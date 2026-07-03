@@ -90,6 +90,7 @@ const computeOrder = (entries) => entries.sort((a, b) => (b.score - a.score))
 const isAvatarUrl = (s) => typeof s === 'string' && /^(data:|https?:|blob:|\/)/.test(s)
 
 let revealed = false
+let history = []
 
 const render = (players) => {
   const ordered = computeOrder(players.slice())
@@ -104,6 +105,8 @@ const render = (players) => {
       const isImg = isAvatarUrl(p?.avatar)
       avatarEl.style.backgroundImage = isImg ? `url(${p.avatar})` : ''
       avatarEl.textContent = isImg ? '' : (p?.avatar || (p ? p.name.slice(0, 2).toUpperCase() : ''))
+      if (p?.id) avatarEl.dataset.playerId = p.id
+      else delete avatarEl.dataset.playerId
     }
   }
   fill(byStep(1), top[0])
@@ -137,6 +140,8 @@ const render = (players) => {
       row.style.justifyContent = 'space-between'
       row.style.padding = '12px 0'
       row.style.borderBottom = '1px solid var(--color-border)'
+      row.style.cursor = 'pointer'
+      if (p.id) row.dataset.playerId = p.id
       row.innerHTML = `
         <span style="font-weight:600">${i + 1}. ${p.name}</span>
         <span style="color:var(--color-accent); font-weight:700">${p.score} pts</span>
@@ -146,14 +151,49 @@ const render = (players) => {
   }
 }
 
+const historyTooltip = document.createElement('div')
+historyTooltip.id = 'historyTooltip'
+historyTooltip.className = 'history-tooltip d-none'
+document.body.appendChild(historyTooltip)
+
+const showHistoryTooltip = (playerId, x, y) => {
+  if (!playerId || history.length === 0) { historyTooltip.classList.add('d-none'); return }
+  const rows = history.map(h => {
+    const status = h.results ? h.results[playerId] : undefined
+    const icon = status === 'correct' ? '✓' : status === 'incorrect' ? '✗' : '–'
+    const cls = status === 'correct' ? 'icon-correct' : status === 'incorrect' ? 'icon-incorrect' : 'icon-absent'
+    return `<div class="history-tooltip-row"><span>${h.prompt || ''}</span><span class="${cls}">${icon}</span></div>`
+  }).join('')
+  historyTooltip.innerHTML = rows
+  historyTooltip.style.left = `${x + 12}px`
+  historyTooltip.style.top = `${y + 12}px`
+  historyTooltip.classList.remove('d-none')
+}
+
+const hideHistoryTooltip = () => { historyTooltip.classList.add('d-none') }
+
+;[document.getElementById('resultsPodium'), document.getElementById('fullTable')].forEach(container => {
+  if (!container) return
+  container.addEventListener('mousemove', e => {
+    const target = e.target.closest('[data-player-id]')
+    if (target) showHistoryTooltip(target.dataset.playerId, e.clientX, e.clientY)
+    else hideHistoryTooltip()
+  })
+  container.addEventListener('mouseleave', hideHistoryTooltip)
+})
+
 socket.on('connect', () => {
   const name = localStorage.getItem('queazy_profile_name') || 'Spectateur'
   const avatar = localStorage.getItem('queazy_profile_avatar') || '🙂'
   socket.emit('room:join', { roomCode, playerName: name, token: getToken(), avatar })
 })
 
+socket.on('history:sync', (payload) => {
+  history = payload?.history || []
+})
+
 socket.on('lobby:list', (list) => {
-  const players = (list || []).filter(p => !p.isHost).map(p => ({ name: p.name, score: p.score || 0, avatar: p.avatar || '' }))
+  const players = (list || []).filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name, score: p.score || 0, avatar: p.avatar || '' }))
   render(players)
 })
 

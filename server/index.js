@@ -143,6 +143,7 @@ const start = async () => {
     const raw = Math.max(floor, Math.floor(base - alpha * elapsed))
     return raw
   }
+  const GRAD_CORRECT_THRESHOLD = 0.8
 
   io.on('connection', socket => {
     socket.on('room:create', async payload => {
@@ -157,6 +158,7 @@ const start = async () => {
         currentQuestion: null,
         scores: new Map(),
         tokens: new Map(),
+        history: [],
         ended: false
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
@@ -213,6 +215,22 @@ const start = async () => {
       await socket.join(code)
       socket.emit('player:token', { token })
       io.to(code).emit('player:joined', { id: socket.id, name })
+
+      // Envoyé uniquement au socket qui rejoint (ex. la page de résultats finaux) :
+      // traduit les résultats indexés par token (identité durable) vers le socket.id
+      // courant de chaque joueur — ne jamais exposer les tokens bruts au client, ils
+      // servent à reprendre l'identité d'un joueur en cas de reconnexion.
+      if (room.history.length > 0) {
+        const history = room.history.map(h => {
+          const idResults = {}
+          for (const [tok, val] of Object.entries(h.results)) {
+            const t = room.tokens.get(tok)
+            if (t) idResults[t.id] = val
+          }
+          return { id: h.id, prompt: h.prompt, type: h.type, results: idResults }
+        })
+        socket.emit('history:sync', { history })
+      }
       
       const list = Array.from(room.players.values()).map(p => ({ 
         id: p.id, 
@@ -329,7 +347,10 @@ const start = async () => {
         return
       }
 
-      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now(), answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false }
+      const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {} }
+      room.history.push(historyEntry)
+
+      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now(), answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry }
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
       // lisible dans la frame WebSocket (devtools) avant même de répondre.
@@ -337,7 +358,28 @@ const start = async () => {
       const broadcastPayload = payload?.type === 'graduation' ? payloadWithoutCorrect : payload
 
       io.to(code).emit('question:show', { ...broadcastPayload, singleAttempt: room.currentQuestion.singleAttempt, startTs: room.currentQuestion.startTs })
-      setTimeout(() => { io.to(code).emit('timer:end', { id: room.currentQuestion.id }) }, room.currentQuestion.timerMs)
+      setTimeout(() => {
+        // Tout token sans résultat pour cette question au moment où le temps est écoulé
+        // n'a simplement pas répondu (couvre aussi une soumission graduation avec des
+        // bornes invalides, déjà ignorée silencieusement côté scoring).
+        for (const [token] of room.tokens) {
+          if (!(token in historyEntry.results)) historyEntry.results[token] = 'incorrect'
+        }
+
+        io.to(code).emit('timer:end', { id: room.currentQuestion.id })
+
+        // Si une réponse texte libre est encore en attente de validation par l'hôte,
+        // on ne révèle pas la bonne réponse : le flux de modération existant continue
+        // de gérer la transition vers le classement une fois la modération terminée.
+        if (room.pending.size === 0) {
+          io.to(code).emit('question:reveal', {
+            id: room.currentQuestion.id,
+            type: room.currentQuestion.type,
+            correct: room.currentQuestion.correct,
+            target: room.currentQuestion.type === 'graduation' ? room.currentQuestion.correct?.[0] : undefined
+          })
+        }
+      }, room.currentQuestion.timerMs)
     })
 
     socket.on('answer:submit', payload => {
@@ -353,9 +395,9 @@ const start = async () => {
 
       if (q.type === 'graduation') {
         const guess = Number(payload?.content)
-        if (!Number.isFinite(guess)) return
         const min = Number(q.min), max = Number(q.max)
         const target = Number(q.correct?.[0])
+        if (!Number.isFinite(guess) || !Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(target) || min >= max) return
         const clamped = Math.min(max, Math.max(min, guess))
         const range = Math.max(1e-9, max - min)
         const closeness = Math.max(0, 1 - Math.abs(clamped - target) / range)
@@ -363,7 +405,10 @@ const start = async () => {
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
-        if (p?.token) room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+        if (p?.token) {
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+          if (q.historyEntry) q.historyEntry.results[p.token] = closeness >= GRAD_CORRECT_THRESHOLD ? 'correct' : 'incorrect'
+        }
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'graded')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
@@ -377,7 +422,10 @@ const start = async () => {
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
-        if (p?.token) room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+        if (p?.token) {
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+          if (q.historyEntry) q.historyEntry.results[p.token] = 'correct'
+        }
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'correct')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
@@ -386,6 +434,8 @@ const start = async () => {
         // On ne passe JAMAIS par la modération pour un QCM.
         if (q.type === 'mcq') {
           q.submissions?.set(socket.id, 'incorrect')
+          const p = room.players.get(socket.id)
+          if (p?.token && q.historyEntry) q.historyEntry.results[p.token] = 'incorrect'
           return
         }
 
@@ -396,7 +446,7 @@ const start = async () => {
         const submitTs = Date.now()
         const delta = pointsFor(q.startTs, submitTs)
         const answerId = `${socket.id}:${submitTs}`
-        room.pending.set(answerId, { playerId: socket.id, content: payload?.content, ts: submitTs, delta })
+        room.pending.set(answerId, { playerId: socket.id, content: payload?.content, ts: submitTs, delta, historyEntry: q.historyEntry })
         q.submissions?.set(socket.id, answerId)
         io.to(code).emit('answer:queue', { answerId, playerId: socket.id, content: payload?.content })
       }
@@ -415,10 +465,13 @@ const start = async () => {
       const total = (room.scores.get(item.playerId) || 0) + delta
       room.scores.set(item.playerId, total)
       const p = room.players.get(item.playerId)
-      if (p?.token) room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
+      if (p?.token) {
+        room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
+        if (item.historyEntry) item.historyEntry.results[p.token] = 'correct'
+      }
       q?.answered?.add(item.playerId)
       io.to(code).emit('score:update', { playerId: item.playerId, delta, total })
-      
+
       // Si plus aucune réponse en attente après approbation
       if (room.pending.size === 0) {
         io.to(code).emit('moderation:finished')
@@ -429,13 +482,25 @@ const start = async () => {
       const code = payload?.roomCode
       const room = rooms.get(code)
       if (!room) return
+      const item = room.pending.get(payload?.answerId)
       room.pending.delete(payload?.answerId)
+      if (item?.historyEntry) {
+        const p = room.players.get(item.playerId)
+        if (p?.token) item.historyEntry.results[p.token] = 'incorrect'
+      }
       io.to(code).emit('moderation:rejected', { answerId: payload?.answerId })
-      
+
       // Si plus aucune réponse en attente après rejet
       if (room.pending.size === 0) {
         io.to(code).emit('moderation:finished')
       }
+    })
+
+    socket.on('leaderboard:show', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || socket.id !== room.hostId) return
+      io.to(code).emit('leaderboard:show')
     })
 
     socket.on('disconnect', () => {
