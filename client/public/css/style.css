@@ -558,6 +558,16 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   position: relative;
 }
 
+.read-only-banner {
+  background: var(--tile-yellow, #f5b700);
+  color: #3a2e00;
+  font-weight: 700;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+  text-align: center;
+}
+
 .grad-readout {
   text-align: center;
   margin-bottom: 6px;
