@@ -364,6 +364,31 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   transform: scale(1.1);
 }
 
+.kick-tile-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: all 0.2s ease;
+  padding: 0;
+  z-index: 2;
+}
+
+.kick-tile-btn:hover {
+  background: #fef2f2;
+  color: var(--color-danger);
+  transform: scale(1.1);
+}
+
 .btn-ready-toggle {
   cursor: pointer;
   transition: transform 0.2s ease;
@@ -679,7 +704,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   text-shadow: 0 3px 0 rgba(0,0,0,0.2);
 }
 .free-text-input { display: flex; gap: 12px; background: white; padding: 12px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); border: none; }
-.free-text-input.mcq-mode { background: transparent; padding: 0; box-shadow: none; justify-content: center; }
+.free-text-input.mcq-mode { background: transparent; padding: 0; box-shadow: none; justify-content: center; margin-top: 24px; }
 
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
 

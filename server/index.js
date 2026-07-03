@@ -182,6 +182,7 @@ const start = async () => {
       const token = payload?.token || uid()
       const room = rooms.get(code)
       if (!room) return socket.emit('room:error', { message: 'room not found' })
+      socket.roomCode = code // Pour nettoyer proprement cette entrée au disconnect
 
       // Si c'est l'hôte qui se reconnecte
       if (token === room.hostToken) {
@@ -272,6 +273,45 @@ const start = async () => {
       const allReady = Array.from(room.players.values())
         .filter(x => x.id !== room.hostId && x.token !== room.hostToken)
         .every(x => !!x.ready)
+      io.to(code).emit('lobby:readyStatus', { allReady })
+    })
+
+    socket.on('player:kick', payload => {
+      const code = payload?.roomCode
+      const targetId = payload?.playerId
+      const room = rooms.get(code)
+      if (!room) return
+      // Seul l'hôte peut exclure un joueur, et pas lui-même.
+      if (socket.id !== room.hostId) return
+      if (targetId === room.hostId) return
+      const target = room.players.get(targetId)
+      if (!target) return
+
+      room.players.delete(targetId)
+      room.scores.delete(targetId)
+      // Invalide son jeton pour qu'une reconnexion (même navigateur) ne le
+      // fasse pas rentrer automatiquement avec son ancien état.
+      if (target.token) room.tokens.delete(target.token)
+
+      const targetSocket = io.sockets.sockets.get(targetId)
+      if (targetSocket) {
+        targetSocket.emit('player:kicked', { message: 'Tu as été exclu de la salle par l\'hôte.' })
+        targetSocket.leave(code)
+        targetSocket.disconnect(true)
+      }
+
+      const list = Array.from(room.players.values()).map(p => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar || '',
+        score: room.scores.get(p.id) || 0,
+        ready: !!p.ready,
+        isHost: p.id === room.hostId || p.token === room.hostToken
+      }))
+      io.to(code).emit('lobby:list', list)
+      const allReady = Array.from(room.players.values())
+        .filter(p => p.id !== room.hostId && p.token !== room.hostToken)
+        .every(p => !!p.ready)
       io.to(code).emit('lobby:readyStatus', { allReady })
     })
 
@@ -372,16 +412,33 @@ const start = async () => {
     })
 
     socket.on('disconnect', () => {
-      if (socket.hostRoomCode) {
-        const room = rooms.get(socket.hostRoomCode)
-        // Si le quiz est terminé, l'hôte (et les joueurs) sont en train de naviguer
-        // vers /result.html : leur ancienne connexion se ferme normalement, ce n'est
-        // pas une vraie déconnexion. On ne supprime pas la salle dans ce cas, pour
-        // laisser le temps à la page de résultats de la rejoindre.
-        if (room && room.hostId === socket.id && !room.ended) {
-          io.to(socket.hostRoomCode).emit('room:closed', { message: 'L\'hôte s\'est déconnecté.' })
-          rooms.delete(socket.hostRoomCode)
-        }
+      const code = socket.roomCode || socket.hostRoomCode
+      if (!code) return
+      const room = rooms.get(code)
+      if (!room) return
+
+      // Si l'hôte se déconnecte avant la fin du quiz, la salle se ferme pour tout le monde.
+      if (room.hostId === socket.id && !room.ended) {
+        io.to(code).emit('room:closed', { message: 'L\'hôte s\'est déconnecté.' })
+        rooms.delete(code)
+        return
+      }
+
+      // Sinon (joueur qui quitte, ou hôte qui navigue vers /result.html une fois le
+      // quiz terminé) : on retire uniquement cette connexion de la liste. Sans ça,
+      // les entrées fantômes s'accumulaient à chaque déconnexion (un joueur qui ne
+      // se reconnectait jamais avec le même jeton restait affiché indéfiniment,
+      // donnant l'impression d'un joueur dupliqué sur le classement/podium).
+      if (room.players.delete(socket.id)) {
+        const list = Array.from(room.players.values()).map(p => ({
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar || '',
+          score: room.scores.get(p.id) || 0,
+          ready: !!p.ready,
+          isHost: p.id === room.hostId || p.token === room.hostToken
+        }))
+        io.to(code).emit('lobby:list', list)
       }
     })
 

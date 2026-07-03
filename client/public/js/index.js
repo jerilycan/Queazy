@@ -426,6 +426,11 @@ socket.on('room:closed', ({ message }) => {
   resetUI()
 })
 
+socket.on('player:kicked', ({ message }) => {
+  showAnnounce(message || 'Tu as été exclu de la salle.', 'error')
+  resetUI()
+})
+
 const loadQuizById = (id) => {
   window.supabaseClient
     .from('quizzes')
@@ -773,6 +778,19 @@ socket.on('lobby:list', arr => {
   hostArea.innerHTML = ''
   console.log('Cleared lobbyGrid and lobbyHost')
 
+  // Synchronise le cache local des scores avec la liste faisant autorité
+  // envoyée par le serveur : retire toute entrée dont l'id ne correspond
+  // plus à une connexion actuelle (ex. un joueur reconnecté avec un nouveau
+  // socket.id). Sans ça, ces entrées fantômes restaient affichées à côté
+  // de la nouvelle, dupliquant le joueur sur le classement en direct.
+  const currentIds = new Set(arr.map(p => p.id))
+  scores.forEach((_, id) => { if (!currentIds.has(id)) scores.delete(id) })
+
+  // Calculé indépendamment de la variable isHost (mutée plus bas dans cette
+  // boucle) pour que le bouton d'exclusion s'affiche de façon fiable quel
+  // que soit l'ordre des joueurs dans la liste reçue du serveur.
+  const iAmHost = arr.some(x => (x.id === window.myId || x.token === getToken()) && x.isHost)
+
   const playerCount = arr.filter(p => !p.isHost).length
   if (isHost) {
     if (playerCount === 0) {
@@ -864,6 +882,11 @@ socket.on('lobby:list', arr => {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </div>
         ` : ''}
+        ${(iAmHost && !isMe) ? `
+          <div class="kick-tile-btn" title="Exclure ce joueur">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </div>
+        ` : ''}
         <div class="avatar-main" style="width:54px; height:54px; font-size:24px; ${isAvatarUrl(p.avatar) ? `background-image:url(${p.avatar}); background-size:cover; background-position:center;` : ''}">
           ${isAvatarUrl(p.avatar) ? '' : (p.avatar || '🙂')}
         </div>
@@ -896,7 +919,18 @@ socket.on('lobby:list', arr => {
           }
         }
       }
-      
+
+      if (iAmHost && !isMe) {
+        const kickBtn = tile.querySelector('.kick-tile-btn')
+        if (kickBtn) {
+          kickBtn.onclick = () => {
+            if (confirm(`Exclure ${p.name} de la salle ?`)) {
+              socket.emit('player:kick', { roomCode: roomInput.value.trim(), playerId: p.id })
+            }
+          }
+        }
+      }
+
       grid.appendChild(tile)
     }
   })
