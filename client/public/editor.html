@@ -27,6 +27,10 @@
 
     <div class="container mt-20">
 
+      <div id="readOnlyBanner" class="read-only-banner d-none">
+        👁️ Lecture seule — ce quiz appartient à un autre créateur. Tu peux le consulter mais pas le modifier.
+      </div>
+
       <div class="editor-top-bar">
         <div class="quiz-meta">
           <input id="title" placeholder="Titre du quizz" />
@@ -44,6 +48,7 @@
         <div class="editor-actions">
           <button id="deleteQuiz" class="btn text-danger">Supprimer ce Quizz</button>
           <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
+          <button id="duplicateQuiz" class="btn btn-primary px-32 d-none">Dupliquer dans mes quiz</button>
         </div>
       </div>
       

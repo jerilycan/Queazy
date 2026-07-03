@@ -87,6 +87,7 @@ const singleAttemptEl = document.getElementById('singleAttempt')
 const isPublicEl = document.getElementById('isPublic')
 const saveQuizBtn = document.getElementById('saveQuiz')
 const deleteQuizBtn = document.getElementById('deleteQuiz')
+const duplicateQuizBtn = document.getElementById('duplicateQuiz')
 const addQuestionBtn = document.getElementById('addQuestion')
 const questionListEl = document.getElementById('questionList')
 const questionDetailEl = document.getElementById('questionDetail')
@@ -152,6 +153,28 @@ let currentId = null
 let questions = []
 let activeIndex = 0
 let hasSelectedOnce = false
+let readOnly = false // true si on ouvre le quiz d'un autre créateur (lecture seule)
+
+// Passe l'éditeur en lecture seule : désactive toutes les saisies, masque
+// enregistrer/supprimer et affiche un bandeau. Les lignes d'options/réponses
+// recréées dynamiquement sont gérées via le drapeau readOnly dans createInputRow.
+const applyReadOnly = () => {
+  readOnly = true
+  const controls = [
+    titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
+    addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
+    qGradMin, qGradMax, qGradTarget,
+    document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
+    document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
+    document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus')
+  ]
+  controls.forEach(el => { if (el) el.disabled = true })
+  if (saveQuizBtn) saveQuizBtn.style.display = 'none'
+  if (deleteQuizBtn) deleteQuizBtn.style.display = 'none'
+  if (duplicateQuizBtn) duplicateQuizBtn.classList.remove('d-none')
+  const banner = document.getElementById('readOnlyBanner')
+  if (banner) banner.classList.remove('d-none')
+}
 
 // --- Utilitaires ---
 
@@ -324,24 +347,28 @@ const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked =
     check.className = 'checkbox-custom mr-8'
     check.checked = isChecked
     check.title = 'Marquer comme réponse correcte'
+    check.disabled = readOnly
     check.onchange = (e) => onCheck(e.target.checked)
     div.appendChild(check)
   }
-  
+
   const input = document.createElement('input')
   input.type = 'text'
   input.value = value
   input.placeholder = 'Entrez du texte...'
   input.style.flex = '1'
+  input.disabled = readOnly
   input.oninput = (e) => onInput(e.target.value)
-  
-  const del = document.createElement('button')
-  del.className = 'btn-icon btn-danger'
-  del.innerHTML = '&times;'
-  del.onclick = onDelete
-  
+
   div.appendChild(input)
-  div.appendChild(del)
+
+  if (!readOnly) {
+    const del = document.createElement('button')
+    del.className = 'btn-icon btn-danger'
+    del.innerHTML = '&times;'
+    del.onclick = onDelete
+    div.appendChild(del)
+  }
   return div
 }
 
@@ -412,33 +439,41 @@ addCorrectBtn.onclick = () => {
   renderCorrects()
 }
 saveQuizBtn.onclick = async () => {
+  if (readOnly) return
   saveCurrentQuestionState()
-  
+
   // Validation avant sauvegarde
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]
-    
-    // Vérifier l'énoncé
+
+    // Vérifier l'énoncé (commun à tous les types)
     if (!q.prompt || q.prompt.trim() === '') {
       selectQuestion(i)
       showToast(`La question ${i + 1} n'a pas d'énoncé`, 'error')
       return
     }
-    
-    // Vérifier les réponses correctes
-    const hasCorrectResponse = q.correct && q.correct.some(c => c && c.trim() !== '')
-    if (!hasCorrectResponse) {
-      selectQuestion(i)
-      showToast(`La question ${i + 1} doit avoir au moins une réponse valide`, 'error')
-      return
-    }
-    
-    // Pour les QCM, vérifier qu'il y a des options
+
     if (q.type === 'mcq') {
-      const hasValidOptions = q.options && q.options.some(o => o && o.trim() !== '')
-      if (!hasValidOptions) {
+      // Au moins une option non vide
+      const validOptions = (q.options || []).filter(o => o && o.trim() !== '')
+      if (validOptions.length === 0) {
         selectQuestion(i)
         showToast(`Le QCM ${i + 1} doit avoir au moins une option de réponse`, 'error')
+        return
+      }
+      // Au moins une option cochée comme correcte
+      const hasChecked = validOptions.some(o => (q.correct || []).includes(o))
+      if (!hasChecked) {
+        selectQuestion(i)
+        showToast(`Le QCM ${i + 1} : cochez au moins une bonne réponse`, 'error')
+        return
+      }
+    } else if (q.type === 'free') {
+      // Au moins une réponse acceptée renseignée
+      const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
+      if (!hasAnswer) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
         return
       }
     }
@@ -498,7 +533,36 @@ saveQuizBtn.onclick = async () => {
   }
 }
 
+// Dupliquer le quiz d'un autre créateur dans mes propres quiz (copie privée éditable)
+if (duplicateQuizBtn) {
+  duplicateQuizBtn.onclick = async () => {
+    const { data: { session } } = await sb.auth.getSession()
+    if (!session) { window.location.href = '/login.html?reason=create'; return }
+    const srcTitle = titleEl.value.trim() || 'Quiz'
+    duplicateQuizBtn.disabled = true
+    try {
+      const { data, error } = await sb.from('quizzes')
+        .insert([{
+          title: 'Copie de ' + srcTitle,
+          questions,
+          single_attempt: singleAttemptEl.checked,
+          is_public: false, // une copie est privée par défaut
+          owner_id: session.user.id
+        }])
+        .select('id')
+        .single()
+      if (error) throw error
+      showToast('Quiz dupliqué dans tes quiz !')
+      window.location.href = '/editor.html?id=' + encodeURIComponent(data.id)
+    } catch (err) {
+      duplicateQuizBtn.disabled = false
+      showToast('Erreur lors de la duplication : ' + (err.message || ''), 'error')
+    }
+  }
+}
+
 deleteQuizBtn.onclick = () => {
+  if (readOnly) return
   if (!currentId) return
   if (!confirm('Voulez-vous vraiment supprimer ce quiz ?')) return
   const sb = window.supabaseClient
@@ -519,10 +583,10 @@ const init = () => {
   if (id) {
     currentId = id
     window.supabaseClient.from('quizzes')
-      .select('id,title,questions,single_attempt,is_public')
+      .select('id,title,questions,single_attempt,is_public,owner_id')
       .eq('id', id)
       .single()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error) throw error
         titleEl.value = data.title || ''
         singleAttemptEl.checked = data.single_attempt !== false
@@ -531,6 +595,13 @@ const init = () => {
         activeIndex = 0
         selectQuestion(0)
         updateSidebar()
+
+        // Seul le créateur peut modifier : sinon, lecture seule (la base le
+        // refuse déjà via RLS, mais on l'empêche aussi dans l'UI).
+        const { data: { session } } = await sb.auth.getSession()
+        if (!session || session.user.id !== data.owner_id) {
+          applyReadOnly()
+        }
       })
       .catch(() => {
         showToast('Erreur lors du chargement du quiz', 'error')
