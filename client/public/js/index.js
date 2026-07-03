@@ -157,9 +157,12 @@ const gradSlider = document.getElementById('gradSlider')
 const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
+const gradTargetMarker = document.getElementById('gradTargetMarker')
+const revealAnswerText = document.getElementById('revealAnswerText')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
+const showLeaderboardBtn = document.getElementById('showLeaderboardBtn')
 const startQuizBtn = document.getElementById('startQuiz')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
@@ -186,6 +189,28 @@ let isGameEnded = false
 
 if (gradSlider) {
   gradSlider.oninput = () => { if (gradValueReadout) gradValueReadout.textContent = gradSlider.value }
+}
+
+const clearRevealState = () => {
+  Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
+  if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
+  if (gradTargetMarker) gradTargetMarker.classList.add('d-none')
+  if (showLeaderboardBtn) { showLeaderboardBtn.classList.add('d-none'); showLeaderboardBtn.style.display = 'none' }
+}
+
+const positionGradTargetMarker = (target) => {
+  if (!gradTargetMarker || !gradSlider) return
+  const min = Number(gradSlider.min), max = Number(gradSlider.max)
+  const pct = Math.min(100, Math.max(0, ((Number(target) - min) / (max - min)) * 100))
+  gradTargetMarker.style.left = `${pct}%`
+  gradTargetMarker.textContent = target
+  gradTargetMarker.classList.remove('d-none')
+}
+
+const revealFreeAnswer = (text) => {
+  if (!revealAnswerText) return
+  revealAnswerText.textContent = `Bonne réponse : ${text}`
+  revealAnswerText.classList.remove('d-none')
 }
 const scores = new Map()
 const leaderOverlay = document.getElementById('leaderOverlay')
@@ -822,6 +847,7 @@ socket.on('lobby:list', arr => {
     const isMe = p.id === window.myId || p.token === getToken()
     
     const s = scores.get(p.id) || { name: p.name, total: 0 }
+    if (p.name) s.name = p.name // rafraîchit un nom générique posé trop tôt (ex. player:joined avant le vrai pseudo)
     s.isHost = p.isHost
     scores.set(p.id, s)
     
@@ -1035,6 +1061,8 @@ const emitQuestion = (index) => {
     timerMs: q.timerMs || 15000,
     correct: Array.isArray(q.correct) ? q.correct : [],
     options: Array.isArray(q.options) ? q.options : [],
+    min: q.min,
+    max: q.max,
     singleAttempt: currentSingleAttempt
   }
   socket.emit('question:show', payload)
@@ -1047,6 +1075,16 @@ const goNext = () => {
   quizIndex += 1
 }
 nextQuestionBtn.onclick = goNext
+
+if (showLeaderboardBtn) {
+  showLeaderboardBtn.onclick = () => {
+    const roomCode = roomInput.value.trim()
+    if (!roomCode) return
+    socket.emit('leaderboard:show', { roomCode })
+    showLeaderboardBtn.classList.add('d-none')
+    showLeaderboardBtn.style.display = 'none'
+  }
+}
 
 prevQuestionBtn.onclick = () => {
   if (prevQuestionBtn.classList.contains('is-disabled')) return
@@ -1096,6 +1134,7 @@ startQuizBtn.onclick = () => {
 }
 
 socket.on('question:show', payload => {
+  clearRevealState()
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.add('d-none')
@@ -1431,11 +1470,9 @@ socket.on('timer:end', () => {
       leaderboard.innerHTML = '<div id="moderationNotice"><h2 style="margin-bottom:20px; color:white">Validation des réponses par l\'hôte...</h2><p class="text-white" style="opacity:0.85">Un peu de patience, l\'hôte vérifie les dernières pépites !</p></div>'
       leaderOverlay.classList.remove('d-none')
       leaderOverlay.style.display = 'flex'
-    } else {
-      renderBoard()
-      leaderOverlay.classList.remove('d-none')
-      leaderOverlay.style.display = 'flex'
     }
+    // Sinon : on attend l'évènement question:reveal, qui affiche la bonne réponse
+    // sur l'écran de question actuel — plus de saut automatique vers le classement.
   } else {
     leaderOverlay.style.display = 'none'
     if (loadedQuiz && quizIndex >= loadedQuiz.questions.length) {
@@ -1443,6 +1480,30 @@ socket.on('timer:end', () => {
       nextQuestionBtn.onclick = showResults
     }
   }
+})
+
+socket.on('question:reveal', payload => {
+  if (payload.type === 'mcq' && optionsDiv) {
+    Array.from(optionsDiv.children).forEach(el => {
+      if ((payload.correct || []).includes(el.textContent)) el.classList.add('correct-reveal')
+      else el.classList.add('incorrect-reveal')
+    })
+  } else if (payload.type === 'free') {
+    revealFreeAnswer((payload.correct || [])[0] || '')
+  } else if (payload.type === 'graduation') {
+    positionGradTargetMarker(payload.target)
+  }
+  if (isHost && showLeaderboardBtn) {
+    showLeaderboardBtn.classList.remove('d-none')
+    showLeaderboardBtn.style.display = 'inline-flex'
+  }
+})
+
+socket.on('leaderboard:show', () => {
+  clearRevealState()
+  renderBoard()
+  leaderOverlay.classList.remove('d-none')
+  leaderOverlay.style.display = 'flex'
 })
 
 socket.on('moderation:finished', () => {
@@ -1465,7 +1526,6 @@ socket.on('score:update', ({ playerId, delta, total }) => {
   
   const myId = window.myId
   if (myId === playerId) {
-    log('Score +' + delta)
     const prevPos = beforeOrder.indexOf(myId) >= 0 ? beforeOrder.indexOf(myId) + 1 : null
     const newPos = afterOrder.indexOf(myId) >= 0 ? afterOrder.indexOf(myId) + 1 : null
     if (newPos && prevPos && newPos < prevPos) {

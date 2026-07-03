@@ -110,6 +110,7 @@
           <button id="selectQuizBtn" class="btn h-48 px-32">Sélectionner un Quiz</button>
           <button id="startQuiz" class="btn btn-primary h-48 px-32">LANCER</button>
           <button id="prevQuestion" class="btn h-48 d-none">Précédent</button>
+          <button id="showLeaderboardBtn" class="btn btn-primary h-48 px-32 d-none">Voir le classement</button>
           <button id="nextQuestion" class="btn h-48 d-none">Suivant</button>
         </div>
       </div>
@@ -165,11 +166,13 @@
               <span id="gradMaxLabel" class="grad-bound">100</span>
             </div>
             <input type="range" id="gradSlider" class="grad-slider" min="0" max="100" value="50" />
+            <div id="gradTargetMarker" class="grad-target-marker d-none"></div>
           </div>
           <div id="freeText" class="free-text-input">
             <input id="answer" placeholder="Votre réponse..." class="h-60 border-none bg-transparent font-18" />
             <button id="send" class="btn btn-primary w-140 h-60 font-16">Envoyer</button>
           </div>
+          <div id="revealAnswerText" class="reveal-answer d-none"></div>
         </div>
         
         <div id="log" class="log-message"></div>

@@ -84,6 +84,7 @@ if (savedAvatarPreview && profileAvatarPreviewEl) {
 }
 
 const singleAttemptEl = document.getElementById('singleAttempt')
+const isPublicEl = document.getElementById('isPublic')
 const saveQuizBtn = document.getElementById('saveQuiz')
 const deleteQuizBtn = document.getElementById('deleteQuiz')
 const addQuestionBtn = document.getElementById('addQuestion')
@@ -467,7 +468,8 @@ saveQuizBtn.onclick = async () => {
   const body = {
     title,
     questions,
-    singleAttempt: singleAttemptEl.checked
+    singleAttempt: singleAttemptEl.checked,
+    isPublic: isPublicEl.checked
   }
   const sb = window.supabaseClient
   try {
@@ -478,13 +480,13 @@ saveQuizBtn.onclick = async () => {
     }
     if (currentId) {
       const { error } = await sb.from('quizzes')
-        .update({ title, questions, single_attempt: body.singleAttempt })
+        .update({ title, questions, single_attempt: body.singleAttempt, is_public: body.isPublic })
         .eq('id', currentId)
       if (error) throw error
       showToast('Quiz sauvegardé avec succès !')
     } else {
       const { data, error } = await sb.from('quizzes')
-        .insert([{ title, questions, single_attempt: body.singleAttempt, is_public: false, owner_id: session.user.id }])
+        .insert([{ title, questions, single_attempt: body.singleAttempt, is_public: body.isPublic, owner_id: session.user.id }])
         .select('id')
         .single()
       if (error) throw error
@@ -517,13 +519,14 @@ const init = () => {
   if (id) {
     currentId = id
     window.supabaseClient.from('quizzes')
-      .select('id,title,questions,single_attempt')
+      .select('id,title,questions,single_attempt,is_public')
       .eq('id', id)
       .single()
       .then(({ data, error }) => {
         if (error) throw error
         titleEl.value = data.title || ''
         singleAttemptEl.checked = data.single_attempt !== false
+        isPublicEl.checked = !!data.is_public
         questions = data.questions || [createDefaultQuestion()]
         activeIndex = 0
         selectQuestion(0)
@@ -551,6 +554,7 @@ const resetToNew = () => {
   questions = [createDefaultQuestion()]
   activeIndex = 0
   titleEl.value = ''
+  isPublicEl.checked = false
   selectQuestion(0)
   updateSidebar()
 }
