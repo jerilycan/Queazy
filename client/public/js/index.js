@@ -162,7 +162,6 @@ const revealAnswerText = document.getElementById('revealAnswerText')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
-const showLeaderboardBtn = document.getElementById('showLeaderboardBtn')
 const startQuizBtn = document.getElementById('startQuiz')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
@@ -266,7 +265,6 @@ const clearRevealState = () => {
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (gradRuler) gradRuler.classList.remove('reveal')
-  if (showLeaderboardBtn) { showLeaderboardBtn.classList.add('d-none'); showLeaderboardBtn.style.display = 'none' }
 }
 
 const positionGradTargetMarker = (target) => {
@@ -1148,13 +1146,34 @@ const goNext = () => {
 }
 nextQuestionBtn.onclick = goNext
 
-if (showLeaderboardBtn) {
-  showLeaderboardBtn.onclick = () => {
-    const roomCode = roomInput.value.trim()
-    if (!roomCode) return
-    socket.emit('leaderboard:show', { roomCode })
-    showLeaderboardBtn.classList.add('d-none')
-    showLeaderboardBtn.style.display = 'none'
+// Bouton unique de l'hôte, en trois temps :
+//   answering  → masqué (les joueurs répondent)
+//   revealed   → "Suivant" affiche le classement à tout le monde
+//   leaderboard→ "Question suivante" (ou "Résultat" à la dernière) enchaîne
+let hostPhase = 'answering'
+const isLastQuestion = () => !!loadedQuiz && quizIndex >= loadedQuiz.questions.length
+
+const updateHostControls = () => {
+  if (!isHost) return
+  const showNav = hostPhase !== 'answering'
+  ;[nextQuestionBtn, prevQuestionBtn].forEach(btn => {
+    btn.classList.toggle('d-none', !showNav)
+    btn.style.display = showNav ? 'inline-flex' : 'none'
+  })
+  if (hostPhase === 'revealed') {
+    nextQuestionBtn.textContent = 'Suivant'
+    nextQuestionBtn.onclick = () => {
+      const roomCode = roomInput.value.trim()
+      if (roomCode) socket.emit('leaderboard:show', { roomCode })
+    }
+  } else if (hostPhase === 'leaderboard') {
+    if (isLastQuestion()) {
+      nextQuestionBtn.textContent = 'Résultat'
+      nextQuestionBtn.onclick = showResults
+    } else {
+      nextQuestionBtn.textContent = 'Question suivante'
+      nextQuestionBtn.onclick = goNext
+    }
   }
 }
 
@@ -1542,10 +1561,6 @@ socket.on('timer:end', () => {
     // sur l'écran de question actuel — plus de saut automatique vers le classement.
   } else {
     leaderOverlay.style.display = 'none'
-    if (loadedQuiz && quizIndex >= loadedQuiz.questions.length) {
-      nextQuestionBtn.textContent = 'Résultat'
-      nextQuestionBtn.onclick = showResults
-    }
   }
 })
 
@@ -1560,10 +1575,7 @@ socket.on('question:reveal', payload => {
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
   }
-  if (isHost && showLeaderboardBtn) {
-    showLeaderboardBtn.classList.remove('d-none')
-    showLeaderboardBtn.style.display = 'inline-flex'
-  }
+  if (isHost) { hostPhase = 'revealed'; updateHostControls() }
 })
 
 socket.on('leaderboard:show', () => {
@@ -1571,17 +1583,20 @@ socket.on('leaderboard:show', () => {
   renderBoard()
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
+  if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
 })
 
 socket.on('moderation:finished', () => {
-  if (!isHost) {
-    isModerationPending = false
-    renderBoard()
-    leaderOverlay.classList.remove('d-none')
-    leaderOverlay.style.display = 'flex'
-  }
+  isModerationPending = false
+  renderBoard()
+  leaderOverlay.classList.remove('d-none')
+  leaderOverlay.style.display = 'flex'
+  if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
 })
-socket.on('question:show', () => { leaderOverlay.style.display = 'none' })
+socket.on('question:show', () => {
+  leaderOverlay.style.display = 'none'
+  if (isHost) { hostPhase = 'answering'; updateHostControls() }
+})
 
 socket.on('score:update', ({ playerId, delta, total }) => {
   const beforeOrder = computeOrder().map(([id]) => id)
