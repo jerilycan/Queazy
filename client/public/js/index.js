@@ -778,6 +778,14 @@ socket.on('lobby:list', arr => {
   hostArea.innerHTML = ''
   console.log('Cleared lobbyGrid and lobbyHost')
 
+  // Synchronise le cache local des scores avec la liste faisant autorité
+  // envoyée par le serveur : retire toute entrée dont l'id ne correspond
+  // plus à une connexion actuelle (ex. un joueur reconnecté avec un nouveau
+  // socket.id). Sans ça, ces entrées fantômes restaient affichées à côté
+  // de la nouvelle, dupliquant le joueur sur le classement en direct.
+  const currentIds = new Set(arr.map(p => p.id))
+  scores.forEach((_, id) => { if (!currentIds.has(id)) scores.delete(id) })
+
   // Calculé indépendamment de la variable isHost (mutée plus bas dans cette
   // boucle) pour que le bouton d'exclusion s'affiche de façon fiable quel
   // que soit l'ordre des joueurs dans la liste reçue du serveur.
