@@ -162,6 +162,7 @@ const revealAnswerText = document.getElementById('revealAnswerText')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
+const leaderNextBtn = document.getElementById('leaderNextBtn')
 const startQuizBtn = document.getElementById('startQuiz')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
@@ -1155,24 +1156,32 @@ const isLastQuestion = () => !!loadedQuiz && quizIndex >= loadedQuiz.questions.l
 
 const updateHostControls = () => {
   if (!isHost) return
-  const showNav = hostPhase !== 'answering'
+  // Barre de l'hôte (en haut de page) : visible seulement à la révélation.
+  // En phase classement, le classement plein écran la recouvrirait — l'avancement
+  // se fait donc via un bouton placé DANS l'overlay du classement.
+  const revealed = hostPhase === 'revealed'
   ;[nextQuestionBtn, prevQuestionBtn].forEach(btn => {
-    btn.classList.toggle('d-none', !showNav)
-    btn.style.display = showNav ? 'inline-flex' : 'none'
+    btn.classList.toggle('d-none', !revealed)
+    btn.style.display = revealed ? 'inline-flex' : 'none'
   })
-  if (hostPhase === 'revealed') {
+  if (revealed) {
     nextQuestionBtn.textContent = 'Suivant'
     nextQuestionBtn.onclick = () => {
       const roomCode = roomInput.value.trim()
       if (roomCode) socket.emit('leaderboard:show', { roomCode })
     }
-  } else if (hostPhase === 'leaderboard') {
-    if (isLastQuestion()) {
-      nextQuestionBtn.textContent = 'Résultat'
-      nextQuestionBtn.onclick = showResults
-    } else {
-      nextQuestionBtn.textContent = 'Question suivante'
-      nextQuestionBtn.onclick = goNext
+  }
+  if (leaderNextBtn) {
+    const onLeaderboard = hostPhase === 'leaderboard'
+    leaderNextBtn.classList.toggle('d-none', !onLeaderboard)
+    if (onLeaderboard) {
+      if (isLastQuestion()) {
+        leaderNextBtn.textContent = 'Résultat'
+        leaderNextBtn.onclick = showResults
+      } else {
+        leaderNextBtn.textContent = 'Question suivante'
+        leaderNextBtn.onclick = goNext
+      }
     }
   }
 }
