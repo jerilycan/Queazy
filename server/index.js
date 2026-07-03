@@ -165,7 +165,7 @@ const start = async () => {
     })
 
     socket.on('room:close', async payload => {
-      const code = payload?.roomCode
+      const code = (payload?.roomCode || '').toUpperCase()
       const room = rooms.get(code)
       if (room && room.hostId === socket.id) {
         io.to(code).emit('room:closed', { message: 'La salle a été fermée par l\'hôte.' })
@@ -177,7 +177,7 @@ const start = async () => {
     })
 
     socket.on('room:join', async payload => {
-      const code = payload?.roomCode
+      const code = (payload?.roomCode || '').toUpperCase()
       const name = payload?.playerName || 'Player'
       const token = payload?.token || uid()
       const room = rooms.get(code)

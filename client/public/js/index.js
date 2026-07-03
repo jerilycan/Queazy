@@ -109,8 +109,14 @@ const autoCreate = params.get('create')
 const autoJoin = params.get('join')
 
 if (preRoom) {
-  roomInput.value = preRoom
+  roomInput.value = preRoom.toUpperCase()
 }
+
+roomInput.addEventListener('input', () => {
+  const pos = roomInput.selectionStart
+  roomInput.value = roomInput.value.toUpperCase()
+  roomInput.setSelectionRange(pos, pos)
+})
 
 window.addEventListener('DOMContentLoaded', () => {
   // Logo animation trigger
@@ -740,7 +746,7 @@ socket.on('connect', () => {
   if (preRoom) {
     const nm = nameInput.value.trim() || localStorage.getItem('queazy_profile_name') || 'Joueur'
     const av = selectedIcon || localStorage.getItem('queazy_profile_avatar') || '🙂'
-    socket.emit('room:join', { roomCode: preRoom, playerName: nm, token: getToken(), avatar: av })
+    socket.emit('room:join', { roomCode: preRoom.toUpperCase(), playerName: nm, token: getToken(), avatar: av })
   }
 })
 
