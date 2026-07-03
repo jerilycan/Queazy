@@ -725,13 +725,61 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   box-shadow: 0 2px 0 rgba(0,0,0,0.25);
 }
 .option-btn.correct-reveal {
-  outline: 4px solid var(--tile-green);
+  outline: 4px solid white;
   outline-offset: -4px;
-  box-shadow: 0 0 0 4px rgba(38, 137, 12, 0.35);
+  box-shadow: 0 0 0 6px rgba(38, 137, 12, 0.9), 0 5px 0 rgba(0,0,0,0.25);
+  animation: correct-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.option-btn.correct-reveal::after {
+  content: '✓';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: white;
+  color: var(--tile-green);
+  font-size: 20px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@keyframes correct-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
 }
 .option-btn.incorrect-reveal {
-  opacity: 0.45;
-  filter: grayscale(0.4);
+  opacity: 0.35;
+  filter: grayscale(0.6);
+}
+
+/* Interactions verrouillées après la fin du timer (la révélation reste visible) */
+.answers-locked .option-btn,
+.answers-locked .grad-ruler {
+  pointer-events: none;
+}
+
+/* Badge de confirmation après l'envoi d'une réponse */
+.answer-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 320px;
+  margin: 0 auto var(--space-md);
+  padding: 10px 24px;
+  background: var(--tile-green);
+  color: white;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  border-radius: 999px;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.2), var(--shadow-md);
+  animation: fadeIn 0.3s ease;
 }
 
 /* Table Styles */
@@ -915,6 +963,11 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   .player-grid { grid-template-columns: repeat(2, 1fr); }
   .options-grid { grid-template-columns: 1fr; }
   .icon-grid { grid-template-columns: repeat(4, 1fr); }
+  .question-text { font-size: 26px; margin-bottom: 24px; }
+  /* Barre hôte : contrôles empilés et pleine largeur */
+  #hostPanel { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px !important; }
+  #hostPanel .d-flex.gap-sm { flex-wrap: wrap; justify-content: center; }
+  .grad-value { font-size: 32px; }
 }
 
 /* Quiz Editor Rework */
@@ -1498,3 +1551,15 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
 .history-tooltip-row .icon-correct { color: var(--tile-green); font-weight: 800; }
 .history-tooltip-row .icon-incorrect { color: var(--color-danger); font-weight: 800; }
 .history-tooltip-row .icon-absent { color: var(--color-text-muted); }
+
+/* ============================================================
+   Responsive — placé en fin de fichier pour primer sur les
+   définitions de base (même spécificité, ordre du fichier).
+   ============================================================ */
+@media (max-width: 900px) {
+  /* Éditeur : la grille à sidebar fixe déborde sur petit écran → on empile */
+  .editor-layout { grid-template-columns: 1fr; height: auto; min-height: 0; }
+  .question-sidebar { max-height: 260px; }
+  .editor-top-bar { flex-wrap: wrap; }
+  .quiz-meta { flex-wrap: wrap; }
+}

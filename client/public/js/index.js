@@ -268,6 +268,11 @@ const clearRevealState = () => {
   if (gradRuler) gradRuler.classList.remove('reveal')
 }
 
+// Badge « Réponse envoyée » : feedback principal du joueur après soumission
+const answerStatusEl = document.getElementById('answerStatus')
+const showAnswerStatus = () => { if (answerStatusEl) answerStatusEl.classList.remove('d-none') }
+const hideAnswerStatus = () => { if (answerStatusEl) answerStatusEl.classList.add('d-none') }
+
 const positionGradTargetMarker = (target) => {
   // Révélation : on bloque le curseur et on fait défiler la règle jusqu'à la
   // bonne valeur (le viseur central atterrit dessus), viseur teinté en vert.
@@ -1116,14 +1121,20 @@ socket.on('lobby:readyStatus', ({ allReady }) => {
   }
 })
 
+let hostQuestionLabel = ''
+
 const emitQuestion = (index) => {
   const roomCode = roomInput.value.trim()
   if (!roomCode || !loadedQuiz) return
   const q = loadedQuiz.questions && loadedQuiz.questions[index]
-  if (!q) { 
+  if (!q) {
     if (index >= loadedQuiz.questions.length) log('Quizz terminé')
-    return 
+    return
   }
+  // Repère de progression dans la barre hôte, complété par le compteur
+  // de réponses reçu via answer:progress.
+  hostQuestionLabel = `Question ${index + 1}/${loadedQuiz.questions.length}`
+  if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · en attente des réponses…`
   const payload = {
     roomCode,
     id: q.id || ('q' + (index + 1)),
@@ -1267,6 +1278,8 @@ socket.on('question:show', payload => {
   sendBtn.disabled = false
   gradState.disabled = false
   selectedMcqOptions = []
+  inputArea.classList.remove('answers-locked')
+  hideAnswerStatus()
 
   // Show send button for MCQ/graduation too if we want manual validation
   if ((payload.type === 'mcq' || payload.type === 'graduation') && !isHost) {
@@ -1281,6 +1294,8 @@ socket.on('question:show', payload => {
       buildRuler(min, max, mid)
     }
   } else {
+    // Ré-affiche la ligne de saisie (masquée à timer:end sur la question d'avant)
+    document.getElementById('freeText').classList.remove('d-none')
     document.getElementById('freeText').classList.remove('mcq-mode')
     answerInput.classList.remove('d-none')
     sendBtn.textContent = 'Envoyer'
@@ -1375,7 +1390,13 @@ sendBtn.onclick = () => {
 
 answerInput.addEventListener('keydown', e => { if (e.key === 'Enter') { sendBtn.click() } })
 
-socket.on('answer:ack', () => { log('Réponse envoyée') })
+socket.on('answer:ack', () => { showAnswerStatus() })
+
+// Compteur de réponses affiché dans la barre de contrôle de l'hôte
+socket.on('answer:progress', ({ answered, total }) => {
+  if (!isHost || !loadedInfo || !hostQuestionLabel) return
+  loadedInfo.textContent = `${hostQuestionLabel} · ${answered}/${total} réponse${answered > 1 ? 's' : ''}`
+})
 
 // Gestion de la modération (Hôte)
 const moderationDiv = document.createElement('div')
@@ -1559,7 +1580,12 @@ socket.on('player:joined', ({ id, name }) => {
 
 socket.on('timer:end', () => {
   if (!isHost) {
-    inputArea.style.display = 'none'
+    // Ne PAS masquer inputArea : la révélation (surbrillance QCM, règle,
+    // réponse acceptée) s'affiche dedans. On verrouille juste les interactions.
+    inputArea.classList.add('answers-locked')
+    const ft = document.getElementById('freeText')
+    if (ft) ft.classList.add('d-none')
+    hideAnswerStatus()
     if (isModerationPending) {
       leaderRows.clear()
       leaderboard.innerHTML = '<div id="moderationNotice"><h2 style="margin-bottom:20px; color:white">Validation des réponses par l\'hôte...</h2><p class="text-white" style="opacity:0.85">Un peu de patience, l\'hôte vérifie les dernières pépites !</p></div>'

@@ -393,6 +393,15 @@ const start = async () => {
       if (q.singleAttempt && q.submissions?.has(socket.id)) return
       socket.emit('answer:ack', { playerId: socket.id })
 
+      // Compteur « X/Y ont répondu » pour l'écran de l'hôte : émis après chaque
+      // soumission enregistrée (peu importe qu'elle soit juste, fausse ou en
+      // attente de modération).
+      const emitProgress = () => {
+        const total = Array.from(room.players.values())
+          .filter(p => p.id !== room.hostId && p.token !== room.hostToken).length
+        io.to(code).emit('answer:progress', { answered: q.submissions?.size || 0, total })
+      }
+
       if (q.type === 'graduation') {
         const guess = Number(payload?.content)
         const min = Number(q.min), max = Number(q.max)
@@ -412,6 +421,7 @@ const start = async () => {
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'graded')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        emitProgress()
         return
       }
 
@@ -429,6 +439,7 @@ const start = async () => {
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'correct')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        emitProgress()
       } else {
         // Pour les QCM (type 'mcq'), c'est binaire : si ce n'est pas EXACT, c'est FAUX.
         // On ne passe JAMAIS par la modération pour un QCM.
@@ -436,6 +447,7 @@ const start = async () => {
           q.submissions?.set(socket.id, 'incorrect')
           const p = room.players.get(socket.id)
           if (p?.token && q.historyEntry) q.historyEntry.results[p.token] = 'incorrect'
+          emitProgress()
           return
         }
 
@@ -449,6 +461,7 @@ const start = async () => {
         room.pending.set(answerId, { playerId: socket.id, content: payload?.content, ts: submitTs, delta, historyEntry: q.historyEntry })
         q.submissions?.set(socket.id, answerId)
         io.to(code).emit('answer:queue', { answerId, playerId: socket.id, content: payload?.content })
+        emitProgress()
       }
     })
 
