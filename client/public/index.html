@@ -68,7 +68,7 @@
         <div class="d-flex flex-column gap-md">
           <div class="d-grid grid-cols-split gap-sm">
             <input id="room" placeholder="Code salle" class="text-center font-bold uppercase" />
-            <input id="name" placeholder="Ton pseudo" />
+            <input id="name" placeholder="Ton pseudo" maxlength="20" />
           </div>
           <button id="join" class="btn btn-primary h-56 font-18 w-full">
             <span>Rejoindre la partie</span>
@@ -91,7 +91,7 @@
       <div id="guestJoinOptions" class="card text-center max-w-500 m-auto mt-40 d-none">
         <h2 class="mb-lg font-32">Jouer en tant qu'invité</h2>
         <div class="d-flex flex-column gap-md">
-          <input id="guestNameInput" placeholder="Ton pseudo invité" class="max-w-320" />
+          <input id="guestNameInput" placeholder="Ton pseudo invité" class="max-w-320" maxlength="20" />
           <button id="confirmGuestJoin" class="btn btn-primary h-56 font-18 w-full">
             <span>Confirmer et rejoindre</span>
           </button>
@@ -158,6 +158,14 @@
 
         <div id="inputArea" class="d-none max-w-700 m-auto">
           <div id="options" class="options-grid d-none"></div>
+          <div id="graduationArea" class="graduation-area d-none">
+            <div class="graduation-labels">
+              <span id="gradMinLabel" class="grad-bound">0</span>
+              <span id="gradValueReadout" class="grad-value">50</span>
+              <span id="gradMaxLabel" class="grad-bound">100</span>
+            </div>
+            <input type="range" id="gradSlider" class="grad-slider" min="0" max="100" value="50" />
+          </div>
           <div id="freeText" class="free-text-input">
             <input id="answer" placeholder="Votre réponse..." class="h-60 border-none bg-transparent font-18" />
             <button id="send" class="btn btn-primary w-140 h-60 font-16">Envoyer</button>

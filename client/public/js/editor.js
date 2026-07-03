@@ -121,11 +121,30 @@ if (timerMinus && timerPlus && qTimer) {
 const mcqSection = document.getElementById('mcqSection')
 const optionsList = document.getElementById('optionsList')
 const addOptionBtn = document.getElementById('addOption')
+const correctSection = document.getElementById('correctSection')
 const correctList = document.getElementById('correctList')
 const addCorrectBtn = document.getElementById('addCorrect')
 const deleteQuestionBtn = document.getElementById('deleteQuestion')
 const qIndexLabel = document.getElementById('qIndexLabel')
 const correctLabel = document.getElementById('correctLabel')
+
+const graduationSection = document.getElementById('graduationSection')
+const qGradMin = document.getElementById('qGradMin')
+const qGradMax = document.getElementById('qGradMax')
+const qGradTarget = document.getElementById('qGradTarget')
+
+const bindGradStepper = (input, minusBtn, plusBtn, onCommit) => {
+  const commit = (val) => { input.value = val; onCommit(Number(val) || 0) }
+  minusBtn.onclick = () => commit((Number(input.value) || 0) - 1)
+  plusBtn.onclick = () => commit((Number(input.value) || 0) + 1)
+  input.oninput = () => onCommit(Number(input.value) || 0)
+}
+
+if (qGradMin && qGradMax && qGradTarget) {
+  bindGradStepper(qGradMin, document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'), (v) => { if (questions[activeIndex]) questions[activeIndex].min = v })
+  bindGradStepper(qGradMax, document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'), (v) => { if (questions[activeIndex]) questions[activeIndex].max = v })
+  bindGradStepper(qGradTarget, document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus'), (v) => { if (questions[activeIndex]) questions[activeIndex].correct = [String(v)] })
+}
 
 // État de l'application
 let currentId = null
@@ -182,6 +201,13 @@ const updateSidebar = () => {
   })
 }
 
+const populateGradFields = (q) => {
+  if (!qGradMin) return
+  qGradMin.value = q.min ?? 0
+  qGradMax.value = q.max ?? 100
+  qGradTarget.value = q.correct?.[0] ?? 50
+}
+
 const selectQuestion = (index) => {
   if (hasSelectedOnce) saveCurrentQuestionState()
   activeIndex = index
@@ -192,14 +218,15 @@ const selectQuestion = (index) => {
   qPrompt.value = q.prompt || ''
   qType.value = q.type || 'free'
   qTimer.value = (q.timerMs || 15000) / 1000
-  
+  populateGradFields(q)
+
   renderOptions()
   renderCorrects()
-  toggleMcqSection()
+  toggleTypeSections()
   updateSidebar()
-  
+
   qIndexLabel.textContent = `Question ${activeIndex + 1} / ${questions.length}`
-  
+
   // Mettre le focus sur l'énoncé pour une saisie rapide
   qPrompt.focus()
   hasSelectedOnce = true
@@ -207,22 +234,25 @@ const selectQuestion = (index) => {
 
 const saveCurrentQuestionState = () => {
   if (activeIndex < 0 || activeIndex >= questions.length) return
-  
+
   const q = questions[activeIndex]
   q.prompt = qPrompt.value.trim()
   q.type = qType.value
   q.timerMs = parseInt(qTimer.value) * 1000 || 15000
+  if (q.type === 'graduation') {
+    q.min = Number(qGradMin.value)
+    q.max = Number(qGradMax.value)
+    q.correct = [String(qGradTarget.value)]
+  }
 }
 
-const toggleMcqSection = () => {
-  const correctSection = correctList.closest('.detail-section')
+const toggleTypeSections = () => {
+  mcqSection.classList.toggle('d-none', qType.value !== 'mcq')
+  if (graduationSection) graduationSection.classList.toggle('d-none', qType.value !== 'graduation')
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation')
   if (qType.value === 'mcq') {
-    mcqSection.classList.remove('d-none')
-    if (correctSection) correctSection.classList.add('d-none')
     correctLabel.textContent = 'Réponses correctes'
   } else {
-    mcqSection.classList.add('d-none')
-    if (correctSection) correctSection.classList.remove('d-none')
     correctLabel.textContent = 'Réponses acceptées'
   }
 }
@@ -317,8 +347,15 @@ const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked =
 // --- Événements ---
 
 qType.onchange = () => {
-  questions[activeIndex].type = qType.value
-  toggleMcqSection()
+  const q = questions[activeIndex]
+  q.type = qType.value
+  if (qType.value === 'graduation') {
+    if (q.min === undefined) q.min = 0
+    if (q.max === undefined) q.max = 100
+    if (!q.correct || !q.correct[0]) q.correct = ['50']
+    populateGradFields(q)
+  }
+  toggleTypeSections()
   renderOptions()
   renderCorrects()
 }
@@ -353,12 +390,13 @@ deleteQuestionBtn.onclick = () => {
   qPrompt.value = q.prompt || ''
   qType.value = q.type || 'free'
   qTimer.value = (q.timerMs || 15000) / 1000
-  
+  populateGradFields(q)
+
   renderOptions()
   renderCorrects()
-  toggleMcqSection()
+  toggleTypeSections()
   updateSidebar()
-  
+
   qIndexLabel.textContent = `Question ${activeIndex + 1} / ${questions.length}`
   qPrompt.focus()
 }
@@ -400,6 +438,26 @@ saveQuizBtn.onclick = async () => {
       if (!hasValidOptions) {
         selectQuestion(i)
         showToast(`Le QCM ${i + 1} doit avoir au moins une option de réponse`, 'error')
+        return
+      }
+    }
+
+    // Pour les curseurs numériques, vérifier la cohérence min/max/cible
+    if (q.type === 'graduation') {
+      const min = Number(q.min), max = Number(q.max), target = Number(q.correct?.[0])
+      if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(target)) {
+        selectQuestion(i)
+        showToast(`Le curseur ${i + 1} a des valeurs invalides`, 'error')
+        return
+      }
+      if (min >= max) {
+        selectQuestion(i)
+        showToast(`Le curseur ${i + 1} : le minimum doit être inférieur au maximum`, 'error')
+        return
+      }
+      if (target < min || target > max) {
+        selectQuestion(i)
+        showToast(`Le curseur ${i + 1} : la valeur correcte doit être entre le min et le max`, 'error')
         return
       }
     }
