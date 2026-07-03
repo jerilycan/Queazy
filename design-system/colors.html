@@ -1,0 +1,67 @@
+<!-- @dsCard group="Fondations" -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700&display=swap');
+:root {
+  --color-bg: #46178f;
+  --color-bg-deep: #2e0f5c;
+  --color-navbar: #0e0e10;
+  --color-card: #ffffff;
+  --color-text: #1d1147;
+  --color-text-muted: #6b6190;
+  --color-accent: #46178f;
+  --color-accent-soft: rgba(70,23,143,0.1);
+  --color-border: rgba(29,17,71,0.1);
+  --color-danger: #e21b3c;
+  --tile-red: #e21b3c;
+  --tile-blue: #1368ce;
+  --tile-yellow: #d89e00;
+  --tile-green: #26890c;
+  --radius-md: 16px;
+  --shadow-sm: 0 4px 12px rgba(29,17,71,0.06);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px; background: #f4f2fa; font-family: 'Nunito', sans-serif; }
+h1 { font-family: 'Baloo 2', sans-serif; font-size: 22px; color: var(--color-text); margin: 0 0 24px; }
+h2 { font-family: 'Baloo 2', sans-serif; font-size: 15px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 32px 0 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
+.swatch { border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-sm); background: white; border: 1px solid var(--color-border); }
+.swatch-fill { height: 72px; }
+.swatch-label { padding: 10px 12px; font-size: 12px; }
+.swatch-name { font-weight: 700; color: var(--color-text); display: block; }
+.swatch-value { color: var(--color-text-muted); font-family: monospace; }
+</style>
+</head>
+<body>
+  <h1>QuEazy — Palette de couleurs</h1>
+
+  <h2>Marque</h2>
+  <div class="grid">
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-bg)"></div><div class="swatch-label"><span class="swatch-name">--color-bg</span><span class="swatch-value">#46178f</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-bg-deep)"></div><div class="swatch-label"><span class="swatch-name">--color-bg-deep</span><span class="swatch-value">#2e0f5c</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-navbar)"></div><div class="swatch-label"><span class="swatch-name">--color-navbar</span><span class="swatch-value">#0e0e10</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-accent)"></div><div class="swatch-label"><span class="swatch-name">--color-accent</span><span class="swatch-value">#46178f</span></div></div>
+  </div>
+
+  <h2>Texte &amp; surfaces</h2>
+  <div class="grid">
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-card)"></div><div class="swatch-label"><span class="swatch-name">--color-card</span><span class="swatch-value">#ffffff</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-text)"></div><div class="swatch-label"><span class="swatch-name">--color-text</span><span class="swatch-value">#1d1147</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-text-muted)"></div><div class="swatch-label"><span class="swatch-name">--color-text-muted</span><span class="swatch-value">#6b6190</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-accent-soft)"></div><div class="swatch-label"><span class="swatch-name">--color-accent-soft</span><span class="swatch-value">rgba(70,23,143,.1)</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-border)"></div><div class="swatch-label"><span class="swatch-name">--color-border</span><span class="swatch-value">rgba(29,17,71,.1)</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--color-danger)"></div><div class="swatch-label"><span class="swatch-name">--color-danger</span><span class="swatch-value">#e21b3c</span></div></div>
+  </div>
+
+  <h2>Tuiles QCM (style Kahoot)</h2>
+  <div class="grid">
+    <div class="swatch"><div class="swatch-fill" style="background:var(--tile-red)"></div><div class="swatch-label"><span class="swatch-name">--tile-red</span><span class="swatch-value">#e21b3c</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--tile-blue)"></div><div class="swatch-label"><span class="swatch-name">--tile-blue</span><span class="swatch-value">#1368ce</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--tile-yellow)"></div><div class="swatch-label"><span class="swatch-name">--tile-yellow</span><span class="swatch-value">#d89e00</span></div></div>
+    <div class="swatch"><div class="swatch-fill" style="background:var(--tile-green)"></div><div class="swatch-label"><span class="swatch-name">--tile-green</span><span class="swatch-value">#26890c</span></div></div>
+  </div>
+</body>
+</html>

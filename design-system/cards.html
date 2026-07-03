@@ -1,0 +1,49 @@
+<!-- @dsCard group="Composants" -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700&display=swap');
+:root {
+  --color-accent: #46178f;
+  --color-accent-soft: rgba(70,23,143,0.1);
+  --color-text: #1d1147;
+  --color-text-muted: #6b6190;
+  --color-border: rgba(29,17,71,0.1);
+  --radius-lg: 24px;
+  --shadow-md: 0 12px 32px rgba(29,17,71,0.12);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px; background: linear-gradient(160deg, #46178f 0%, #2e0f5c 100%); font-family: 'Nunito', sans-serif; }
+h2 { font-family: 'Baloo 2', sans-serif; font-size: 15px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 12px; }
+.row { display: flex; gap: 20px; flex-wrap: wrap; }
+.card {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfaff 100%);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, var(--shadow-md);
+  border: 1px solid var(--color-border);
+  width: 260px;
+}
+.card h3 { font-family: 'Baloo 2', sans-serif; margin: 0 0 8px; color: var(--color-text); font-size: 18px; }
+.card p { margin: 0; color: var(--color-text-muted); font-size: 14px; }
+.quiz-card { cursor: pointer; }
+.note { color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <h2>Carte standard</h2>
+  <div class="row">
+    <div class="card">
+      <h3>C'est l'heure du quiz !</h3>
+      <p>Fond en dégradé subtil blanc → lavande, ombre portée douce. Utilisée pour tous les conteneurs principaux (join, login, profil, éditeur).</p>
+    </div>
+    <div class="card quiz-card">
+      <h3>Démo Néon</h3>
+      <p>8 questions</p>
+    </div>
+  </div>
+  <p class="note">Au survol (non visible ici) : léger soulèvement (translateY -5px) + halo radial accent.</p>
+</body>
+</html>

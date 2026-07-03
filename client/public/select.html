@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QuEazy – Sélection de Quizz</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/js/supabase-config.js"></script>
+  </head>
+  <body>
+    <div class="navbar">
+      <a href="/" class="brand">QuEazy</a>
+      <div class="nav-group">
+        <a href="/?create=true" id="navCreate" class="btn btn-nav-main">Créer</a>
+        <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
+      </div>
+      <div class="nav-group">
+        <a href="/select.html" class="btn btn-nav-secondary">Mes Quiz</a>
+        <a id="navLogin" href="/login.html" class="btn btn-nav-secondary d-none">Connexion</a>
+        <a id="profile" href="/profile.html" class="profile-chip d-none">
+          <span id="profileAvatar" class="avatar-profile-link"></span>
+          <span id="profileName" class="profile-name"></span>
+        </a>
+      </div>
+    </div>
+
+    <div class="container mt-20">
+      
+      <div class="d-flex justify-between align-center mb-lg">
+        <div class="d-flex gap-sm">
+          <button id="tabMine" class="btn btn-primary">Mes Quiz</button>
+          <button id="tabPublic" class="btn">Quizz publics</button>
+        </div>
+        <a href="/editor.html" id="newQuizBtn" class="btn btn-primary"><span>+</span> Nouveau Quiz</a>
+      </div>
+      
+      <div id="list" class="player-grid select-grid">
+        <!-- Liste des quiz -->
+      </div>
+    </div>
+    <script src="/js/select.js"></script>
+  </body>
+</html>

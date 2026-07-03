@@ -1,0 +1,43 @@
+<!-- @dsCard group="Composants" -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700&display=swap');
+:root {
+  --tile-red: #e21b3c; --tile-blue: #1368ce; --tile-yellow: #d89e00; --tile-green: #26890c;
+  --radius-md: 16px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px; font-family: 'Nunito', sans-serif; background: linear-gradient(160deg, #46178f 0%, #2e0f5c 100%); }
+h2 { font-family: 'Baloo 2', sans-serif; font-size: 15px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 16px; }
+.question-text { font-family: 'Baloo 2', sans-serif; font-size: 24px; font-weight: 800; color: white; text-align: center; margin-bottom: 24px; text-shadow: 0 3px 0 rgba(0,0,0,0.2); }
+.options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 600px; }
+.option-btn {
+  padding: 20px 20px 20px 56px; color: white; border: none; border-radius: var(--radius-md);
+  box-shadow: 0 5px 0 rgba(0,0,0,0.25); font-weight: 800; font-size: 16px; text-align: left;
+  position: relative; min-height: 64px; display: flex; align-items: center;
+}
+.option-btn::before { content: ''; position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; background: rgba(255,255,255,0.9); }
+.option-btn:nth-child(1) { background: var(--tile-red); }
+.option-btn:nth-child(1)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+.option-btn:nth-child(2) { background: var(--tile-blue); }
+.option-btn:nth-child(2)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+.option-btn:nth-child(3) { background: var(--tile-yellow); }
+.option-btn:nth-child(3)::before { border-radius: 50%; }
+.option-btn:nth-child(4) { background: var(--tile-green); }
+.option-btn:nth-child(4)::before { border-radius: 4px; }
+</style>
+</head>
+<body>
+  <h2>Tuiles de réponse QCM (écran de jeu)</h2>
+  <div class="question-text">Quelle est la capitale de la France ?</div>
+  <div class="options-grid">
+    <div class="option-btn">Paris</div>
+    <div class="option-btn">Lyon</div>
+    <div class="option-btn">Marseille</div>
+    <div class="option-btn">Toulouse</div>
+  </div>
+</body>
+</html>

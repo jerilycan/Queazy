@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QuEazy – Profil</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/js/supabase-config.js"></script>
+  </head>
+  <body>
+    <div class="navbar">
+      <a href="/" class="brand">QuEazy</a>
+      <div class="nav-group">
+        <a href="/?create=true" id="navCreate" class="btn btn-nav-main">Créer</a>
+        <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
+      </div>
+      <div class="nav-group">
+        <a href="/select.html" class="btn btn-nav-secondary">Mes Quiz</a>
+        <a id="navLogin" href="/login.html" class="btn btn-nav-secondary d-none">Connexion</a>
+        <a id="profile" href="/profile.html" class="profile-chip d-none">
+          <span id="profileAvatar" class="avatar-profile-link"></span>
+          <span id="profileName" class="profile-name"></span>
+        </a>
+      </div>
+    </div>
+
+    <div class="container mt-20">
+
+      <h1 class="mb-lg">Mon Profil</h1>
+
+      <div class="card">
+        <div class="d-flex gap-lg align-start">
+          <div id="avatar" class="avatar-main avatar-lg flex-shrink-0 avatar-profile"></div>
+          <div class="flex-1 d-flex flex-column gap-md">
+            <div>
+              <label class="d-block font-14 font-bold text-muted mb-8">Pseudo</label>
+              <input id="name" placeholder="Ton pseudo" />
+            </div>
+            
+            <div>
+              <label class="d-block font-14 font-bold text-muted mb-8">Avatar</label>
+              <div class="icon-grid" id="avatarGrid"></div>
+            </div>
+
+            <button id="save" class="btn btn-primary h-50 mt-8">Sauvegarder le profil</button>
+            <button id="logout" class="btn border-danger text-danger h-50 mt-8">Se déconnecter</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toasts" class="toast-container"></div>
+
+    <script src="/js/profile.js"></script>
+  </body>
+</html>

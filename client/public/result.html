@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Résultats - QuEazy</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/js/supabase-config.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  </head>
+  <body>
+    <div class="navbar">
+      <a href="/" class="brand">QuEazy</a>
+      <div class="nav-group">
+        <a href="/select.html" class="btn btn-nav-secondary">Mes Quiz</a>
+      </div>
+      <div class="nav-group">
+        <a id="navLogin" href="/login.html" class="btn btn-nav-secondary d-none">Connexion</a>
+        <a id="profile" href="/profile.html" class="profile-chip d-none">
+          <span id="profileAvatar" class="avatar-profile-link"></span>
+          <span id="profileName" class="profile-name"></span>
+        </a>
+      </div>
+    </div>
+
+    <div class="container mt-20">
+      <div class="card max-w-700 m-auto text-center">
+        <h1 class="font-32 mb-md">🏆 Résultats finaux 🏆</h1>
+        <div id="resultsPodium" class="podium-container m-auto mb-lg" style="max-width:540px">
+          <div class="podium-step step-2 hidden">
+            <div class="podium-avatar"></div>
+            <div class="podium-name text-dark font-bold mb-8"></div>
+            <div class="podium-bar bg-accent-light" style="height: 120px; width: 80px; display:flex; align-items:center; justify-content:center; border-radius: 8px 8px 0 0;">
+              <span class="text-white font-24 font-bold">2</span>
+            </div>
+            <div class="podium-score text-accent font-bold mt-8"></div>
+          </div>
+          <div class="podium-step step-1 hidden">
+            <div class="podium-crown" style="font-size:40px; margin-bottom:-10px; position:relative; z-index:10;">👑</div>
+            <div class="podium-avatar"></div>
+            <div class="podium-name text-dark font-bold mb-8"></div>
+            <div class="podium-bar bg-accent" style="height: 160px; width: 100px; display:flex; align-items:center; justify-content:center; border-radius: 8px 8px 0 0;">
+              <span class="text-white font-32 font-bold">1</span>
+            </div>
+            <div class="podium-score text-accent font-bold mt-8"></div>
+          </div>
+          <div class="podium-step step-3 hidden">
+            <div class="podium-avatar"></div>
+            <div class="podium-name text-dark font-bold mb-8"></div>
+            <div class="podium-bar bg-accent-light" style="height: 80px; width: 80px; display:flex; align-items:center; justify-content:center; border-radius: 8px 8px 0 0;">
+              <span class="text-white font-24 font-bold">3</span>
+            </div>
+            <div class="podium-score text-accent font-bold mt-8"></div>
+          </div>
+        </div>
+        <div id="fullTable" class="mt-lg"></div>
+        <div style="margin-top:48px">
+          <button id="backHome" class="btn btn-primary px-32 py-12 font-18">Retour à l'accueil</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/results.js"></script>
+  </body>
+</html>

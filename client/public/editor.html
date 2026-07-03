@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QuEazy – Éditeur de Quizz</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/js/supabase-config.js"></script>
+  </head>
+  <body>
+    <div class="navbar">
+      <a href="/" class="brand">QuEazy</a>
+      <div class="nav-group">
+        <a href="/?create=true" id="navCreate" class="btn btn-nav-main">Créer</a>
+        <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
+      </div>
+      <div class="nav-group">
+        <a href="/select.html" class="btn btn-nav-secondary">Mes Quiz</a>
+        <a id="navLogin" href="/login.html" class="btn btn-nav-secondary d-none">Connexion</a>
+        <a id="profile" href="/profile.html" class="profile-chip d-none">
+          <span id="profileAvatar" class="avatar-profile-link"></span>
+          <span id="profileName" class="profile-name"></span>
+        </a>
+      </div>
+    </div>
+
+    <div class="container mt-20">
+
+      <div class="editor-top-bar">
+        <div class="quiz-meta">
+          <input id="title" placeholder="Titre du quizz" />
+          <div class="align-center d-flex gap-sm">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14">
+              <input id="singleAttempt" type="checkbox" checked class="checkbox-custom" />
+              Une seule tentative
+            </label>
+          </div>
+        </div>
+        <div class="editor-actions">
+          <button id="deleteQuiz" class="btn text-danger">Supprimer ce Quizz</button>
+          <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
+        </div>
+      </div>
+      
+      <div class="editor-layout">
+        <!-- Sidebar: Liste des questions -->
+        <div class="question-sidebar">
+          <div class="sidebar-header">
+            <h3 class="font-14">Questions</h3>
+            <button id="addQuestion" class="btn-icon" title="Ajouter une question">+</button>
+          </div>
+          <div id="questionList" class="question-list">
+            <!-- Rempli par JS -->
+          </div>
+        </div>
+
+        <!-- Detail: Éditeur de la question sélectionnée -->
+        <div id="questionDetail" class="question-detail">
+          <div class="detail-section">
+            <label>Énoncé de la question</label>
+            <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..."></textarea>
+          </div>
+
+          <div class="d-grid grid-cols-split gap-lg">
+            <div class="detail-section">
+              <label>Type de réponse</label>
+              <select id="qType">
+                <option value="free">Texte libre</option>
+                <option value="mcq">Choix multiples (QCM)</option>
+              </select>
+            </div>
+            <div class="detail-section">
+              <label>Temps imparti (secondes)</label>
+              <div class="timer-controls">
+                <button id="timerMinus" class="btn-timer">-</button>
+                <input type="number" id="qTimer" value="15" min="5" max="120" readonly />
+                <button id="timerPlus" class="btn-timer">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="mcqSection" class="detail-section d-none">
+            <label>Options de réponse</label>
+            <div id="optionsList" class="options-editor">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="addOption" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une option</button>
+          </div>
+
+          <div class="detail-section">
+            <label id="correctLabel">Réponses acceptées</label>
+            <div id="correctList" class="options-editor">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="addCorrect" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse correcte</button>
+          </div>
+
+          <div class="mt-auto d-flex justify-between align-center pt-20 border-accent-top">
+            <button id="deleteQuestion" class="btn text-danger font-14">Supprimer cette question</button>
+            <div class="text-muted font-13" id="qIndexLabel">Question 1 / 1</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toasts" class="toast-container"></div>
+
+    <script src="/js/editor.js"></script>
+  </body>
+</html>

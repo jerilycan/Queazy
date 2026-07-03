@@ -1,0 +1,42 @@
+<!-- @dsCard group="Composants" -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700&display=swap');
+:root {
+  --color-accent: #46178f;
+  --color-border: rgba(29,17,71,0.1);
+  --color-accent-soft: rgba(70,23,143,0.1);
+  --radius-sm: 12px;
+  --shadow-sm: 0 4px 12px rgba(29,17,71,0.06);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px; background: #f4f2fa; font-family: 'Nunito', sans-serif; }
+h2 { font-family: 'Baloo 2', sans-serif; font-size: 15px; color: #6b6190; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 12px; }
+.icon-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; max-width: 480px; }
+.icon-opt.avatar-tile {
+  width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--color-border);
+  background-size: cover; background-position: center; background-color: transparent;
+  overflow: hidden; cursor: pointer;
+}
+.icon-opt.avatar-tile.selected { border-color: var(--color-accent); background-color: transparent; box-shadow: var(--shadow-sm); }
+.note { color: #6b6190; font-size: 12px; margin-top: 12px; max-width: 480px; }
+</style>
+</head>
+<body>
+  <h2>Sélecteur d'avatar (page Profil)</h2>
+  <div class="icon-grid">
+    <div class="icon-opt avatar-tile selected" style="background-image:url(assets/avatar1.png)"></div>
+    <div class="icon-opt avatar-tile" style="background-image:url(assets/avatar2.png)"></div>
+    <div class="icon-opt avatar-tile" style="background-image:url(assets/avatar3.png)"></div>
+    <div class="icon-opt avatar-tile" style="background-image:url(assets/avatar4.png)"></div>
+    <div class="icon-opt avatar-tile" style="background-image:url(assets/avatar5.png)"></div>
+    <div class="icon-opt avatar-tile" style="background-image:url(assets/avatar6.png)"></div>
+    <div class="icon-opt avatar-tile" style="background-image:url(assets/avatar7.png)"></div>
+    <div class="icon-opt avatar-tile" style="background-image:url(assets/avatar8.png)"></div>
+  </div>
+  <p class="note">8 avatars illustrés prédéfinis, stockés comme fichiers statiques (pas d'upload libre — voir décision produit : coût de stockage/modération nul, valeur "profils.avatar_url" = simple chemin texte, synchronisé via Supabase).</p>
+</body>
+</html>

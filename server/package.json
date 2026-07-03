@@ -1,0 +1,16 @@
+{
+  "name": "queazy-server",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@fastify/static": "^6.12.0",
+    "@supabase/supabase-js": "^2.95.3",
+    "fastify": "^4.25.2",
+    "socket.io": "^4.7.2"
+  }
+}

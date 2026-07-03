@@ -1,0 +1,45 @@
+<!-- @dsCard group="Composants" -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700&display=swap');
+:root {
+  --color-accent: #46178f;
+  --color-accent-rgb: 70,23,143;
+  --color-text: #1d1147;
+  --color-text-muted: #6b6190;
+  --radius-lg: 24px;
+  --radius-md: 16px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px; background: #f4f2fa; font-family: 'Nunito', sans-serif; }
+h2 { font-family: 'Baloo 2', sans-serif; font-size: 15px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 12px; }
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; min-height: 280px; padding: 48px; gap: 8px;
+  background: radial-gradient(circle, rgba(var(--color-accent-rgb),0.06) 0%, transparent 70%);
+  border-radius: var(--radius-lg); max-width: 480px;
+}
+.empty-state-icon { font-size: 56px; margin-bottom: 8px; }
+.empty-state h3 { font-family: 'Baloo 2', sans-serif; color: var(--color-text); margin: 0; }
+.empty-state p { color: var(--color-text-muted); max-width: 360px; margin: 0 0 4px; }
+.btn-primary {
+  padding: 12px 24px; border-radius: var(--radius-md); border: none; text-decoration: none;
+  background: linear-gradient(135deg, var(--color-accent) 0%, #5b21c9 100%); color: white;
+  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 14px;
+  box-shadow: 0 4px 0 #2e0f5c; display: inline-block;
+}
+</style>
+</head>
+<body>
+  <h2>État vide — avec CTA (ex. "Mes Quiz")</h2>
+  <div class="empty-state">
+    <div class="empty-state-icon">📝</div>
+    <h3>Aucun quiz pour l'instant</h3>
+    <p>Crée ton premier quiz pour commencer à jouer avec tes amis.</p>
+    <a href="#" class="btn-primary">+ Créer mon premier quiz</a>
+  </div>
+</body>
+</html>

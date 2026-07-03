@@ -1,0 +1,48 @@
+<!-- @dsCard group="Fondations" -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;600;700;800;900&display=swap');
+:root {
+  --color-accent: #46178f;
+  --color-text: #1d1147;
+  --color-text-muted: #6b6190;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px; background: #f4f2fa; font-family: 'Nunito', sans-serif; color: var(--color-text); }
+h2.section { font-family: 'Baloo 2', sans-serif; font-size: 15px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 32px 0 12px; }
+.brand {
+  font-size: 40px;
+  font-family: 'Baloo 2', sans-serif;
+  background: linear-gradient(90deg, #ff57a6 0%, var(--color-accent) 30%, #26d9c4 50%, var(--color-accent) 70%, #ff57a6 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  font-weight: 800; display: inline-block;
+}
+.baloo { font-family: 'Baloo 2', sans-serif; font-weight: 800; margin: 8px 0; }
+.nunito { font-family: 'Nunito', sans-serif; margin: 8px 0; }
+.sample-40 { font-size: 40px; }
+.sample-32 { font-size: 32px; }
+.sample-24 { font-size: 24px; }
+.sample-18 { font-size: 18px; }
+.sample-14 { font-size: 14px; color: var(--color-text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.body-text { font-size: 16px; line-height: 1.5; max-width: 480px; }
+.muted { color: var(--color-text-muted); }
+</style>
+</head>
+<body>
+  <span class="brand">QuEazy</span>
+
+  <h2 class="section">Baloo 2 — titres &amp; boutons (bubbly, ludique)</h2>
+  <div class="baloo sample-40">Titre principal 40px</div>
+  <div class="baloo sample-32">Titre de section 32px</div>
+  <div class="baloo sample-24">Sous-titre 24px</div>
+  <div class="baloo sample-18">Bouton / label 18px</div>
+  <div class="baloo sample-14">Étiquette 14px uppercase</div>
+
+  <h2 class="section">Nunito — texte courant</h2>
+  <p class="nunito body-text">Ce texte utilise Nunito, la police de corps de QuEazy — lisible, chaleureuse, pensée pour les instructions de jeu et les formulaires. <span class="muted">Le texte secondaire utilise --color-text-muted.</span></p>
+</body>
+</html>

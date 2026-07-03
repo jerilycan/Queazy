@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QuEazy</title>
+    <link rel="stylesheet" href="/css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="/js/supabase-config.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  </head>
+  <body>
+    <div class="navbar">
+      <a href="/" class="brand">QuEazy</a>
+      <div class="nav-group">
+        <a href="/?create=true" id="navCreate" class="btn btn-nav-main">Créer</a>
+        <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
+      </div>
+      <div class="nav-group">
+        <a href="/select.html" class="btn btn-nav-secondary">Mes Quiz</a>
+        <a id="navLogin" href="/login.html" class="btn btn-nav-secondary d-none">Connexion</a>
+        <a id="profile" href="/profile.html" class="profile-chip d-none">
+          <span id="profileAvatar" class="avatar-profile-link"></span>
+          <span id="profileName" class="profile-name"></span>
+        </a>
+      </div>
+    </div>
+
+    <div class="container mt-20">
+
+      <!-- Salon d'attente -->
+      <div id="lobby" class="card d-none">
+        <div class="lobby-header">
+          <h1>Salon d’attente</h1>
+          <p class="text-muted mt-8">Préparez-vous pour le début de la partie</p>
+        </div>
+        
+        <div id="lobbyHost" class="lobby-host-card"></div>
+
+        <h3 class="mb-md opacity-80">Joueurs connectés</h3>
+        <div id="lobbyGrid" class="player-grid"></div>
+      </div>
+
+      <!-- Popup de personnalisation (cachée par défaut) -->
+      <div id="personalizationPopup" class="modal-overlay d-none">
+        <div class="modal-content card max-w-500">
+          <div class="d-flex justify-between align-center mb-lg">
+            <h2 class="font-28">Personnalisation</h2>
+            <button id="closePersonalization" class="btn-close">&times;</button>
+          </div>
+          
+          <div id="lobbyBuilder" class="d-flex flex-column align-center gap-md">
+            <div id="lobbyPreview" class="avatar-main avatar-lg">🙂</div>
+            <input id="lobbyName" placeholder="Ton pseudo" class="w-full" />
+            <div class="icon-grid" id="iconGrid">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="lobbySave" class="btn btn-primary h-50 w-full">Je suis prêt !</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connexion / Création -->
+      <div id="joinCard" class="card text-center max-w-500 m-auto mt-40">
+        <h2 class="mb-lg font-32">C’est l’heure du quiz !</h2>
+        <div class="d-flex flex-column gap-md">
+          <div class="d-grid grid-cols-split gap-sm">
+            <input id="room" placeholder="Code salle" class="text-center font-bold uppercase" />
+            <input id="name" placeholder="Ton pseudo" />
+          </div>
+          <button id="join" class="btn btn-primary h-56 font-18 w-full">
+            <span>Rejoindre la partie</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>
+          </button>
+          
+          <div id="createRoomDivider" class="divider">
+            <div class="divider-line"></div>
+            <span class="divider-text">Ou</span>
+            <div class="divider-line"></div>
+          </div>
+          
+          <button id="createRoom" class="btn h-56 w-full border-border">
+            <span>Créer ma propre salle</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Choix invité (caché par défaut) -->
+      <div id="guestJoinOptions" class="card text-center max-w-500 m-auto mt-40 d-none">
+        <h2 class="mb-lg font-32">Jouer en tant qu'invité</h2>
+        <div class="d-flex flex-column gap-md">
+          <input id="guestNameInput" placeholder="Ton pseudo invité" class="max-w-320" />
+          <button id="confirmGuestJoin" class="btn btn-primary h-56 font-18 w-full">
+            <span>Confirmer et rejoindre</span>
+          </button>
+          <button id="cancelGuestJoin" class="btn h-56 w-full border-border">
+            <span>Annuler</span>
+          </button>
+        </div>
+      </div>
+      <!-- Panel de contrôle Hôte -->
+      <div id="hostPanel" class="card d-none mt-20 border-accent-left d-flex align-center justify-between" style="padding: 20px 32px;">
+        <div class="d-flex flex-column gap-xs">
+          <h3 class="font-18">Contrôles de l'hôte</h3>
+          <div id="loadedInfo" class="font-14 text-accent font-bold">Aucun quiz sélectionné</div>
+        </div>
+        <div class="d-flex gap-sm">
+          <button id="selectQuizBtn" class="btn h-48 px-32">Sélectionner un Quiz</button>
+          <button id="startQuiz" class="btn btn-primary h-48 px-32">LANCER</button>
+          <button id="prevQuestion" class="btn h-48 d-none">Précédent</button>
+          <button id="nextQuestion" class="btn h-48 d-none">Suivant</button>
+        </div>
+      </div>
+
+      <!-- Popup de sélection de quiz (cachée par défaut) -->
+      <div id="quizSelectPopup" class="modal-overlay d-none">
+        <div class="modal-content card">
+          <h2 class="mb-lg font-32">Sélectionner un Quiz</h2>
+          <div id="quizList" class="d-flex flex-column gap-md mb-lg">
+            <!-- Les quiz seront chargés ici par JavaScript -->
+            <p class="text-muted">Chargement des quiz...</p>
+          </div>
+          <div class="d-flex gap-sm justify-end">
+            <button id="cancelQuizSelect" class="btn h-48">Annuler</button>
+            <button id="confirmQuizSelect" class="btn btn-primary h-48" disabled>Confirmer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Infos Salle (Hôte) -->
+      <div id="roomInfo" class="card d-none mt-20 max-w-500 m-auto text-center border-accent-top">
+        <h3 class="font-14 uppercase text-muted mb-16 letter-spacing-1">Partager l'accès</h3>
+        <div id="qr" class="qr-container"></div>
+        <div class="info-box mb-16">
+          <div id="serverInfo" class="font-bold font-18 text-dark mb-12"></div>
+          <button id="copyUrl" class="btn btn-primary w-full h-44">Copier le lien d'invitation</button>
+        </div>
+      </div>
+
+      
+      <!-- Code de salle persistant pour tous -->
+      <div id="persistentRoomCode" class="persistent-code d-none">
+        Code salle: <span id="displayRoomCode" class="font-bold text-accent"></span>
+      </div>
+
+      <!-- Zone de jeu -->
+      <div id="main" class="mt-40">
+        <div id="question" class="question-text"></div>
+        
+        <div class="timer-container d-none" id="timerContainer">
+          <div class="timer-bar-wrapper">
+            <div id="timerBar" class="timer-bar-fill"></div>
+            <div id="timerLabel" class="timer-label">15</div>
+          </div>
+        </div>
+
+        <div id="inputArea" class="d-none max-w-700 m-auto">
+          <div id="options" class="options-grid d-none"></div>
+          <div id="freeText" class="free-text-input">
+            <input id="answer" placeholder="Votre réponse..." class="h-60 border-none bg-transparent font-18" />
+            <button id="send" class="btn btn-primary w-140 h-60 font-16">Envoyer</button>
+          </div>
+        </div>
+        
+        <div id="log" class="log-message"></div>
+      </div>
+    </div>
+
+    <!-- Leaderboard Overlay -->
+    <div id="leaderOverlay" class="d-none leader-overlay">
+      <h2 class="leader-title">Classement</h2>
+      <div id="leaderboard" class="leaderboard-list"></div>
+    </div>
+
+    <!-- Podium -->
+    <div id="podium" class="d-none" style="position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:2000; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+      <h2 class="text-center mb-40 font-40 text-white" style="text-shadow: 0 4px 12px rgba(0,0,0,0.5);">🏆 Podium Final 🏆</h2>
+      <div class="podium-container">
+        <div class="podium-step step-2 hidden">
+          <div class="podium-avatar"></div>
+          <div class="podium-name text-white font-bold mb-8"></div>
+          <div class="podium-bar bg-accent-light" style="height: 120px; width: 80px; display:flex; align-items:center; justify-content:center; border-radius: 8px 8px 0 0;">
+            <span class="text-white font-24 font-bold">2</span>
+          </div>
+          <div class="podium-score text-accent font-bold mt-8"></div>
+        </div>
+        <div class="podium-step step-1 hidden">
+          <div class="podium-crown text-40 mb-[-10px] z-10">👑</div>
+          <div class="podium-avatar"></div>
+          <div class="podium-name text-white font-bold mb-8"></div>
+          <div class="podium-bar bg-accent" style="height: 160px; width: 100px; display:flex; align-items:center; justify-content:center; border-radius: 8px 8px 0 0; box-shadow: 0 0 20px rgba(var(--color-accent-rgb), 0.5);">
+            <span class="text-white font-32 font-bold">1</span>
+          </div>
+          <div class="podium-score text-accent font-bold mt-8"></div>
+        </div>
+        <div class="podium-step step-3 hidden">
+          <div class="podium-avatar"></div>
+          <div class="podium-name text-white font-bold mb-8"></div>
+          <div class="podium-bar bg-accent-light" style="height: 80px; width: 80px; display:flex; align-items:center; justify-content:center; border-radius: 8px 8px 0 0;">
+            <span class="text-white font-24 font-bold">3</span>
+          </div>
+          <div class="podium-score text-accent font-bold mt-8"></div>
+        </div>
+      </div>
+      <div class="text-center mt-60 opacity-0 animation-fade-in" style="animation-delay: 6s; animation-fill-mode: forwards;">
+        <button onclick="window.location.reload()" class="btn btn-primary px-32 py-12 font-18 shadow-lg">Retour à l'accueil</button>
+      </div>
+    </div>
+
+    <script src="/js/index.js"></script>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+<!-- @dsCard group="Composants" -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap');
+:root {
+  --color-accent: #46178f;
+  --color-card: #ffffff;
+  --color-text: #1d1147;
+  --tile-red: #e21b3c;
+  --tile-blue: #1368ce;
+  --radius-md: 16px;
+  --shadow-sm: 0 4px 12px rgba(29,17,71,0.06);
+  --shadow-md: 0 12px 32px rgba(29,17,71,0.12);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px; background: #f4f2fa; font-family: 'Nunito', sans-serif; }
+h2 { font-family: 'Baloo 2', sans-serif; font-size: 15px; color: #6b6190; text-transform: uppercase; letter-spacing: 0.05em; margin: 32px 0 12px; }
+h2:first-child { margin-top: 0; }
+.row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.btn {
+  padding: 12px 24px; border-radius: var(--radius-md); border: none;
+  background: var(--color-card); color: var(--color-text);
+  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer;
+  box-shadow: 0 4px 0 rgba(29,17,71,0.18), var(--shadow-sm);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-primary { background: linear-gradient(135deg, var(--color-accent) 0%, #5b21c9 100%); color: white; box-shadow: 0 4px 0 #2e0f5c, var(--shadow-sm); }
+.btn-nav-main { background: var(--tile-blue) !important; color: white !important; padding: 12px 32px; border-radius: 14px; font-weight: 800; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 5px 0 #0c4a96; }
+.btn-nav-main.red { background: var(--tile-red) !important; box-shadow: 0 5px 0 #9c1029; }
+.btn-nav-secondary { background: white !important; color: var(--color-accent) !important; border: 2px solid var(--color-accent) !important; border-radius: var(--radius-md); font-weight: 800; padding: 8px 20px; }
+.btn:disabled, .btn.is-disabled { opacity: .5; cursor: not-allowed; box-shadow: none !important; }
+.btn-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md); border: 1px solid rgba(29,17,71,0.1); background: white; padding: 0; }
+.note { font-size: 12px; color: #6b6190; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h2>Bouton neutre / Primaire</h2>
+  <div class="row">
+    <button class="btn">Annuler</button>
+    <button class="btn btn-primary">Sauvegarder</button>
+    <button class="btn" disabled>Désactivé</button>
+  </div>
+  <p class="note">Mécanique "pression 3D" : l'ombre décalée s'aplatit au clic (:active). Ne pas retirer ce comportement lors de futures itérations.</p>
+
+  <h2>Navbar principale (Créer / Rejoindre)</h2>
+  <div class="row">
+    <a class="btn btn-nav-main">Créer</a>
+    <a class="btn btn-nav-main red">Rejoindre</a>
+    <a class="btn btn-nav-secondary">Mes Quiz</a>
+  </div>
+
+  <h2>Icône</h2>
+  <div class="row">
+    <button class="btn-icon">+</button>
+  </div>
+</body>
+</html>

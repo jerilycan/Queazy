@@ -1,0 +1,8 @@
+installation:
+  version: 6.0.0-alpha.23
+  installDate: 2026-01-25T18:34:01.527Z
+  lastUpdated: 2026-01-25T18:34:01.527Z
+modules:
+  - core
+ides:
+  - trae
