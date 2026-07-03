@@ -160,13 +160,15 @@
         <div id="inputArea" class="d-none max-w-700 m-auto">
           <div id="options" class="options-grid d-none"></div>
           <div id="graduationArea" class="graduation-area d-none">
+            <div class="grad-readout"><span id="gradValueReadout" class="grad-value">50</span></div>
+            <div id="gradRuler" class="grad-ruler">
+              <div id="gradRulerTrack" class="grad-ruler-track"></div>
+              <div class="grad-ruler-cursor"></div>
+            </div>
             <div class="graduation-labels">
               <span id="gradMinLabel" class="grad-bound">0</span>
-              <span id="gradValueReadout" class="grad-value">50</span>
               <span id="gradMaxLabel" class="grad-bound">100</span>
             </div>
-            <input type="range" id="gradSlider" class="grad-slider" min="0" max="100" value="50" />
-            <div id="gradTargetMarker" class="grad-target-marker d-none"></div>
           </div>
           <div id="freeText" class="free-text-input">
             <input id="answer" placeholder="Votre réponse..." class="h-60 border-none bg-transparent font-18" />
