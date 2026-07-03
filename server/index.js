@@ -13,6 +13,7 @@ app.get('/health', async () => ({ ok: true }))
 
 const quizzStore = new Map()
 const uid = () => Math.random().toString(36).slice(2, 10)
+const MAX_NAME_LENGTH = 20
 const seedQuizz = {
   id: 'sample1',
   title: 'Démo Néon',
@@ -178,7 +179,7 @@ const start = async () => {
 
     socket.on('room:join', async payload => {
       const code = (payload?.roomCode || '').toUpperCase()
-      const name = payload?.playerName || 'Player'
+      const name = (payload?.playerName || 'Player').slice(0, MAX_NAME_LENGTH)
       const token = payload?.token || uid()
       const room = rooms.get(code)
       if (!room) return socket.emit('room:error', { message: 'room not found' })
@@ -235,7 +236,7 @@ const start = async () => {
       if (!room) return
       const p = room.players.get(socket.id)
       if (!p) return
-      if (payload?.name) p.name = payload.name
+      if (payload?.name) p.name = String(payload.name).slice(0, MAX_NAME_LENGTH)
       if (typeof payload?.avatar === 'string') p.avatar = payload.avatar
       const tok = room.tokens.get(p.token)
       if (tok) room.tokens.set(p.token, { id: socket.id, name: p.name, score: room.scores.get(socket.id) || 0 })
@@ -328,8 +329,14 @@ const start = async () => {
         return
       }
 
-      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], timerMs: payload?.timerMs || 15000, startTs: Date.now(), answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false }
-      io.to(code).emit('question:show', { ...payload, singleAttempt: room.currentQuestion.singleAttempt, startTs: room.currentQuestion.startTs })
+      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now(), answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false }
+
+      // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
+      // lisible dans la frame WebSocket (devtools) avant même de répondre.
+      const { correct, ...payloadWithoutCorrect } = payload || {}
+      const broadcastPayload = payload?.type === 'graduation' ? payloadWithoutCorrect : payload
+
+      io.to(code).emit('question:show', { ...broadcastPayload, singleAttempt: room.currentQuestion.singleAttempt, startTs: room.currentQuestion.startTs })
       setTimeout(() => { io.to(code).emit('timer:end', { id: room.currentQuestion.id }) }, room.currentQuestion.timerMs)
     })
 
@@ -343,8 +350,28 @@ const start = async () => {
       if (q.answered?.has(socket.id)) return
       if (q.singleAttempt && q.submissions?.has(socket.id)) return
       socket.emit('answer:ack', { playerId: socket.id })
+
+      if (q.type === 'graduation') {
+        const guess = Number(payload?.content)
+        if (!Number.isFinite(guess)) return
+        const min = Number(q.min), max = Number(q.max)
+        const target = Number(q.correct?.[0])
+        const clamped = Math.min(max, Math.max(min, guess))
+        const range = Math.max(1e-9, max - min)
+        const closeness = Math.max(0, 1 - Math.abs(clamped - target) / range)
+        const delta = Math.round(pointsFor(q.startTs, Date.now()) * closeness)
+        const total = (room.scores.get(socket.id) || 0) + delta
+        room.scores.set(socket.id, total)
+        const p = room.players.get(socket.id)
+        if (p?.token) room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+        q.answered?.add(socket.id)
+        q.submissions?.set(socket.id, 'graded')
+        io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        return
+      }
+
       const res = fuzzy(payload?.content || '', q.correct)
-      
+
       if (res.ok && res.exact) {
         const delta = pointsFor(q.startTs, Date.now())
         const total = (room.scores.get(socket.id) || 0) + delta

@@ -152,6 +152,11 @@ const inputArea = document.getElementById('inputArea')
 const answerInput = document.getElementById('answer')
 const sendBtn = document.getElementById('send')
 const optionsDiv = document.getElementById('options')
+const graduationArea = document.getElementById('graduationArea')
+const gradSlider = document.getElementById('gradSlider')
+const gradValueReadout = document.getElementById('gradValueReadout')
+const gradMinLabel = document.getElementById('gradMinLabel')
+const gradMaxLabel = document.getElementById('gradMaxLabel')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
@@ -176,7 +181,12 @@ let currentSingleAttempt = true
 let selectedIcon = AVATAR_CHOICES[0]
 let timerInt = null
 let selectedMcqOptions = []
+let currentQuestionType = 'free'
 let isGameEnded = false
+
+if (gradSlider) {
+  gradSlider.oninput = () => { if (gradValueReadout) gradValueReadout.textContent = gradSlider.value }
+}
 const scores = new Map()
 const leaderOverlay = document.getElementById('leaderOverlay')
 const leaderboard = document.getElementById('leaderboard')
@@ -1101,6 +1111,7 @@ socket.on('question:show', payload => {
     inputArea.classList.remove('d-none')
     inputArea.style.display = isHost ? 'none' : 'block'
   }
+  currentQuestionType = payload.type || 'free'
   if (optionsDiv) {
     optionsDiv.style.display = payload.type === 'mcq' ? 'grid' : 'none'
     if (payload.type === 'mcq') {
@@ -1109,17 +1120,32 @@ socket.on('question:show', payload => {
       optionsDiv.classList.add('d-none')
     }
   }
+  if (graduationArea) {
+    graduationArea.classList.toggle('d-none', payload.type !== 'graduation')
+  }
   answerInput.value = ''
   answerInput.disabled = false
   sendBtn.disabled = false
+  if (gradSlider) gradSlider.disabled = false
   selectedMcqOptions = []
-  
-  // Show send button for MCQ too if we want manual validation
-  if (payload.type === 'mcq' && !isHost) {
+
+  // Show send button for MCQ/graduation too if we want manual validation
+  if ((payload.type === 'mcq' || payload.type === 'graduation') && !isHost) {
     document.getElementById('freeText').classList.remove('d-none')
     document.getElementById('freeText').classList.add('mcq-mode')
     answerInput.classList.add('d-none')
     sendBtn.textContent = 'Valider'
+    if (payload.type === 'graduation' && gradSlider) {
+      const min = Number(payload.min ?? 0)
+      const max = Number(payload.max ?? 100)
+      const mid = Math.round((min + max) / 2)
+      gradSlider.min = min
+      gradSlider.max = max
+      gradSlider.value = mid
+      if (gradMinLabel) gradMinLabel.textContent = min
+      if (gradMaxLabel) gradMaxLabel.textContent = max
+      if (gradValueReadout) gradValueReadout.textContent = mid
+    }
   } else {
     document.getElementById('freeText').classList.remove('mcq-mode')
     answerInput.classList.remove('d-none')
@@ -1181,17 +1207,17 @@ socket.on('question:show', payload => {
 
 sendBtn.onclick = () => {
   const roomCode = roomInput.value.trim()
-  
-  // If it's an MCQ, we submit all selected options
-  const isMcq = !optionsDiv.classList.contains('d-none')
+
   let content = ''
-  
-  if (isMcq) {
+
+  if (currentQuestionType === 'mcq') {
     if (selectedMcqOptions.length === 0) {
       showAnnounce('Veuillez sélectionner au moins une réponse')
       return
     }
     content = selectedMcqOptions.join(', ')
+  } else if (currentQuestionType === 'graduation') {
+    content = String(gradSlider.value)
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -1199,11 +1225,12 @@ sendBtn.onclick = () => {
 
   if (currentSingleAttempt && sendBtn.disabled) return
   socket.emit('answer:submit', { roomCode, content })
-  
+
   if (currentSingleAttempt) {
     sendBtn.disabled = true
     answerInput.disabled = true
-    Array.from(optionsDiv.children).forEach(c => { 
+    if (gradSlider) gradSlider.disabled = true
+    Array.from(optionsDiv.children).forEach(c => {
       c.style.pointerEvents = 'none'
       if (!c.classList.contains('selected')) {
         c.style.opacity = '0.5'

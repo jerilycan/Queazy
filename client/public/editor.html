@@ -68,6 +68,7 @@
               <select id="qType">
                 <option value="free">Texte libre</option>
                 <option value="mcq">Choix multiples (QCM)</option>
+                <option value="graduation">Curseur numérique</option>
               </select>
             </div>
             <div class="detail-section">
@@ -88,7 +89,34 @@
             <button id="addOption" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une option</button>
           </div>
 
-          <div class="detail-section">
+          <div id="graduationSection" class="d-flex gap-lg d-none">
+            <div class="detail-section flex-1">
+              <label>Minimum</label>
+              <div class="timer-controls">
+                <button id="gradMinMinus" class="btn-timer" type="button">-</button>
+                <input type="number" id="qGradMin" class="stepper-input" value="0" />
+                <button id="gradMinPlus" class="btn-timer" type="button">+</button>
+              </div>
+            </div>
+            <div class="detail-section flex-1">
+              <label>Maximum</label>
+              <div class="timer-controls">
+                <button id="gradMaxMinus" class="btn-timer" type="button">-</button>
+                <input type="number" id="qGradMax" class="stepper-input" value="100" />
+                <button id="gradMaxPlus" class="btn-timer" type="button">+</button>
+              </div>
+            </div>
+            <div class="detail-section flex-1">
+              <label>Valeur correcte</label>
+              <div class="timer-controls">
+                <button id="gradTargetMinus" class="btn-timer" type="button">-</button>
+                <input type="number" id="qGradTarget" class="stepper-input" value="50" />
+                <button id="gradTargetPlus" class="btn-timer" type="button">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="correctSection" class="detail-section">
             <label id="correctLabel">Réponses acceptées</label>
             <div id="correctList" class="options-editor">
               <!-- Rempli par JS -->

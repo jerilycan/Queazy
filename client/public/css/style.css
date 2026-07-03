@@ -552,6 +552,71 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   box-shadow: 0 0 20px rgba(226, 27, 60, 0.7);
 }
 
+.graduation-area {
+  max-width: 700px;
+  margin: var(--space-lg) auto 0;
+}
+
+.graduation-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+  color: white;
+}
+
+.grad-bound {
+  font-weight: 600;
+  opacity: 0.8;
+  font-size: 14px;
+}
+
+.grad-value {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.grad-slider {
+  width: 100%;
+  height: 24px;
+  border-radius: 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(90deg, #26d9c4, var(--color-accent));
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+
+.grad-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: var(--shadow-md);
+  cursor: grab;
+}
+
+.grad-slider::-moz-range-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: white;
+  box-shadow: var(--shadow-md);
+  cursor: grab;
+}
+
+.grad-slider::-moz-range-track {
+  height: 24px;
+  border-radius: 12px;
+  background: transparent;
+}
+
 @keyframes timer-pulse {
   from { transform: scaleY(1); }
   to { transform: scaleY(1.1); }
@@ -839,6 +904,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
 
 .question-item.type-mcq::before { background: var(--tile-blue); }
 .question-item.type-free::before { background: var(--tile-green); }
+.question-item.type-graduation::before { background: var(--tile-yellow); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
@@ -949,7 +1015,8 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   background: white;
 }
 
-#qTimer {
+#qTimer,
+.stepper-input {
   width: 60px;
   padding: 12px 8px;
   border: none;
@@ -964,12 +1031,15 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
 }
 
 #qTimer::-webkit-outer-spin-button,
-#qTimer::-webkit-inner-spin-button {
+#qTimer::-webkit-inner-spin-button,
+.stepper-input::-webkit-outer-spin-button,
+.stepper-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-#qTimer:focus {
+#qTimer:focus,
+.stepper-input:focus {
   outline: none;
   box-shadow: none;
 }
