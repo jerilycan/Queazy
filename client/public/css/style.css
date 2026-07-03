@@ -558,77 +558,111 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   position: relative;
 }
 
-.grad-target-marker {
-  position: absolute;
-  top: -28px;
-  transform: translateX(-50%);
-  background: var(--tile-green);
-  color: white;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.graduation-labels {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 12px;
-  color: white;
-}
-
-.grad-bound {
-  font-weight: 600;
-  opacity: 0.8;
-  font-size: 14px;
+.grad-readout {
+  text-align: center;
+  margin-bottom: 6px;
 }
 
 .grad-value {
   font-family: 'Baloo 2', sans-serif;
   font-weight: 800;
-  font-size: 28px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  font-size: 40px;
+  color: white;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
-.grad-slider {
+.grad-ruler {
+  position: relative;
   width: 100%;
-  height: 24px;
-  border-radius: 12px;
-  appearance: none;
-  -webkit-appearance: none;
-  background: linear-gradient(90deg, #26d9c4, var(--color-accent));
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
-  cursor: pointer;
-}
-
-.grad-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: white;
-  box-shadow: var(--shadow-md);
+  max-width: 520px;
+  height: 84px;
+  margin: 0 auto;
+  overflow: hidden;
   cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  /* Dégradé transparent sur les côtés gauche/droite */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 16%, #000 84%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 16%, #000 84%, transparent 100%);
 }
 
-.grad-slider::-moz-range-thumb {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: white;
-  box-shadow: var(--shadow-md);
-  cursor: grab;
+.grad-ruler.grabbing { cursor: grabbing; }
+
+.grad-ruler-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
-.grad-slider::-moz-range-track {
-  height: 24px;
-  border-radius: 12px;
-  background: transparent;
+.grad-tick {
+  position: absolute;
+  bottom: 22px;
+  width: 2px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.45);
+  transform: translateX(-50%);
+}
+
+.grad-tick.major {
+  height: 26px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.grad-tick-label {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Viseur fixe au centre */
+.grad-ruler-cursor {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  bottom: 20px;
+  width: 3px;
+  transform: translateX(-50%);
+  background: var(--color-accent);
+  border-radius: 2px;
+  box-shadow: 0 0 10px rgba(var(--color-accent-rgb), 0.7);
+  pointer-events: none;
+}
+
+.grad-ruler-cursor::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 9px solid var(--color-accent);
+}
+
+.grad-ruler.reveal .grad-ruler-cursor { background: var(--tile-green); box-shadow: 0 0 12px rgba(38, 137, 12, 0.8); }
+.grad-ruler.reveal .grad-ruler-cursor::before { border-top-color: var(--tile-green); }
+
+.graduation-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  max-width: 520px;
+  margin: 6px auto 0;
+  color: white;
+}
+
+.grad-bound {
+  font-weight: 600;
+  opacity: 0.7;
+  font-size: 14px;
 }
 
 @keyframes timer-pulse {

@@ -153,11 +153,11 @@ const answerInput = document.getElementById('answer')
 const sendBtn = document.getElementById('send')
 const optionsDiv = document.getElementById('options')
 const graduationArea = document.getElementById('graduationArea')
-const gradSlider = document.getElementById('gradSlider')
+const gradRuler = document.getElementById('gradRuler')
+const gradRulerTrack = document.getElementById('gradRulerTrack')
 const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
-const gradTargetMarker = document.getElementById('gradTargetMarker')
 const revealAnswerText = document.getElementById('revealAnswerText')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
@@ -187,24 +187,94 @@ let selectedMcqOptions = []
 let currentQuestionType = 'free'
 let isGameEnded = false
 
-if (gradSlider) {
-  gradSlider.oninput = () => { if (gradValueReadout) gradValueReadout.textContent = gradSlider.value }
+// --- Curseur "règle" : viseur fixe au centre, c'est la graduation qui défile ---
+const PX_PER_MAJOR = 72
+const gradState = { min: 0, max: 100, value: 50, pxPerUnit: 1, disabled: false }
+
+const niceStep = (range) => {
+  const raw = Math.max(range, 1) / 10
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)))
+  const n = raw / pow
+  const m = n >= 5 ? 5 : n >= 2 ? 2 : 1
+  return Math.max(1, Math.round(m * pow))
+}
+
+const applyRulerTransform = () => {
+  if (!gradRulerTrack) return
+  gradRulerTrack.style.transform = `translateX(${-(gradState.value - gradState.min) * gradState.pxPerUnit}px)`
+}
+
+const setRulerValue = (v, animate) => {
+  const clamped = Math.min(gradState.max, Math.max(gradState.min, Math.round(v)))
+  gradState.value = clamped
+  if (gradValueReadout) gradValueReadout.textContent = clamped
+  if (gradRulerTrack) gradRulerTrack.style.transition = animate ? '' : 'none'
+  applyRulerTransform()
+}
+
+const buildRuler = (min, max, value) => {
+  if (!gradRuler || !gradRulerTrack) return
+  gradState.min = min
+  gradState.max = max
+  gradState.disabled = false
+  gradRuler.classList.remove('reveal')
+  const range = max - min
+  const major = niceStep(range)
+  const minor = Math.max(1, Math.round(major / 5))
+  gradState.pxPerUnit = PX_PER_MAJOR / major
+  const pad = (gradRuler.clientWidth || 480) / 2
+  let html = ''
+  for (let v = min; v <= max; v += minor) {
+    const isMajor = (v - min) % major === 0
+    const left = pad + (v - min) * gradState.pxPerUnit
+    html += `<div class="grad-tick ${isMajor ? 'major' : ''}" style="left:${left}px"></div>`
+    if (isMajor) html += `<div class="grad-tick-label" style="left:${left}px">${v}</div>`
+  }
+  gradRulerTrack.innerHTML = html
+  setRulerValue(value, false)
+  if (gradMinLabel) gradMinLabel.textContent = min
+  if (gradMaxLabel) gradMaxLabel.textContent = max
+}
+
+if (gradRuler) {
+  let dragging = false, startX = 0, startValue = 0
+  gradRuler.addEventListener('pointerdown', e => {
+    if (gradState.disabled) return
+    dragging = true
+    startX = e.clientX
+    startValue = gradState.value
+    try { gradRuler.setPointerCapture(e.pointerId) } catch {}
+    gradRuler.classList.add('grabbing')
+  })
+  gradRuler.addEventListener('pointermove', e => {
+    if (!dragging) return
+    const dx = e.clientX - startX
+    setRulerValue(startValue - dx / gradState.pxPerUnit, false)
+  })
+  const endDrag = (e) => {
+    if (!dragging) return
+    dragging = false
+    try { gradRuler.releasePointerCapture(e.pointerId) } catch {}
+    gradRuler.classList.remove('grabbing')
+    setRulerValue(gradState.value, true)
+  }
+  gradRuler.addEventListener('pointerup', endDrag)
+  gradRuler.addEventListener('pointercancel', endDrag)
 }
 
 const clearRevealState = () => {
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
-  if (gradTargetMarker) gradTargetMarker.classList.add('d-none')
+  if (gradRuler) gradRuler.classList.remove('reveal')
   if (showLeaderboardBtn) { showLeaderboardBtn.classList.add('d-none'); showLeaderboardBtn.style.display = 'none' }
 }
 
 const positionGradTargetMarker = (target) => {
-  if (!gradTargetMarker || !gradSlider) return
-  const min = Number(gradSlider.min), max = Number(gradSlider.max)
-  const pct = Math.min(100, Math.max(0, ((Number(target) - min) / (max - min)) * 100))
-  gradTargetMarker.style.left = `${pct}%`
-  gradTargetMarker.textContent = target
-  gradTargetMarker.classList.remove('d-none')
+  // Révélation : on bloque le curseur et on fait défiler la règle jusqu'à la
+  // bonne valeur (le viseur central atterrit dessus), viseur teinté en vert.
+  gradState.disabled = true
+  if (gradRuler) gradRuler.classList.add('reveal')
+  setRulerValue(Number(target), true)
 }
 
 const revealFreeAnswer = (text) => {
@@ -486,7 +556,9 @@ const loadQuizById = (id) => {
         prompt: q.prompt || 'Question',
         timerMs: q.timerMs || 15000,
         correct: Array.isArray(q.correct) ? q.correct : [],
-        options: Array.isArray(q.options) ? q.options : []
+        options: Array.isArray(q.options) ? q.options : [],
+        min: q.min,
+        max: q.max
       })) : []
       loadedQuiz = {
         id: data.id,
@@ -1165,7 +1237,7 @@ socket.on('question:show', payload => {
   answerInput.value = ''
   answerInput.disabled = false
   sendBtn.disabled = false
-  if (gradSlider) gradSlider.disabled = false
+  gradState.disabled = false
   selectedMcqOptions = []
 
   // Show send button for MCQ/graduation too if we want manual validation
@@ -1174,16 +1246,11 @@ socket.on('question:show', payload => {
     document.getElementById('freeText').classList.add('mcq-mode')
     answerInput.classList.add('d-none')
     sendBtn.textContent = 'Valider'
-    if (payload.type === 'graduation' && gradSlider) {
+    if (payload.type === 'graduation' && gradRuler) {
       const min = Number(payload.min ?? 0)
       const max = Number(payload.max ?? 100)
       const mid = Math.round((min + max) / 2)
-      gradSlider.min = min
-      gradSlider.max = max
-      gradSlider.value = mid
-      if (gradMinLabel) gradMinLabel.textContent = min
-      if (gradMaxLabel) gradMaxLabel.textContent = max
-      if (gradValueReadout) gradValueReadout.textContent = mid
+      buildRuler(min, max, mid)
     }
   } else {
     document.getElementById('freeText').classList.remove('mcq-mode')
@@ -1256,7 +1323,7 @@ sendBtn.onclick = () => {
     }
     content = selectedMcqOptions.join(', ')
   } else if (currentQuestionType === 'graduation') {
-    content = String(gradSlider.value)
+    content = String(gradState.value)
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -1268,7 +1335,7 @@ sendBtn.onclick = () => {
   if (currentSingleAttempt) {
     sendBtn.disabled = true
     answerInput.disabled = true
-    if (gradSlider) gradSlider.disabled = true
+    gradState.disabled = true
     Array.from(optionsDiv.children).forEach(c => {
       c.style.pointerEvents = 'none'
       if (!c.classList.contains('selected')) {
