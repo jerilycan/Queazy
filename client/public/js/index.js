@@ -287,6 +287,11 @@ const revealFreeAnswer = (text) => {
   revealAnswerText.classList.remove('d-none')
 }
 const scores = new Map()
+// Classement (ids triés par score) juste avant le début de la question en
+// cours — sert à annoncer un changement de position au bon moment (voir
+// revealMyPositionChange), jamais pendant que les réponses sont encore en
+// train d'arriver.
+let preQuestionOrder = []
 const leaderOverlay = document.getElementById('leaderOverlay')
 const leaderboard = document.getElementById('leaderboard')
 const navCreate = document.getElementById('navCreate')
@@ -1246,6 +1251,9 @@ startQuizBtn.onclick = () => {
 
 socket.on('question:show', payload => {
   clearRevealState()
+  // Snapshot AVANT que les scores de cette question ne commencent à arriver :
+  // sert de référence pour annoncer le changement de position au bon moment.
+  preQuestionOrder = computeOrder().map(([id]) => id)
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.add('d-none')
@@ -1616,6 +1624,7 @@ socket.on('question:reveal', payload => {
 socket.on('leaderboard:show', () => {
   clearRevealState()
   renderBoard()
+  revealMyPositionChange()
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
@@ -1624,6 +1633,7 @@ socket.on('leaderboard:show', () => {
 socket.on('moderation:finished', () => {
   isModerationPending = false
   renderBoard()
+  revealMyPositionChange()
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
@@ -1633,27 +1643,35 @@ socket.on('question:show', () => {
   if (isHost) { hostPhase = 'answering'; updateHostControls() }
 })
 
-socket.on('score:update', ({ playerId, delta, total }) => {
-  const beforeOrder = computeOrder().map(([id]) => id)
+socket.on('score:update', ({ playerId, total }) => {
+  // Met à jour le score en silence : ni annonce, ni rafraîchissement visible
+  // du classement tant que l'hôte n'a pas révélé la bonne réponse à tout le
+  // monde. Sinon, le premier à répondre juste verrait sa position bouger (ou
+  // une notification) avant même que les autres aient pu répondre — un indice
+  // de correction en avance sur les autres joueurs.
   const s = scores.get(playerId) || { name: playerId, total: 0 }
   s.total = total
   scores.set(playerId, s)
-  const afterOrder = computeOrder().map(([id]) => id)
-  renderBoard()
-  
-  const myId = window.myId
-  if (myId === playerId) {
-    const prevPos = beforeOrder.indexOf(myId) >= 0 ? beforeOrder.indexOf(myId) + 1 : null
-    const newPos = afterOrder.indexOf(myId) >= 0 ? afterOrder.indexOf(myId) + 1 : null
-    if (newPos && prevPos && newPos < prevPos) {
-      const passedName = scores.get(afterOrder[newPos])?.name || 'quelqu’un'
-      showAnnounce(`WOAW ! Tu passes en ${newPos}ᵉ position, devant ${passedName} !`)
-    } else if (newPos && prevPos && newPos > prevPos) {
-      const aheadName = scores.get(afterOrder[newPos - 2])?.name || 'quelqu’un'
-      showAnnounce(`Oh… Tu descends en ${newPos}ᵉ position, derrière ${aheadName}.`)
-    }
-  }
 })
+
+// Annonce le changement de position dû à LA question qui vient de se
+// terminer, comparé au classement d'avant cette question — appelé seulement
+// une fois le classement affiché (après la révélation), jamais avant.
+const revealMyPositionChange = () => {
+  const myId = window.myId
+  if (!myId || preQuestionOrder.length === 0) return
+  const afterOrder = computeOrder().map(([id]) => id)
+  const prevPos = preQuestionOrder.indexOf(myId) >= 0 ? preQuestionOrder.indexOf(myId) + 1 : null
+  const newPos = afterOrder.indexOf(myId) >= 0 ? afterOrder.indexOf(myId) + 1 : null
+  if (newPos && prevPos && newPos < prevPos) {
+    const passedName = scores.get(afterOrder[newPos])?.name || 'quelqu’un'
+    showAnnounce(`WOAW ! Tu passes en ${newPos}ᵉ position, devant ${passedName} !`)
+  } else if (newPos && prevPos && newPos > prevPos) {
+    const aheadName = scores.get(afterOrder[newPos - 2])?.name || 'quelqu’un'
+    showAnnounce(`Oh… Tu descends en ${newPos}ᵉ position, derrière ${aheadName}.`)
+  }
+  preQuestionOrder = []
+}
 
 socket.on('quiz:notReady', ({ message }) => {
   showAnnounce(message)
