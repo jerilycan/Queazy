@@ -1,5 +1,19 @@
 const socket = io()
 
+// Sons du jeu : tic-tac du timer, bonne/mauvaise réponse. Un seul objet Audio
+// réutilisé par son (avec currentTime=0) pour permettre des déclenchements
+// rapprochés (ex. tic-tac chaque seconde) sans empiler les instances.
+const sounds = {
+  tick: new Audio('/audio/tick.wav'),
+  correct: new Audio('/audio/correct.wav'),
+  wrong: new Audio('/audio/wrong.wav')
+}
+const playSound = (name) => {
+  const el = sounds[name]
+  if (!el) return
+  try { el.currentTime = 0; el.play().catch(() => {}) } catch {}
+}
+
 // État d'authentification partagé (mis à jour par checkAuth)
 let isAuthReady = false
 let canCreate = false
@@ -292,6 +306,10 @@ const scores = new Map()
 // revealMyPositionChange), jamais pendant que les réponses sont encore en
 // train d'arriver.
 let preQuestionOrder = []
+// Rafraîchi à chaque question:show, mis à true si un score:update pour MOI
+// arrive avant la révélation — sert uniquement à choisir le son (correct.wav
+// / wrong.wav) joué à la révélation, jamais affiché avant.
+let myAnsweredCorrectlyThisQuestion = false
 const leaderOverlay = document.getElementById('leaderOverlay')
 const leaderboard = document.getElementById('leaderboard')
 const navCreate = document.getElementById('navCreate')
@@ -1313,26 +1331,35 @@ socket.on('question:show', payload => {
   const start = payload.startTs
   const total = payload.timerMs
   clearInterval(timerInt)
-  
+  myAnsweredCorrectlyThisQuestion = false
+
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
     timerBarFill.style.width = '100%'
   }
 
+  let lastTickSecond = null
   timerInt = setInterval(() => {
     const now = Date.now()
     const remaining = Math.max(0, total - (now - start))
     const pct = (remaining / total) * 100
-    
+
     if (timerBarFill) {
       timerBarFill.style.width = `${pct}%`
       if (pct <= 20) {
         timerBarFill.classList.add('timer-urgent')
       }
     }
-    
+
     if (timerLabel) {
       timerLabel.textContent = Math.ceil(remaining / 1000)
+    }
+
+    // Tic-tac dans les 5 dernières secondes, une fois par seconde entamée
+    const secondsLeft = Math.ceil(remaining / 1000)
+    if (remaining > 0 && remaining <= 5000 && secondsLeft !== lastTickSecond) {
+      lastTickSecond = secondsLeft
+      playSound('tick')
     }
 
     if (remaining <= 0) {
@@ -1618,6 +1645,7 @@ socket.on('question:reveal', payload => {
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
   }
+  if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
   if (isHost) { hostPhase = 'revealed'; updateHostControls() }
 })
 
@@ -1634,6 +1662,10 @@ socket.on('moderation:finished', () => {
   isModerationPending = false
   renderBoard()
   revealMyPositionChange()
+  // Aucune révélation visuelle n'a eu lieu pour cette question (texte libre
+  // en attente de modération) : c'est ici qu'on apprend enfin si on avait
+  // juste ou faux, donc c'est ici que le son doit jouer.
+  if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
@@ -1650,8 +1682,12 @@ socket.on('score:update', ({ playerId, total }) => {
   // une notification) avant même que les autres aient pu répondre — un indice
   // de correction en avance sur les autres joueurs.
   const s = scores.get(playerId) || { name: playerId, total: 0 }
+  const prevTotal = s.total
   s.total = total
   scores.set(playerId, s)
+  // Sert uniquement à choisir le son joué à la révélation (voir plus bas) —
+  // pas de fuite ici puisque le son ne joue que lors de question:reveal.
+  if (playerId === window.myId && total > prevTotal) myAnsweredCorrectlyThisQuestion = true
 })
 
 // Annonce le changement de position dû à LA question qui vient de se

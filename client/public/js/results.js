@@ -2,6 +2,8 @@ const params = new URLSearchParams(window.location.search)
 const roomCode = params.get('room') || ''
 const socket = io()
 
+const fanfareSound = new Audio('/audio/fanfare.wav')
+
 const backBtn = document.getElementById('backHome')
 if (backBtn) backBtn.onclick = () => { window.location.href = '/' }
 
@@ -128,6 +130,7 @@ const render = (players) => {
     setTimeout(() => {
       reveal(step1, !!top[0], 0)
       if (top[0] && window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } })
+      if (top[0]) { try { fanfareSound.currentTime = 0; fanfareSound.play().catch(() => {}) } catch {} }
     }, 2900)
   }
 
