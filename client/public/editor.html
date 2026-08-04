@@ -77,6 +77,7 @@
               <select id="qType">
                 <option value="free">Texte libre</option>
                 <option value="mcq">Choix multiples (QCM)</option>
+                <option value="truefalse">Vrai / Faux</option>
                 <option value="graduation">Curseur numérique</option>
               </select>
             </div>
@@ -122,6 +123,14 @@
                 <input type="number" id="qGradTarget" class="stepper-input" value="50" />
                 <button id="gradTargetPlus" class="btn-timer" type="button">+</button>
               </div>
+            </div>
+          </div>
+
+          <div id="trueFalseSection" class="detail-section d-none">
+            <label>Bonne réponse</label>
+            <div class="truefalse-toggle">
+              <button type="button" id="tfTrueBtn" class="truefalse-toggle-btn">✓ Vrai</button>
+              <button type="button" id="tfFalseBtn" class="truefalse-toggle-btn">✕ Faux</button>
             </div>
           </div>
 

@@ -681,6 +681,29 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
 }
 
 .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-md); margin-top: var(--space-lg); }
+
+/* Vrai/Faux : deux gros boutons centrés, couleurs fixes (vert/rouge) plutôt
+   que la rotation de couleurs/formes du QCM ; l'icône coche/croix est
+   incluse directement dans le texte du bouton (voir index.js). */
+.truefalse-btn {
+  padding: 32px var(--space-md);
+  justify-content: center;
+  text-align: center;
+  font-size: 22px;
+  min-height: 96px;
+}
+.truefalse-btn::before {
+  content: '✓';
+  position: static;
+  width: auto;
+  height: auto;
+  background: none;
+  font-size: 26px;
+  margin-right: 12px;
+}
+.options-grid.truefalse-grid .truefalse-btn:nth-child(1) { background: var(--tile-green); }
+.options-grid.truefalse-grid .truefalse-btn:nth-child(2) { background: var(--tile-red); }
+.options-grid.truefalse-grid .truefalse-btn:nth-child(2)::before { content: '✕'; }
 .option-btn { 
   padding: var(--space-md) var(--space-md) var(--space-md) 56px;
   background: var(--tile-red);
@@ -1035,6 +1058,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
 .question-item.type-mcq::before { background: var(--tile-blue); }
 .question-item.type-free::before { background: var(--tile-green); }
 .question-item.type-graduation::before { background: var(--tile-yellow); }
+.question-item.type-truefalse::before { background: var(--tile-red); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
@@ -1220,6 +1244,30 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.truefalse-toggle {
+  display: flex;
+  gap: var(--space-sm);
+}
+.truefalse-toggle-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-border);
+  background: white;
+  color: var(--color-text-muted);
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.truefalse-toggle-btn:hover { border-color: var(--color-accent); }
+.truefalse-toggle-btn.active {
+  border-color: var(--tile-green);
+  background: var(--tile-green);
+  color: white;
 }
 
 .option-row {

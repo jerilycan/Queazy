@@ -441,9 +441,9 @@ const start = async () => {
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
       } else {
-        // Pour les QCM (type 'mcq'), c'est binaire : si ce n'est pas EXACT, c'est FAUX.
-        // On ne passe JAMAIS par la modération pour un QCM.
-        if (q.type === 'mcq') {
+        // Pour les QCM ('mcq') et Vrai/Faux ('truefalse'), c'est binaire : si ce
+        // n'est pas EXACT, c'est FAUX. On ne passe JAMAIS par la modération.
+        if (q.type === 'mcq' || q.type === 'truefalse') {
           q.submissions?.set(socket.id, 'incorrect')
           const p = room.players.get(socket.id)
           if (p?.token && q.historyEntry) q.historyEntry.results[p.token] = 'incorrect'

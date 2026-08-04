@@ -1289,12 +1289,10 @@ socket.on('question:show', payload => {
   }
   currentQuestionType = payload.type || 'free'
   if (optionsDiv) {
-    optionsDiv.style.display = payload.type === 'mcq' ? 'grid' : 'none'
-    if (payload.type === 'mcq') {
-      optionsDiv.classList.remove('d-none')
-    } else {
-      optionsDiv.classList.add('d-none')
-    }
+    const isMcqLike = payload.type === 'mcq' || payload.type === 'truefalse'
+    optionsDiv.style.display = isMcqLike ? 'grid' : 'none'
+    optionsDiv.classList.toggle('d-none', !isMcqLike)
+    optionsDiv.classList.toggle('truefalse-grid', payload.type === 'truefalse')
   }
   if (graduationArea) {
     graduationArea.classList.toggle('d-none', payload.type !== 'graduation')
@@ -1307,8 +1305,8 @@ socket.on('question:show', payload => {
   inputArea.classList.remove('answers-locked')
   hideAnswerStatus()
 
-  // Show send button for MCQ/graduation too if we want manual validation
-  if ((payload.type === 'mcq' || payload.type === 'graduation') && !isHost) {
+  // Show send button for MCQ/truefalse/graduation too if we want manual validation
+  if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation') && !isHost) {
     document.getElementById('freeText').classList.remove('d-none')
     document.getElementById('freeText').classList.add('mcq-mode')
     answerInput.classList.add('d-none')
@@ -1374,7 +1372,7 @@ socket.on('question:show', payload => {
       el.textContent = opt
       el.onclick = () => {
         if (currentSingleAttempt && sendBtn.disabled) return
-        
+
         // Toggle selection
         if (selectedMcqOptions.includes(opt)) {
           selectedMcqOptions = selectedMcqOptions.filter(o => o !== opt)
@@ -1386,6 +1384,26 @@ socket.on('question:show', payload => {
       }
       optionsDiv.appendChild(el)
     })
+  } else if (!isHost && payload.type === 'truefalse') {
+    // Choix exclusif (un seul des deux boutons peut être sélectionné à la fois),
+    // contrairement au QCM où plusieurs réponses peuvent être cochées.
+    const choices = Array.isArray(payload.options) && payload.options.length === 2 ? payload.options : ['Vrai', 'Faux']
+    choices.forEach(opt => {
+      const el = document.createElement('div')
+      el.className = 'option-btn truefalse-btn'
+      // textContent reste EXACTEMENT la valeur (pas d'icône ajoutée ici) :
+      // le surlignage de révélation compare el.textContent à payload.correct
+      // tel quel (logique partagée avec le QCM). L'icône ✓/✕ est ajoutée en
+      // CSS (::before), donc invisible pour cette comparaison.
+      el.textContent = opt
+      el.onclick = () => {
+        if (currentSingleAttempt && sendBtn.disabled) return
+        selectedMcqOptions = [opt]
+        Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'))
+        el.classList.add('selected')
+      }
+      optionsDiv.appendChild(el)
+    })
   }
 })
 
@@ -1394,7 +1412,7 @@ sendBtn.onclick = () => {
 
   let content = ''
 
-  if (currentQuestionType === 'mcq') {
+  if (currentQuestionType === 'mcq' || currentQuestionType === 'truefalse') {
     if (selectedMcqOptions.length === 0) {
       showAnnounce('Veuillez sélectionner au moins une réponse')
       return
@@ -1635,7 +1653,7 @@ socket.on('timer:end', () => {
 })
 
 socket.on('question:reveal', payload => {
-  if (payload.type === 'mcq' && optionsDiv) {
+  if ((payload.type === 'mcq' || payload.type === 'truefalse') && optionsDiv) {
     Array.from(optionsDiv.children).forEach(el => {
       if ((payload.correct || []).includes(el.textContent)) el.classList.add('correct-reveal')
       else el.classList.add('incorrect-reveal')

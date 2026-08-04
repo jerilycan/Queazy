@@ -135,6 +135,10 @@ const qGradMin = document.getElementById('qGradMin')
 const qGradMax = document.getElementById('qGradMax')
 const qGradTarget = document.getElementById('qGradTarget')
 
+const trueFalseSection = document.getElementById('trueFalseSection')
+const tfTrueBtn = document.getElementById('tfTrueBtn')
+const tfFalseBtn = document.getElementById('tfFalseBtn')
+
 const bindGradStepper = (input, minusBtn, plusBtn, onCommit) => {
   const commit = (val) => { input.value = val; onCommit(Number(val) || 0) }
   minusBtn.onclick = () => commit((Number(input.value) || 0) - 1)
@@ -232,6 +236,13 @@ const populateGradFields = (q) => {
   qGradTarget.value = q.correct?.[0] ?? 50
 }
 
+const populateTrueFalseFields = (q) => {
+  if (!tfTrueBtn) return
+  const isTrue = (q.correct?.[0] ?? 'Vrai') === 'Vrai'
+  tfTrueBtn.classList.toggle('active', isTrue)
+  tfFalseBtn.classList.toggle('active', !isTrue)
+}
+
 const selectQuestion = (index) => {
   if (hasSelectedOnce) saveCurrentQuestionState()
   activeIndex = index
@@ -243,6 +254,7 @@ const selectQuestion = (index) => {
   qType.value = q.type || 'free'
   qTimer.value = (q.timerMs || 15000) / 1000
   populateGradFields(q)
+  populateTrueFalseFields(q)
 
   renderOptions()
   renderCorrects()
@@ -267,18 +279,29 @@ const saveCurrentQuestionState = () => {
     q.min = Number(qGradMin.value)
     q.max = Number(qGradMax.value)
     q.correct = [String(qGradTarget.value)]
+  } else if (q.type === 'truefalse') {
+    // Options fixes ; q.correct est déjà tenu à jour par les boutons Vrai/Faux
+    // (voir plus bas), on s'assure juste qu'il reste valide.
+    q.options = ['Vrai', 'Faux']
+    if (q.correct?.[0] !== 'Vrai' && q.correct?.[0] !== 'Faux') q.correct = ['Vrai']
   }
 }
 
 const toggleTypeSections = () => {
   mcqSection.classList.toggle('d-none', qType.value !== 'mcq')
   if (graduationSection) graduationSection.classList.toggle('d-none', qType.value !== 'graduation')
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation')
+  if (trueFalseSection) trueFalseSection.classList.toggle('d-none', qType.value !== 'truefalse')
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse')
   if (qType.value === 'mcq') {
     correctLabel.textContent = 'Réponses correctes'
   } else {
     correctLabel.textContent = 'Réponses acceptées'
   }
+}
+
+if (tfTrueBtn && tfFalseBtn) {
+  tfTrueBtn.onclick = () => { if (questions[activeIndex]) questions[activeIndex].correct = ['Vrai']; populateTrueFalseFields(questions[activeIndex]) }
+  tfFalseBtn.onclick = () => { if (questions[activeIndex]) questions[activeIndex].correct = ['Faux']; populateTrueFalseFields(questions[activeIndex]) }
 }
 
 const renderOptions = () => {
@@ -382,6 +405,10 @@ qType.onchange = () => {
     if (q.max === undefined) q.max = 100
     if (!q.correct || !q.correct[0]) q.correct = ['50']
     populateGradFields(q)
+  } else if (qType.value === 'truefalse') {
+    q.options = ['Vrai', 'Faux']
+    if (q.correct?.[0] !== 'Vrai' && q.correct?.[0] !== 'Faux') q.correct = ['Vrai']
+    populateTrueFalseFields(q)
   }
   toggleTypeSections()
   renderOptions()
@@ -419,6 +446,7 @@ deleteQuestionBtn.onclick = () => {
   qType.value = q.type || 'free'
   qTimer.value = (q.timerMs || 15000) / 1000
   populateGradFields(q)
+  populateTrueFalseFields(q)
 
   renderOptions()
   renderCorrects()
