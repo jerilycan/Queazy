@@ -1,23 +1,31 @@
 document.addEventListener('DOMContentLoaded', () => {
   console.log("login.js DOMContentLoaded");
 
-  const emailInput = document.getElementById('email')
-  const pseudoInput = document.getElementById('pseudo')
-  const passwordInput = document.getElementById('password')
+  const loginIdentifierInput = document.getElementById('loginIdentifier')
+  const loginPasswordInput = document.getElementById('loginPassword')
   const signInBtn = document.getElementById('signIn')
-  const signUpBtn = document.getElementById('signUp')
-  const guestPlayBtn = document.getElementById('guestPlay')
   const loginError = document.getElementById('loginError')
   const loginReason = document.getElementById('loginReason')
   const loginCard = document.getElementById('loginCard')
+
+  const signupEmailInput = document.getElementById('signupEmail')
+  const signupPseudoInput = document.getElementById('signupPseudo')
+  const signupPasswordInput = document.getElementById('signupPassword')
+  const signUpBtn = document.getElementById('signUp')
+  const signupError = document.getElementById('signupError')
+  const signupCard = document.getElementById('signupCard')
+
+  const guestPlayBtn = document.getElementById('guestPlay')
   const successCard = document.getElementById('successCard')
   const backToLoginBtn = document.getElementById('backToLogin')
   const resendEmailBtn = document.getElementById('resendEmail')
   const resendMessage = document.getElementById('resendMessage')
+  const showSignupLink = document.getElementById('showSignup')
+  const showLoginLink = document.getElementById('showLogin')
 
-  console.log("Elements found:", { 
-    emailInput: !!emailInput, 
-    signInBtn: !!signInBtn, 
+  console.log("Elements found:", {
+    loginIdentifierInput: !!loginIdentifierInput,
+    signInBtn: !!signInBtn,
     signUpBtn: !!signUpBtn,
     resendEmailBtn: !!resendEmailBtn
   });
@@ -57,7 +65,21 @@ document.addEventListener('DOMContentLoaded', () => {
     loginReason.classList.remove('d-none')
   }
 
-  const showError = (message) => {
+  // --- Bascule entre la carte de connexion et la carte de création de compte ---
+  const showLoginCard = () => {
+    signupCard.classList.add('d-none')
+    successCard.classList.add('d-none')
+    loginCard.classList.remove('d-none')
+  }
+  const showSignupCard = () => {
+    loginCard.classList.add('d-none')
+    successCard.classList.add('d-none')
+    signupCard.classList.remove('d-none')
+  }
+  if (showSignupLink) showSignupLink.onclick = (e) => { e.preventDefault(); showSignupCard() }
+  if (showLoginLink) showLoginLink.onclick = (e) => { e.preventDefault(); showLoginCard() }
+
+  const showLoginError = (message) => {
     if (loginError) {
       loginError.textContent = message
       loginError.classList.remove('d-none')
@@ -65,21 +87,28 @@ document.addEventListener('DOMContentLoaded', () => {
       alert(message)
     }
   }
+  const hideLoginError = () => { if (loginError) loginError.classList.add('d-none') }
 
-  const hideError = () => {
-    if (loginError) loginError.classList.add('d-none')
+  const showSignupError = (message) => {
+    if (signupError) {
+      signupError.textContent = message
+      signupError.classList.remove('d-none')
+    } else {
+      alert(message)
+    }
   }
+  const hideSignupError = () => { if (signupError) signupError.classList.add('d-none') }
 
   if (signInBtn) {
     signInBtn.onclick = async (e) => {
       e.preventDefault();
       console.log("Clic sur Se connecter");
-      hideError()
-      const identifier = emailInput.value.trim()
-      const password = passwordInput.value
+      hideLoginError()
+      const identifier = loginIdentifierInput.value.trim()
+      const password = loginPasswordInput.value
 
       if (!identifier || !password) {
-        showError('Veuillez remplir tous les champs.')
+        showLoginError('Veuillez remplir tous les champs.')
         return
       }
 
@@ -93,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (resolveError || !resolved) {
             // Message générique : ne pas révéler si c'est le pseudo ou le
             // mot de passe qui est incorrect.
-            showError('Identifiants incorrects.')
+            showLoginError('Identifiants incorrects.')
             return
           }
           email = resolved
@@ -105,14 +134,14 @@ document.addEventListener('DOMContentLoaded', () => {
         })
 
         if (error) {
-          showError(error.message)
+          showLoginError(error.message)
         } else {
           localStorage.removeItem('queazy_guest')
           window.location.href = '/'
         }
       } catch (err) {
         console.error("Erreur lors de la connexion:", err);
-        showError("Une erreur est survenue lors de la connexion.")
+        showLoginError("Une erreur est survenue lors de la connexion.")
       }
     }
   }
@@ -121,19 +150,19 @@ document.addEventListener('DOMContentLoaded', () => {
     signUpBtn.onclick = async (e) => {
       e.preventDefault();
       console.log("Bouton Créer un compte cliqué");
-      hideError()
-      
-      const email = emailInput.value
-      const password = passwordInput.value
-      const pseudo = pseudoInput.value ? pseudoInput.value.trim() : ''
+      hideSignupError()
+
+      const email = signupEmailInput.value.trim()
+      const password = signupPasswordInput.value
+      const pseudo = signupPseudoInput.value ? signupPseudoInput.value.trim() : ''
 
       if (!email || !password) {
-        showError('Veuillez remplir au moins l\'email et le mot de passe.')
+        showSignupError('Veuillez remplir au moins l\'email et le mot de passe.')
         return
       }
 
       if (password.length < 6) {
-        showError('Le mot de passe doit faire au moins 6 caractères.')
+        showSignupError('Le mot de passe doit faire au moins 6 caractères.')
         return
       }
 
@@ -156,36 +185,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (error) {
           console.error("Erreur Supabase signUp :", error);
-          showError(error.message)
+          showSignupError(error.message)
         } else {
           console.log("Réponse Supabase signUp :", data);
           localStorage.removeItem('queazy_guest')
-          
+
           if (pseudo) {
             localStorage.setItem('queazy_profile_name', pseudo)
           }
 
           if (data.user && data.user.identities && data.user.identities.length === 0) {
-            showError("Cet email est déjà utilisé.")
+            showSignupError("Cet email est déjà utilisé.")
             return
           }
 
           if (data.user) {
             if (!data.session) {
               console.log("Inscription réussie, attente confirmation email");
-              loginCard.classList.add('d-none')
+              signupCard.classList.add('d-none')
               successCard.classList.remove('d-none')
             } else {
               console.log("Inscription réussie, session créée");
               window.location.href = '/'
             }
           } else {
-            showError("Une erreur inconnue est survenue lors de l'inscription.")
+            showSignupError("Une erreur inconnue est survenue lors de l'inscription.")
           }
         }
       } catch (err) {
         console.error("Exception lors de l'inscription:", err);
-        showError("Une erreur technique est survenue.")
+        showSignupError("Une erreur technique est survenue.")
       }
     }
   }
@@ -195,17 +224,17 @@ document.addEventListener('DOMContentLoaded', () => {
     signInGoogleBtn.onclick = async (e) => {
       e.preventDefault();
       console.log("Clic sur Continuer avec Google");
-      hideError()
+      hideLoginError()
       localStorage.removeItem('queazy_guest')
       try {
         const { error } = await sb.auth.signInWithOAuth({
           provider: 'google',
           options: { redirectTo: window.location.origin + '/' }
         })
-        if (error) showError(error.message)
+        if (error) showLoginError(error.message)
       } catch (err) {
         console.error("Erreur lors de la connexion Google:", err);
-        showError("Une erreur est survenue lors de la connexion avec Google.")
+        showLoginError("Une erreur est survenue lors de la connexion avec Google.")
       }
     }
   }
@@ -222,15 +251,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (backToLoginBtn) {
     backToLoginBtn.onclick = (e) => {
       e.preventDefault();
-      successCard.classList.add('d-none')
-      loginCard.classList.remove('d-none')
+      showLoginCard()
     }
   }
 
   if (resendEmailBtn) {
     resendEmailBtn.onclick = async (e) => {
       e.preventDefault();
-      const email = emailInput.value;
+      const email = signupEmailInput.value;
       if (!email) {
         alert("Veuillez entrer votre email d'abord.");
         return;
