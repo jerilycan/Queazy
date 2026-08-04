@@ -75,15 +75,30 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       console.log("Clic sur Se connecter");
       hideError()
-      const email = emailInput.value
+      const identifier = emailInput.value.trim()
       const password = passwordInput.value
 
-      if (!email || !password) {
+      if (!identifier || !password) {
         showError('Veuillez remplir tous les champs.')
         return
       }
 
       try {
+        // Supabase n'authentifie que par email : si l'utilisateur a tapé un
+        // pseudo, on le résout d'abord côté base (voir resolve_login_email
+        // dans supabase/schema.sql).
+        let email = identifier
+        if (!identifier.includes('@')) {
+          const { data: resolved, error: resolveError } = await sb.rpc('resolve_login_email', { identifier })
+          if (resolveError || !resolved) {
+            // Message générique : ne pas révéler si c'est le pseudo ou le
+            // mot de passe qui est incorrect.
+            showError('Identifiants incorrects.')
+            return
+          }
+          email = resolved
+        }
+
         const { data, error } = await sb.auth.signInWithPassword({
           email,
           password,

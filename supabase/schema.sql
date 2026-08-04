@@ -13,6 +13,16 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- Unicité du pseudo (insensible à la casse) : nécessaire pour permettre la
+-- connexion par pseudo (voir resolve_login_email plus bas) sans ambiguïté.
+-- Si cette ligne échoue avec une erreur de doublons, des pseudos en conflit
+-- existent déjà en base — les repérer avec :
+--   select lower(username), array_agg(id) from public.profiles group by lower(username) having count(*) > 1;
+-- puis les renommer manuellement avant de relancer cette création d'index.
+create unique index if not exists profiles_username_lower_unique_idx
+  on public.profiles (lower(username))
+  where username is not null and username <> '';
+
 alter table public.profiles enable row level security;
 
 drop policy if exists "Profiles: lecture de son propre profil" on public.profiles;
@@ -33,15 +43,32 @@ create policy "Profiles: mise a jour de son propre profil"
 -- Création automatique d'une ligne profiles à l'inscription
 -- (évite les erreurs si le client lit le profil avant le premier
 -- passage sur la page /profile.html)
+-- Le pseudo doit être unique (voir l'index ci-dessus) : en cas de collision
+-- (ex. deux personnes nommées "Jeremy", ou deux emails avec le même préfixe
+-- sur des domaines différents), on ajoute un suffixe numérique croissant
+-- plutôt que de laisser l'inscription échouer.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
+declare
+  base_username text;
+  candidate text;
+  suffix int := 0;
 begin
-  insert into public.profiles (id, username)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)))
-  on conflict (id) do nothing;
+  base_username := coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(new.email, '@', 1));
+  candidate := base_username;
+  loop
+    begin
+      insert into public.profiles (id, username) values (new.id, candidate)
+      on conflict (id) do nothing;
+      exit;
+    exception when unique_violation then
+      suffix := suffix + 1;
+      candidate := base_username || suffix::text;
+    end;
+  end loop;
   return new;
 end;
 $$;
@@ -50,6 +77,41 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ============================================================
+-- Connexion par email OU pseudo
+-- ============================================================
+-- Supabase Auth n'authentifie que par email (ou téléphone), jamais par
+-- pseudo. Cette fonction traduit un identifiant de connexion en email
+-- utilisable par signInWithPassword côté client :
+--   - si l'identifiant ressemble à un email, il est renvoyé tel quel ;
+--   - sinon, il est traité comme un pseudo et résolu via profiles + auth.users.
+-- security definer est nécessaire pour lire auth.users (normalement
+-- inaccessible aux rôles anon/authenticated) et pour contourner la RLS de
+-- profiles (qui ne permet de lire que son propre profil).
+-- Compromis assumé : un pseudo existant révèle l'email associé à qui le
+-- devine. Acceptable ici (quiz entre amis, pas de données sensibles) ; à
+-- remplacer par une résolution côté serveur (sans jamais renvoyer l'email
+-- au client) si le contexte devient plus sensible.
+create or replace function public.resolve_login_email(identifier text)
+returns text
+language sql
+stable
+security definer set search_path = public
+as $$
+  select case
+    when identifier ilike '%@%' then identifier
+    else (
+      select u.email
+      from public.profiles p
+      join auth.users u on u.id = p.id
+      where lower(p.username) = lower(identifier)
+      limit 1
+    )
+  end
+$$;
+
+grant execute on function public.resolve_login_email(text) to anon, authenticated;
 
 -- ============================================================
 -- 2. TABLE quizzes
