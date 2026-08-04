@@ -8,6 +8,7 @@ const sounds = {
   correct: new Audio('/audio/correct.wav'),
   wrong: new Audio('/audio/wrong.wav')
 }
+sounds.tick.volume = 0.35
 const playSound = (name) => {
   const el = sounds[name]
   if (!el) return
@@ -258,6 +259,12 @@ const buildRuler = (min, max, value) => {
     html += `<div class="grad-tick ${isMajor ? 'major' : ''}" style="left:${left}px"></div>`
     if (isMajor) html += `<div class="grad-tick-label" style="left:${left}px">${v}</div>`
   }
+  // Murs de fin de course à min/max exacts : les graduations seules peuvent
+  // s'arrêter avant la vraie borne si (max-min) n'est pas un multiple du pas,
+  // ce qui laissait un "trou" sans repère juste avant la limite réelle.
+  const wallLeft = (v) => pad + (v - min) * gradState.pxPerUnit
+  html += `<div class="grad-wall" style="left:${wallLeft(min)}px"></div>`
+  html += `<div class="grad-wall" style="left:${wallLeft(max)}px"></div>`
   gradRulerTrack.innerHTML = html
   setRulerValue(value, false)
   if (gradMinLabel) gradMinLabel.textContent = min
@@ -277,13 +284,19 @@ if (gradRuler) {
   gradRuler.addEventListener('pointermove', e => {
     if (!dragging) return
     const dx = e.clientX - startX
-    setRulerValue(startValue - dx / gradState.pxPerUnit, false)
+    const raw = startValue - dx / gradState.pxPerUnit
+    // Retour visuel "butée" : on ne compare pas juste la valeur affichée
+    // (déjà bornée) mais la position brute du doigt/pointeur, pour détecter
+    // qu'on POUSSE au-delà de la limite, pas seulement qu'on l'a atteinte.
+    gradRuler.classList.toggle('limit-hit', raw < gradState.min || raw > gradState.max)
+    setRulerValue(raw, false)
   })
   const endDrag = (e) => {
     if (!dragging) return
     dragging = false
     try { gradRuler.releasePointerCapture(e.pointerId) } catch {}
     gradRuler.classList.remove('grabbing')
+    gradRuler.classList.remove('limit-hit')
     setRulerValue(gradState.value, true)
   }
   gradRuler.addEventListener('pointerup', endDrag)
@@ -406,6 +419,9 @@ let preQuestionOrder = []
 // arrive avant la révélation — sert uniquement à choisir le son (correct.wav
 // / wrong.wav) joué à la révélation, jamais affiché avant.
 let myAnsweredCorrectlyThisQuestion = false
+// Rafraîchi à chaque question:show, mis à true dès l'envoi d'une réponse —
+// coupe le tic-tac du timer pour ce joueur (il n'a plus besoin d'être pressé).
+let hasAnsweredThisQuestion = false
 const leaderOverlay = document.getElementById('leaderOverlay')
 const leaderboard = document.getElementById('leaderboard')
 const navCreate = document.getElementById('navCreate')
@@ -801,6 +817,7 @@ const hideJoinPanel = () => {
 }
 
 const showLobby = () => {
+  document.body.classList.remove('game-active')
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.remove('d-none')
@@ -1378,6 +1395,10 @@ socket.on('question:show', payload => {
     lobby.classList.add('d-none')
     lobby.style.display = 'none'
   }
+  // Sur mobile, la navbar (boutons Créer/Mes Quiz/etc.) prend trop de place
+  // pendant la partie : on la réduit au seul nom, non cliquable, pour éviter
+  // qu'un joueur ne quitte la partie par erreur (voir règle CSS associée).
+  document.body.classList.add('game-active')
   const timerContainer = document.getElementById('timerContainer')
   if (timerContainer) {
     timerContainer.classList.remove('d-none')
@@ -1437,6 +1458,7 @@ socket.on('question:show', payload => {
   const total = payload.timerMs
   clearInterval(timerInt)
   myAnsweredCorrectlyThisQuestion = false
+  hasAnsweredThisQuestion = false
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -1462,7 +1484,7 @@ socket.on('question:show', payload => {
 
     // Tic-tac dans les 5 dernières secondes, une fois par seconde entamée
     const secondsLeft = Math.ceil(remaining / 1000)
-    if (remaining > 0 && remaining <= 5000 && secondsLeft !== lastTickSecond) {
+    if (remaining > 0 && remaining <= 5000 && secondsLeft !== lastTickSecond && !hasAnsweredThisQuestion) {
       lastTickSecond = secondsLeft
       playSound('tick')
     }
@@ -1536,6 +1558,7 @@ sendBtn.onclick = () => {
 
   if (currentSingleAttempt && sendBtn.disabled) return
   socket.emit('answer:submit', { roomCode, content })
+  hasAnsweredThisQuestion = true
 
   if (currentSingleAttempt) {
     sendBtn.disabled = true

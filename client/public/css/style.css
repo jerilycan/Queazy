@@ -229,8 +229,8 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   overflow: hidden;
 }
 .card:hover {
-  transform: translateY(-5px) scale(1.01);
-  box-shadow: var(--shadow-lg), 0 0 30px rgba(var(--color-accent-rgb),0.18);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(var(--color-accent-rgb),0.12);
   border-color: var(--color-accent);
 }
 .card::after {
@@ -245,7 +245,7 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   z-index: 0;
 }
 .card:hover::after {
-  opacity: 1;
+  opacity: 0.5;
 }
 .card > * { position: relative; z-index: 1; }
 
@@ -701,6 +701,26 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   white-space: nowrap;
 }
 
+/* Mur de fin de course : marque clairement le min/max réel de la règle
+   (contrairement aux graduations, qui peuvent s'arrêter avant la borne si
+   elle ne tombe pas pile sur un multiple du pas) pour qu'on ne puisse pas
+   croire qu'il reste de la marge derrière le fondu du bord. */
+.grad-wall {
+  position: absolute;
+  bottom: 10px;
+  width: 5px;
+  height: 40px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255,255,255,0.5) 0px,
+    rgba(255,255,255,0.5) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  transform: translateX(-50%);
+}
+
 /* Viseur fixe au centre */
 .grad-ruler-cursor {
   position: absolute;
@@ -713,6 +733,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   border-radius: 2px;
   box-shadow: 0 0 10px rgba(var(--color-accent-rgb), 0.7);
   pointer-events: none;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .grad-ruler-cursor::before {
@@ -724,10 +745,28 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   border-left: 7px solid transparent;
   border-right: 7px solid transparent;
   border-top: 9px solid var(--color-accent);
+  transition: border-top-color 0.15s ease;
 }
 
 .grad-ruler.reveal .grad-ruler-cursor { background: var(--tile-green); box-shadow: 0 0 12px rgba(var(--tile-green-rgb),0.8); }
 .grad-ruler.reveal .grad-ruler-cursor::before { border-top-color: var(--tile-green); }
+
+/* Retour visuel quand on tire au-delà du min/max pendant le glisser : le
+   viseur passe au rouge et tressaute, façon "butée", au lieu de simplement
+   arrêter de bouger sans explication. */
+.grad-ruler.limit-hit .grad-ruler-cursor {
+  background: var(--tile-red);
+  box-shadow: 0 0 14px rgba(var(--tile-red-rgb), 0.8);
+  animation: grad-limit-shake 0.22s ease;
+}
+.grad-ruler.limit-hit .grad-ruler-cursor::before { border-top-color: var(--tile-red); }
+.grad-ruler.limit-hit .grad-wall { background-color: rgba(var(--tile-red-rgb), 0.6); }
+
+@keyframes grad-limit-shake {
+  0%, 100% { transform: translateX(-50%); }
+  30% { transform: translateX(calc(-50% - 3px)); }
+  70% { transform: translateX(calc(-50% + 3px)); }
+}
 
 .graduation-labels {
   display: flex;
@@ -1099,6 +1138,13 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   #hostPanel { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px !important; }
   #hostPanel .d-flex.gap-sm { flex-wrap: wrap; justify-content: center; }
   .grad-value { font-size: 32px; }
+
+  /* Pendant la partie, la navbar ne doit pas manger l'écran ni permettre de
+     quitter la partie par erreur : plus aucun bouton, juste le nom, figé. */
+  body.game-active .navbar { margin: 6px 12px 0; padding: 10px 16px; gap: 0; }
+  body.game-active .nav-group,
+  body.game-active .theme-toggle-btn { display: none !important; }
+  body.game-active .brand { pointer-events: none; cursor: default; }
 }
 
 /* Quiz Editor Rework */
