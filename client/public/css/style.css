@@ -879,7 +879,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 }
 .order-item.correct-reveal .order-item-handle { opacity: 0.7; }
 
-/* Question "image" : grille fixe (8x5 — doit rester cohérente avec
+/* Question "image" : grille fixe (10x6 — doit rester cohérente avec
    IMAGE_GRID_COLS/ROWS côté JS) superposée à l'image, traits discrets pour
    rester lisible sans gêner l'image. */
 .image-area { max-width: 640px; margin: var(--space-lg) auto 0; }
@@ -900,8 +900,8 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(5, 1fr);
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(6, 1fr);
 }
 .image-cell {
   border: 1px solid rgba(255,255,255,0.14);

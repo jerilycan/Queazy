@@ -155,8 +155,8 @@ const imageEditImg = document.getElementById('imageEditImg')
 const imageEditGrid = document.getElementById('imageEditGrid')
 // Doit rester cohérent avec IMAGE_GRID_COLS/ROWS dans client/public/js/index.js
 // (grille fixe, mêmes coordonnées des deux côtés).
-const IMAGE_GRID_COLS = 8
-const IMAGE_GRID_ROWS = 5
+const IMAGE_GRID_COLS = 10
+const IMAGE_GRID_ROWS = 6
 
 const bindGradStepper = (input, minusBtn, plusBtn, onCommit) => {
   const commit = (val) => { input.value = val; onCommit(Number(val) || 0) }

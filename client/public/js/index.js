@@ -386,8 +386,8 @@ const revealOrderList = (correctOrder) => {
 // Grille fixe superposée à l'image, une case sélectionnée à la fois (comme
 // vrai/faux). Le scoring par proximité (voir server/index.js) tolère d'être
 // à quelques cases de la bonne réponse.
-const IMAGE_GRID_COLS = 8
-const IMAGE_GRID_ROWS = 5
+const IMAGE_GRID_COLS = 10
+const IMAGE_GRID_ROWS = 6
 let imageDisabled = true
 let imageSelectedCell = null
 
