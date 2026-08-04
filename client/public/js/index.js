@@ -180,8 +180,9 @@ const answerInput = document.getElementById('answer')
 const sendBtn = document.getElementById('send')
 const optionsDiv = document.getElementById('options')
 const graduationArea = document.getElementById('graduationArea')
-const gradRuler = document.getElementById('gradRuler')
-const gradRulerTrack = document.getElementById('gradRulerTrack')
+const gradSlider = document.getElementById('gradSlider')
+const gradSliderFill = document.getElementById('gradSliderFill')
+const gradSliderThumb = document.getElementById('gradSliderThumb')
 const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
@@ -216,91 +217,82 @@ let selectedMcqOptions = []
 let currentQuestionType = 'free'
 let isGameEnded = false
 
-// --- Curseur "règle" : viseur fixe au centre, c'est la graduation qui défile ---
-const PX_PER_MAJOR = 72
-const gradState = { min: 0, max: 100, value: 50, pxPerUnit: 1, disabled: false }
-
-const niceStep = (range) => {
-  const raw = Math.max(range, 1) / 10
-  const pow = Math.pow(10, Math.floor(Math.log10(raw)))
-  const n = raw / pow
-  const m = n >= 5 ? 5 : n >= 2 ? 2 : 1
-  return Math.max(1, Math.round(m * pow))
+// --- Révélation « écran principal » : la question apparaît en grand, puis
+// les réponses une à une avec une animation, avant que le chrono ne démarre
+// vraiment pour les joueurs. L'hôte voit exactement la même chose (tuiles en
+// lecture seule) — c'est son écran à partager avec la salle. Les constantes
+// de timing sont dupliquées côté serveur (server/index.js) pour que le délai
+// avant déverrouillage corresponde pile à la durée de l'animation ici.
+const REVEAL_QUESTION_BEAT_MS = 900
+const REVEAL_STAGGER_MS = 350
+let revealToken = 0
+const applyTileReveal = (el, index) => {
+  el.style.animation = 'none'
+  void el.offsetWidth
+  el.style.animation = `tileRevealIn 0.5s cubic-bezier(.34,1.56,.64,1) ${REVEAL_QUESTION_BEAT_MS + index * REVEAL_STAGGER_MS}ms both`
 }
 
-const applyRulerTransform = () => {
-  if (!gradRulerTrack) return
-  gradRulerTrack.style.transform = `translateX(${-(gradState.value - gradState.min) * gradState.pxPerUnit}px)`
-}
+// --- Curseur classique sur piste : les bornes min/max sont les deux bouts
+// physiques de la piste (toujours visibles), donc jamais ambiguës — remplace
+// l'ancienne règle à viseur fixe/graduation défilante. ---
+const gradState = { min: 0, max: 100, value: 50, disabled: false }
 
-const setRulerValue = (v, animate) => {
+const setGradValue = (v, animate) => {
   const clamped = Math.min(gradState.max, Math.max(gradState.min, Math.round(v)))
   gradState.value = clamped
+  const pct = gradState.max === gradState.min ? 0 : (clamped - gradState.min) / (gradState.max - gradState.min) * 100
   if (gradValueReadout) gradValueReadout.textContent = clamped
-  if (gradRulerTrack) gradRulerTrack.style.transition = animate ? '' : 'none'
-  applyRulerTransform()
+  // Pas de transition CSS permanente sur left/width : ça retarderait le pouce
+  // derrière le doigt pendant le glisser. On l'active seulement au besoin
+  // (arrivée initiale, révélation), au coup par coup.
+  if (gradSliderFill) {
+    gradSliderFill.style.transition = animate ? 'width 0.3s cubic-bezier(.22,1,.36,1), background 0.2s ease' : 'background 0.2s ease'
+    gradSliderFill.style.width = `${pct}%`
+  }
+  if (gradSliderThumb) {
+    gradSliderThumb.style.transition = animate ? 'left 0.3s cubic-bezier(.22,1,.36,1), box-shadow 0.15s ease' : 'box-shadow 0.15s ease'
+    gradSliderThumb.style.left = `${pct}%`
+  }
 }
 
-const buildRuler = (min, max, value) => {
-  if (!gradRuler || !gradRulerTrack) return
+const buildGradSlider = (min, max, value) => {
+  if (!gradSlider) return
   gradState.min = min
   gradState.max = max
-  gradState.disabled = false
-  gradRuler.classList.remove('reveal')
-  const range = max - min
-  const major = niceStep(range)
-  const minor = Math.max(1, Math.round(major / 5))
-  gradState.pxPerUnit = PX_PER_MAJOR / major
-  const pad = (gradRuler.clientWidth || 480) / 2
-  let html = ''
-  for (let v = min; v <= max; v += minor) {
-    const isMajor = (v - min) % major === 0
-    const left = pad + (v - min) * gradState.pxPerUnit
-    html += `<div class="grad-tick ${isMajor ? 'major' : ''}" style="left:${left}px"></div>`
-    if (isMajor) html += `<div class="grad-tick-label" style="left:${left}px">${v}</div>`
-  }
-  // Murs de fin de course à min/max exacts : les graduations seules peuvent
-  // s'arrêter avant la vraie borne si (max-min) n'est pas un multiple du pas,
-  // ce qui laissait un "trou" sans repère juste avant la limite réelle.
-  const wallLeft = (v) => pad + (v - min) * gradState.pxPerUnit
-  html += `<div class="grad-wall" style="left:${wallLeft(min)}px"></div>`
-  html += `<div class="grad-wall" style="left:${wallLeft(max)}px"></div>`
-  gradRulerTrack.innerHTML = html
-  setRulerValue(value, false)
+  gradState.disabled = true
+  gradSlider.classList.remove('reveal')
+  setGradValue(value)
   if (gradMinLabel) gradMinLabel.textContent = min
   if (gradMaxLabel) gradMaxLabel.textContent = max
+  applyTileReveal(gradSlider, 0)
 }
 
-if (gradRuler) {
-  let dragging = false, startX = 0, startValue = 0
-  gradRuler.addEventListener('pointerdown', e => {
+if (gradSlider) {
+  let dragging = false
+  const setFromClientX = (clientX) => {
+    const r = gradSlider.getBoundingClientRect()
+    const pct = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
+    setGradValue(gradState.min + pct * (gradState.max - gradState.min))
+  }
+  gradSlider.addEventListener('pointerdown', e => {
     if (gradState.disabled) return
     dragging = true
-    startX = e.clientX
-    startValue = gradState.value
-    try { gradRuler.setPointerCapture(e.pointerId) } catch {}
-    gradRuler.classList.add('grabbing')
+    try { gradSlider.setPointerCapture(e.pointerId) } catch {}
+    gradSlider.classList.add('grabbing')
+    setFromClientX(e.clientX)
   })
-  gradRuler.addEventListener('pointermove', e => {
+  gradSlider.addEventListener('pointermove', e => {
     if (!dragging) return
-    const dx = e.clientX - startX
-    const raw = startValue - dx / gradState.pxPerUnit
-    // Retour visuel "butée" : on ne compare pas juste la valeur affichée
-    // (déjà bornée) mais la position brute du doigt/pointeur, pour détecter
-    // qu'on POUSSE au-delà de la limite, pas seulement qu'on l'a atteinte.
-    gradRuler.classList.toggle('limit-hit', raw < gradState.min || raw > gradState.max)
-    setRulerValue(raw, false)
+    setFromClientX(e.clientX)
   })
   const endDrag = (e) => {
     if (!dragging) return
     dragging = false
-    try { gradRuler.releasePointerCapture(e.pointerId) } catch {}
-    gradRuler.classList.remove('grabbing')
-    gradRuler.classList.remove('limit-hit')
-    setRulerValue(gradState.value, true)
+    try { gradSlider.releasePointerCapture(e.pointerId) } catch {}
+    gradSlider.classList.remove('grabbing')
   }
-  gradRuler.addEventListener('pointerup', endDrag)
-  gradRuler.addEventListener('pointercancel', endDrag)
+  gradSlider.addEventListener('pointerup', endDrag)
+  gradSlider.addEventListener('pointercancel', endDrag)
 }
 
 // --- Liste réordonnable (question "order") ---
@@ -322,7 +314,7 @@ const buildOrderList = (items) => {
   orderList.innerHTML = ''
   orderState.itemEls = []
   orderState.currentOrder = items.map((_, i) => i)
-  orderDisabled = false
+  orderDisabled = true
 
   items.forEach((text, uid) => {
     const el = document.createElement('div')
@@ -333,6 +325,7 @@ const buildOrderList = (items) => {
     el.querySelector('.order-item-text').textContent = text
     orderList.appendChild(el)
     orderState.itemEls.push(el)
+    applyTileReveal(el, uid)
 
     let dragging = false, startY = 0, startPos = 0, itemHeight = 0
     el.addEventListener('pointerdown', e => {
@@ -387,7 +380,7 @@ const revealOrderList = (correctOrder) => {
 const clearRevealState = () => {
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
-  if (gradRuler) gradRuler.classList.remove('reveal')
+  if (gradSlider) gradSlider.classList.remove('reveal')
   orderState.itemEls.forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
 }
 
@@ -397,11 +390,11 @@ const showAnswerStatus = () => { if (answerStatusEl) answerStatusEl.classList.re
 const hideAnswerStatus = () => { if (answerStatusEl) answerStatusEl.classList.add('d-none') }
 
 const positionGradTargetMarker = (target) => {
-  // Révélation : on bloque le curseur et on fait défiler la règle jusqu'à la
-  // bonne valeur (le viseur central atterrit dessus), viseur teinté en vert.
+  // Révélation : on bloque le curseur et on déplace le pouce jusqu'à la
+  // bonne valeur, teinté en vert.
   gradState.disabled = true
-  if (gradRuler) gradRuler.classList.add('reveal')
-  setRulerValue(Number(target), true)
+  if (gradSlider) gradSlider.classList.add('reveal')
+  setGradValue(Number(target), true)
 }
 
 const revealFreeAnswer = (text) => {
@@ -1405,9 +1398,15 @@ socket.on('question:show', payload => {
     timerContainer.style.display = 'flex'
   }
   qDiv.textContent = payload.prompt
+  qDiv.style.animation = 'none'
+  void qDiv.offsetWidth
+  qDiv.style.animation = 'tileRevealIn 0.5s cubic-bezier(.34,1.56,.64,1) both'
+  // L'hôte voit désormais les mêmes tuiles que les joueurs (verrouillées en
+  // lecture seule, jamais de bouton d'envoi) : c'est son écran à partager
+  // avec la salle, plus une simple console de contrôle à l'aveugle.
   if (inputArea) {
     inputArea.classList.remove('d-none')
-    inputArea.style.display = isHost ? 'none' : 'block'
+    inputArea.style.display = 'block'
   }
   currentQuestionType = payload.type || 'free'
   if (optionsDiv) {
@@ -1424,33 +1423,37 @@ socket.on('question:show', payload => {
   }
   answerInput.value = ''
   answerInput.disabled = false
-  sendBtn.disabled = false
-  gradState.disabled = false
+  sendBtn.disabled = true
+  gradState.disabled = true
   selectedMcqOptions = []
-  inputArea.classList.remove('answers-locked')
+  // Tout le monde démarre verrouillé : la question puis les tuiles se
+  // révèlent d'abord (ci-dessous), le chrono et les réponses ne s'activent
+  // qu'à startTs. L'hôte, lui, reste verrouillé en permanence — il ne répond
+  // jamais, ce n'est que son écran à partager avec la salle.
+  inputArea.classList.add('answers-locked')
   hideAnswerStatus()
 
-  // Show send button for MCQ/truefalse/graduation/order too if we want manual validation
-  if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order') && !isHost) {
-    document.getElementById('freeText').classList.remove('d-none')
-    document.getElementById('freeText').classList.add('mcq-mode')
-    answerInput.classList.add('d-none')
-    sendBtn.textContent = 'Valider'
-    if (payload.type === 'graduation' && gradRuler) {
-      const min = Number(payload.min ?? 0)
-      const max = Number(payload.max ?? 100)
-      const mid = Math.round((min + max) / 2)
-      buildRuler(min, max, mid)
+  const freeTextEl = document.getElementById('freeText')
+  freeTextEl.classList.add('d-none')
+  if (!isHost) {
+    if (payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order') {
+      freeTextEl.classList.add('mcq-mode')
+      answerInput.classList.add('d-none')
+      sendBtn.textContent = 'Valider'
+    } else {
+      freeTextEl.classList.remove('mcq-mode')
+      answerInput.classList.remove('d-none')
+      sendBtn.textContent = 'Envoyer'
     }
-    if (payload.type === 'order' && Array.isArray(payload.options)) {
-      buildOrderList(payload.options)
-    }
-  } else {
-    // Ré-affiche la ligne de saisie (masquée à timer:end sur la question d'avant)
-    document.getElementById('freeText').classList.remove('d-none')
-    document.getElementById('freeText').classList.remove('mcq-mode')
-    answerInput.classList.remove('d-none')
-    sendBtn.textContent = 'Envoyer'
+  }
+  if (payload.type === 'graduation' && gradSlider) {
+    const min = Number(payload.min ?? 0)
+    const max = Number(payload.max ?? 100)
+    const mid = Math.round((min + max) / 2)
+    buildGradSlider(min, max, mid)
+  }
+  if (payload.type === 'order' && Array.isArray(payload.options)) {
+    buildOrderList(payload.options)
   }
 
   currentSingleAttempt = payload.singleAttempt !== false
@@ -1465,9 +1468,35 @@ socket.on('question:show', payload => {
     timerBarFill.style.width = '100%'
   }
 
+  // Déverrouillage à startTs (fin de la révélation) : tuiles/curseur/liste et
+  // bouton d'envoi redeviennent interactifs pile quand le chrono démarre pour
+  // de vrai. revealToken évite qu'un déverrouillage tardif ne s'applique après
+  // le passage à une autre question (hôte qui enchaîne très vite).
+  const myRevealToken = ++revealToken
+  if (!isHost) {
+    setTimeout(() => {
+      if (revealToken !== myRevealToken) return
+      inputArea.classList.remove('answers-locked')
+      sendBtn.disabled = false
+      gradState.disabled = false
+      orderDisabled = false
+      freeTextEl.classList.remove('d-none')
+      applyTileReveal(freeTextEl, 0)
+    }, Math.max(0, start - Date.now()))
+  }
+
   let lastTickSecond = null
   timerInt = setInterval(() => {
     const now = Date.now()
+    if (now < start) {
+      // Phase de révélation : la barre reste pleine, pas de décompte affiché.
+      if (timerBarFill) {
+        timerBarFill.style.width = '100%'
+        timerBarFill.classList.remove('timer-urgent')
+      }
+      if (timerLabel) timerLabel.textContent = '···'
+      return
+    }
     const remaining = Math.max(0, total - (now - start))
     const pct = (remaining / total) * 100
 
@@ -1494,8 +1523,8 @@ socket.on('question:show', payload => {
     }
   }, 100)
   optionsDiv.innerHTML = ''
-  if (!isHost && payload.type === 'mcq' && Array.isArray(payload.options)) {
-    payload.options.forEach(opt => {
+  if (payload.type === 'mcq' && Array.isArray(payload.options)) {
+    payload.options.forEach((opt, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn'
       el.textContent = opt
@@ -1512,12 +1541,13 @@ socket.on('question:show', payload => {
         }
       }
       optionsDiv.appendChild(el)
+      applyTileReveal(el, i)
     })
-  } else if (!isHost && payload.type === 'truefalse') {
+  } else if (payload.type === 'truefalse') {
     // Choix exclusif (un seul des deux boutons peut être sélectionné à la fois),
     // contrairement au QCM où plusieurs réponses peuvent être cochées.
     const choices = Array.isArray(payload.options) && payload.options.length === 2 ? payload.options : ['Vrai', 'Faux']
-    choices.forEach(opt => {
+    choices.forEach((opt, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn truefalse-btn'
       // textContent reste EXACTEMENT la valeur (pas d'icône ajoutée ici) :
@@ -1532,6 +1562,7 @@ socket.on('question:show', payload => {
         el.classList.add('selected')
       }
       optionsDiv.appendChild(el)
+      applyTileReveal(el, i)
     })
   }
 })

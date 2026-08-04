@@ -145,6 +145,24 @@ const start = async () => {
   }
   const GRAD_CORRECT_THRESHOLD = 0.8
 
+  // Délai de révélation avant que le chrono ne démarre vraiment : le temps
+  // que la question s'affiche puis que les réponses apparaissent une à une
+  // (animation partagée hôte/joueurs), tout le monde lit en même temps avant
+  // que ça ne devienne une course. Les constantes (pause, décalage par tuile,
+  // durée d'anim) sont dupliquées côté client (index.js) pour que le timing
+  // visuel colle exactement à ce délai serveur.
+  const REVEAL_QUESTION_BEAT_MS = 900
+  const REVEAL_STAGGER_MS = 350
+  const REVEAL_TILE_ANIM_MS = 500
+  const REVEAL_BUFFER_MS = 400
+  const computeRevealMs = (payload) => {
+    const hasTiles = payload?.type === 'mcq' || payload?.type === 'truefalse' || payload?.type === 'order'
+    const tileCount = hasTiles && Array.isArray(payload?.options) ? Math.max(1, payload.options.length) : 1
+    const staggerSpan = hasTiles ? (tileCount - 1) * REVEAL_STAGGER_MS : 0
+    const tileAnim = payload?.type === 'free' ? 0 : REVEAL_TILE_ANIM_MS
+    return REVEAL_QUESTION_BEAT_MS + staggerSpan + tileAnim + REVEAL_BUFFER_MS
+  }
+
   io.on('connection', socket => {
     socket.on('room:create', async payload => {
       const code = Math.random().toString(36).slice(2, 7).toUpperCase()
@@ -350,13 +368,17 @@ const start = async () => {
       const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {} }
       room.history.push(historyEntry)
 
-      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now(), answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry }
+      const revealMs = computeRevealMs(payload)
+      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry }
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
       // lisible dans la frame WebSocket (devtools) avant même de répondre.
       const { correct, ...payloadWithoutCorrect } = payload || {}
       const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order') ? payloadWithoutCorrect : payload
 
+      // Diffusé immédiatement (pas au bout de revealMs) : chaque client anime
+      // lui-même la révélation de la question/des tuiles jusqu'à startTs, pour
+      // que l'hôte (écran principal) et les joueurs la voient au même moment.
       io.to(code).emit('question:show', { ...broadcastPayload, singleAttempt: room.currentQuestion.singleAttempt, startTs: room.currentQuestion.startTs })
       setTimeout(() => {
         // Tout token sans résultat pour cette question au moment où le temps est écoulé
@@ -379,7 +401,7 @@ const start = async () => {
             target: room.currentQuestion.type === 'graduation' ? room.currentQuestion.correct?.[0] : undefined
           })
         }
-      }, room.currentQuestion.timerMs)
+      }, revealMs + room.currentQuestion.timerMs)
     })
 
     socket.on('answer:submit', payload => {
@@ -388,6 +410,10 @@ const start = async () => {
       if (!room) return
       const q = room.currentQuestion
       if (!q) return
+      // Encore en phase de révélation (les tuiles apparaissent à l'écran) :
+      // le client bloque déjà l'UI, mais on ne fait jamais confiance qu'au
+      // serveur pour l'ouverture réelle de la fenêtre de réponse.
+      if (Date.now() < q.startTs) return
       if (Date.now() - q.startTs > q.timerMs) return
       if (q.answered?.has(socket.id)) return
       if (q.singleAttempt && q.submissions?.has(socket.id)) return

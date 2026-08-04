@@ -118,12 +118,16 @@ const render = (players) => {
   if (!revealed) {
     revealed = true
     const step3 = byStep(3), step2 = byStep(2), step1 = byStep(1)
-    // Les places sans joueur (parties à 1-2 participants) apparaissent tout de
-    // suite, sans animation : pas de rebond "dramatique" sur une case vide.
+    // Une place sans joueur (partie à 1-2 participants) ne doit pas apparaître
+    // du tout — pas de podium vide avec un "—" à la 3e place.
     const reveal = (step, hasPlayer, delay) => {
       if (!step) return
-      if (hasPlayer) setTimeout(() => step.classList.remove('hidden'), delay)
-      else step.classList.remove('hidden')
+      if (hasPlayer) {
+        step.style.display = ''
+        setTimeout(() => step.classList.remove('hidden'), delay)
+      } else {
+        step.style.display = 'none'
+      }
     }
     reveal(step3, !!top[2], 500)
     reveal(step2, !!top[1], 1700)
