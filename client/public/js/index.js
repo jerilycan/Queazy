@@ -14,6 +14,18 @@ const playSound = (name) => {
   try { el.currentTime = 0; el.play().catch(() => {}) } catch {}
 }
 
+// Fisher-Yates — utilisé pour mélanger l'ordre initial affiché aux joueurs
+// pour les questions de type "order" (l'ordre correct ne doit jamais être
+// l'arrangement de départ trivial saisi dans l'éditeur).
+const shuffleArray = (arr) => {
+  const a = arr.slice()
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 // État d'authentification partagé (mis à jour par checkAuth)
 let isAuthReady = false
 let canCreate = false
@@ -173,6 +185,8 @@ const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
 const revealAnswerText = document.getElementById('revealAnswerText')
+const orderArea = document.getElementById('orderArea')
+const orderList = document.getElementById('orderList')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
@@ -276,10 +290,92 @@ if (gradRuler) {
   gradRuler.addEventListener('pointercancel', endDrag)
 }
 
+// --- Liste réordonnable (question "order") ---
+// Pointer Events (pas l'API HTML5 Drag and Drop, peu fiable au toucher) +
+// la propriété CSS `order` pour repositionner les éléments : les noeuds DOM
+// eux-mêmes ne sont JAMAIS recréés pendant un glisser, donc le pointeur capturé
+// (setPointerCapture) reste valide du pointerdown au pointerup.
+let orderDisabled = false
+const orderState = { itemEls: [], currentOrder: [] } // currentOrder : indices dans l'ordre visuel actuel
+
+const applyOrderPositions = () => {
+  orderState.currentOrder.forEach((uid, pos) => { orderState.itemEls[uid].style.order = pos })
+}
+
+const getCurrentOrderTexts = () => orderState.currentOrder.map(uid => orderState.itemEls[uid].dataset.text)
+
+const buildOrderList = (items) => {
+  if (!orderList) return
+  orderList.innerHTML = ''
+  orderState.itemEls = []
+  orderState.currentOrder = items.map((_, i) => i)
+  orderDisabled = false
+
+  items.forEach((text, uid) => {
+    const el = document.createElement('div')
+    el.className = 'order-item'
+    el.dataset.text = text
+    el.style.order = uid
+    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="order-item-text"></span>`
+    el.querySelector('.order-item-text').textContent = text
+    orderList.appendChild(el)
+    orderState.itemEls.push(el)
+
+    let dragging = false, startY = 0, startPos = 0, itemHeight = 0
+    el.addEventListener('pointerdown', e => {
+      if (orderDisabled) return
+      dragging = true
+      startY = e.clientY
+      startPos = orderState.currentOrder.indexOf(uid)
+      itemHeight = el.getBoundingClientRect().height + 10 // + gap approximatif
+      el.classList.add('dragging')
+      try { el.setPointerCapture(e.pointerId) } catch {}
+    })
+    el.addEventListener('pointermove', e => {
+      if (!dragging) return
+      const deltaY = e.clientY - startY
+      el.style.transform = `translateY(${deltaY}px)`
+      const steps = Math.round(deltaY / itemHeight)
+      const targetPos = Math.min(orderState.currentOrder.length - 1, Math.max(0, startPos + steps))
+      const curPos = orderState.currentOrder.indexOf(uid)
+      if (targetPos !== curPos) {
+        orderState.currentOrder.splice(curPos, 1)
+        orderState.currentOrder.splice(targetPos, 0, uid)
+        orderState.itemEls.forEach((sib, sibUid) => { if (sibUid !== uid) sib.style.order = orderState.currentOrder.indexOf(sibUid) })
+      }
+    })
+    const endDrag = (e) => {
+      if (!dragging) return
+      dragging = false
+      try { el.releasePointerCapture(e.pointerId) } catch {}
+      el.classList.remove('dragging')
+      el.style.transform = ''
+      applyOrderPositions()
+    }
+    el.addEventListener('pointerup', endDrag)
+    el.addEventListener('pointercancel', endDrag)
+  })
+}
+
+// Révélation : la liste se réarrange dans l'ordre correct (le score déjà
+// attribué est "tout ou rien", donc pas de distinction case par case —
+// la révélation montre juste où était la bonne réponse).
+const revealOrderList = (correctOrder) => {
+  if (!orderState.itemEls.length) return
+  orderDisabled = true
+  const newOrder = correctOrder
+    .map(text => orderState.itemEls.findIndex(el => el.dataset.text === text))
+    .filter(uid => uid !== -1)
+  if (newOrder.length === orderState.itemEls.length) orderState.currentOrder = newOrder
+  applyOrderPositions()
+  orderState.itemEls.forEach(el => el.classList.add('correct-reveal'))
+}
+
 const clearRevealState = () => {
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (gradRuler) gradRuler.classList.remove('reveal')
+  orderState.itemEls.forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
 }
 
 // Badge « Réponse envoyée » : feedback principal du joueur après soumission
@@ -1158,14 +1254,19 @@ const emitQuestion = (index) => {
   // de réponses reçu via answer:progress.
   hostQuestionLabel = `Question ${index + 1}/${loadedQuiz.questions.length}`
   if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · en attente des réponses…`
+  const correctOrder = Array.isArray(q.correct) ? q.correct : []
   const payload = {
     roomCode,
     id: q.id || ('q' + (index + 1)),
     type: q.type || 'free',
     prompt: q.prompt || 'Question',
     timerMs: q.timerMs || 15000,
-    correct: Array.isArray(q.correct) ? q.correct : [],
-    options: Array.isArray(q.options) ? q.options : [],
+    correct: correctOrder,
+    // Pour 'order', les joueurs voient les items dans un ordre mélangé (pas
+    // l'ordre correct saisi dans l'éditeur, ni toujours le même mélange) —
+    // le mélange est fait une fois ici, avant l'envoi ; le serveur retire
+    // 'correct' de la diffusion (anti-triche), 'options' seul est visible.
+    options: q.type === 'order' ? shuffleArray(correctOrder) : (Array.isArray(q.options) ? q.options : []),
     min: q.min,
     max: q.max,
     singleAttempt: currentSingleAttempt
@@ -1297,6 +1398,9 @@ socket.on('question:show', payload => {
   if (graduationArea) {
     graduationArea.classList.toggle('d-none', payload.type !== 'graduation')
   }
+  if (orderArea) {
+    orderArea.classList.toggle('d-none', payload.type !== 'order')
+  }
   answerInput.value = ''
   answerInput.disabled = false
   sendBtn.disabled = false
@@ -1305,8 +1409,8 @@ socket.on('question:show', payload => {
   inputArea.classList.remove('answers-locked')
   hideAnswerStatus()
 
-  // Show send button for MCQ/truefalse/graduation too if we want manual validation
-  if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation') && !isHost) {
+  // Show send button for MCQ/truefalse/graduation/order too if we want manual validation
+  if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order') && !isHost) {
     document.getElementById('freeText').classList.remove('d-none')
     document.getElementById('freeText').classList.add('mcq-mode')
     answerInput.classList.add('d-none')
@@ -1316,6 +1420,9 @@ socket.on('question:show', payload => {
       const max = Number(payload.max ?? 100)
       const mid = Math.round((min + max) / 2)
       buildRuler(min, max, mid)
+    }
+    if (payload.type === 'order' && Array.isArray(payload.options)) {
+      buildOrderList(payload.options)
     }
   } else {
     // Ré-affiche la ligne de saisie (masquée à timer:end sur la question d'avant)
@@ -1420,6 +1527,8 @@ sendBtn.onclick = () => {
     content = selectedMcqOptions.join(', ')
   } else if (currentQuestionType === 'graduation') {
     content = String(gradState.value)
+  } else if (currentQuestionType === 'order') {
+    content = JSON.stringify(getCurrentOrderTexts())
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -1432,6 +1541,7 @@ sendBtn.onclick = () => {
     sendBtn.disabled = true
     answerInput.disabled = true
     gradState.disabled = true
+    orderDisabled = true
     Array.from(optionsDiv.children).forEach(c => {
       c.style.pointerEvents = 'none'
       if (!c.classList.contains('selected')) {
@@ -1636,6 +1746,7 @@ socket.on('timer:end', () => {
     // Ne PAS masquer inputArea : la révélation (surbrillance QCM, règle,
     // réponse acceptée) s'affiche dedans. On verrouille juste les interactions.
     inputArea.classList.add('answers-locked')
+    orderDisabled = true
     const ft = document.getElementById('freeText')
     if (ft) ft.classList.add('d-none')
     hideAnswerStatus()
@@ -1662,6 +1773,8 @@ socket.on('question:reveal', payload => {
     revealFreeAnswer((payload.correct || [])[0] || '')
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
+  } else if (payload.type === 'order') {
+    revealOrderList(payload.correct || [])
   }
   if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
   if (isHost) { hostPhase = 'revealed'; updateHostControls() }

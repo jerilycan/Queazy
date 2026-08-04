@@ -79,6 +79,7 @@
                 <option value="mcq">Choix multiples (QCM)</option>
                 <option value="truefalse">Vrai / Faux</option>
                 <option value="graduation">Curseur numérique</option>
+                <option value="order">Ordre / classement</option>
               </select>
             </div>
             <div class="detail-section">
@@ -132,6 +133,14 @@
               <button type="button" id="tfTrueBtn" class="truefalse-toggle-btn">✓ Vrai</button>
               <button type="button" id="tfFalseBtn" class="truefalse-toggle-btn">✕ Faux</button>
             </div>
+          </div>
+
+          <div id="orderSection" class="detail-section d-none">
+            <label>Éléments, dans le bon ordre (glisser pour réordonner)</label>
+            <div id="orderEditList" class="options-editor">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="addOrderItem" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter un élément</button>
           </div>
 
           <div id="correctSection" class="detail-section">

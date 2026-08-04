@@ -782,9 +782,48 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
 
 /* Interactions verrouillées après la fin du timer (la révélation reste visible) */
 .answers-locked .option-btn,
-.answers-locked .grad-ruler {
+.answers-locked .grad-ruler,
+.answers-locked .order-item {
   pointer-events: none;
 }
+
+/* Liste réordonnable (question "order") */
+.order-area { max-width: 560px; margin: var(--space-lg) auto 0; }
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  background: white;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--color-text);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.order-item.dragging {
+  cursor: grabbing;
+  z-index: 10;
+  box-shadow: var(--shadow-lg);
+  opacity: 0.95;
+}
+.order-item:not(.dragging) { transition: transform 0.15s ease; }
+.order-item-handle { opacity: 0.35; font-size: 18px; }
+.order-item-text { flex: 1; }
+.order-item.correct-reveal {
+  background: var(--tile-green);
+  color: white;
+  box-shadow: 0 0 0 3px rgba(38,137,12,0.4), var(--shadow-md);
+}
+.order-item.correct-reveal .order-item-handle { opacity: 0.7; }
 
 /* Badge de confirmation après l'envoi d'une réponse */
 .answer-status {
@@ -1059,6 +1098,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
 .question-item.type-free::before { background: var(--tile-green); }
 .question-item.type-graduation::before { background: var(--tile-yellow); }
 .question-item.type-truefalse::before { background: var(--tile-red); }
+.question-item.type-order::before { background: var(--color-accent); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
@@ -1306,6 +1346,17 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   font-size: 14px;
   background: transparent;
   flex: 1;
+}
+
+.order-edit-row { cursor: grab; }
+.order-edit-row.dragging { opacity: 0.4; }
+.order-edit-row.drag-over { border-color: var(--tile-yellow); box-shadow: 0 0 0 2px var(--tile-yellow) inset; }
+.order-edit-num {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  width: 18px;
+  text-align: center;
 }
 
 .btn-icon {

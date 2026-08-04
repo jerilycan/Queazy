@@ -355,7 +355,7 @@ const start = async () => {
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
       // lisible dans la frame WebSocket (devtools) avant même de répondre.
       const { correct, ...payloadWithoutCorrect } = payload || {}
-      const broadcastPayload = payload?.type === 'graduation' ? payloadWithoutCorrect : payload
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order') ? payloadWithoutCorrect : payload
 
       io.to(code).emit('question:show', { ...broadcastPayload, singleAttempt: room.currentQuestion.singleAttempt, startTs: room.currentQuestion.startTs })
       setTimeout(() => {
@@ -421,6 +421,37 @@ const start = async () => {
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'graded')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        emitProgress()
+        return
+      }
+
+      if (q.type === 'order') {
+        // Tout ou rien : l'ordre soumis (JSON d'un tableau) doit correspondre
+        // exactement, élément par élément, à q.correct. Pas de fuzzy matching
+        // ici (ça n'aurait pas de sens pour une comparaison de séquence), pas
+        // de modération (comme mcq/truefalse).
+        let submitted
+        try { submitted = JSON.parse(payload?.content || '[]') } catch { submitted = null }
+        const correctOrder = Array.isArray(q.correct) ? q.correct : []
+        const isCorrect = Array.isArray(submitted) &&
+          submitted.length === correctOrder.length &&
+          submitted.every((v, i) => v === correctOrder[i])
+        const p = room.players.get(socket.id)
+        if (isCorrect) {
+          const delta = pointsFor(q.startTs, Date.now())
+          const total = (room.scores.get(socket.id) || 0) + delta
+          room.scores.set(socket.id, total)
+          if (p?.token) {
+            room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+            if (q.historyEntry) q.historyEntry.results[p.token] = 'correct'
+          }
+          q.answered?.add(socket.id)
+          q.submissions?.set(socket.id, 'correct')
+          io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        } else {
+          if (p?.token && q.historyEntry) q.historyEntry.results[p.token] = 'incorrect'
+          q.submissions?.set(socket.id, 'incorrect')
+        }
         emitProgress()
         return
       }

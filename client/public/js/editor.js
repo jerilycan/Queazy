@@ -139,6 +139,10 @@ const trueFalseSection = document.getElementById('trueFalseSection')
 const tfTrueBtn = document.getElementById('tfTrueBtn')
 const tfFalseBtn = document.getElementById('tfFalseBtn')
 
+const orderSection = document.getElementById('orderSection')
+const orderEditList = document.getElementById('orderEditList')
+const addOrderItemBtn = document.getElementById('addOrderItem')
+
 const bindGradStepper = (input, minusBtn, plusBtn, onCommit) => {
   const commit = (val) => { input.value = val; onCommit(Number(val) || 0) }
   minusBtn.onclick = () => commit((Number(input.value) || 0) - 1)
@@ -167,7 +171,7 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
-    qGradMin, qGradMax, qGradTarget,
+    qGradMin, qGradMax, qGradTarget, tfTrueBtn, tfFalseBtn, addOrderItemBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
     document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus')
@@ -312,6 +316,7 @@ const selectQuestion = (index) => {
 
   renderOptions()
   renderCorrects()
+  renderOrderItems()
   toggleTypeSections()
   updateSidebar()
 
@@ -345,7 +350,8 @@ const toggleTypeSections = () => {
   mcqSection.classList.toggle('d-none', qType.value !== 'mcq')
   if (graduationSection) graduationSection.classList.toggle('d-none', qType.value !== 'graduation')
   if (trueFalseSection) trueFalseSection.classList.toggle('d-none', qType.value !== 'truefalse')
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse')
+  if (orderSection) orderSection.classList.toggle('d-none', qType.value !== 'order')
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse' || qType.value === 'order')
   if (qType.value === 'mcq') {
     correctLabel.textContent = 'Réponses correctes'
   } else {
@@ -414,6 +420,92 @@ const renderCorrects = () => {
   })
 }
 
+// Réutilise le même glisser-déposer HTML5 que la sidebar des questions
+// (moveQuestion) : ici on réordonne q.correct, la séquence "bonne réponse".
+let orderDragSrcIndex = null
+
+const renderOrderItems = () => {
+  if (!orderEditList) return
+  orderEditList.innerHTML = ''
+  const q = questions[activeIndex]
+  if (!q) return
+  if (!Array.isArray(q.correct) || q.correct.length === 0) q.correct = ['', '']
+
+  q.correct.forEach((item, idx) => {
+    const row = document.createElement('div')
+    row.className = 'option-row order-edit-row'
+    row.draggable = !readOnly
+    row.dataset.index = idx
+
+    if (!readOnly) {
+      row.addEventListener('dragstart', () => { orderDragSrcIndex = idx; row.classList.add('dragging') })
+      row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over') })
+      row.addEventListener('dragleave', () => row.classList.remove('drag-over'))
+      row.addEventListener('drop', (e) => {
+        e.preventDefault()
+        row.classList.remove('drag-over')
+        if (orderDragSrcIndex === null || orderDragSrcIndex === idx) return
+        const [moved] = q.correct.splice(orderDragSrcIndex, 1)
+        q.correct.splice(idx, 0, moved)
+        orderDragSrcIndex = null
+        renderOrderItems()
+      })
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging')
+        Array.from(orderEditList.children).forEach(c => c.classList.remove('drag-over'))
+        orderDragSrcIndex = null
+      })
+    }
+
+    if (!readOnly) {
+      const handle = document.createElement('span')
+      handle.className = 'q-drag-handle'
+      handle.textContent = '⠿'
+      row.appendChild(handle)
+    }
+
+    const num = document.createElement('span')
+    num.className = 'order-edit-num'
+    num.textContent = idx + 1
+    row.appendChild(num)
+
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.value = item
+    input.placeholder = 'Élément ' + (idx + 1)
+    input.style.flex = '1'
+    input.disabled = readOnly
+    input.oninput = (e) => { q.correct[idx] = e.target.value }
+    row.appendChild(input)
+
+    if (!readOnly) {
+      const del = document.createElement('button')
+      del.className = 'btn-icon btn-danger'
+      del.innerHTML = '&times;'
+      del.onclick = () => {
+        if (q.correct.length <= 2) {
+          showToast('Il faut au moins 2 éléments à ordonner', 'error')
+          return
+        }
+        q.correct.splice(idx, 1)
+        renderOrderItems()
+      }
+      row.appendChild(del)
+    }
+
+    orderEditList.appendChild(row)
+  })
+}
+
+if (addOrderItemBtn) {
+  addOrderItemBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    if (!Array.isArray(questions[activeIndex].correct)) questions[activeIndex].correct = []
+    questions[activeIndex].correct.push('')
+    renderOrderItems()
+  }
+}
+
 const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked = false, onCheck = null) => {
   const div = document.createElement('div')
   div.className = 'option-row'
@@ -463,10 +555,16 @@ qType.onchange = () => {
     q.options = ['Vrai', 'Faux']
     if (q.correct?.[0] !== 'Vrai' && q.correct?.[0] !== 'Faux') q.correct = ['Vrai']
     populateTrueFalseFields(q)
+  } else if (qType.value === 'order') {
+    // q.correct venant d'un autre type (une seule réponse acceptée, options
+    // QCM...) n'a pas de sens comme séquence à ordonner : on repart propre
+    // sauf s'il contient déjà au moins 2 éléments (ex. retour sur ce type).
+    if (!Array.isArray(q.correct) || q.correct.length < 2) q.correct = ['', '']
   }
   toggleTypeSections()
   renderOptions()
   renderCorrects()
+  renderOrderItems()
 }
 
 qPrompt.oninput = () => {
@@ -504,6 +602,7 @@ deleteQuestionBtn.onclick = () => {
 
   renderOptions()
   renderCorrects()
+  renderOrderItems()
   toggleTypeSections()
   updateSidebar()
 
@@ -576,6 +675,16 @@ saveQuizBtn.onclick = async () => {
       if (target < min || target > max) {
         selectQuestion(i)
         showToast(`Le curseur ${i + 1} : la valeur correcte doit être entre le min et le max`, 'error')
+        return
+      }
+    }
+
+    // Pour l'ordre/classement, il faut au moins 2 éléments non vides
+    if (q.type === 'order') {
+      const validItems = (q.correct || []).filter(item => item && item.trim() !== '')
+      if (validItems.length < 2) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : il faut au moins 2 éléments à ordonner`, 'error')
         return
       }
     }
