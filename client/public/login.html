@@ -20,28 +20,19 @@
 
         <div class="d-flex flex-column gap-md">
           <div class="form-group text-left">
-            <label class="d-block mb-8 font-bold text-muted">Pseudo (optionnel)</label>
-            <input id="pseudo" type="text" placeholder="Ton pseudo" class="w-full" />
+            <label class="d-block mb-8 font-bold text-muted">Email ou pseudo</label>
+            <input id="loginIdentifier" type="text" placeholder="ton@email.com ou ton pseudo" class="w-full" autocomplete="username" />
           </div>
-          
-          <div class="form-group text-left">
-            <label class="d-block mb-8 font-bold text-muted">Email</label>
-            <input id="email" type="email" placeholder="ton@email.com" class="w-full" />
-          </div>
-          
+
           <div class="form-group text-left">
             <label class="d-block mb-8 font-bold text-muted">Mot de passe</label>
-            <input id="password" type="password" placeholder="••••••••" class="w-full" />
+            <input id="loginPassword" type="password" placeholder="••••••••" class="w-full" autocomplete="current-password" />
           </div>
 
           <div id="loginError" class="text-danger font-14 d-none"></div>
 
           <button id="signIn" class="btn btn-primary h-56 font-18 w-full">
             <span>Se connecter</span>
-          </button>
-          
-          <button id="signUp" class="btn h-56 w-full border-border">
-            <span>Créer un compte</span>
           </button>
 
           <div class="divider">
@@ -69,6 +60,45 @@
           <button id="guestPlay" class="btn h-56 w-full border-accent bg-accent-light text-accent font-bold">
             <span>Jouer en tant qu'invité</span>
           </button>
+
+          <p class="font-14 text-muted mt-8">
+            Pas encore de compte ?
+            <a href="#" id="showSignup" class="text-accent font-bold">Créer un compte</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- Création de compte (carte séparée de la connexion) -->
+      <div id="signupCard" class="card text-center max-w-500 m-auto d-none">
+        <h2 class="mb-lg font-32">Créer un compte</h2>
+        <p class="text-muted mb-lg">Un compte permet de sauvegarder tes quiz et tes scores.</p>
+
+        <div class="d-flex flex-column gap-md">
+          <div class="form-group text-left">
+            <label class="d-block mb-8 font-bold text-muted">Email</label>
+            <input id="signupEmail" type="email" placeholder="ton@email.com" class="w-full" autocomplete="email" />
+          </div>
+
+          <div class="form-group text-left">
+            <label class="d-block mb-8 font-bold text-muted">Pseudo (optionnel)</label>
+            <input id="signupPseudo" type="text" placeholder="Ton pseudo" class="w-full" />
+          </div>
+
+          <div class="form-group text-left">
+            <label class="d-block mb-8 font-bold text-muted">Mot de passe</label>
+            <input id="signupPassword" type="password" placeholder="••••••••" class="w-full" autocomplete="new-password" />
+          </div>
+
+          <div id="signupError" class="text-danger font-14 d-none"></div>
+
+          <button id="signUp" class="btn btn-primary h-56 font-18 w-full">
+            <span>Créer mon compte</span>
+          </button>
+
+          <p class="font-14 text-muted mt-8">
+            Déjà un compte ?
+            <a href="#" id="showLogin" class="text-accent font-bold">Se connecter</a>
+          </p>
         </div>
       </div>
 

@@ -1,5 +1,31 @@
 const socket = io()
 
+// Sons du jeu : tic-tac du timer, bonne/mauvaise réponse. Un seul objet Audio
+// réutilisé par son (avec currentTime=0) pour permettre des déclenchements
+// rapprochés (ex. tic-tac chaque seconde) sans empiler les instances.
+const sounds = {
+  tick: new Audio('/audio/tick.wav'),
+  correct: new Audio('/audio/correct.wav'),
+  wrong: new Audio('/audio/wrong.wav')
+}
+const playSound = (name) => {
+  const el = sounds[name]
+  if (!el) return
+  try { el.currentTime = 0; el.play().catch(() => {}) } catch {}
+}
+
+// Fisher-Yates — utilisé pour mélanger l'ordre initial affiché aux joueurs
+// pour les questions de type "order" (l'ordre correct ne doit jamais être
+// l'arrangement de départ trivial saisi dans l'éditeur).
+const shuffleArray = (arr) => {
+  const a = arr.slice()
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 // État d'authentification partagé (mis à jour par checkAuth)
 let isAuthReady = false
 let canCreate = false
@@ -159,6 +185,8 @@ const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
 const revealAnswerText = document.getElementById('revealAnswerText')
+const orderArea = document.getElementById('orderArea')
+const orderList = document.getElementById('orderList')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
@@ -262,11 +290,98 @@ if (gradRuler) {
   gradRuler.addEventListener('pointercancel', endDrag)
 }
 
+// --- Liste réordonnable (question "order") ---
+// Pointer Events (pas l'API HTML5 Drag and Drop, peu fiable au toucher) +
+// la propriété CSS `order` pour repositionner les éléments : les noeuds DOM
+// eux-mêmes ne sont JAMAIS recréés pendant un glisser, donc le pointeur capturé
+// (setPointerCapture) reste valide du pointerdown au pointerup.
+let orderDisabled = false
+const orderState = { itemEls: [], currentOrder: [] } // currentOrder : indices dans l'ordre visuel actuel
+
+const applyOrderPositions = () => {
+  orderState.currentOrder.forEach((uid, pos) => { orderState.itemEls[uid].style.order = pos })
+}
+
+const getCurrentOrderTexts = () => orderState.currentOrder.map(uid => orderState.itemEls[uid].dataset.text)
+
+const buildOrderList = (items) => {
+  if (!orderList) return
+  orderList.innerHTML = ''
+  orderState.itemEls = []
+  orderState.currentOrder = items.map((_, i) => i)
+  orderDisabled = false
+
+  items.forEach((text, uid) => {
+    const el = document.createElement('div')
+    el.className = 'order-item'
+    el.dataset.text = text
+    el.style.order = uid
+    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="order-item-text"></span>`
+    el.querySelector('.order-item-text').textContent = text
+    orderList.appendChild(el)
+    orderState.itemEls.push(el)
+
+    let dragging = false, startY = 0, startPos = 0, itemHeight = 0
+    el.addEventListener('pointerdown', e => {
+      if (orderDisabled) return
+      dragging = true
+      startY = e.clientY
+      startPos = orderState.currentOrder.indexOf(uid)
+      itemHeight = el.getBoundingClientRect().height + 10 // + gap approximatif
+      el.classList.add('dragging')
+      try { el.setPointerCapture(e.pointerId) } catch {}
+    })
+    el.addEventListener('pointermove', e => {
+      if (!dragging) return
+      const deltaY = e.clientY - startY
+      el.style.transform = `translateY(${deltaY}px)`
+      const steps = Math.round(deltaY / itemHeight)
+      const targetPos = Math.min(orderState.currentOrder.length - 1, Math.max(0, startPos + steps))
+      const curPos = orderState.currentOrder.indexOf(uid)
+      if (targetPos !== curPos) {
+        orderState.currentOrder.splice(curPos, 1)
+        orderState.currentOrder.splice(targetPos, 0, uid)
+        orderState.itemEls.forEach((sib, sibUid) => { if (sibUid !== uid) sib.style.order = orderState.currentOrder.indexOf(sibUid) })
+      }
+    })
+    const endDrag = (e) => {
+      if (!dragging) return
+      dragging = false
+      try { el.releasePointerCapture(e.pointerId) } catch {}
+      el.classList.remove('dragging')
+      el.style.transform = ''
+      applyOrderPositions()
+    }
+    el.addEventListener('pointerup', endDrag)
+    el.addEventListener('pointercancel', endDrag)
+  })
+}
+
+// Révélation : la liste se réarrange dans l'ordre correct (le score déjà
+// attribué est "tout ou rien", donc pas de distinction case par case —
+// la révélation montre juste où était la bonne réponse).
+const revealOrderList = (correctOrder) => {
+  if (!orderState.itemEls.length) return
+  orderDisabled = true
+  const newOrder = correctOrder
+    .map(text => orderState.itemEls.findIndex(el => el.dataset.text === text))
+    .filter(uid => uid !== -1)
+  if (newOrder.length === orderState.itemEls.length) orderState.currentOrder = newOrder
+  applyOrderPositions()
+  orderState.itemEls.forEach(el => el.classList.add('correct-reveal'))
+}
+
 const clearRevealState = () => {
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (gradRuler) gradRuler.classList.remove('reveal')
+  orderState.itemEls.forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
 }
+
+// Badge « Réponse envoyée » : feedback principal du joueur après soumission
+const answerStatusEl = document.getElementById('answerStatus')
+const showAnswerStatus = () => { if (answerStatusEl) answerStatusEl.classList.remove('d-none') }
+const hideAnswerStatus = () => { if (answerStatusEl) answerStatusEl.classList.add('d-none') }
 
 const positionGradTargetMarker = (target) => {
   // Révélation : on bloque le curseur et on fait défiler la règle jusqu'à la
@@ -282,6 +397,15 @@ const revealFreeAnswer = (text) => {
   revealAnswerText.classList.remove('d-none')
 }
 const scores = new Map()
+// Classement (ids triés par score) juste avant le début de la question en
+// cours — sert à annoncer un changement de position au bon moment (voir
+// revealMyPositionChange), jamais pendant que les réponses sont encore en
+// train d'arriver.
+let preQuestionOrder = []
+// Rafraîchi à chaque question:show, mis à true si un score:update pour MOI
+// arrive avant la révélation — sert uniquement à choisir le son (correct.wav
+// / wrong.wav) joué à la révélation, jamais affiché avant.
+let myAnsweredCorrectlyThisQuestion = false
 const leaderOverlay = document.getElementById('leaderOverlay')
 const leaderboard = document.getElementById('leaderboard')
 const navCreate = document.getElementById('navCreate')
@@ -1116,22 +1240,33 @@ socket.on('lobby:readyStatus', ({ allReady }) => {
   }
 })
 
+let hostQuestionLabel = ''
+
 const emitQuestion = (index) => {
   const roomCode = roomInput.value.trim()
   if (!roomCode || !loadedQuiz) return
   const q = loadedQuiz.questions && loadedQuiz.questions[index]
-  if (!q) { 
+  if (!q) {
     if (index >= loadedQuiz.questions.length) log('Quizz terminé')
-    return 
+    return
   }
+  // Repère de progression dans la barre hôte, complété par le compteur
+  // de réponses reçu via answer:progress.
+  hostQuestionLabel = `Question ${index + 1}/${loadedQuiz.questions.length}`
+  if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · en attente des réponses…`
+  const correctOrder = Array.isArray(q.correct) ? q.correct : []
   const payload = {
     roomCode,
     id: q.id || ('q' + (index + 1)),
     type: q.type || 'free',
     prompt: q.prompt || 'Question',
     timerMs: q.timerMs || 15000,
-    correct: Array.isArray(q.correct) ? q.correct : [],
-    options: Array.isArray(q.options) ? q.options : [],
+    correct: correctOrder,
+    // Pour 'order', les joueurs voient les items dans un ordre mélangé (pas
+    // l'ordre correct saisi dans l'éditeur, ni toujours le même mélange) —
+    // le mélange est fait une fois ici, avant l'envoi ; le serveur retire
+    // 'correct' de la diffusion (anti-triche), 'options' seul est visible.
+    options: q.type === 'order' ? shuffleArray(correctOrder) : (Array.isArray(q.options) ? q.options : []),
     min: q.min,
     max: q.max,
     singleAttempt: currentSingleAttempt
@@ -1235,6 +1370,9 @@ startQuizBtn.onclick = () => {
 
 socket.on('question:show', payload => {
   clearRevealState()
+  // Snapshot AVANT que les scores de cette question ne commencent à arriver :
+  // sert de référence pour annoncer le changement de position au bon moment.
+  preQuestionOrder = computeOrder().map(([id]) => id)
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.add('d-none')
@@ -1252,24 +1390,27 @@ socket.on('question:show', payload => {
   }
   currentQuestionType = payload.type || 'free'
   if (optionsDiv) {
-    optionsDiv.style.display = payload.type === 'mcq' ? 'grid' : 'none'
-    if (payload.type === 'mcq') {
-      optionsDiv.classList.remove('d-none')
-    } else {
-      optionsDiv.classList.add('d-none')
-    }
+    const isMcqLike = payload.type === 'mcq' || payload.type === 'truefalse'
+    optionsDiv.style.display = isMcqLike ? 'grid' : 'none'
+    optionsDiv.classList.toggle('d-none', !isMcqLike)
+    optionsDiv.classList.toggle('truefalse-grid', payload.type === 'truefalse')
   }
   if (graduationArea) {
     graduationArea.classList.toggle('d-none', payload.type !== 'graduation')
+  }
+  if (orderArea) {
+    orderArea.classList.toggle('d-none', payload.type !== 'order')
   }
   answerInput.value = ''
   answerInput.disabled = false
   sendBtn.disabled = false
   gradState.disabled = false
   selectedMcqOptions = []
+  inputArea.classList.remove('answers-locked')
+  hideAnswerStatus()
 
-  // Show send button for MCQ/graduation too if we want manual validation
-  if ((payload.type === 'mcq' || payload.type === 'graduation') && !isHost) {
+  // Show send button for MCQ/truefalse/graduation/order too if we want manual validation
+  if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order') && !isHost) {
     document.getElementById('freeText').classList.remove('d-none')
     document.getElementById('freeText').classList.add('mcq-mode')
     answerInput.classList.add('d-none')
@@ -1280,7 +1421,12 @@ socket.on('question:show', payload => {
       const mid = Math.round((min + max) / 2)
       buildRuler(min, max, mid)
     }
+    if (payload.type === 'order' && Array.isArray(payload.options)) {
+      buildOrderList(payload.options)
+    }
   } else {
+    // Ré-affiche la ligne de saisie (masquée à timer:end sur la question d'avant)
+    document.getElementById('freeText').classList.remove('d-none')
     document.getElementById('freeText').classList.remove('mcq-mode')
     answerInput.classList.remove('d-none')
     sendBtn.textContent = 'Envoyer'
@@ -1290,26 +1436,35 @@ socket.on('question:show', payload => {
   const start = payload.startTs
   const total = payload.timerMs
   clearInterval(timerInt)
-  
+  myAnsweredCorrectlyThisQuestion = false
+
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
     timerBarFill.style.width = '100%'
   }
 
+  let lastTickSecond = null
   timerInt = setInterval(() => {
     const now = Date.now()
     const remaining = Math.max(0, total - (now - start))
     const pct = (remaining / total) * 100
-    
+
     if (timerBarFill) {
       timerBarFill.style.width = `${pct}%`
       if (pct <= 20) {
         timerBarFill.classList.add('timer-urgent')
       }
     }
-    
+
     if (timerLabel) {
       timerLabel.textContent = Math.ceil(remaining / 1000)
+    }
+
+    // Tic-tac dans les 5 dernières secondes, une fois par seconde entamée
+    const secondsLeft = Math.ceil(remaining / 1000)
+    if (remaining > 0 && remaining <= 5000 && secondsLeft !== lastTickSecond) {
+      lastTickSecond = secondsLeft
+      playSound('tick')
     }
 
     if (remaining <= 0) {
@@ -1324,7 +1479,7 @@ socket.on('question:show', payload => {
       el.textContent = opt
       el.onclick = () => {
         if (currentSingleAttempt && sendBtn.disabled) return
-        
+
         // Toggle selection
         if (selectedMcqOptions.includes(opt)) {
           selectedMcqOptions = selectedMcqOptions.filter(o => o !== opt)
@@ -1336,6 +1491,26 @@ socket.on('question:show', payload => {
       }
       optionsDiv.appendChild(el)
     })
+  } else if (!isHost && payload.type === 'truefalse') {
+    // Choix exclusif (un seul des deux boutons peut être sélectionné à la fois),
+    // contrairement au QCM où plusieurs réponses peuvent être cochées.
+    const choices = Array.isArray(payload.options) && payload.options.length === 2 ? payload.options : ['Vrai', 'Faux']
+    choices.forEach(opt => {
+      const el = document.createElement('div')
+      el.className = 'option-btn truefalse-btn'
+      // textContent reste EXACTEMENT la valeur (pas d'icône ajoutée ici) :
+      // le surlignage de révélation compare el.textContent à payload.correct
+      // tel quel (logique partagée avec le QCM). L'icône ✓/✕ est ajoutée en
+      // CSS (::before), donc invisible pour cette comparaison.
+      el.textContent = opt
+      el.onclick = () => {
+        if (currentSingleAttempt && sendBtn.disabled) return
+        selectedMcqOptions = [opt]
+        Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'))
+        el.classList.add('selected')
+      }
+      optionsDiv.appendChild(el)
+    })
   }
 })
 
@@ -1344,7 +1519,7 @@ sendBtn.onclick = () => {
 
   let content = ''
 
-  if (currentQuestionType === 'mcq') {
+  if (currentQuestionType === 'mcq' || currentQuestionType === 'truefalse') {
     if (selectedMcqOptions.length === 0) {
       showAnnounce('Veuillez sélectionner au moins une réponse')
       return
@@ -1352,6 +1527,8 @@ sendBtn.onclick = () => {
     content = selectedMcqOptions.join(', ')
   } else if (currentQuestionType === 'graduation') {
     content = String(gradState.value)
+  } else if (currentQuestionType === 'order') {
+    content = JSON.stringify(getCurrentOrderTexts())
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -1364,6 +1541,7 @@ sendBtn.onclick = () => {
     sendBtn.disabled = true
     answerInput.disabled = true
     gradState.disabled = true
+    orderDisabled = true
     Array.from(optionsDiv.children).forEach(c => {
       c.style.pointerEvents = 'none'
       if (!c.classList.contains('selected')) {
@@ -1375,7 +1553,13 @@ sendBtn.onclick = () => {
 
 answerInput.addEventListener('keydown', e => { if (e.key === 'Enter') { sendBtn.click() } })
 
-socket.on('answer:ack', () => { log('Réponse envoyée') })
+socket.on('answer:ack', () => { showAnswerStatus() })
+
+// Compteur de réponses affiché dans la barre de contrôle de l'hôte
+socket.on('answer:progress', ({ answered, total }) => {
+  if (!isHost || !loadedInfo || !hostQuestionLabel) return
+  loadedInfo.textContent = `${hostQuestionLabel} · ${answered}/${total} réponse${answered > 1 ? 's' : ''}`
+})
 
 // Gestion de la modération (Hôte)
 const moderationDiv = document.createElement('div')
@@ -1559,7 +1743,13 @@ socket.on('player:joined', ({ id, name }) => {
 
 socket.on('timer:end', () => {
   if (!isHost) {
-    inputArea.style.display = 'none'
+    // Ne PAS masquer inputArea : la révélation (surbrillance QCM, règle,
+    // réponse acceptée) s'affiche dedans. On verrouille juste les interactions.
+    inputArea.classList.add('answers-locked')
+    orderDisabled = true
+    const ft = document.getElementById('freeText')
+    if (ft) ft.classList.add('d-none')
+    hideAnswerStatus()
     if (isModerationPending) {
       leaderRows.clear()
       leaderboard.innerHTML = '<div id="moderationNotice"><h2 style="margin-bottom:20px; color:white">Validation des réponses par l\'hôte...</h2><p class="text-white" style="opacity:0.85">Un peu de patience, l\'hôte vérifie les dernières pépites !</p></div>'
@@ -1574,7 +1764,7 @@ socket.on('timer:end', () => {
 })
 
 socket.on('question:reveal', payload => {
-  if (payload.type === 'mcq' && optionsDiv) {
+  if ((payload.type === 'mcq' || payload.type === 'truefalse') && optionsDiv) {
     Array.from(optionsDiv.children).forEach(el => {
       if ((payload.correct || []).includes(el.textContent)) el.classList.add('correct-reveal')
       else el.classList.add('incorrect-reveal')
@@ -1583,13 +1773,17 @@ socket.on('question:reveal', payload => {
     revealFreeAnswer((payload.correct || [])[0] || '')
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
+  } else if (payload.type === 'order') {
+    revealOrderList(payload.correct || [])
   }
+  if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
   if (isHost) { hostPhase = 'revealed'; updateHostControls() }
 })
 
 socket.on('leaderboard:show', () => {
   clearRevealState()
   renderBoard()
+  revealMyPositionChange()
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
@@ -1598,6 +1792,11 @@ socket.on('leaderboard:show', () => {
 socket.on('moderation:finished', () => {
   isModerationPending = false
   renderBoard()
+  revealMyPositionChange()
+  // Aucune révélation visuelle n'a eu lieu pour cette question (texte libre
+  // en attente de modération) : c'est ici qu'on apprend enfin si on avait
+  // juste ou faux, donc c'est ici que le son doit jouer.
+  if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
@@ -1607,27 +1806,39 @@ socket.on('question:show', () => {
   if (isHost) { hostPhase = 'answering'; updateHostControls() }
 })
 
-socket.on('score:update', ({ playerId, delta, total }) => {
-  const beforeOrder = computeOrder().map(([id]) => id)
+socket.on('score:update', ({ playerId, total }) => {
+  // Met à jour le score en silence : ni annonce, ni rafraîchissement visible
+  // du classement tant que l'hôte n'a pas révélé la bonne réponse à tout le
+  // monde. Sinon, le premier à répondre juste verrait sa position bouger (ou
+  // une notification) avant même que les autres aient pu répondre — un indice
+  // de correction en avance sur les autres joueurs.
   const s = scores.get(playerId) || { name: playerId, total: 0 }
+  const prevTotal = s.total
   s.total = total
   scores.set(playerId, s)
-  const afterOrder = computeOrder().map(([id]) => id)
-  renderBoard()
-  
-  const myId = window.myId
-  if (myId === playerId) {
-    const prevPos = beforeOrder.indexOf(myId) >= 0 ? beforeOrder.indexOf(myId) + 1 : null
-    const newPos = afterOrder.indexOf(myId) >= 0 ? afterOrder.indexOf(myId) + 1 : null
-    if (newPos && prevPos && newPos < prevPos) {
-      const passedName = scores.get(afterOrder[newPos])?.name || 'quelqu’un'
-      showAnnounce(`WOAW ! Tu passes en ${newPos}ᵉ position, devant ${passedName} !`)
-    } else if (newPos && prevPos && newPos > prevPos) {
-      const aheadName = scores.get(afterOrder[newPos - 2])?.name || 'quelqu’un'
-      showAnnounce(`Oh… Tu descends en ${newPos}ᵉ position, derrière ${aheadName}.`)
-    }
-  }
+  // Sert uniquement à choisir le son joué à la révélation (voir plus bas) —
+  // pas de fuite ici puisque le son ne joue que lors de question:reveal.
+  if (playerId === window.myId && total > prevTotal) myAnsweredCorrectlyThisQuestion = true
 })
+
+// Annonce le changement de position dû à LA question qui vient de se
+// terminer, comparé au classement d'avant cette question — appelé seulement
+// une fois le classement affiché (après la révélation), jamais avant.
+const revealMyPositionChange = () => {
+  const myId = window.myId
+  if (!myId || preQuestionOrder.length === 0) return
+  const afterOrder = computeOrder().map(([id]) => id)
+  const prevPos = preQuestionOrder.indexOf(myId) >= 0 ? preQuestionOrder.indexOf(myId) + 1 : null
+  const newPos = afterOrder.indexOf(myId) >= 0 ? afterOrder.indexOf(myId) + 1 : null
+  if (newPos && prevPos && newPos < prevPos) {
+    const passedName = scores.get(afterOrder[newPos])?.name || 'quelqu’un'
+    showAnnounce(`WOAW ! Tu passes en ${newPos}ᵉ position, devant ${passedName} !`)
+  } else if (newPos && prevPos && newPos > prevPos) {
+    const aheadName = scores.get(afterOrder[newPos - 2])?.name || 'quelqu’un'
+    showAnnounce(`Oh… Tu descends en ${newPos}ᵉ position, derrière ${aheadName}.`)
+  }
+  preQuestionOrder = []
+}
 
 socket.on('quiz:notReady', ({ message }) => {
   showAnnounce(message)
