@@ -1094,6 +1094,18 @@ input:focus { outline: none; border-color: var(--color-accent); background: whit
   font-weight: 600;
 }
 
+.question-item .q-drag-handle {
+  cursor: grab;
+  opacity: 0.35;
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+}
+.question-item:hover .q-drag-handle { opacity: 0.7; }
+.question-item.active .q-drag-handle { opacity: 0.8; }
+.question-item.dragging { opacity: 0.4; }
+.question-item.drag-over { border-color: var(--tile-yellow); box-shadow: 0 0 0 2px var(--tile-yellow) inset; }
+
 .question-detail {
   background: linear-gradient(180deg, #fdfcff 0%, #f5f1fb 100%);
   border-radius: var(--radius-lg);

@@ -208,21 +208,75 @@ const createDefaultQuestion = () => ({
   timerMs: 15000
 })
 
+// Glisser-déposer pour réordonner les questions (souris/desktop uniquement :
+// l'API HTML5 Drag and Drop n'est pas fiable au toucher sur mobile, ce qui
+// est acceptable ici puisque l'éditeur de quiz n'est pas pensé pour mobile).
+let dragSrcIndex = null
+
+const moveQuestion = (fromIdx, toIdx) => {
+  if (fromIdx === toIdx) return
+  const [moved] = questions.splice(fromIdx, 1)
+  questions.splice(toIdx, 0, moved)
+  // L'index de la question actuellement ouverte doit suivre son contenu, pas
+  // sa position numérique : sinon, après un déplacement, l'éditeur continue
+  // d'afficher les champs d'une AUTRE question sans que rien ne le signale.
+  if (activeIndex === fromIdx) activeIndex = toIdx
+  else if (fromIdx < activeIndex && toIdx >= activeIndex) activeIndex -= 1
+  else if (fromIdx > activeIndex && toIdx <= activeIndex) activeIndex += 1
+  updateSidebar()
+  qIndexLabel.textContent = `Question ${activeIndex + 1} / ${questions.length}`
+}
+
 const updateSidebar = () => {
   questionListEl.innerHTML = ''
   questions.forEach((q, idx) => {
     const item = document.createElement('div')
     item.className = `question-item type-${q.type || 'free'} ${idx === activeIndex ? 'active' : ''}`.trim()
     item.onclick = () => selectQuestion(idx)
-    
+    item.draggable = !readOnly
+    item.dataset.index = idx
+
+    if (!readOnly) {
+      item.addEventListener('dragstart', (e) => {
+        dragSrcIndex = idx
+        item.classList.add('dragging')
+        e.dataTransfer.effectAllowed = 'move'
+      })
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        item.classList.add('drag-over')
+      })
+      item.addEventListener('dragleave', () => item.classList.remove('drag-over'))
+      item.addEventListener('drop', (e) => {
+        e.preventDefault()
+        item.classList.remove('drag-over')
+        if (dragSrcIndex === null || dragSrcIndex === idx) return
+        if (hasSelectedOnce) saveCurrentQuestionState()
+        moveQuestion(dragSrcIndex, idx)
+        dragSrcIndex = null
+      })
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging')
+        Array.from(questionListEl.children).forEach(c => c.classList.remove('drag-over'))
+        dragSrcIndex = null
+      })
+    }
+
+    const handle = document.createElement('span')
+    handle.className = 'q-drag-handle'
+    handle.textContent = '⠿'
+    handle.title = 'Glisser pour réordonner'
+
     const num = document.createElement('span')
     num.className = 'q-num'
     num.textContent = idx + 1
-    
+
     const text = document.createElement('span')
     text.className = 'q-text'
     text.textContent = q.prompt || '(Nouvelle question)'
-    
+
+    if (!readOnly) item.appendChild(handle)
     item.appendChild(num)
     item.appendChild(text)
     questionListEl.appendChild(item)
