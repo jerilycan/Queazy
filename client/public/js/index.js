@@ -187,8 +187,13 @@ const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
 const revealAnswerText = document.getElementById('revealAnswerText')
+const myResultBanner = document.getElementById('myResultBanner')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
+const imageArea = document.getElementById('imageArea')
+const imageWrap = document.getElementById('imageWrap')
+const imageImg = document.getElementById('imageImg')
+const imageGrid = document.getElementById('imageGrid')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
@@ -377,11 +382,84 @@ const revealOrderList = (correctOrder) => {
   orderState.itemEls.forEach(el => el.classList.add('correct-reveal'))
 }
 
+// --- Question "image" : où sur l'image ? ---
+// Grille fixe superposée à l'image, une case sélectionnée à la fois (comme
+// vrai/faux). Le scoring par proximité (voir server/index.js) tolère d'être
+// à quelques cases de la bonne réponse.
+const IMAGE_GRID_COLS = 8
+const IMAGE_GRID_ROWS = 5
+let imageDisabled = true
+let imageSelectedCell = null
+
+const buildImageGrid = (src) => {
+  if (!imageImg || !imageGrid) return
+  imageImg.src = src
+  imageGrid.innerHTML = ''
+  imageSelectedCell = null
+  imageDisabled = true
+  for (let row = 0; row < IMAGE_GRID_ROWS; row++) {
+    for (let col = 0; col < IMAGE_GRID_COLS; col++) {
+      const cell = document.createElement('div')
+      cell.className = 'image-cell'
+      cell.dataset.col = col
+      cell.dataset.row = row
+      cell.onclick = () => {
+        if (imageDisabled) return
+        if (currentSingleAttempt && sendBtn.disabled) return
+        Array.from(imageGrid.children).forEach(c => c.classList.remove('selected'))
+        cell.classList.add('selected')
+        imageSelectedCell = { col, row }
+      }
+      imageGrid.appendChild(cell)
+    }
+  }
+  if (imageWrap) applyTileReveal(imageWrap, 0)
+}
+
+// Révélation : la bonne case en vert ; si le joueur avait cliqué ailleurs,
+// sa case à lui reste visible mais marquée fausse — pour comparer les deux.
+const revealImageCell = (correctCell) => {
+  if (!imageGrid || !correctCell) return
+  imageDisabled = true
+  Array.from(imageGrid.children).forEach(cell => {
+    const col = Number(cell.dataset.col)
+    const row = Number(cell.dataset.row)
+    if (col === correctCell.col && row === correctCell.row) cell.classList.add('correct-reveal')
+    else if (cell.classList.contains('selected')) cell.classList.add('incorrect-reveal')
+  })
+}
+
 const clearRevealState = () => {
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
+  if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
   if (gradSlider) gradSlider.classList.remove('reveal')
   orderState.itemEls.forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
+  if (imageGrid) Array.from(imageGrid.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
+}
+
+// Bandeau perso "Bonne réponse !/Mauvaise réponse" au reveal — nécessaire
+// pour les types où la révélation ne montre que LA bonne réponse (ex.
+// "ordre" : tout redevient vert quel que soit mon résultat) sans jamais dire
+// si LA MIENNE l'était.
+// text/variant : pour les types à score de proximité (ex. "image"), un état
+// intermédiaire "Presque !" (variant 'is-close') peut être imposé — sinon
+// déduit de myAnsweredCorrectlyThisQuestion (bon points gagnés = vert).
+const showMyResultBanner = (text, variant) => {
+  if (!myResultBanner || isHost) return
+  myResultBanner.classList.remove('d-none', 'is-correct', 'is-incorrect', 'is-close')
+  if (text) {
+    myResultBanner.classList.add(variant || 'is-correct')
+    myResultBanner.textContent = text
+    return
+  }
+  if (myAnsweredCorrectlyThisQuestion) {
+    myResultBanner.classList.add('is-correct')
+    myResultBanner.textContent = `Bonne réponse ! +${myLastDelta} points`
+  } else {
+    myResultBanner.classList.add('is-incorrect')
+    myResultBanner.textContent = 'Mauvaise réponse'
+  }
 }
 
 // Badge « Réponse envoyée » : feedback principal du joueur après soumission
@@ -412,6 +490,9 @@ let preQuestionOrder = []
 // arrive avant la révélation — sert uniquement à choisir le son (correct.wav
 // / wrong.wav) joué à la révélation, jamais affiché avant.
 let myAnsweredCorrectlyThisQuestion = false
+// Delta de points du dernier score:update me concernant — sert au bandeau
+// "Bonne réponse ! +X points" affiché au reveal (voir showMyResultBanner).
+let myLastDelta = 0
 // Rafraîchi à chaque question:show, mis à true dès l'envoi d'une réponse —
 // coupe le tic-tac du timer pour ce joueur (il n'a plus besoin d'être pressé).
 let hasAnsweredThisQuestion = false
@@ -1279,6 +1360,7 @@ const emitQuestion = (index) => {
     options: q.type === 'order' ? shuffleArray(correctOrder) : (Array.isArray(q.options) ? q.options : []),
     min: q.min,
     max: q.max,
+    image: q.type === 'image' ? q.image : undefined,
     singleAttempt: currentSingleAttempt
   }
   socket.emit('question:show', payload)
@@ -1382,7 +1464,7 @@ socket.on('question:show', payload => {
   clearRevealState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
-  preQuestionOrder = computeOrder().map(([id]) => id)
+  preQuestionOrder = computeOrder().filter(([id, s]) => !s.isHost).map(([id]) => id)
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.add('d-none')
@@ -1421,6 +1503,9 @@ socket.on('question:show', payload => {
   if (orderArea) {
     orderArea.classList.toggle('d-none', payload.type !== 'order')
   }
+  if (imageArea) {
+    imageArea.classList.toggle('d-none', payload.type !== 'image')
+  }
   answerInput.value = ''
   answerInput.disabled = false
   sendBtn.disabled = true
@@ -1436,7 +1521,7 @@ socket.on('question:show', payload => {
   const freeTextEl = document.getElementById('freeText')
   freeTextEl.classList.add('d-none')
   if (!isHost) {
-    if (payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order') {
+    if (payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image') {
       freeTextEl.classList.add('mcq-mode')
       answerInput.classList.add('d-none')
       sendBtn.textContent = 'Valider'
@@ -1455,12 +1540,16 @@ socket.on('question:show', payload => {
   if (payload.type === 'order' && Array.isArray(payload.options)) {
     buildOrderList(payload.options)
   }
+  if (payload.type === 'image' && payload.image) {
+    buildImageGrid(payload.image)
+  }
 
   currentSingleAttempt = payload.singleAttempt !== false
   const start = payload.startTs
   const total = payload.timerMs
   clearInterval(timerInt)
   myAnsweredCorrectlyThisQuestion = false
+  myLastDelta = 0
   hasAnsweredThisQuestion = false
 
   if (timerBarFill) {
@@ -1480,6 +1569,7 @@ socket.on('question:show', payload => {
       sendBtn.disabled = false
       gradState.disabled = false
       orderDisabled = false
+      imageDisabled = false
       freeTextEl.classList.remove('d-none')
       applyTileReveal(freeTextEl, 0)
     }, Math.max(0, start - Date.now()))
@@ -1582,6 +1672,12 @@ sendBtn.onclick = () => {
     content = String(gradState.value)
   } else if (currentQuestionType === 'order') {
     content = JSON.stringify(getCurrentOrderTexts())
+  } else if (currentQuestionType === 'image') {
+    if (!imageSelectedCell) {
+      showAnnounce('Sélectionne un endroit sur l\'image')
+      return
+    }
+    content = JSON.stringify(imageSelectedCell)
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -1596,6 +1692,7 @@ sendBtn.onclick = () => {
     answerInput.disabled = true
     gradState.disabled = true
     orderDisabled = true
+    imageDisabled = true
     Array.from(optionsDiv.children).forEach(c => {
       c.style.pointerEvents = 'none'
       if (!c.classList.contains('selected')) {
@@ -1801,6 +1898,7 @@ socket.on('timer:end', () => {
     // réponse acceptée) s'affiche dedans. On verrouille juste les interactions.
     inputArea.classList.add('answers-locked')
     orderDisabled = true
+    imageDisabled = true
     const ft = document.getElementById('freeText')
     if (ft) ft.classList.add('d-none')
     hideAnswerStatus()
@@ -1829,6 +1927,18 @@ socket.on('question:reveal', payload => {
     positionGradTargetMarker(payload.target)
   } else if (payload.type === 'order') {
     revealOrderList(payload.correct || [])
+    showMyResultBanner()
+  } else if (payload.type === 'image') {
+    const correctCell = (payload.correct || [])[0]
+    revealImageCell(correctCell)
+    const dist = (imageSelectedCell && correctCell)
+      ? Math.max(Math.abs(imageSelectedCell.col - correctCell.col), Math.abs(imageSelectedCell.row - correctCell.row))
+      : null
+    if (dist !== null && dist > 0 && myAnsweredCorrectlyThisQuestion) {
+      showMyResultBanner(`Presque ! ${dist} case${dist > 1 ? 's' : ''} d'écart, +${myLastDelta} points`, 'is-close')
+    } else {
+      showMyResultBanner()
+    }
   }
   if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
   if (isHost) { hostPhase = 'revealed'; updateHostControls() }
@@ -1836,8 +1946,13 @@ socket.on('question:reveal', payload => {
 
 socket.on('leaderboard:show', () => {
   clearRevealState()
+  const beforeOrder = preQuestionOrder
+  preQuestionOrder = []
   renderBoard()
-  revealMyPositionChange()
+  // Le message perso arrive une fois l'animation de réarrangement du
+  // classement terminée (transform 0.9s sur .leader-row, voir style.css),
+  // pas en même temps qu'elle.
+  setTimeout(() => revealMyPositionChange(beforeOrder), 1000)
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
@@ -1845,8 +1960,10 @@ socket.on('leaderboard:show', () => {
 
 socket.on('moderation:finished', () => {
   isModerationPending = false
+  const beforeOrder = preQuestionOrder
+  preQuestionOrder = []
   renderBoard()
-  revealMyPositionChange()
+  setTimeout(() => revealMyPositionChange(beforeOrder), 1000)
   // Aucune révélation visuelle n'a eu lieu pour cette question (texte libre
   // en attente de modération) : c'est ici qu'on apprend enfin si on avait
   // juste ou faux, donc c'est ici que le son doit jouer.
@@ -1860,7 +1977,7 @@ socket.on('question:show', () => {
   if (isHost) { hostPhase = 'answering'; updateHostControls() }
 })
 
-socket.on('score:update', ({ playerId, total }) => {
+socket.on('score:update', ({ playerId, total, delta }) => {
   // Met à jour le score en silence : ni annonce, ni rafraîchissement visible
   // du classement tant que l'hôte n'a pas révélé la bonne réponse à tout le
   // monde. Sinon, le premier à répondre juste verrait sa position bouger (ou
@@ -1872,26 +1989,41 @@ socket.on('score:update', ({ playerId, total }) => {
   scores.set(playerId, s)
   // Sert uniquement à choisir le son joué à la révélation (voir plus bas) —
   // pas de fuite ici puisque le son ne joue que lors de question:reveal.
-  if (playerId === window.myId && total > prevTotal) myAnsweredCorrectlyThisQuestion = true
+  if (playerId === window.myId && total > prevTotal) {
+    myAnsweredCorrectlyThisQuestion = true
+    myLastDelta = typeof delta === 'number' ? delta : (total - prevTotal)
+  }
 })
 
-// Annonce le changement de position dû à LA question qui vient de se
-// terminer, comparé au classement d'avant cette question — appelé seulement
-// une fois le classement affiché (après la révélation), jamais avant.
-const revealMyPositionChange = () => {
+// Message perso après la question qui vient de se terminer, comparé au
+// classement d'AVANT cette question (beforeOrder, capturé au moment du
+// snapshot — voir les appelants) — toujours quelque chose d'utile plutôt que
+// rien dès que le rang n'a pas bougé : dépassement, ou écart de points avec
+// le joueur juste devant. Appelé seulement une fois le classement affiché et
+// réarrangé (après la révélation), jamais avant.
+const revealMyPositionChange = (beforeOrder) => {
   const myId = window.myId
-  if (!myId || preQuestionOrder.length === 0) return
-  const afterOrder = computeOrder().map(([id]) => id)
-  const prevPos = preQuestionOrder.indexOf(myId) >= 0 ? preQuestionOrder.indexOf(myId) + 1 : null
+  if (!myId || !beforeOrder || beforeOrder.length === 0) return
+  const afterOrder = computeOrder().filter(([id, s]) => !s.isHost).map(([id]) => id)
+  const prevPos = beforeOrder.indexOf(myId) >= 0 ? beforeOrder.indexOf(myId) + 1 : null
   const newPos = afterOrder.indexOf(myId) >= 0 ? afterOrder.indexOf(myId) + 1 : null
-  if (newPos && prevPos && newPos < prevPos) {
-    const passedName = scores.get(afterOrder[newPos])?.name || 'quelqu’un'
-    showAnnounce(`WOAW ! Tu passes en ${newPos}ᵉ position, devant ${passedName} !`)
-  } else if (newPos && prevPos && newPos > prevPos) {
-    const aheadName = scores.get(afterOrder[newPos - 2])?.name || 'quelqu’un'
-    showAnnounce(`Oh… Tu descends en ${newPos}ᵉ position, derrière ${aheadName}.`)
+  if (!newPos) return
+
+  if (newPos === 1) {
+    if (prevPos && prevPos > 1) showAnnounce('Tu prends la tête du classement ! Bravo !')
+    return
   }
-  preQuestionOrder = []
+  if (prevPos && newPos < prevPos) {
+    const passedName = scores.get(afterOrder[newPos])?.name || 'quelqu’un'
+    showAnnounce(`Tu es passé devant ${passedName} ! Bravo !`)
+    return
+  }
+  const ahead = scores.get(afterOrder[newPos - 2])
+  const mine = scores.get(myId)
+  if (ahead && mine) {
+    const gap = Math.max(0, ahead.total - mine.total)
+    showAnnounce(`Tu es juste derrière ${ahead.name} avec ${gap} point${gap > 1 ? 's' : ''} de retard, courage !`)
+  }
 }
 
 socket.on('quiz:notReady', ({ message }) => {

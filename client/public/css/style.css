@@ -836,7 +836,8 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 /* Interactions verrouillées après la fin du timer (la révélation reste visible) */
 .answers-locked .option-btn,
 .answers-locked .grad-slider,
-.answers-locked .order-item {
+.answers-locked .order-item,
+.answers-locked .image-cell {
   pointer-events: none;
 }
 
@@ -877,6 +878,52 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   box-shadow: 0 0 0 3px rgba(var(--tile-green-rgb),0.4), var(--shadow-md);
 }
 .order-item.correct-reveal .order-item-handle { opacity: 0.7; }
+
+/* Question "image" : grille fixe (8x5 — doit rester cohérente avec
+   IMAGE_GRID_COLS/ROWS côté JS) superposée à l'image, traits discrets pour
+   rester lisible sans gêner l'image. */
+.image-area { max-width: 640px; margin: var(--space-lg) auto 0; }
+.image-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  line-height: 0;
+}
+.image-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.image-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+}
+.image-cell {
+  border: 1px solid rgba(255,255,255,0.14);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.image-cell:hover { background: rgba(255,255,255,0.12); }
+.image-cell.selected {
+  background: rgba(var(--color-accent-rgb),0.35);
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+.image-cell.correct-reveal {
+  background: rgba(var(--tile-green-rgb),0.45);
+  border-color: var(--tile-green);
+  box-shadow: inset 0 0 0 3px var(--tile-green);
+}
+.image-cell.incorrect-reveal {
+  background: rgba(var(--tile-red-rgb),0.4);
+  border-color: var(--tile-red);
+  box-shadow: inset 0 0 0 2px var(--tile-red);
+}
 
 /* Badge de confirmation après l'envoi d'une réponse */
 .answer-status {
@@ -1011,6 +1058,25 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   text-align: center;
 }
 
+/* Bandeau "Bonne réponse !/Mauvaise réponse" au reveal : nécessaire pour les
+   types où la révélation ne montre que LA bonne réponse (ex. "ordre", où
+   tout redevient vert quel que soit le résultat) sans dire si LA MIENNE
+   l'était. */
+.my-result-banner {
+  max-width: 700px;
+  margin: var(--space-md) auto 0;
+  padding: 14px 24px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  animation: fadeIn 0.3s ease;
+}
+.my-result-banner.is-correct { background: var(--tile-green); color: white; }
+.my-result-banner.is-incorrect { background: var(--color-surface); color: var(--color-text-muted); border: 2px solid var(--color-border); }
+.my-result-banner.is-close { background: var(--tile-yellow); color: #3a2e00; }
+
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
 
 .bg-accent { background: var(--color-accent) !important; }
@@ -1061,6 +1127,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .m-auto { margin-left: auto; margin-right: auto; }
 .px-16 { padding-left: 16px; padding-right: 16px; }
 .px-32 { padding-left: 32px; padding-right: 32px; }
+.pt-20 { padding-top: 20px; }
 .bg-transparent { background: transparent; }
 .border-none { border: none; }
 .border-border { border-color: var(--color-border); }
@@ -1070,9 +1137,57 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .w-120 { width: 120px; }
 .w-140 { width: 140px; }
 
+/* Bouton burger : masqué par défaut (desktop), affiché seulement en mobile
+   (media query plus bas). .nav-menu regroupe les .nav-group pour pouvoir les
+   faire apparaître comme un seul panneau déroulant sous la pilule — sur
+   desktop `display: contents` le rend invisible en tant que boîte, ses
+   enfants participent directement à la grille de .navbar comme avant. */
+.nav-menu { display: contents; }
+.menu-toggle-btn {
+  display: none;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 0;
+}
+.menu-toggle-btn span {
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: white;
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+.navbar.nav-open .menu-toggle-btn span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.navbar.nav-open .menu-toggle-btn span:nth-child(2) { opacity: 0; }
+.navbar.nav-open .menu-toggle-btn span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
 @media (max-width: 640px) {
   .container { padding: var(--space-md); }
-  .navbar { display: flex; flex-direction: column; gap: 10px; border-radius: 24px; margin: 8px 12px 0; height: auto; padding: 16px; text-align: center; }
+  .navbar { display: flex; flex-direction: row; align-items: center; justify-content: space-between; border-radius: 24px; margin: 8px 12px 0; height: 64px; padding: 0 18px; }
+  .menu-toggle-btn { display: flex; }
+  .nav-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 12px;
+    right: 12px;
+    flex-direction: column;
+    gap: 10px;
+    background: rgba(5,5,12,0.95);
+    border: 1px solid rgba(255,47,176,0.2);
+    border-radius: 20px;
+    padding: 16px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+    z-index: 999;
+  }
+  .navbar.nav-open .nav-menu { display: flex; }
   .nav-group { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
   .nav-group:last-child { justify-content: center; }
   .player-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1085,10 +1200,10 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   .grad-value { font-size: 32px; }
 
   /* Pendant la partie, la navbar ne doit pas manger l'écran ni permettre de
-     quitter la partie par erreur : plus aucun bouton, juste le nom, figé. */
-  body.game-active .navbar { margin: 6px 12px 0; padding: 10px 16px; gap: 0; }
-  body.game-active .nav-group,
-  body.game-active .theme-toggle-btn { display: none !important; }
+     quitter la partie par erreur : plus aucun bouton (menu burger compris),
+     juste le nom, figé. */
+  body.game-active .navbar { margin: 6px 12px 0; height: 52px; padding: 0 16px; }
+  body.game-active .menu-toggle-btn { display: none !important; }
   body.game-active .brand { pointer-events: none; cursor: default; }
 }
 
@@ -1159,6 +1274,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .question-item.type-graduation::before { background: var(--tile-yellow); }
 .question-item.type-truefalse::before { background: var(--tile-red); }
 .question-item.type-order::before { background: var(--color-accent); }
+.question-item.type-image::before { background: var(--color-cyan); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
@@ -1232,7 +1348,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   letter-spacing: 0.05em;
 }
 
-#qPrompt {
+#qPrompt, #reportReason {
   width: 100%;
   padding: 16px;
   border-radius: var(--radius-md);
@@ -1247,7 +1363,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   color: var(--color-text);
 }
 
-#qPrompt:focus {
+#qPrompt:focus, #reportReason:focus {
   outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb),0.15);

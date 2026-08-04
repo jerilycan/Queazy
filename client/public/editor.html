@@ -49,6 +49,7 @@
         <div class="editor-actions">
           <button id="deleteQuiz" class="btn text-danger">Supprimer ce Quizz</button>
           <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
+          <button id="reportQuizBtn" class="btn text-danger d-none">🚩 Signaler</button>
           <button id="duplicateQuiz" class="btn btn-primary px-32 d-none">Dupliquer dans mes quiz</button>
         </div>
       </div>
@@ -81,6 +82,7 @@
                 <option value="truefalse">Vrai / Faux</option>
                 <option value="graduation">Curseur numérique</option>
                 <option value="order">Ordre / classement</option>
+                <option value="image">Image (où se trouve ?)</option>
               </select>
             </div>
             <div class="detail-section">
@@ -144,6 +146,16 @@
             <button id="addOrderItem" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter un élément</button>
           </div>
 
+          <div id="imageSection" class="detail-section d-none">
+            <label>Image</label>
+            <input type="file" id="imageUpload" accept="image/*" class="cursor-pointer" />
+            <div id="imageEditWrap" class="image-wrap d-none mt-8" style="max-width: 480px;">
+              <img id="imageEditImg" class="image-img" alt="" />
+              <div id="imageEditGrid" class="image-grid"></div>
+            </div>
+            <p class="text-muted font-13 mt-8">Clique sur une case de la grille pour indiquer la bonne réponse.</p>
+          </div>
+
           <div id="correctSection" class="detail-section">
             <label id="correctLabel">Réponses acceptées</label>
             <div id="correctList" class="options-editor">
@@ -161,6 +173,19 @@
     </div>
 
     <div id="toasts" class="toast-container"></div>
+
+    <!-- Popup de signalement (quiz d'un autre créateur) -->
+    <div id="reportPopup" class="modal-overlay d-none">
+      <div class="modal-content card">
+        <h2 class="mb-lg font-32">Signaler ce quiz</h2>
+        <p class="text-muted mb-lg">Dis-nous ce qui ne va pas (optionnel) — on va vérifier.</p>
+        <textarea id="reportReason" rows="3" placeholder="Motif (optionnel)..." class="w-full mb-lg"></textarea>
+        <div class="d-flex gap-sm justify-end">
+          <button id="cancelReport" class="btn h-48">Annuler</button>
+          <button id="confirmReport" class="btn btn-primary h-48">Envoyer le signalement</button>
+        </div>
+      </div>
+    </div>
 
     <script src="/js/editor.js"></script>
   </body>

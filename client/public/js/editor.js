@@ -88,6 +88,11 @@ const isPublicEl = document.getElementById('isPublic')
 const saveQuizBtn = document.getElementById('saveQuiz')
 const deleteQuizBtn = document.getElementById('deleteQuiz')
 const duplicateQuizBtn = document.getElementById('duplicateQuiz')
+const reportQuizBtn = document.getElementById('reportQuizBtn')
+const reportPopup = document.getElementById('reportPopup')
+const reportReasonInput = document.getElementById('reportReason')
+const cancelReportBtn = document.getElementById('cancelReport')
+const confirmReportBtn = document.getElementById('confirmReport')
 const addQuestionBtn = document.getElementById('addQuestion')
 const questionListEl = document.getElementById('questionList')
 const questionDetailEl = document.getElementById('questionDetail')
@@ -143,6 +148,16 @@ const orderSection = document.getElementById('orderSection')
 const orderEditList = document.getElementById('orderEditList')
 const addOrderItemBtn = document.getElementById('addOrderItem')
 
+const imageSection = document.getElementById('imageSection')
+const imageUploadInput = document.getElementById('imageUpload')
+const imageEditWrap = document.getElementById('imageEditWrap')
+const imageEditImg = document.getElementById('imageEditImg')
+const imageEditGrid = document.getElementById('imageEditGrid')
+// Doit rester cohérent avec IMAGE_GRID_COLS/ROWS dans client/public/js/index.js
+// (grille fixe, mêmes coordonnées des deux côtés).
+const IMAGE_GRID_COLS = 8
+const IMAGE_GRID_ROWS = 5
+
 const bindGradStepper = (input, minusBtn, plusBtn, onCommit) => {
   const commit = (val) => { input.value = val; onCommit(Number(val) || 0) }
   minusBtn.onclick = () => commit((Number(input.value) || 0) - 1)
@@ -171,7 +186,7 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
-    qGradMin, qGradMax, qGradTarget, tfTrueBtn, tfFalseBtn, addOrderItemBtn,
+    qGradMin, qGradMax, qGradTarget, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
     document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus')
@@ -180,6 +195,7 @@ const applyReadOnly = () => {
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
   if (deleteQuizBtn) deleteQuizBtn.style.display = 'none'
   if (duplicateQuizBtn) duplicateQuizBtn.classList.remove('d-none')
+  if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
   const banner = document.getElementById('readOnlyBanner')
   if (banner) banner.classList.remove('d-none')
 }
@@ -301,6 +317,92 @@ const populateTrueFalseFields = (q) => {
   tfFalseBtn.classList.toggle('active', !isTrue)
 }
 
+// Grille de sélection de la bonne case, réutilisée depuis l'écran de jeu
+// (mêmes classes .image-grid/.image-cell) mais en mode "choisir" plutôt que
+// "répondre" : un clic désigne directement q.correct, pas de soumission.
+const renderImageGrid = (q) => {
+  if (!imageEditGrid) return
+  imageEditGrid.innerHTML = ''
+  const correctCell = q.correct?.[0]
+  for (let row = 0; row < IMAGE_GRID_ROWS; row++) {
+    for (let col = 0; col < IMAGE_GRID_COLS; col++) {
+      const cell = document.createElement('div')
+      cell.className = 'image-cell'
+      if (correctCell && correctCell.col === col && correctCell.row === row) cell.classList.add('selected')
+      if (!readOnly) {
+        cell.onclick = () => {
+          q.correct = [{ col, row }]
+          renderImageGrid(q)
+        }
+      }
+      imageEditGrid.appendChild(cell)
+    }
+  }
+}
+
+const populateImageFields = (q) => {
+  if (!imageEditWrap) return
+  if (q.image) {
+    imageEditImg.src = q.image
+    imageEditWrap.classList.remove('d-none')
+    renderImageGrid(q)
+  } else {
+    imageEditWrap.classList.add('d-none')
+  }
+}
+
+// Garde-fous techniques sur l'upload : "accept=image/*" sur l'input n'est
+// qu'une suggestion du sélecteur de fichier, pas une vraie protection — on
+// vérifie le type réel, on plafonne la taille brute, puis on redimensionne
+// et recompresse systématiquement via un canvas. Ça évite à la fois les
+// fichiers énormes/mal formés et les lignes de quiz qui gonflent en base.
+const IMAGE_MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10 Mo, avant compression
+const IMAGE_MAX_DIMENSION = 1280
+const IMAGE_JPEG_QUALITY = 0.8
+
+if (imageUploadInput) {
+  imageUploadInput.onchange = () => {
+    const file = imageUploadInput.files && imageUploadInput.files[0]
+    // Permet de reproposer le même fichier après une erreur (sinon le
+    // navigateur ne redéclenche pas onchange si on reprend le même fichier).
+    imageUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+
+    if (!file.type || !file.type.startsWith('image/')) {
+      showToast('Ce fichier n\'est pas une image', 'error')
+      return
+    }
+    if (file.size > IMAGE_MAX_UPLOAD_BYTES) {
+      showToast('Image trop lourde (10 Mo max)', 'error')
+      return
+    }
+
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      const scale = Math.min(1, IMAGE_MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      // Recompressée en JPEG : plus léger que le PNG d'origine pour une
+      // photo, et taille finale plafonnée quelle que soit l'image importée.
+      questions[activeIndex].image = canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY)
+      populateImageFields(questions[activeIndex])
+    }
+    img.onerror = () => {
+      // Le type MIME annonçait une image mais le navigateur n'a pas pu la
+      // décoder : fichier corrompu ou pas réellement une image malgré
+      // l'extension/le type déclaré.
+      URL.revokeObjectURL(objectUrl)
+      showToast('Impossible de lire cette image', 'error')
+    }
+    img.src = objectUrl
+  }
+}
+
 const selectQuestion = (index) => {
   if (hasSelectedOnce) saveCurrentQuestionState()
   activeIndex = index
@@ -313,6 +415,7 @@ const selectQuestion = (index) => {
   qTimer.value = (q.timerMs || 15000) / 1000
   populateGradFields(q)
   populateTrueFalseFields(q)
+  populateImageFields(q)
 
   renderOptions()
   renderCorrects()
@@ -351,7 +454,8 @@ const toggleTypeSections = () => {
   if (graduationSection) graduationSection.classList.toggle('d-none', qType.value !== 'graduation')
   if (trueFalseSection) trueFalseSection.classList.toggle('d-none', qType.value !== 'truefalse')
   if (orderSection) orderSection.classList.toggle('d-none', qType.value !== 'order')
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse' || qType.value === 'order')
+  if (imageSection) imageSection.classList.toggle('d-none', qType.value !== 'image')
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse' || qType.value === 'order' || qType.value === 'image')
   if (qType.value === 'mcq') {
     correctLabel.textContent = 'Réponses correctes'
   } else {
@@ -560,6 +664,12 @@ qType.onchange = () => {
     // QCM...) n'a pas de sens comme séquence à ordonner : on repart propre
     // sauf s'il contient déjà au moins 2 éléments (ex. retour sur ce type).
     if (!Array.isArray(q.correct) || q.correct.length < 2) q.correct = ['', '']
+  } else if (qType.value === 'image') {
+    // q.correct venant d'un autre type (texte, séquence...) ne correspond pas
+    // au format {col,row} attendu : on repart propre sauf s'il a déjà la
+    // bonne forme (ex. retour sur ce type).
+    if (!Array.isArray(q.correct) || typeof q.correct[0]?.col !== 'number') q.correct = []
+    populateImageFields(q)
   }
   toggleTypeSections()
   renderOptions()
@@ -599,6 +709,7 @@ deleteQuestionBtn.onclick = () => {
   qTimer.value = (q.timerMs || 15000) / 1000
   populateGradFields(q)
   populateTrueFalseFields(q)
+  populateImageFields(q)
 
   renderOptions()
   renderCorrects()
@@ -688,6 +799,20 @@ saveQuizBtn.onclick = async () => {
         return
       }
     }
+
+    // Pour "image", il faut une image importée et une case désignée
+    if (q.type === 'image') {
+      if (!q.image) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : importe une image`, 'error')
+        return
+      }
+      if (typeof q.correct?.[0]?.col !== 'number') {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : clique sur la grille pour indiquer la bonne case`, 'error')
+        return
+      }
+    }
   }
   
   const title = titleEl.value.trim() || 'Mon Quiz sans titre'
@@ -748,6 +873,37 @@ if (duplicateQuizBtn) {
     } catch (err) {
       duplicateQuizBtn.disabled = false
       showToast('Erreur lors de la duplication : ' + (err.message || ''), 'error')
+    }
+  }
+}
+
+// Signaler le quiz d'un autre créateur (contenu inapproprié, image
+// problématique...) — insertion dans la table reports, consultée à la main
+// depuis le dashboard Supabase. Aucune action automatique sur le quiz : la
+// modération reste manuelle.
+if (reportQuizBtn && reportPopup) {
+  reportQuizBtn.onclick = () => {
+    reportReasonInput.value = ''
+    reportPopup.classList.remove('d-none')
+  }
+  cancelReportBtn.onclick = () => { reportPopup.classList.add('d-none') }
+  confirmReportBtn.onclick = async () => {
+    if (!currentId) { reportPopup.classList.add('d-none'); return }
+    confirmReportBtn.disabled = true
+    try {
+      const { data: { session } } = await sb.auth.getSession()
+      const { error } = await sb.from('reports').insert([{
+        quiz_id: currentId,
+        reporter_id: session?.user?.id || null,
+        reason: reportReasonInput.value.trim() || null
+      }])
+      if (error) throw error
+      reportPopup.classList.add('d-none')
+      showToast('Merci, ton signalement a été envoyé.')
+    } catch (err) {
+      showToast('Erreur lors de l\'envoi du signalement : ' + (err.message || ''), 'error')
+    } finally {
+      confirmReportBtn.disabled = false
     }
   }
 }

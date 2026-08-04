@@ -171,3 +171,26 @@ create trigger quizzes_set_updated_at
 
 create index if not exists quizzes_owner_id_idx on public.quizzes (owner_id);
 create index if not exists quizzes_is_public_idx on public.quizzes (is_public);
+
+-- ============================================================
+-- 3. TABLE reports — signalements de quiz publics (contenu inapproprié)
+-- ============================================================
+create table if not exists public.reports (
+  id uuid primary key default gen_random_uuid(),
+  quiz_id uuid references public.quizzes(id) on delete cascade,
+  reporter_id uuid references auth.users(id) on delete set null,
+  reason text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.reports enable row level security;
+
+-- N'importe qui (connecté ou invité) peut signaler un quiz public. Aucune
+-- lecture n'est ouverte via l'API : les signalements se consultent depuis le
+-- dashboard Supabase (rôle service, qui ignore la RLS) pour modérer à la main.
+drop policy if exists "Reports: creation par tous" on public.reports;
+create policy "Reports: creation par tous"
+  on public.reports for insert
+  with check (true);
+
+create index if not exists reports_quiz_id_idx on public.reports (quiz_id);

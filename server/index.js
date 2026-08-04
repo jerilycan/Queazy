@@ -144,6 +144,10 @@ const start = async () => {
     return raw
   }
   const GRAD_CORRECT_THRESHOLD = 0.8
+  // Question "image" : distance en cases (Chebyshev — inclut les diagonales,
+  // cohérent avec une grille visible où une case adjacente "compte presque")
+  // au-delà de laquelle la proximité ne rapporte plus rien.
+  const IMAGE_PROXIMITY_MAX_DIST = 3
 
   // Délai de révélation avant que le chrono ne démarre vraiment : le temps
   // que la question s'affiche puis que les réponses apparaissent une à une
@@ -365,6 +369,21 @@ const start = async () => {
         return
       }
 
+      // Filet de sécurité côté serveur pour le champ image (question type
+      // "image") : l'éditeur redimensionne/compresse déjà avant l'envoi, mais
+      // il ne faut jamais dépendre uniquement du client — un client modifié
+      // pourrait émettre ce payload directement. Seuil volontairement bien
+      // en dessous de maxHttpBufferSize de socket.io (1 Mo par défaut) : au-delà,
+      // c'est le transport qui coupe la connexion de l'hôte entièrement (testé
+      // en direct), ce qui est bien pire qu'ignorer une seule question — mieux
+      // vaut rejeter proprement ici, largement avant cette limite. ~700 Ko en
+      // base64 laisse une bonne marge au-dessus de ce que produit la
+      // compression normale (une photo 1280px en JPEG fait plutôt 100-500 Ko).
+      if (typeof payload?.image === 'string' && payload.image.length > 700_000) {
+        console.warn(`[question:show] image trop lourde ignorée (room ${code}, ${payload.image.length} caractères)`)
+        return
+      }
+
       const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {} }
       room.history.push(historyEntry)
 
@@ -374,7 +393,7 @@ const start = async () => {
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
       // lisible dans la frame WebSocket (devtools) avant même de répondre.
       const { correct, ...payloadWithoutCorrect } = payload || {}
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order') ? payloadWithoutCorrect : payload
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image') ? payloadWithoutCorrect : payload
 
       // Diffusé immédiatement (pas au bout de revealMs) : chaque client anime
       // lui-même la révélation de la question/des tuiles jusqu'à startTs, pour
@@ -443,6 +462,31 @@ const start = async () => {
         if (p?.token) {
           room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
           if (q.historyEntry) q.historyEntry.results[p.token] = closeness >= GRAD_CORRECT_THRESHOLD ? 'correct' : 'incorrect'
+        }
+        q.answered?.add(socket.id)
+        q.submissions?.set(socket.id, 'graded')
+        io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        emitProgress()
+        return
+      }
+
+      if (q.type === 'image') {
+        // Distance en cases jusqu'à la bonne réponse -> facteur de proximité,
+        // même principe que la tolérance de "graduation" mais sur une grille
+        // 2D (Chebyshev = la plus grande des deux distances, col et ligne).
+        let cell
+        try { cell = JSON.parse(payload?.content || 'null') } catch { cell = null }
+        const correctCell = Array.isArray(q.correct) ? q.correct[0] : null
+        if (!cell || typeof cell.col !== 'number' || typeof cell.row !== 'number' || !correctCell) return
+        const dist = Math.max(Math.abs(cell.col - correctCell.col), Math.abs(cell.row - correctCell.row))
+        const closeness = Math.max(0, 1 - dist / IMAGE_PROXIMITY_MAX_DIST)
+        const delta = Math.round(pointsFor(q.startTs, Date.now()) * closeness)
+        const total = (room.scores.get(socket.id) || 0) + delta
+        room.scores.set(socket.id, total)
+        const p = room.players.get(socket.id)
+        if (p?.token) {
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+          if (q.historyEntry) q.historyEntry.results[p.token] = dist === 0 ? 'correct' : 'incorrect'
         }
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'graded')
