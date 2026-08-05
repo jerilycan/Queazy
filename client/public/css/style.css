@@ -55,8 +55,10 @@
   --color-bg: #4c14a8;
   --color-bg-deep: #1f0940;
   --color-bg-2: #4c14a8;
-  --color-card: #ffffff;
-  --color-card-2: #f6f1fd;
+  /* Légèrement teintées (lavande très pâle) plutôt que blanc pur : moins
+     agressif à l'œil sur le fond violet vif, tout en restant très clair. */
+  --color-card: #faf8fd;
+  --color-card-2: #f2ecfa;
   --color-bg-alt: #f1edfb;
   --color-surface: #f5f2fb;
   --color-surface-2: #ece5f9;
@@ -90,9 +92,9 @@ body {
 
 :root[data-theme="light"] body {
   background:
-    radial-gradient(circle at 15% 20%, rgba(255,47,176,0.30) 0%, transparent 45%),
-    radial-gradient(circle at 85% 15%, rgba(47,227,255,0.24) 0%, transparent 40%),
-    radial-gradient(circle at 50% 90%, rgba(255,255,255,0.10) 0%, transparent 50%),
+    radial-gradient(circle at 15% 20%, rgba(255,47,176,0.20) 0%, transparent 45%),
+    radial-gradient(circle at 85% 15%, rgba(47,227,255,0.16) 0%, transparent 40%),
+    radial-gradient(circle at 50% 90%, rgba(255,255,255,0.08) 0%, transparent 50%),
     linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
 }
 
