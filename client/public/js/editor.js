@@ -325,23 +325,34 @@ const populateTrueFalseFields = (q) => {
   tfFalseBtn.classList.toggle('active', !isTrue)
 }
 
-// Zone de bonne réponse (type "image") : rectangle tracé au pixel par
-// glisser-déposer directement sur l'image, stocké en coordonnées normalisées
-// 0-1 (x0,y0,x1,y1) — pas de grille côté éditeur (contrairement à l'écran de
-// jeu, voir index.js) : une grille fixe est trop grossière pour cadrer une
-// forme irrégulière (ex. un département) sans déborder sur ses voisins,
-// alors qu'un rectangle libre peut se caler au pixel près.
-const renderImageZone = (rect) => {
+// Zone(s) de bonne réponse (type "image") : un ou plusieurs rectangles tracés
+// au pixel par glisser-déposer directement sur l'image, chacun stocké en
+// coordonnées normalisées 0-1 (x0,y0,x1,y1) — pas de grille côté éditeur : une
+// grille fixe est trop grossière pour cadrer une forme irrégulière (ex. un
+// département) sans déborder sur ses voisins, alors qu'un rectangle libre
+// peut se caler au pixel près. Plusieurs rectangles indépendants sont
+// autorisés (ex. deux zones disjointes toutes les deux valides).
+const renderImageZones = (zones) => {
   if (!imageEditZone) return
-  if (!rect || typeof rect.x0 !== 'number') {
-    imageEditZone.classList.add('d-none')
-    return
-  }
-  imageEditZone.classList.remove('d-none')
-  imageEditZone.style.left = `${rect.x0 * 100}%`
-  imageEditZone.style.top = `${rect.y0 * 100}%`
-  imageEditZone.style.width = `${(rect.x1 - rect.x0) * 100}%`
-  imageEditZone.style.height = `${(rect.y1 - rect.y0) * 100}%`
+  const container = imageEditZone.parentElement
+  if (!container) return
+  Array.from(container.querySelectorAll('.image-zone-overlay:not(#imageEditZone)')).forEach(el => el.remove())
+  const list = Array.isArray(zones) ? zones : []
+  list.forEach((rect, i) => {
+    // Réutilise l'élément #imageEditZone pour le premier rectangle (déjà dans
+    // le DOM/lié au CSS), en crée des clones SANS id pour les suivants (sinon
+    // le sélecteur ":not(#imageEditZone)" ci-dessus ne retrouverait plus
+    // l'original au prochain appel, une fois son id retiré par erreur).
+    const el = i === 0 ? imageEditZone : imageEditZone.cloneNode(false)
+    if (i > 0) el.removeAttribute('id')
+    el.classList.remove('d-none')
+    el.style.left = `${rect.x0 * 100}%`
+    el.style.top = `${rect.y0 * 100}%`
+    el.style.width = `${(rect.x1 - rect.x0) * 100}%`
+    el.style.height = `${(rect.y1 - rect.y0) * 100}%`
+    if (i > 0) container.appendChild(el)
+  })
+  if (list.length === 0) imageEditZone.classList.add('d-none')
 }
 
 // En dessous de cette taille (normalisée), on considère le tracé comme un
@@ -367,21 +378,29 @@ if (imageEditWrap) {
     e.preventDefault()
   })
   window.addEventListener('mousemove', (e) => {
-    if (!dragStart) return
-    renderImageZone(rectFrom(dragStart, pointFromEvent(e)))
+    if (!dragStart || !questions[activeIndex]) return
+    // Prévisualisation en direct : les zones déjà validées + celle en cours de tracé.
+    renderImageZones([...(questions[activeIndex].correct || []), rectFrom(dragStart, pointFromEvent(e))])
   })
   window.addEventListener('mouseup', (e) => {
     if (!dragStart) return
     const zone = rectFrom(dragStart, pointFromEvent(e))
     dragStart = null
-    if (!questions[activeIndex]) return
+    const q = questions[activeIndex]
+    if (!q) return
+    if (!Array.isArray(q.correct)) q.correct = []
     if (zone.x1 - zone.x0 < IMAGE_ZONE_MIN_SIZE || zone.y1 - zone.y0 < IMAGE_ZONE_MIN_SIZE) {
-      // Tracé trop petit (clic accidentel) : on garde la zone précédente.
-      renderImageZone(questions[activeIndex].correct?.[0])
+      // Tracé trop petit pour être un vrai rectangle : traité comme un clic
+      // (zone.x0/y0 ≈ le point cliqué, vu l'écart minime entre début et fin).
+      // S'il tombe DANS un rectangle existant, on le retire (clic pour
+      // désélectionner) ; sinon on ignore (clic accidentel dans le vide).
+      const idx = q.correct.findIndex(r => zone.x0 >= r.x0 - 0.005 && zone.x0 <= r.x1 + 0.005 && zone.y0 >= r.y0 - 0.005 && zone.y0 <= r.y1 + 0.005)
+      if (idx !== -1) q.correct.splice(idx, 1)
+      renderImageZones(q.correct)
       return
     }
-    questions[activeIndex].correct = [zone]
-    renderImageZone(zone)
+    q.correct.push(zone)
+    renderImageZones(q.correct)
   })
 }
 
@@ -389,7 +408,7 @@ if (clearImageZoneBtn) {
   clearImageZoneBtn.onclick = () => {
     if (readOnly || !questions[activeIndex]) return
     questions[activeIndex].correct = []
-    renderImageZone(null)
+    renderImageZones([])
   }
 }
 
@@ -398,7 +417,7 @@ const populateImageFields = (q) => {
   if (q.image) {
     imageEditImg.src = q.image
     imageEditWrap.classList.remove('d-none')
-    renderImageZone(q.correct?.[0])
+    renderImageZones(q.correct)
   } else {
     imageEditWrap.classList.add('d-none')
   }

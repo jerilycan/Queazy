@@ -183,9 +183,19 @@ const renderFullTable = (ordered) => {
       row.style.transition = 'none'
       row.style.transform = `translateY(${dy}px)`
       void row.offsetHeight // force le navigateur à appliquer la position de départ avant de ré-activer la transition
+      // Même effet "dépassement" que le classement en cours de partie
+      // (index.js renderBoard()) : halo doré tant que la ligne grimpe.
+      row.classList.add(dy > 0 ? 'rank-up' : 'rank-down')
+      row.style.zIndex = '5'
       requestAnimationFrame(() => {
         row.style.transition = ''
         row.style.transform = ''
+      })
+      row.addEventListener('transitionend', function onEnd (e) {
+        if (e.propertyName !== 'transform') return
+        row.removeEventListener('transitionend', onEnd)
+        row.classList.remove('rank-up', 'rank-down')
+        row.style.zIndex = ''
       })
     }
   })

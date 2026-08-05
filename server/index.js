@@ -217,16 +217,13 @@ const start = async () => {
     return raw
   }
   const GRAD_CORRECT_THRESHOLD = 0.8
-  // Question "image" : distance en cases (Chebyshev — inclut les diagonales,
-  // cohérent avec une grille visible où une case adjacente "compte presque")
-  // au-delà de laquelle la proximité ne rapporte plus rien.
-  const IMAGE_PROXIMITY_MAX_DIST = 3
-  // Doit rester cohérent avec IMAGE_GRID_COLS/ROWS dans client/public/js/index.js
-  // (grille fixe côté joueur) — sert ici à convertir la case cliquée en
-  // coordonnées normalisées 0-1, pour la comparer au rectangle {x0,y0,x1,y1}
-  // dessiné librement par le créateur dans l'éditeur (pas de grille de son côté).
-  const IMAGE_GRID_COLS = 10
-  const IMAGE_GRID_ROWS = 6
+  // Question "image" : le joueur clique directement sur l'image (coordonnées
+  // normalisées 0-1, pas de grille — voir index.js) ; le créateur définit une
+  // ou plusieurs zones rectangulaires (idem, voir editor.js). Distance
+  // Chebyshev (le plus grand des deux axes) du point cliqué au rectangle le
+  // plus proche, en unités normalisées : au-delà de ce seuil (30% de la
+  // largeur/hauteur de l'image), la proximité ne rapporte plus rien.
+  const IMAGE_PROXIMITY_MAX_DIST = 0.3
 
   // Délai de révélation avant que le chrono ne démarre vraiment : le temps
   // que la question s'affiche puis que les réponses apparaissent une à une
@@ -483,24 +480,24 @@ const start = async () => {
       }
 
       if (q.type === 'image') {
-        // Distance jusqu'au rectangle de bonne réponse ({x0,y0,x1,y1}, tracé
-        // librement par le créateur, coordonnées normalisées 0-1) -> facteur
-        // de proximité, même principe que la tolérance de "graduation". On
-        // convertit d'abord la case cliquée (grille fixe côté joueur) en point
-        // normalisé (son centre), puis on mesure l'écart au rectangle en
-        // "unités de case" (delta normalisé * nombre de cases) pour garder le
-        // même seuil de tolérance qu'avant (IMAGE_PROXIMITY_MAX_DIST). Dans le
-        // rectangle -> distance 0 -> points max ; en dehors -> ça dégrade selon
-        // l'écart au bord le plus proche (Chebyshev : le plus grand des deux axes).
-        let cell
-        try { cell = JSON.parse(payload?.content || 'null') } catch { cell = null }
-        const zone = Array.isArray(q.correct) ? q.correct[0] : null
-        if (!cell || typeof cell.col !== 'number' || typeof cell.row !== 'number' || !zone || typeof zone.x0 !== 'number') return
-        const px = (cell.col + 0.5) / IMAGE_GRID_COLS
-        const py = (cell.row + 0.5) / IMAGE_GRID_ROWS
-        const distX = px < zone.x0 ? (zone.x0 - px) * IMAGE_GRID_COLS : px > zone.x1 ? (px - zone.x1) * IMAGE_GRID_COLS : 0
-        const distY = py < zone.y0 ? (zone.y0 - py) * IMAGE_GRID_ROWS : py > zone.y1 ? (py - zone.y1) * IMAGE_GRID_ROWS : 0
-        const dist = Math.max(distX, distY)
+        // Distance jusqu'à la zone de bonne réponse la plus proche (une ou
+        // plusieurs rectangles {x0,y0,x1,y1}, tracés librement par le
+        // créateur, coordonnées normalisées 0-1) -> facteur de proximité,
+        // même principe que la tolérance de "graduation". Le joueur clique
+        // directement sur l'image (point normalisé, pas de grille) : dans
+        // n'importe laquelle des zones -> distance 0 -> points max ; en
+        // dehors -> ça dégrade selon l'écart au rectangle le plus proche
+        // (Chebyshev : le plus grand des deux axes).
+        let point
+        try { point = JSON.parse(payload?.content || 'null') } catch { point = null }
+        const zones = Array.isArray(q.correct) ? q.correct.filter(z => z && typeof z.x0 === 'number') : []
+        if (!point || typeof point.x !== 'number' || typeof point.y !== 'number' || zones.length === 0) return
+        const distToZone = (z) => {
+          const dx = point.x < z.x0 ? z.x0 - point.x : point.x > z.x1 ? point.x - z.x1 : 0
+          const dy = point.y < z.y0 ? z.y0 - point.y : point.y > z.y1 ? point.y - z.y1 : 0
+          return Math.max(dx, dy)
+        }
+        const dist = Math.min(...zones.map(distToZone))
         const closeness = Math.max(0, 1 - dist / IMAGE_PROXIMITY_MAX_DIST)
         const delta = Math.round(pointsFor(q.startTs, Date.now()) * closeness)
         const total = (room.scores.get(socket.id) || 0) + delta

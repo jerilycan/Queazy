@@ -873,7 +873,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .answers-locked .option-btn,
 .answers-locked .grad-slider,
 .answers-locked .order-item,
-.answers-locked .image-cell {
+.answers-locked .image-click-layer {
   pointer-events: none;
 }
 
@@ -899,14 +899,21 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   cursor: grab;
   user-select: none;
 }
-.order-item.dragging {
+/* Classes injectées par SortableJS (voir index.js buildOrderList) — pas de
+   transition CSS maison ici, SortableJS gère lui-même l'animation du
+   réarrangement (options animation/easing passées à Sortable.create). */
+.order-item-chosen {
   cursor: grabbing;
   z-index: 10;
   box-shadow: var(--shadow-lg);
-  opacity: 0.95;
+  transform: scale(1.03);
 }
-.order-item:not(.dragging) { transition: transform 0.15s ease; }
-.order-item-handle { opacity: 0.35; font-size: 18px; }
+.order-item-ghost {
+  opacity: 0.4;
+  background: var(--color-surface);
+  box-shadow: none;
+}
+.order-item-handle { opacity: 0.35; font-size: 18px; cursor: grab; }
 .order-item-text { flex: 1; }
 .order-item.correct-reveal {
   background: var(--tile-green);
@@ -931,9 +938,10 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   color: var(--tile-green);
 }
 
-/* Question "image" : grille fixe (10x6 — doit rester cohérente avec
-   IMAGE_GRID_COLS/ROWS côté JS) superposée à l'image, traits discrets pour
-   rester lisible sans gêner l'image. */
+/* Question "image" : le joueur clique directement sur l'image (coordonnées
+   au pixel, pas de grille — voir index.js buildImageAnswerArea) : plus
+   cohérent avec les zones dessinées librement par le créateur (editor.js)
+   qu'une grille fixe, qui restait grossière face à une zone au pixel près. */
 .image-area { max-width: 640px; margin: var(--space-lg) auto 0; }
 .image-wrap {
   position: relative;
@@ -948,38 +956,46 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   width: 100%;
   height: auto;
 }
-.image-grid {
+/* Capte les clics sur toute l'image ; le curseur en croix indique qu'on peut
+   pointer n'importe où (pas juste des cases prédéfinies). */
+.image-click-layer {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  grid-template-rows: repeat(6, 1fr);
+  cursor: crosshair;
 }
-.image-cell {
-  border: 1px solid rgba(255,255,255,0.14);
-  cursor: pointer;
-  transition: background-color 0.15s ease;
+/* Rectangles de bonne réponse révélés (une ou plusieurs zones) — purement
+   visuels, ne doivent jamais intercepter le clic. */
+.image-zones-reveal {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
-.image-cell:hover { background: rgba(255,255,255,0.12); }
-.image-cell.selected {
-  background: rgba(var(--color-accent-rgb),0.35);
-  border-color: var(--color-accent);
-  box-shadow: inset 0 0 0 2px var(--color-accent);
+/* Marqueur du point cliqué par CE joueur : un pin (goutte) centré exactement
+   sur les coordonnées choisies (le coin sans arrondi, tourné à -45°, forme la
+   pointe qui indique le point précis) — neutre avant la révélation, coloré
+   vert/rouge une fois la bonne réponse connue. */
+.image-marker {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-accent);
+  border: 3px solid white;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  animation: markerDrop 0.3s cubic-bezier(.34,1.56,.64,1) both;
 }
-.image-cell.correct-reveal {
-  background: rgba(var(--tile-green-rgb),0.45);
-  border-color: var(--tile-green);
-  box-shadow: inset 0 0 0 3px var(--tile-green);
+@keyframes markerDrop {
+  from { transform: translate(-50%, -50%) rotate(-45deg) scale(0.3); opacity: 0; }
+  to { transform: translate(-50%, -50%) rotate(-45deg) scale(1); opacity: 1; }
 }
-.image-cell.incorrect-reveal {
-  background: rgba(var(--tile-red-rgb),0.4);
-  border-color: var(--tile-red);
-  box-shadow: inset 0 0 0 2px var(--tile-red);
-}
+.image-marker.marker-correct { background: var(--tile-green); }
+.image-marker.marker-incorrect { background: var(--tile-red); }
 
-/* Éditeur : zone de bonne réponse dessinée au pixel (glisser-déposer), plus
-   calée sur la grille — voir editor.js. Le rectangle est purement visuel
-   (pointer-events: none), c'est le wrap qui capte le glisser. */
+/* Éditeur : zone(s) de bonne réponse dessinée(s) au pixel (glisser-déposer)
+   — voir editor.js. Purement visuel (pointer-events: none), c'est le wrap
+   qui capte le glisser. Réutilisé côté jeu pour révéler la/les zone(s)
+   correctes (voir .image-zone-correct-reveal ci-dessous), en vert cette fois. */
 .image-zone-wrap {
   cursor: crosshair;
   user-select: none;
@@ -990,6 +1006,10 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   background: rgba(var(--color-accent-rgb), 0.3);
   border: 2px solid var(--color-accent);
   border-radius: 4px;
+}
+.image-zone-overlay.zone-correct-reveal {
+  background: rgba(var(--tile-green-rgb), 0.35);
+  border-color: var(--tile-green);
 }
 .image-error-msg {
   text-align: center;
@@ -1876,6 +1896,18 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .leader-row.is-me { border: 2px solid var(--color-accent); box-shadow: 0 0 0 4px var(--color-accent-soft); }
 .leader-row.row-enter { opacity: 0; transform: translateY(16px) scale(0.96); }
 .leader-row.row-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .35s, transform .35s cubic-bezier(0.34,1.56,0.64,1); }
+/* Effet "dépassement" pendant le glissement FLIP (voir renderBoard() dans
+   index.js) : un halo doré qui accompagne la ligne tant qu'elle grimpe dans
+   le classement, plus discret en descendant — histoire qu'un dépassement se
+   RESSENTE, pas juste un réarrangement silencieux. */
+.leader-row.rank-up {
+  position: relative;
+  box-shadow: 0 0 0 3px var(--tile-yellow), 0 0 28px rgba(255,210,63,0.65), var(--shadow-md);
+}
+.leader-row.rank-down {
+  position: relative;
+  box-shadow: 0 0 0 2px rgba(var(--tile-red-rgb),0.4), var(--shadow-sm);
+}
 .leader-rank { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: var(--tile-blue); color: white; font-family: 'Baloo 2', sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 16px; }
 .leader-row:nth-child(1) .leader-rank { background: var(--tile-yellow); }
 .leader-row:nth-child(2) .leader-rank { background: var(--tile-green); }
@@ -1946,6 +1978,18 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 }
 .result-row-rank { font-weight: 600; color: var(--color-text); }
 .result-row-score { color: var(--color-accent); font-weight: 700; }
+/* Même effet "dépassement" que le classement en cours de partie (voir
+   .leader-row.rank-up dans ce même fichier) : halo doré tant qu'une ligne
+   grimpe dans le classement final, plus discret en descendant. */
+.result-row.rank-up {
+  position: relative;
+  background: rgba(255,210,63,0.12);
+  box-shadow: inset 3px 0 0 var(--tile-yellow), 0 0 20px rgba(255,210,63,0.4);
+}
+.result-row.rank-down {
+  position: relative;
+  box-shadow: inset 3px 0 0 rgba(var(--tile-red-rgb),0.4);
+}
 
 /* Hauteurs/largeurs sorties du HTML (styles inline) pour pouvoir les
    réduire sur mobile ci-dessous — sinon un style inline ne peut pas être

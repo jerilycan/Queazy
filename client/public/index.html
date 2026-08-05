@@ -27,6 +27,11 @@
     <script src="/js/supabase-config.js" defer></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+    <!-- Glisser-déposer de la question "ordre" (voir index.js buildOrderList) :
+         SortableJS plutôt qu'une implémentation maison, pour une animation
+         fluide/organique "gratuite" (chaque tuile suit la souris en continu,
+         les autres glissent pour faire de la place) sans avoir à la retravailler nous-mêmes. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" defer></script>
   </head>
   <body>
     <div class="navbar">
@@ -196,7 +201,9 @@
           <div id="imageArea" class="image-area d-none">
             <div id="imageWrap" class="image-wrap">
               <img id="imageImg" class="image-img" alt="" />
-              <div id="imageGrid" class="image-grid"></div>
+              <div id="imageZonesReveal" class="image-zones-reveal"></div>
+              <div id="imageClickLayer" class="image-click-layer"></div>
+              <div id="imageMarker" class="image-marker d-none"></div>
             </div>
             <div id="imageErrorMsg" class="image-error-msg d-none">🖼️ Image indisponible</div>
           </div>

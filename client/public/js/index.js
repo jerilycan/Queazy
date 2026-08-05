@@ -193,7 +193,9 @@ const orderList = document.getElementById('orderList')
 const imageArea = document.getElementById('imageArea')
 const imageWrap = document.getElementById('imageWrap')
 const imageImg = document.getElementById('imageImg')
-const imageGrid = document.getElementById('imageGrid')
+const imageClickLayer = document.getElementById('imageClickLayer')
+const imageMarker = document.getElementById('imageMarker')
+const imageZonesReveal = document.getElementById('imageZonesReveal')
 const imageErrorMsg = document.getElementById('imageErrorMsg')
 // Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
@@ -310,96 +312,53 @@ if (gradSlider) {
 }
 
 // --- Liste réordonnable (question "order") ---
-// Pointer Events (pas l'API HTML5 Drag and Drop, peu fiable au toucher) +
-// la propriété CSS `order` pour repositionner les éléments : les noeuds DOM
-// eux-mêmes ne sont JAMAIS recréés pendant un glisser, donc le pointeur capturé
-// (setPointerCapture) reste valide du pointerdown au pointerup.
+// SortableJS (chargé en CDN, voir index.html) plutôt qu'une implémentation
+// maison au pointeur : animation fluide/organique "gratuite" (chaque tuile
+// suit le doigt/la souris en continu, les autres glissent pour faire de la
+// place), avec un vrai support tactile éprouvé. dataIdAttr utilise le texte
+// de chaque tuile comme identifiant stable (déjà supposé unique ailleurs
+// dans ce fichier) — sert à demander un tri animé vers l'ordre correct au
+// reveal via sortable.sort(...).
 let orderDisabled = false
-const orderState = { itemEls: [], currentOrder: [] } // currentOrder : indices dans l'ordre visuel actuel
-
-const applyOrderPositions = () => {
-  orderState.currentOrder.forEach((uid, pos) => { orderState.itemEls[uid].style.order = pos })
+const orderState = { itemEls: [], sortable: null }
+// Garde orderState.sortable.option('disabled', ...) synchronisé avec le
+// simple booléen orderDisabled utilisé partout ailleurs dans ce fichier.
+const setOrderDisabled = (v) => {
+  orderDisabled = v
+  if (orderState.sortable) orderState.sortable.option('disabled', v)
 }
 
-const getCurrentOrderTexts = () => orderState.currentOrder.map(uid => orderState.itemEls[uid].dataset.text)
+const getCurrentOrderTexts = () => Array.from(orderList.children).map(el => el.dataset.text)
 
 const buildOrderList = (items) => {
   if (!orderList) return
   orderList.innerHTML = ''
   orderState.itemEls = []
-  orderState.currentOrder = items.map((_, i) => i)
   orderDisabled = true
 
   items.forEach((text, uid) => {
     const el = document.createElement('div')
     el.className = 'order-item'
     el.dataset.text = text
-    el.style.order = uid
     el.innerHTML = `<span class="order-item-handle">⠿</span><span class="order-item-text"></span><span class="order-item-mybadge d-none"></span>`
     el.querySelector('.order-item-text').textContent = text
     orderList.appendChild(el)
     orderState.itemEls.push(el)
     applyTileReveal(el, uid)
-
-    let dragging = false, startY = 0, startPos = 0, itemHeight = 0
-    el.addEventListener('pointerdown', e => {
-      if (orderDisabled) return
-      dragging = true
-      startY = e.clientY
-      startPos = orderState.currentOrder.indexOf(uid)
-      itemHeight = el.getBoundingClientRect().height + 10 // + gap approximatif
-      el.classList.add('dragging')
-      try { el.setPointerCapture(e.pointerId) } catch {}
-    })
-    el.addEventListener('pointermove', e => {
-      if (!dragging) return
-      const deltaY = e.clientY - startY
-      el.style.transform = `translateY(${deltaY}px) scale(1.03)`
-      const steps = Math.round(deltaY / itemHeight)
-      const targetPos = Math.min(orderState.currentOrder.length - 1, Math.max(0, startPos + steps))
-      const curPos = orderState.currentOrder.indexOf(uid)
-      if (targetPos !== curPos) {
-        // FLIP sur les AUTRES tuiles (celle qu'on déplace suit déjà la souris
-        // via translateY ci-dessus) : l'ordre CSS n'est pas animable en soi,
-        // donc on capture leur position avant le changement puis on anime
-        // depuis là — sinon elles sautaient instantanément à leur nouvelle
-        // place, beaucoup moins lisible pendant le glisser.
-        const before = new Map()
-        orderState.itemEls.forEach((sib, sibUid) => {
-          if (sibUid !== uid) before.set(sibUid, sib.getBoundingClientRect())
-        })
-        orderState.currentOrder.splice(curPos, 1)
-        orderState.currentOrder.splice(targetPos, 0, uid)
-        orderState.itemEls.forEach((sib, sibUid) => { if (sibUid !== uid) sib.style.order = orderState.currentOrder.indexOf(sibUid) })
-        orderState.itemEls.forEach((sib, sibUid) => {
-          if (sibUid === uid) return
-          const b = before.get(sibUid)
-          if (!b) return
-          const a = sib.getBoundingClientRect()
-          const dy = b.top - a.top
-          if (dy) {
-            sib.style.transition = 'none'
-            sib.style.transform = `translateY(${dy}px)`
-            void sib.offsetHeight // force la position de départ avant de ré-activer la transition
-            requestAnimationFrame(() => {
-              sib.style.transition = ''
-              sib.style.transform = ''
-            })
-          }
-        })
-      }
-    })
-    const endDrag = (e) => {
-      if (!dragging) return
-      dragging = false
-      try { el.releasePointerCapture(e.pointerId) } catch {}
-      el.classList.remove('dragging')
-      el.style.transform = ''
-      applyOrderPositions()
-    }
-    el.addEventListener('pointerup', endDrag)
-    el.addEventListener('pointercancel', endDrag)
   })
+
+  if (orderState.sortable) { orderState.sortable.destroy(); orderState.sortable = null }
+  if (window.Sortable) {
+    orderState.sortable = window.Sortable.create(orderList, {
+      animation: 250,
+      easing: 'cubic-bezier(.22,1,.36,1)',
+      disabled: true, // se débloque à startTs, comme avant (voir question:show)
+      dataIdAttr: 'data-text',
+      ghostClass: 'order-item-ghost',
+      chosenClass: 'order-item-chosen',
+      dragClass: 'order-item-drag'
+    })
+  }
 }
 
 // Révélation : la liste se réarrange dans l'ordre correct (le score déjà
@@ -409,12 +368,12 @@ const buildOrderList = (items) => {
 // deux d'un coup d'œil plutôt que de perdre sa propre réponse au reveal.
 const revealOrderList = (correctOrder) => {
   if (!orderState.itemEls.length) return
-  orderDisabled = true
-  const newOrder = correctOrder
-    .map(text => orderState.itemEls.findIndex(el => el.dataset.text === text))
-    .filter(uid => uid !== -1)
-  if (newOrder.length === orderState.itemEls.length) orderState.currentOrder = newOrder
-  applyOrderPositions()
+  setOrderDisabled(true)
+  // sort(ids, useAnimation) : SortableJS anime lui-même le réarrangement vers
+  // l'ordre correct (même mécanisme FLIP que le glisser, "gratuit").
+  if (orderState.sortable && Array.isArray(correctOrder) && correctOrder.length === orderState.itemEls.length) {
+    orderState.sortable.sort(correctOrder, true)
+  }
   orderState.itemEls.forEach(el => {
     el.classList.add('correct-reveal')
     const badge = el.querySelector('.order-item-mybadge')
@@ -429,77 +388,99 @@ const revealOrderList = (correctOrder) => {
 }
 
 // --- Question "image" : où sur l'image ? ---
-// Grille fixe superposée à l'image, une case sélectionnée à la fois (comme
-// vrai/faux). Le scoring par proximité (voir server/index.js) tolère d'être
-// à quelques cases de la bonne réponse.
-const IMAGE_GRID_COLS = 10
-const IMAGE_GRID_ROWS = 6
+// Le joueur clique directement sur l'image (coordonnées normalisées 0-1, pas
+// de grille — une grille fixe restait trop grossière face à des zones de
+// bonne réponse dessinées librement au pixel par le créateur, voir editor.js).
+// Le scoring par proximité (voir server/index.js) tolère d'être à une
+// certaine distance de la zone correcte la plus proche.
 let imageDisabled = true
-let imageSelectedCell = null
+let imageSelectedPoint = null // { x, y } normalisé 0-1
 
-const buildImageGrid = (src) => {
-  if (!imageImg || !imageGrid) return
+const buildImageAnswerArea = (src) => {
+  if (!imageImg || !imageClickLayer) return
   imageImg.classList.remove('d-none')
   if (imageErrorMsg) imageErrorMsg.classList.add('d-none')
   imageImg.onerror = () => {
     // Ne devrait normalement jamais arriver (l'hôte upload avant d'émettre
     // question:show) — si ça arrive quand même (upload raté, salle nettoyée
-    // entre-temps...), au moins le signaler clairement plutôt qu'une grille
-    // flottant sur une image cassée invisible.
+    // entre-temps...), au moins le signaler clairement plutôt qu'une zone de
+    // clic flottant sur une image cassée invisible.
     console.error('[image] échec de chargement de l\'image:', src)
     imageImg.classList.add('d-none')
     if (imageErrorMsg) imageErrorMsg.classList.remove('d-none')
   }
   imageImg.src = src
-  imageGrid.innerHTML = ''
-  imageSelectedCell = null
+  imageSelectedPoint = null
   imageDisabled = true
-  for (let row = 0; row < IMAGE_GRID_ROWS; row++) {
-    for (let col = 0; col < IMAGE_GRID_COLS; col++) {
-      const cell = document.createElement('div')
-      cell.className = 'image-cell'
-      cell.dataset.col = col
-      cell.dataset.row = row
-      cell.onclick = () => {
-        if (imageDisabled) return
-        if (currentSingleAttempt && sendBtn.disabled) return
-        Array.from(imageGrid.children).forEach(c => c.classList.remove('selected'))
-        cell.classList.add('selected')
-        imageSelectedCell = { col, row }
-      }
-      imageGrid.appendChild(cell)
-    }
-  }
+  if (imageMarker) imageMarker.classList.add('d-none')
+  if (imageZonesReveal) imageZonesReveal.innerHTML = ''
   if (imageWrap) applyTileReveal(imageWrap, 0)
 }
 
-// Distance (en "unités de case") entre une case cliquée et le rectangle de
-// bonne réponse {x0,y0,x1,y1} (coordonnées normalisées 0-1, tracé librement
-// dans l'éditeur — voir editor.js) : 0 si le centre de la case tombe dedans,
-// sinon l'écart au bord le plus proche. Doit rester identique au calcul
-// serveur (server/index.js) pour que le message affiché ("Presque ! N
-// case(s) d'écart") corresponde exactement aux points réellement accordés.
-const imageZoneDistance = (cell, zone) => {
-  if (!cell || !zone || typeof zone.x0 !== 'number') return null
-  const px = (cell.col + 0.5) / IMAGE_GRID_COLS
-  const py = (cell.row + 0.5) / IMAGE_GRID_ROWS
-  const distX = px < zone.x0 ? (zone.x0 - px) * IMAGE_GRID_COLS : px > zone.x1 ? (px - zone.x1) * IMAGE_GRID_COLS : 0
-  const distY = py < zone.y0 ? (zone.y0 - py) * IMAGE_GRID_ROWS : py > zone.y1 ? (py - zone.y1) * IMAGE_GRID_ROWS : 0
-  return Math.max(distX, distY)
+if (imageClickLayer) {
+  imageClickLayer.onclick = (e) => {
+    if (imageDisabled) return
+    if (currentSingleAttempt && sendBtn.disabled) return
+    const rect = imageClickLayer.getBoundingClientRect()
+    imageSelectedPoint = {
+      x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+    }
+    if (imageMarker) {
+      // Retire puis remet la classe d'animation : sinon un second clic ne
+      // rejoue pas le "drop" (l'élément reste affiché, l'animation ne se
+      // déclenche qu'au passage masqué -> visible).
+      imageMarker.classList.add('d-none')
+      void imageMarker.offsetWidth
+      imageMarker.classList.remove('d-none', 'marker-correct', 'marker-incorrect')
+      imageMarker.style.left = `${imageSelectedPoint.x * 100}%`
+      imageMarker.style.top = `${imageSelectedPoint.y * 100}%`
+    }
+  }
 }
 
-// Révélation : toutes les cases dont le centre tombe dans le rectangle de
-// bonne réponse s'allument en vert ; si le joueur avait cliqué ailleurs, sa
-// case à lui reste visible mais marquée fausse — pour comparer les deux.
-const revealImageCell = (zone) => {
-  if (!imageGrid || !zone || typeof zone.x0 !== 'number') return
+// Distance (en unités normalisées 0-1) entre le point cliqué et une zone
+// {x0,y0,x1,y1} (tracée librement dans l'éditeur) : 0 si le point tombe
+// dedans, sinon l'écart au bord le plus proche. Doit rester identique au
+// calcul serveur (server/index.js) pour que le message affiché ("Presque !
+// ...") corresponde exactement aux points réellement accordés.
+const imageZoneDistance = (point, zone) => {
+  if (!point || !zone || typeof zone.x0 !== 'number') return null
+  const dx = point.x < zone.x0 ? zone.x0 - point.x : point.x > zone.x1 ? point.x - zone.x1 : 0
+  const dy = point.y < zone.y0 ? zone.y0 - point.y : point.y > zone.y1 ? point.y - zone.y1 : 0
+  return Math.max(dx, dy)
+}
+// Distance à la zone la plus proche, quand il y en a plusieurs (voir editor.js).
+const imageMinZoneDistance = (point, zones) => {
+  const list = Array.isArray(zones) ? zones : []
+  const dists = list.map(z => imageZoneDistance(point, z)).filter(d => d !== null)
+  return dists.length ? Math.min(...dists) : null
+}
+
+// Révélation : la ou les zones correctes s'affichent comme des rectangles
+// verts directement sur l'image ; le marqueur du joueur passe au vert s'il
+// était dans l'une d'elles, au rouge sinon — pour comparer les deux d'un
+// coup d'œil, sans jamais avoir eu à cliquer sur une case précise.
+const revealImageZones = (zones) => {
+  if (!imageZonesReveal) return
   imageDisabled = true
-  Array.from(imageGrid.children).forEach(cell => {
-    const col = Number(cell.dataset.col)
-    const row = Number(cell.dataset.row)
-    if (imageZoneDistance({ col, row }, zone) === 0) cell.classList.add('correct-reveal')
-    else if (cell.classList.contains('selected')) cell.classList.add('incorrect-reveal')
+  imageZonesReveal.innerHTML = ''
+  const list = Array.isArray(zones) ? zones : []
+  list.forEach(zone => {
+    if (!zone || typeof zone.x0 !== 'number') return
+    const el = document.createElement('div')
+    el.className = 'image-zone-overlay zone-correct-reveal'
+    el.style.left = `${zone.x0 * 100}%`
+    el.style.top = `${zone.y0 * 100}%`
+    el.style.width = `${(zone.x1 - zone.x0) * 100}%`
+    el.style.height = `${(zone.y1 - zone.y0) * 100}%`
+    imageZonesReveal.appendChild(el)
   })
+  if (imageMarker && imageSelectedPoint) {
+    const dist = imageMinZoneDistance(imageSelectedPoint, list)
+    imageMarker.classList.toggle('marker-correct', dist === 0)
+    imageMarker.classList.toggle('marker-incorrect', dist !== 0)
+  }
 }
 
 const clearRevealState = () => {
@@ -512,7 +493,8 @@ const clearRevealState = () => {
     const badge = el.querySelector('.order-item-mybadge')
     if (badge) { badge.classList.add('d-none'); badge.classList.remove('badge-correct-pos') }
   })
-  if (imageGrid) Array.from(imageGrid.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
+  if (imageZonesReveal) imageZonesReveal.innerHTML = ''
+  if (imageMarker) imageMarker.classList.remove('marker-correct', 'marker-incorrect')
 }
 
 // Bandeau perso "Bonne réponse !/Mauvaise réponse" au reveal — nécessaire
@@ -1674,7 +1656,7 @@ socket.on('question:show', payload => {
     buildOrderList(payload.options)
   }
   if (payload.type === 'image' && payload.imageUrl) {
-    buildImageGrid(payload.imageUrl)
+    buildImageAnswerArea(payload.imageUrl)
   }
 
   currentSingleAttempt = payload.singleAttempt !== false
@@ -1703,7 +1685,7 @@ socket.on('question:show', payload => {
       inputArea.classList.remove('answers-locked')
       sendBtn.disabled = false
       gradState.disabled = false
-      orderDisabled = false
+      setOrderDisabled(false)
       imageDisabled = false
       freeTextEl.classList.remove('d-none')
       applyTileReveal(freeTextEl, 0)
@@ -1810,11 +1792,11 @@ sendBtn.onclick = () => {
     myOrderSubmission = getCurrentOrderTexts()
     content = JSON.stringify(myOrderSubmission)
   } else if (currentQuestionType === 'image') {
-    if (!imageSelectedCell) {
+    if (!imageSelectedPoint) {
       showAnnounce('Sélectionne un endroit sur l\'image')
       return
     }
-    content = JSON.stringify(imageSelectedCell)
+    content = JSON.stringify(imageSelectedPoint)
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -1828,7 +1810,7 @@ sendBtn.onclick = () => {
     sendBtn.disabled = true
     answerInput.disabled = true
     gradState.disabled = true
-    orderDisabled = true
+    setOrderDisabled(true)
     imageDisabled = true
     Array.from(optionsDiv.children).forEach(c => {
       c.style.pointerEvents = 'none'
@@ -2005,9 +1987,21 @@ const renderBoard = () => {
       row.style.transition = 'none'
       row.style.transform = `translateY(${dy}px)`
       void row.offsetHeight // force le navigateur à appliquer la position de départ avant de ré-activer la transition
+      // Effet "dépassement" : glow doré + passe au-dessus des autres lignes
+      // pendant le trajet (dy > 0 = vient d'une position plus basse, donc
+      // monte dans le classement), un peu plus discret en descendant — pour
+      // que ça se ressente vraiment, pas juste un réarrangement neutre.
+      row.classList.add(dy > 0 ? 'rank-up' : 'rank-down')
+      row.style.zIndex = '5'
       requestAnimationFrame(() => {
         row.style.transition = ''
         row.style.transform = ''
+      })
+      row.addEventListener('transitionend', function onEnd (e) {
+        if (e.propertyName !== 'transform') return
+        row.removeEventListener('transitionend', onEnd)
+        row.classList.remove('rank-up', 'rank-down')
+        row.style.zIndex = ''
       })
     }
   })
@@ -2034,7 +2028,7 @@ socket.on('timer:end', () => {
     // Ne PAS masquer inputArea : la révélation (surbrillance QCM, règle,
     // réponse acceptée) s'affiche dedans. On verrouille juste les interactions.
     inputArea.classList.add('answers-locked')
-    orderDisabled = true
+    setOrderDisabled(true)
     imageDisabled = true
     const ft = document.getElementById('freeText')
     if (ft) ft.classList.add('d-none')
@@ -2085,12 +2079,11 @@ socket.on('question:reveal', payload => {
     revealOrderList(payload.correct || [])
     showMyResultBanner()
   } else if (payload.type === 'image') {
-    const zone = (payload.correct || [])[0]
-    revealImageCell(zone)
-    const dist = imageSelectedCell ? imageZoneDistance(imageSelectedCell, zone) : null
+    const zones = payload.correct || []
+    revealImageZones(zones)
+    const dist = imageSelectedPoint ? imageMinZoneDistance(imageSelectedPoint, zones) : null
     if (dist !== null && dist > 0 && myAnsweredCorrectlyThisQuestion) {
-      const roundedDist = Math.round(dist)
-      showMyResultBanner(`Presque ! ${roundedDist || 1} case${roundedDist > 1 ? 's' : ''} d'écart, +${myLastDelta} points`, 'is-close')
+      showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
     } else {
       showMyResultBanner()
     }
@@ -2103,13 +2096,18 @@ socket.on('leaderboard:show', () => {
   clearRevealState()
   const beforeOrder = preQuestionOrder
   preQuestionOrder = []
-  renderBoard()
-  // Le message perso arrive une fois l'animation de réarrangement du
-  // classement terminée (transform 0.9s sur .leader-row, voir style.css),
-  // pas en même temps qu'elle.
-  setTimeout(() => revealMyPositionChange(beforeOrder), 1000)
+  // L'overlay doit être VISIBLE avant renderBoard() : le FLIP qu'il fait a
+  // besoin de mesurer les lignes (getBoundingClientRect) pour capturer leur
+  // position de départ, or un élément caché (display:none) mesure toujours
+  // 0 — l'animation ne s'est donc en réalité jamais jouée jusqu'ici, quel
+  // que soit le changement de classement.
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
+  renderBoard()
+  // Le message perso arrive une fois l'animation de réarrangement du
+  // classement terminée (transform sur .leader-row, voir style.css), pas en
+  // même temps qu'elle.
+  setTimeout(() => revealMyPositionChange(beforeOrder), 1300)
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
 })
 
@@ -2117,14 +2115,17 @@ socket.on('moderation:finished', () => {
   isModerationPending = false
   const beforeOrder = preQuestionOrder
   preQuestionOrder = []
+  // Overlay visible avant renderBoard() — voir le commentaire équivalent
+  // dans 'leaderboard:show' (un élément caché mesure toujours 0, ce qui
+  // empêchait l'animation FLIP de se déclencher).
+  leaderOverlay.classList.remove('d-none')
+  leaderOverlay.style.display = 'flex'
   renderBoard()
-  setTimeout(() => revealMyPositionChange(beforeOrder), 1000)
+  setTimeout(() => revealMyPositionChange(beforeOrder), 1300)
   // Aucune révélation visuelle n'a eu lieu pour cette question (texte libre
   // en attente de modération) : c'est ici qu'on apprend enfin si on avait
   // juste ou faux, donc c'est ici que le son doit jouer.
   if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
-  leaderOverlay.classList.remove('d-none')
-  leaderOverlay.style.display = 'flex'
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
 })
 socket.on('question:show', () => {
