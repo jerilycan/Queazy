@@ -1036,12 +1036,22 @@ const loadQuizById = (id) => {
         type: q.type || 'free',
         prompt: q.prompt || 'Question',
         timerMs: q.timerMs || 15000,
-        correct: Array.isArray(q.correct) ? q.correct : [],
+        // "blindtest" range ses réponses acceptées dans un objet {title, artist},
+        // pas un tableau comme les autres types (voir editor.js/emitQuestion) —
+        // sans ce cas à part, Array.isArray(q.correct) est faux et on perdait
+        // silencieusement titre/artiste (affichés "?" au reveal ensuite).
+        correct: q.type === 'blindtest'
+          ? (q.correct && !Array.isArray(q.correct) ? q.correct : { title: [], artist: [] })
+          : (Array.isArray(q.correct) ? q.correct : []),
         options: Array.isArray(q.options) ? q.options : [],
         min: q.min,
         max: q.max,
         image: q.image,
-        illustration: q.illustration
+        illustration: q.illustration,
+        // Même oubli que q.image en son temps : sans ce champ, l'extrait audio
+        // du blind test disparaissait silencieusement au chargement du quiz
+        // (question démarrée sans le moindre son, aucune erreur visible).
+        audio: q.audio
       })) : []
       loadedQuiz = {
         id: data.id,
