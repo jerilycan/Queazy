@@ -97,6 +97,45 @@ const getBaseUrl = (headers) => {
 const start = async () => {
   const rooms = new Map()
 
+  // Construit la liste de joueurs envoyée au client (lobby, classement,
+  // résultats finaux...). Les joueurs déconnectés restent dedans, avec leur
+  // dernier score/nom connu (voir le handler 'disconnect' : il ne les
+  // supprime plus) — un joueur qui quitte en cours de partie doit rester
+  // visible au classement plutôt que de disparaître.
+  const buildPlayerList = (room) => Array.from(room.players.values()).map(p => ({
+    id: p.id,
+    name: p.name,
+    avatar: p.avatar || '',
+    score: room.scores.get(p.id) || 0,
+    ready: !!p.ready,
+    isHost: p.id === room.hostId || p.token === room.hostToken,
+    connected: p.connected !== false
+  }))
+
+  // Joueurs (hors hôte) actuellement connectés — sert à la fois pour "tout le
+  // monde est prêt" et pour le compteur "X/Y ont répondu" : un joueur qui a
+  // quitté ne doit jamais bloquer indéfiniment le reste de la salle (il
+  // resterait "non prêt"/"n'a pas répondu" pour toujours sinon).
+  const activePlayers = (room) => Array.from(room.players.values())
+    .filter(p => p.id !== room.hostId && p.token !== room.hostToken && p.connected !== false)
+
+  const computeAllReady = (room) => activePlayers(room).every(p => !!p.ready)
+
+  // Historique traduit token -> socket.id courant de chaque joueur (voir plus
+  // bas) — diffusé à TOUTE la salle (pas seulement au socket qui rejoint) :
+  // sinon un viewer déjà connecté (ex. page résultats restée ouverte) garde un
+  // mapping figé au moment de sa propre connexion, qui devient faux dès qu'un
+  // AUTRE joueur se reconnecte ensuite avec un nouveau socket.id (tous ses
+  // résultats affichent alors "–", alors que son score est pourtant correct).
+  const buildHistorySync = (room) => room.history.map(h => {
+    const idResults = {}
+    for (const [tok, val] of Object.entries(h.results)) {
+      const t = room.tokens.get(tok)
+      if (t) idResults[t.id] = val
+    }
+    return { id: h.id, prompt: h.prompt, type: h.type, results: idResults }
+  })
+
   app.get('/server-info', async (req) => ({ url: getBaseUrl(req.headers), port: PORT }))
 
   // Question "image" : l'image ne transite plus par socket.io (un gros blob
@@ -182,6 +221,12 @@ const start = async () => {
   // cohérent avec une grille visible où une case adjacente "compte presque")
   // au-delà de laquelle la proximité ne rapporte plus rien.
   const IMAGE_PROXIMITY_MAX_DIST = 3
+  // Doit rester cohérent avec IMAGE_GRID_COLS/ROWS dans client/public/js/index.js
+  // (grille fixe côté joueur) — sert ici à convertir la case cliquée en
+  // coordonnées normalisées 0-1, pour la comparer au rectangle {x0,y0,x1,y1}
+  // dessiné librement par le créateur dans l'éditeur (pas de grille de son côté).
+  const IMAGE_GRID_COLS = 10
+  const IMAGE_GRID_ROWS = 6
 
   // Délai de révélation avant que le chrono ne démarre vraiment : le temps
   // que la question s'affiche puis que les réponses apparaissent une à une
@@ -197,8 +242,14 @@ const start = async () => {
     const hasTiles = payload?.type === 'mcq' || payload?.type === 'truefalse' || payload?.type === 'order'
     const tileCount = hasTiles && Array.isArray(payload?.options) ? Math.max(1, payload.options.length) : 1
     const staggerSpan = hasTiles ? (tileCount - 1) * REVEAL_STAGGER_MS : 0
-    const tileAnim = payload?.type === 'free' ? 0 : REVEAL_TILE_ANIM_MS
-    return REVEAL_QUESTION_BEAT_MS + staggerSpan + tileAnim + REVEAL_BUFFER_MS
+    // "free" n'a ni tuiles à faire apparaître une à une ni animation à
+    // attendre (un seul champ texte) : le tampon de fin d'animation ne sert
+    // donc à rien pour ce type, contrairement aux autres — on ne garde que le
+    // temps de lecture de la question.
+    const isFree = payload?.type === 'free'
+    const tileAnim = isFree ? 0 : REVEAL_TILE_ANIM_MS
+    const buffer = isFree ? 0 : REVEAL_BUFFER_MS
+    return REVEAL_QUESTION_BEAT_MS + staggerSpan + tileAnim + buffer
   }
 
   io.on('connection', socket => {
@@ -260,48 +311,27 @@ const start = async () => {
       const existing = room.tokens.get(token)
       if (existing) {
         room.players.delete(existing.id)
-        room.players.set(socket.id, { id: socket.id, name: existing.name || name, score: existing.score || 0, token, avatar: payload?.avatar || existing.avatar || '', ready: false })
+        room.players.set(socket.id, { id: socket.id, name: existing.name || name, score: existing.score || 0, token, avatar: payload?.avatar || existing.avatar || '', ready: false, connected: true })
         room.scores.set(socket.id, existing.score || 0)
       } else {
-        room.players.set(socket.id, { id: socket.id, name, score: 0, token, avatar: payload?.avatar || '', ready: false })
+        room.players.set(socket.id, { id: socket.id, name, score: 0, token, avatar: payload?.avatar || '', ready: false, connected: true })
         room.scores.set(socket.id, 0)
       }
       room.tokens.set(token, { id: socket.id, name, score: room.scores.get(socket.id) })
-      
+
       await socket.join(code)
       socket.emit('player:token', { token })
       io.to(code).emit('player:joined', { id: socket.id, name })
 
-      // Envoyé uniquement au socket qui rejoint (ex. la page de résultats finaux) :
-      // traduit les résultats indexés par token (identité durable) vers le socket.id
-      // courant de chaque joueur — ne jamais exposer les tokens bruts au client, ils
-      // servent à reprendre l'identité d'un joueur en cas de reconnexion.
+      // Diffusé à toute la salle (pas seulement à ce socket) : voir
+      // buildHistorySync, un mapping token->id envoyé à un seul viewer devient
+      // faux dès qu'un AUTRE joueur se reconnecte ensuite.
       if (room.history.length > 0) {
-        const history = room.history.map(h => {
-          const idResults = {}
-          for (const [tok, val] of Object.entries(h.results)) {
-            const t = room.tokens.get(tok)
-            if (t) idResults[t.id] = val
-          }
-          return { id: h.id, prompt: h.prompt, type: h.type, results: idResults }
-        })
-        socket.emit('history:sync', { history })
+        io.to(code).emit('history:sync', { history: buildHistorySync(room) })
       }
-      
-      const list = Array.from(room.players.values()).map(p => ({ 
-        id: p.id, 
-        name: p.name, 
-        avatar: p.avatar || '', 
-        score: room.scores.get(p.id) || 0, 
-        ready: !!p.ready, 
-        isHost: p.id === room.hostId || p.token === room.hostToken
-      }))
-      io.to(code).emit('lobby:list', list)
-      
-      const allReady = Array.from(room.players.values())
-        .filter(p => p.id !== room.hostId && p.token !== room.hostToken) // L'hôte n'a pas besoin d'être prêt
-        .every(p => !!p.ready)
-      io.to(code).emit('lobby:readyStatus', { allReady })
+
+      io.to(code).emit('lobby:list', buildPlayerList(room))
+      io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
     })
 
     socket.on('player:profile', payload => {
@@ -314,19 +344,8 @@ const start = async () => {
       if (typeof payload?.avatar === 'string') p.avatar = payload.avatar
       const tok = room.tokens.get(p.token)
       if (tok) room.tokens.set(p.token, { id: socket.id, name: p.name, score: room.scores.get(socket.id) || 0 })
-      const list = Array.from(room.players.values()).map(x => ({ 
-        id: x.id, 
-        name: x.name, 
-        avatar: x.avatar || '', 
-        score: room.scores.get(x.id) || 0, 
-        ready: !!x.ready, 
-        isHost: x.id === room.hostId || x.token === room.hostToken
-      }))
-      io.to(code).emit('lobby:list', list)
-      const allReady = Array.from(room.players.values())
-        .filter(x => x.id !== room.hostId && x.token !== room.hostToken)
-        .every(x => !!x.ready)
-      io.to(code).emit('lobby:readyStatus', { allReady })
+      io.to(code).emit('lobby:list', buildPlayerList(room))
+      io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
     })
 
     socket.on('player:ready', payload => {
@@ -336,19 +355,8 @@ const start = async () => {
       const p = room.players.get(socket.id)
       if (!p) return
       p.ready = !!payload?.ready
-      const list = Array.from(room.players.values()).map(x => ({ 
-        id: x.id, 
-        name: x.name, 
-        avatar: x.avatar || '', 
-        score: room.scores.get(x.id) || 0, 
-        ready: !!x.ready, 
-        isHost: x.id === room.hostId || x.token === room.hostToken
-      }))
-      io.to(code).emit('lobby:list', list)
-      const allReady = Array.from(room.players.values())
-        .filter(x => x.id !== room.hostId && x.token !== room.hostToken)
-        .every(x => !!x.ready)
-      io.to(code).emit('lobby:readyStatus', { allReady })
+      io.to(code).emit('lobby:list', buildPlayerList(room))
+      io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
     })
 
     socket.on('player:kick', payload => {
@@ -375,19 +383,8 @@ const start = async () => {
         targetSocket.disconnect(true)
       }
 
-      const list = Array.from(room.players.values()).map(p => ({
-        id: p.id,
-        name: p.name,
-        avatar: p.avatar || '',
-        score: room.scores.get(p.id) || 0,
-        ready: !!p.ready,
-        isHost: p.id === room.hostId || p.token === room.hostToken
-      }))
-      io.to(code).emit('lobby:list', list)
-      const allReady = Array.from(room.players.values())
-        .filter(p => p.id !== room.hostId && p.token !== room.hostToken)
-        .every(p => !!p.ready)
-      io.to(code).emit('lobby:readyStatus', { allReady })
+      io.to(code).emit('lobby:list', buildPlayerList(room))
+      io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
     })
 
     socket.on('question:show', payload => {
@@ -395,10 +392,7 @@ const start = async () => {
       const room = rooms.get(code)
       if (!room) return
 
-      const allReady = Array.from(room.players.values())
-        .filter(p => p.id !== room.hostId && p.token !== room.hostToken)
-        .every(p => !!p.ready)
-      if (!allReady) {
+      if (!computeAllReady(room)) {
         socket.emit('quiz:notReady', { message: 'Tous les joueurs ne sont pas prêts !' })
         return
       }
@@ -461,8 +455,7 @@ const start = async () => {
       // soumission enregistrée (peu importe qu'elle soit juste, fausse ou en
       // attente de modération).
       const emitProgress = () => {
-        const total = Array.from(room.players.values())
-          .filter(p => p.id !== room.hostId && p.token !== room.hostToken).length
+        const total = activePlayers(room).length
         io.to(code).emit('answer:progress', { answered: q.submissions?.size || 0, total })
       }
 
@@ -490,17 +483,24 @@ const start = async () => {
       }
 
       if (q.type === 'image') {
-        // Distance en cases jusqu'à la case correcte la plus proche -> facteur
-        // de proximité, même principe que la tolérance de "graduation" mais
-        // sur une grille 2D (Chebyshev = la plus grande des deux distances,
-        // col et ligne). "correct" peut contenir plusieurs cases (une "zone"
-        // dessinée par le créateur) : cliquer n'importe où dans la zone vaut
-        // les points max (dist 0), le reste dégrade selon la case la plus proche.
+        // Distance jusqu'au rectangle de bonne réponse ({x0,y0,x1,y1}, tracé
+        // librement par le créateur, coordonnées normalisées 0-1) -> facteur
+        // de proximité, même principe que la tolérance de "graduation". On
+        // convertit d'abord la case cliquée (grille fixe côté joueur) en point
+        // normalisé (son centre), puis on mesure l'écart au rectangle en
+        // "unités de case" (delta normalisé * nombre de cases) pour garder le
+        // même seuil de tolérance qu'avant (IMAGE_PROXIMITY_MAX_DIST). Dans le
+        // rectangle -> distance 0 -> points max ; en dehors -> ça dégrade selon
+        // l'écart au bord le plus proche (Chebyshev : le plus grand des deux axes).
         let cell
         try { cell = JSON.parse(payload?.content || 'null') } catch { cell = null }
-        const correctCells = Array.isArray(q.correct) ? q.correct.filter(c => c && typeof c.col === 'number' && typeof c.row === 'number') : []
-        if (!cell || typeof cell.col !== 'number' || typeof cell.row !== 'number' || correctCells.length === 0) return
-        const dist = Math.min(...correctCells.map(c => Math.max(Math.abs(cell.col - c.col), Math.abs(cell.row - c.row))))
+        const zone = Array.isArray(q.correct) ? q.correct[0] : null
+        if (!cell || typeof cell.col !== 'number' || typeof cell.row !== 'number' || !zone || typeof zone.x0 !== 'number') return
+        const px = (cell.col + 0.5) / IMAGE_GRID_COLS
+        const py = (cell.row + 0.5) / IMAGE_GRID_ROWS
+        const distX = px < zone.x0 ? (zone.x0 - px) * IMAGE_GRID_COLS : px > zone.x1 ? (px - zone.x1) * IMAGE_GRID_COLS : 0
+        const distY = py < zone.y0 ? (zone.y0 - py) * IMAGE_GRID_ROWS : py > zone.y1 ? (py - zone.y1) * IMAGE_GRID_ROWS : 0
+        const dist = Math.max(distX, distY)
         const closeness = Math.max(0, 1 - dist / IMAGE_PROXIMITY_MAX_DIST)
         const delta = Math.round(pointsFor(q.startTs, Date.now()) * closeness)
         const total = (room.scores.get(socket.id) || 0) + delta
@@ -653,20 +653,16 @@ const start = async () => {
       }
 
       // Sinon (joueur qui quitte, ou hôte qui navigue vers /result.html une fois le
-      // quiz terminé) : on retire uniquement cette connexion de la liste. Sans ça,
-      // les entrées fantômes s'accumulaient à chaque déconnexion (un joueur qui ne
-      // se reconnectait jamais avec le même jeton restait affiché indéfiniment,
-      // donnant l'impression d'un joueur dupliqué sur le classement/podium).
-      if (room.players.delete(socket.id)) {
-        const list = Array.from(room.players.values()).map(p => ({
-          id: p.id,
-          name: p.name,
-          avatar: p.avatar || '',
-          score: room.scores.get(p.id) || 0,
-          ready: !!p.ready,
-          isHost: p.id === room.hostId || p.token === room.hostToken
-        }))
-        io.to(code).emit('lobby:list', list)
+      // quiz terminé) : on ne supprime plus l'entrée, juste marquée déconnectée.
+      // Un joueur qui quitte en cours de partie doit rester visible au
+      // classement/podium avec son dernier score connu, pas disparaître — s'il
+      // revient avec le même jeton, room:join reprend cette même entrée (pas
+      // de doublon possible, donc pas de risque de "joueur fantôme" dupliqué).
+      const p = room.players.get(socket.id)
+      if (p) {
+        p.connected = false
+        io.to(code).emit('lobby:list', buildPlayerList(room))
+        io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
       }
     })
 

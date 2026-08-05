@@ -152,11 +152,8 @@ const imageSection = document.getElementById('imageSection')
 const imageUploadInput = document.getElementById('imageUpload')
 const imageEditWrap = document.getElementById('imageEditWrap')
 const imageEditImg = document.getElementById('imageEditImg')
-const imageEditGrid = document.getElementById('imageEditGrid')
-// Doit rester cohérent avec IMAGE_GRID_COLS/ROWS dans client/public/js/index.js
-// (grille fixe, mêmes coordonnées des deux côtés).
-const IMAGE_GRID_COLS = 10
-const IMAGE_GRID_ROWS = 6
+const imageEditZone = document.getElementById('imageEditZone')
+const clearImageZoneBtn = document.getElementById('clearImageZoneBtn')
 
 // Illustration optionnelle (tous les types SAUF "image", qui a déjà sa propre
 // image cliquable ci-dessus) : simple photo affichée au-dessus de la question,
@@ -197,7 +194,7 @@ const applyReadOnly = () => {
     titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
     qGradMin, qGradMax, qGradTarget, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
-    illustrationUploadInput, removeIllustrationBtn,
+    clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
     document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus')
@@ -328,31 +325,71 @@ const populateTrueFalseFields = (q) => {
   tfFalseBtn.classList.toggle('active', !isTrue)
 }
 
-// Grille de sélection de la (ou des) bonne(s) case(s), réutilisée depuis
-// l'écran de jeu (mêmes classes .image-grid/.image-cell) mais en mode
-// "choisir" plutôt que "répondre" : sélection multiple — chaque clic
-// ajoute/retire une case de q.correct, formant une "zone" de tolérance.
-// Cliquer n'importe où dedans en jeu vaut les points max (voir server/index.js).
-const renderImageGrid = (q) => {
-  if (!imageEditGrid) return
-  imageEditGrid.innerHTML = ''
-  if (!Array.isArray(q.correct)) q.correct = []
-  const isSelected = (col, row) => q.correct.some(c => c && c.col === col && c.row === row)
-  for (let row = 0; row < IMAGE_GRID_ROWS; row++) {
-    for (let col = 0; col < IMAGE_GRID_COLS; col++) {
-      const cell = document.createElement('div')
-      cell.className = 'image-cell'
-      if (isSelected(col, row)) cell.classList.add('selected')
-      if (!readOnly) {
-        cell.onclick = () => {
-          const idx = q.correct.findIndex(c => c && c.col === col && c.row === row)
-          if (idx >= 0) q.correct.splice(idx, 1)
-          else q.correct.push({ col, row })
-          renderImageGrid(q)
-        }
-      }
-      imageEditGrid.appendChild(cell)
+// Zone de bonne réponse (type "image") : rectangle tracé au pixel par
+// glisser-déposer directement sur l'image, stocké en coordonnées normalisées
+// 0-1 (x0,y0,x1,y1) — pas de grille côté éditeur (contrairement à l'écran de
+// jeu, voir index.js) : une grille fixe est trop grossière pour cadrer une
+// forme irrégulière (ex. un département) sans déborder sur ses voisins,
+// alors qu'un rectangle libre peut se caler au pixel près.
+const renderImageZone = (rect) => {
+  if (!imageEditZone) return
+  if (!rect || typeof rect.x0 !== 'number') {
+    imageEditZone.classList.add('d-none')
+    return
+  }
+  imageEditZone.classList.remove('d-none')
+  imageEditZone.style.left = `${rect.x0 * 100}%`
+  imageEditZone.style.top = `${rect.y0 * 100}%`
+  imageEditZone.style.width = `${(rect.x1 - rect.x0) * 100}%`
+  imageEditZone.style.height = `${(rect.y1 - rect.y0) * 100}%`
+}
+
+// En dessous de cette taille (normalisée), on considère le tracé comme un
+// clic accidentel plutôt qu'une vraie sélection, et on ignore le résultat.
+const IMAGE_ZONE_MIN_SIZE = 0.015
+
+if (imageEditWrap) {
+  let dragStart = null
+  const pointFromEvent = (e) => {
+    const rect = imageEditWrap.getBoundingClientRect()
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
     }
+  }
+  const rectFrom = (a, b) => ({
+    x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y),
+    x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y)
+  })
+  imageEditWrap.addEventListener('mousedown', (e) => {
+    if (readOnly || !questions[activeIndex]?.image) return
+    dragStart = pointFromEvent(e)
+    e.preventDefault()
+  })
+  window.addEventListener('mousemove', (e) => {
+    if (!dragStart) return
+    renderImageZone(rectFrom(dragStart, pointFromEvent(e)))
+  })
+  window.addEventListener('mouseup', (e) => {
+    if (!dragStart) return
+    const zone = rectFrom(dragStart, pointFromEvent(e))
+    dragStart = null
+    if (!questions[activeIndex]) return
+    if (zone.x1 - zone.x0 < IMAGE_ZONE_MIN_SIZE || zone.y1 - zone.y0 < IMAGE_ZONE_MIN_SIZE) {
+      // Tracé trop petit (clic accidentel) : on garde la zone précédente.
+      renderImageZone(questions[activeIndex].correct?.[0])
+      return
+    }
+    questions[activeIndex].correct = [zone]
+    renderImageZone(zone)
+  })
+}
+
+if (clearImageZoneBtn) {
+  clearImageZoneBtn.onclick = () => {
+    if (readOnly || !questions[activeIndex]) return
+    questions[activeIndex].correct = []
+    renderImageZone(null)
   }
 }
 
@@ -361,7 +398,7 @@ const populateImageFields = (q) => {
   if (q.image) {
     imageEditImg.src = q.image
     imageEditWrap.classList.remove('d-none')
-    renderImageGrid(q)
+    renderImageZone(q.correct?.[0])
   } else {
     imageEditWrap.classList.add('d-none')
   }
@@ -724,9 +761,9 @@ qType.onchange = () => {
     if (!Array.isArray(q.correct) || q.correct.length < 2) q.correct = ['', '']
   } else if (qType.value === 'image') {
     // q.correct venant d'un autre type (texte, séquence...) ne correspond pas
-    // au format {col,row} attendu : on repart propre sauf s'il a déjà la
+    // au format {x0,y0,x1,y1} attendu : on repart propre sauf s'il a déjà la
     // bonne forme (ex. retour sur ce type).
-    if (!Array.isArray(q.correct) || typeof q.correct[0]?.col !== 'number') q.correct = []
+    if (!Array.isArray(q.correct) || typeof q.correct[0]?.x0 !== 'number') q.correct = []
     populateImageFields(q)
   }
   toggleTypeSections()
@@ -866,9 +903,9 @@ saveQuizBtn.onclick = async () => {
         showToast(`La question ${i + 1} : importe une image`, 'error')
         return
       }
-      if (typeof q.correct?.[0]?.col !== 'number') {
+      if (typeof q.correct?.[0]?.x0 !== 'number') {
         selectQuestion(i)
-        showToast(`La question ${i + 1} : clique sur la grille pour indiquer la bonne case`, 'error')
+        showToast(`La question ${i + 1} : trace un rectangle sur l'image pour indiquer la zone correcte`, 'error')
         return
       }
     }

@@ -335,7 +335,7 @@ const buildOrderList = (items) => {
     el.className = 'order-item'
     el.dataset.text = text
     el.style.order = uid
-    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="order-item-text"></span>`
+    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="order-item-text"></span><span class="order-item-mybadge d-none"></span>`
     el.querySelector('.order-item-text').textContent = text
     orderList.appendChild(el)
     orderState.itemEls.push(el)
@@ -354,14 +354,39 @@ const buildOrderList = (items) => {
     el.addEventListener('pointermove', e => {
       if (!dragging) return
       const deltaY = e.clientY - startY
-      el.style.transform = `translateY(${deltaY}px)`
+      el.style.transform = `translateY(${deltaY}px) scale(1.03)`
       const steps = Math.round(deltaY / itemHeight)
       const targetPos = Math.min(orderState.currentOrder.length - 1, Math.max(0, startPos + steps))
       const curPos = orderState.currentOrder.indexOf(uid)
       if (targetPos !== curPos) {
+        // FLIP sur les AUTRES tuiles (celle qu'on déplace suit déjà la souris
+        // via translateY ci-dessus) : l'ordre CSS n'est pas animable en soi,
+        // donc on capture leur position avant le changement puis on anime
+        // depuis là — sinon elles sautaient instantanément à leur nouvelle
+        // place, beaucoup moins lisible pendant le glisser.
+        const before = new Map()
+        orderState.itemEls.forEach((sib, sibUid) => {
+          if (sibUid !== uid) before.set(sibUid, sib.getBoundingClientRect())
+        })
         orderState.currentOrder.splice(curPos, 1)
         orderState.currentOrder.splice(targetPos, 0, uid)
         orderState.itemEls.forEach((sib, sibUid) => { if (sibUid !== uid) sib.style.order = orderState.currentOrder.indexOf(sibUid) })
+        orderState.itemEls.forEach((sib, sibUid) => {
+          if (sibUid === uid) return
+          const b = before.get(sibUid)
+          if (!b) return
+          const a = sib.getBoundingClientRect()
+          const dy = b.top - a.top
+          if (dy) {
+            sib.style.transition = 'none'
+            sib.style.transform = `translateY(${dy}px)`
+            void sib.offsetHeight // force la position de départ avant de ré-activer la transition
+            requestAnimationFrame(() => {
+              sib.style.transition = ''
+              sib.style.transform = ''
+            })
+          }
+        })
       }
     })
     const endDrag = (e) => {
@@ -378,8 +403,10 @@ const buildOrderList = (items) => {
 }
 
 // Révélation : la liste se réarrange dans l'ordre correct (le score déjà
-// attribué est "tout ou rien", donc pas de distinction case par case —
-// la révélation montre juste où était la bonne réponse).
+// attribué est "tout ou rien", donc pas de distinction case par case sur la
+// couleur) — mais chaque tuile affiche en plus un badge "Toi : #N" indiquant
+// la position que CE joueur avait donnée à cet élément, pour comparer les
+// deux d'un coup d'œil plutôt que de perdre sa propre réponse au reveal.
 const revealOrderList = (correctOrder) => {
   if (!orderState.itemEls.length) return
   orderDisabled = true
@@ -388,7 +415,17 @@ const revealOrderList = (correctOrder) => {
     .filter(uid => uid !== -1)
   if (newOrder.length === orderState.itemEls.length) orderState.currentOrder = newOrder
   applyOrderPositions()
-  orderState.itemEls.forEach(el => el.classList.add('correct-reveal'))
+  orderState.itemEls.forEach(el => {
+    el.classList.add('correct-reveal')
+    const badge = el.querySelector('.order-item-mybadge')
+    if (!badge || !myOrderSubmission) return
+    const myPos = myOrderSubmission.indexOf(el.dataset.text)
+    if (myPos === -1) return
+    const correctPos = correctOrder.indexOf(el.dataset.text)
+    badge.textContent = `Toi : #${myPos + 1}`
+    badge.classList.remove('d-none')
+    badge.classList.toggle('badge-correct-pos', correctPos !== -1 && myPos === correctPos)
+  })
 }
 
 // --- Question "image" : où sur l'image ? ---
@@ -436,18 +473,31 @@ const buildImageGrid = (src) => {
   if (imageWrap) applyTileReveal(imageWrap, 0)
 }
 
-// Révélation : toutes les cases correctes (une "zone" possible, pas
-// forcément une seule case) en vert ; si le joueur avait cliqué ailleurs,
-// sa case à lui reste visible mais marquée fausse — pour comparer les deux.
-const revealImageCell = (correctCells) => {
-  if (!imageGrid) return
-  const cells = Array.isArray(correctCells) ? correctCells : (correctCells ? [correctCells] : [])
-  if (cells.length === 0) return
+// Distance (en "unités de case") entre une case cliquée et le rectangle de
+// bonne réponse {x0,y0,x1,y1} (coordonnées normalisées 0-1, tracé librement
+// dans l'éditeur — voir editor.js) : 0 si le centre de la case tombe dedans,
+// sinon l'écart au bord le plus proche. Doit rester identique au calcul
+// serveur (server/index.js) pour que le message affiché ("Presque ! N
+// case(s) d'écart") corresponde exactement aux points réellement accordés.
+const imageZoneDistance = (cell, zone) => {
+  if (!cell || !zone || typeof zone.x0 !== 'number') return null
+  const px = (cell.col + 0.5) / IMAGE_GRID_COLS
+  const py = (cell.row + 0.5) / IMAGE_GRID_ROWS
+  const distX = px < zone.x0 ? (zone.x0 - px) * IMAGE_GRID_COLS : px > zone.x1 ? (px - zone.x1) * IMAGE_GRID_COLS : 0
+  const distY = py < zone.y0 ? (zone.y0 - py) * IMAGE_GRID_ROWS : py > zone.y1 ? (py - zone.y1) * IMAGE_GRID_ROWS : 0
+  return Math.max(distX, distY)
+}
+
+// Révélation : toutes les cases dont le centre tombe dans le rectangle de
+// bonne réponse s'allument en vert ; si le joueur avait cliqué ailleurs, sa
+// case à lui reste visible mais marquée fausse — pour comparer les deux.
+const revealImageCell = (zone) => {
+  if (!imageGrid || !zone || typeof zone.x0 !== 'number') return
   imageDisabled = true
   Array.from(imageGrid.children).forEach(cell => {
     const col = Number(cell.dataset.col)
     const row = Number(cell.dataset.row)
-    if (cells.some(c => c.col === col && c.row === row)) cell.classList.add('correct-reveal')
+    if (imageZoneDistance({ col, row }, zone) === 0) cell.classList.add('correct-reveal')
     else if (cell.classList.contains('selected')) cell.classList.add('incorrect-reveal')
   })
 }
@@ -457,7 +507,11 @@ const clearRevealState = () => {
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
   if (gradSlider) gradSlider.classList.remove('reveal')
-  orderState.itemEls.forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
+  orderState.itemEls.forEach(el => {
+    el.classList.remove('correct-reveal', 'incorrect-reveal')
+    const badge = el.querySelector('.order-item-mybadge')
+    if (badge) { badge.classList.add('d-none'); badge.classList.remove('badge-correct-pos') }
+  })
   if (imageGrid) Array.from(imageGrid.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
 }
 
@@ -524,6 +578,10 @@ let hasAnsweredThisQuestion = false
 // pour l'animation de révélation (le curseur glisse jusqu'à la bonne valeur) :
 // lire gradState.value après coup donnerait donc la bonne réponse, pas la sienne.
 let myGradAnswerValue = null
+// Ordre envoyé par CE joueur pour une question "order" — capturé à l'envoi,
+// car revealOrderList() réarrange ensuite les tuiles vers l'ordre correct
+// (le tableau currentOrder ne reflète plus alors ce que le joueur avait mis).
+let myOrderSubmission = null
 const leaderOverlay = document.getElementById('leaderOverlay')
 const leaderboard = document.getElementById('leaderboard')
 const navCreate = document.getElementById('navCreate')
@@ -1233,7 +1291,10 @@ socket.on('lobby:list', arr => {
       `
     } else {
       const tile = document.createElement('div')
-      tile.className = `player-tile ${isMe ? 'is-me' : ''}`
+      // Un joueur déconnecté reste dans la liste (voir server/index.js) plutôt
+      // que d'être supprimé, avec un badge dédié pour que ça reste clair que
+      // ce n'est pas juste une tuile bloquée sur "Attente".
+      tile.className = `player-tile ${isMe ? 'is-me' : ''} ${p.connected === false ? 'is-disconnected' : ''}`
       tile.innerHTML = `
         ${isMe ? `
           <div class="edit-tile-btn" title="Modifier mon profil">
@@ -1251,8 +1312,8 @@ socket.on('lobby:list', arr => {
         <div style="font-weight:700; font-size:14px; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
           ${p.name}${isMe ? ' (Moi)' : ''}
         </div>
-        <div class="status-badge ${p.ready ? 'status-ready' : 'status-waiting'} ${isMe ? 'btn-ready-toggle' : ''}">
-          ${p.ready ? 'Prêt' : 'Attente'}
+        <div class="status-badge ${p.connected === false ? 'status-gone' : (p.ready ? 'status-ready' : 'status-waiting')} ${isMe ? 'btn-ready-toggle' : ''}">
+          ${p.connected === false ? 'Parti' : (p.ready ? 'Prêt' : 'Attente')}
         </div>
       `
       
@@ -1624,6 +1685,7 @@ socket.on('question:show', payload => {
   myLastDelta = 0
   hasAnsweredThisQuestion = false
   myGradAnswerValue = null
+  myOrderSubmission = null
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -1713,10 +1775,10 @@ socket.on('question:show', payload => {
     choices.forEach((opt, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn truefalse-btn'
-      // textContent reste EXACTEMENT la valeur (pas d'icône ajoutée ici) :
-      // le surlignage de révélation compare el.textContent à payload.correct
-      // tel quel (logique partagée avec le QCM). L'icône ✓/✕ est ajoutée en
-      // CSS (::before), donc invisible pour cette comparaison.
+      // textContent reste EXACTEMENT la valeur : le surlignage de révélation
+      // compare el.textContent à payload.correct tel quel (logique partagée
+      // avec le QCM). La grande forme (losange/triangle) est un ::before CSS
+      // à content vide, donc invisible pour cette comparaison.
       el.textContent = opt
       el.onclick = () => {
         if (currentSingleAttempt && sendBtn.disabled) return
@@ -1745,7 +1807,8 @@ sendBtn.onclick = () => {
     myGradAnswerValue = gradState.value
     content = String(gradState.value)
   } else if (currentQuestionType === 'order') {
-    content = JSON.stringify(getCurrentOrderTexts())
+    myOrderSubmission = getCurrentOrderTexts()
+    content = JSON.stringify(myOrderSubmission)
   } else if (currentQuestionType === 'image') {
     if (!imageSelectedCell) {
       showAnnounce('Sélectionne un endroit sur l\'image')
@@ -2022,13 +2085,12 @@ socket.on('question:reveal', payload => {
     revealOrderList(payload.correct || [])
     showMyResultBanner()
   } else if (payload.type === 'image') {
-    const correctCells = payload.correct || []
-    revealImageCell(correctCells)
-    const dist = (imageSelectedCell && correctCells.length > 0)
-      ? Math.min(...correctCells.map(c => Math.max(Math.abs(imageSelectedCell.col - c.col), Math.abs(imageSelectedCell.row - c.row))))
-      : null
+    const zone = (payload.correct || [])[0]
+    revealImageCell(zone)
+    const dist = imageSelectedCell ? imageZoneDistance(imageSelectedCell, zone) : null
     if (dist !== null && dist > 0 && myAnsweredCorrectlyThisQuestion) {
-      showMyResultBanner(`Presque ! ${dist} case${dist > 1 ? 's' : ''} d'écart, +${myLastDelta} points`, 'is-close')
+      const roundedDist = Math.round(dist)
+      showMyResultBanner(`Presque ! ${roundedDist || 1} case${roundedDist > 1 ? 's' : ''} d'écart, +${myLastDelta} points`, 'is-close')
     } else {
       showMyResultBanner()
     }

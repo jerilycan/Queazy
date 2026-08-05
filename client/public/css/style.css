@@ -557,6 +557,11 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 }
 .status-ready { background: rgba(var(--tile-green-rgb),0.16); color: var(--tile-green); border: 2px solid rgba(var(--tile-green-rgb),0.4); }
 .status-waiting { background: rgba(255,210,63,0.16); color: var(--tile-yellow); border: 2px solid rgba(255,210,63,0.4); }
+.status-gone { background: rgba(255,255,255,0.08); color: var(--color-text-muted); border: 2px solid rgba(255,255,255,0.15); }
+/* Reste affiché (classement/podium doivent le garder) mais visuellement en
+   retrait pour ne pas laisser croire que c'est une tuile figée par erreur. */
+.player-tile.is-disconnected { opacity: 0.55; }
+.player-tile.is-disconnected .kick-tile-btn { display: none; }
 
 .icon-grid {
   display: grid;
@@ -733,35 +738,53 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   font-size: 14px;
 }
 
+/* box-shadow plutôt que transform : le JS pose déjà transform:scaleX(pct) en
+   inline sur ce même élément (voir index.js) — une animation CSS sur la même
+   propriété l'écraserait le temps qu'elle tourne (dernières secondes), donnant
+   l'impression que la barre reste bloquée à 100% une fois passée en urgence. */
 @keyframes timer-pulse {
-  from { transform: scaleY(1); }
-  to { transform: scaleY(1.1); }
+  from { box-shadow: 0 0 20px rgba(var(--tile-red-rgb), 0.7); }
+  to { box-shadow: 0 0 34px rgba(var(--tile-red-rgb), 1); }
 }
 
 .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-md); margin-top: var(--space-lg); }
 
-/* Vrai/Faux : deux gros boutons centrés, couleurs fixes (vert/rouge) plutôt
-   que la rotation de couleurs/formes du QCM ; l'icône coche/croix est
-   incluse directement dans le texte du bouton (voir index.js). */
-.truefalse-btn {
-  padding: 32px var(--space-md);
+/* Vrai/Faux : deux grandes tuiles (façon Kahoot) plutôt que des boutons de
+   la même taille que le QCM — un losange bleu "Vrai", un triangle rouge
+   "Faux", assez grands pour être identifiables au coup d'œil sans lire le
+   texte. Toujours des .option-btn en dessous (même logique de sélection/
+   révélation), juste une mise en page et une taille très différentes. */
+.truefalse-grid { gap: var(--space-lg); }
+/* Qualifié .option-btn.truefalse-btn (spécificité 2 classes) plutôt que
+   .truefalse-btn seul : cette règle arrive avant .option-btn dans la feuille
+   de style, qui redéfinit padding/text-align — sans ce niveau de spécificité
+   en plus, .option-btn regagnerait sur ces propriétés malgré l'ordre voulu. */
+.option-btn.truefalse-btn {
+  flex-direction: column;
   justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding: 40px 20px;
+  min-height: 240px;
+  font-size: 28px;
   text-align: center;
-  font-size: 22px;
-  min-height: 96px;
 }
-.truefalse-btn::before {
-  content: '✓';
+.option-btn.truefalse-btn::before {
+  content: '';
   position: static;
-  width: auto;
-  height: auto;
-  background: none;
-  font-size: 26px;
-  margin-right: 12px;
+  width: 72px;
+  height: 72px;
+  background: rgba(255,255,255,0.92);
+  margin: 0;
 }
-.options-grid.truefalse-grid .truefalse-btn:nth-child(1) { background: var(--tile-green); }
-.options-grid.truefalse-grid .truefalse-btn:nth-child(2) { background: var(--tile-red); }
-.options-grid.truefalse-grid .truefalse-btn:nth-child(2)::before { content: '✕'; }
+.options-grid.truefalse-grid .option-btn.truefalse-btn:nth-child(1) { background: var(--tile-blue); }
+.options-grid.truefalse-grid .option-btn.truefalse-btn:nth-child(1)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+.options-grid.truefalse-grid .option-btn.truefalse-btn:nth-child(2) { background: var(--tile-red); }
+.options-grid.truefalse-grid .option-btn.truefalse-btn:nth-child(2)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+@media (max-width: 640px) {
+  .option-btn.truefalse-btn { min-height: 160px; font-size: 22px; }
+  .option-btn.truefalse-btn::before { width: 52px; height: 52px; }
+}
 .option-btn { 
   padding: var(--space-md) var(--space-md) var(--space-md) 56px;
   background: var(--tile-red);
@@ -891,6 +914,22 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   box-shadow: 0 0 0 3px rgba(var(--tile-green-rgb),0.4), var(--shadow-md);
 }
 .order-item.correct-reveal .order-item-handle { opacity: 0.7; }
+/* Badge de reveal : la position que CE joueur avait donnée à cet élément —
+   vert si ça correspond à la position correcte, neutre sinon. À côté de la
+   tuile qui, elle, a déjà été déplacée à sa VRAIE position (voir index.js). */
+.order-item-mybadge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.18);
+  color: inherit;
+}
+.order-item-mybadge.badge-correct-pos {
+  background: rgba(255,255,255,0.9);
+  color: var(--tile-green);
+}
 
 /* Question "image" : grille fixe (10x6 — doit rester cohérente avec
    IMAGE_GRID_COLS/ROWS côté JS) superposée à l'image, traits discrets pour
@@ -936,6 +975,21 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   background: rgba(var(--tile-red-rgb),0.4);
   border-color: var(--tile-red);
   box-shadow: inset 0 0 0 2px var(--tile-red);
+}
+
+/* Éditeur : zone de bonne réponse dessinée au pixel (glisser-déposer), plus
+   calée sur la grille — voir editor.js. Le rectangle est purement visuel
+   (pointer-events: none), c'est le wrap qui capte le glisser. */
+.image-zone-wrap {
+  cursor: crosshair;
+  user-select: none;
+}
+.image-zone-overlay {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(var(--color-accent-rgb), 0.3);
+  border: 2px solid var(--color-accent);
+  border-radius: 4px;
 }
 .image-error-msg {
   text-align: center;

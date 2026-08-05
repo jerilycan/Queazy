@@ -163,11 +163,14 @@
           <div id="imageSection" class="detail-section d-none">
             <label>Image</label>
             <input type="file" id="imageUpload" accept="image/*" class="cursor-pointer" />
-            <div id="imageEditWrap" class="image-wrap d-none mt-8" style="max-width: 480px;">
-              <img id="imageEditImg" class="image-img" alt="" />
-              <div id="imageEditGrid" class="image-grid"></div>
+            <div id="imageEditWrap" class="image-wrap image-zone-wrap d-none mt-8" style="max-width: 480px;">
+              <img id="imageEditImg" class="image-img" alt="" draggable="false" />
+              <div id="imageEditZone" class="image-zone-overlay d-none"></div>
             </div>
-            <p class="text-muted font-13 mt-8">Clique sur une ou plusieurs cases pour définir la zone de bonne réponse (reclique pour désélectionner).</p>
+            <div class="d-flex justify-between align-center mt-8">
+              <p class="text-muted font-13 m-0">Trace un rectangle sur l'image (glisser-déposer) pour définir la zone de bonne réponse.</p>
+              <button type="button" id="clearImageZoneBtn" class="btn btn-nav-secondary font-13">Effacer la zone</button>
+            </div>
           </div>
 
           <div id="correctSection" class="detail-section">
