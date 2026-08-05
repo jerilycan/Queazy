@@ -242,6 +242,10 @@ const applyTileReveal = (el, index) => {
 // physiques de la piste (toujours visibles), donc jamais ambiguës — remplace
 // l'ancienne règle à viseur fixe/graduation défilante. ---
 const gradState = { min: 0, max: 100, value: 50, disabled: false }
+// Doit rester cohérent avec GRAD_CORRECT_THRESHOLD dans server/index.js — sert
+// uniquement à choisir le message de reveal ("Bonne réponse" vs "Presque !"),
+// le scoring lui-même reste le calcul de proximité continu côté serveur.
+const GRAD_CORRECT_THRESHOLD = 0.8
 
 const setGradValue = (v, animate) => {
   const clamped = Math.min(gradState.max, Math.max(gradState.min, Math.round(v)))
@@ -511,6 +515,11 @@ let myLastDelta = 0
 // Rafraîchi à chaque question:show, mis à true dès l'envoi d'une réponse —
 // coupe le tic-tac du timer pour ce joueur (il n'a plus besoin d'être pressé).
 let hasAnsweredThisQuestion = false
+// Valeur envoyée par CE joueur pour une question "graduation" — capturée à
+// l'envoi, car gradState.value est ensuite déplacé par positionGradTargetMarker
+// pour l'animation de révélation (le curseur glisse jusqu'à la bonne valeur) :
+// lire gradState.value après coup donnerait donc la bonne réponse, pas la sienne.
+let myGradAnswerValue = null
 const leaderOverlay = document.getElementById('leaderOverlay')
 const leaderboard = document.getElementById('leaderboard')
 const navCreate = document.getElementById('navCreate')
@@ -786,7 +795,8 @@ const loadQuizById = (id) => {
         correct: Array.isArray(q.correct) ? q.correct : [],
         options: Array.isArray(q.options) ? q.options : [],
         min: q.min,
-        max: q.max
+        max: q.max,
+        image: q.image
       })) : []
       loadedQuiz = {
         id: data.id,
@@ -1583,6 +1593,7 @@ socket.on('question:show', payload => {
   myAnsweredCorrectlyThisQuestion = false
   myLastDelta = 0
   hasAnsweredThisQuestion = false
+  myGradAnswerValue = null
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -1701,6 +1712,7 @@ sendBtn.onclick = () => {
     }
     content = selectedMcqOptions.join(', ')
   } else if (currentQuestionType === 'graduation') {
+    myGradAnswerValue = gradState.value
     content = String(gradState.value)
   } else if (currentQuestionType === 'order') {
     content = JSON.stringify(getCurrentOrderTexts())
@@ -1953,10 +1965,29 @@ socket.on('question:reveal', payload => {
       if ((payload.correct || []).includes(el.textContent)) el.classList.add('correct-reveal')
       else el.classList.add('incorrect-reveal')
     })
+    showMyResultBanner()
   } else if (payload.type === 'free') {
     revealFreeAnswer((payload.correct || [])[0] || '')
+    showMyResultBanner()
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
+    // Score continu (proximité), comme "image" : au lieu d'un simple binaire,
+    // on distingue "Bonne réponse" (dans le seuil de tolérance), "Presque !"
+    // (score partiel touché mais en dehors du seuil) et "Mauvaise réponse"
+    // (aucun point). Le seuil doit rester cohérent avec GRAD_CORRECT_THRESHOLD
+    // côté serveur (celui qui détermine le ✓/✗ affiché sur la page résultats).
+    const target = Number(payload.target)
+    const range = Math.max(1e-9, gradState.max - gradState.min)
+    const closeness = (Number.isFinite(target) && myGradAnswerValue !== null)
+      ? Math.max(0, 1 - Math.abs(myGradAnswerValue - target) / range)
+      : null
+    if (closeness !== null && closeness >= GRAD_CORRECT_THRESHOLD) {
+      showMyResultBanner()
+    } else if (closeness !== null && myAnsweredCorrectlyThisQuestion) {
+      showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
+    } else {
+      showMyResultBanner('Mauvaise réponse', 'is-incorrect')
+    }
   } else if (payload.type === 'order') {
     revealOrderList(payload.correct || [])
     showMyResultBanner()
