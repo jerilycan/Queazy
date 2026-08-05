@@ -963,8 +963,8 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   inset: 0;
   cursor: crosshair;
 }
-/* Rectangles de bonne réponse révélés (une ou plusieurs zones) — purement
-   visuels, ne doivent jamais intercepter le clic. */
+/* Contour de bonne réponse révélé (une ou plusieurs zones fusionnées, voir
+   rect-union.js) — purement visuel, ne doit jamais intercepter le clic. */
 .image-zones-reveal {
   position: absolute;
   inset: 0;
@@ -1000,22 +1000,33 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 
 /* Éditeur : zone(s) de bonne réponse dessinée(s) au pixel (glisser-déposer)
    — voir editor.js. Purement visuel (pointer-events: none), c'est le wrap
-   qui capte le glisser. Réutilisé côté jeu pour révéler la/les zone(s)
-   correctes (voir .image-zone-correct-reveal ci-dessous), en vert cette fois. */
+   qui capte le glisser. */
 .image-zone-wrap {
   cursor: crosshair;
   user-select: none;
 }
-.image-zone-overlay {
+/* Contour fusionné des zones "image" (voir rect-union.js) : un seul <path>
+   SVG qui suit le pourtour réel de l'union des rectangles tracés — plutôt
+   que des rectangles empilés dont les bordures se chevauchent visuellement
+   dès qu'ils se touchent. Même composant utilisé dans l'éditeur (violet,
+   zone en cours de définition) et côté jeu au reveal (vert, voir la classe
+   .image-zones-reveal qui surcharge la couleur juste en dessous). */
+.rect-union-svg {
   position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  background: rgba(var(--color-accent-rgb), 0.3);
-  border: 2px solid var(--color-accent);
-  border-radius: 4px;
 }
-.image-zone-overlay.zone-correct-reveal {
-  background: rgba(var(--tile-green-rgb), 0.35);
-  border-color: var(--tile-green);
+.rect-union-svg path {
+  fill: rgba(var(--color-accent-rgb), 0.3);
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.image-zones-reveal path {
+  fill: rgba(var(--tile-green-rgb), 0.35);
+  stroke: var(--tile-green);
 }
 .image-error-msg {
   text-align: center;

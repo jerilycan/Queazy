@@ -195,7 +195,7 @@ const imageWrap = document.getElementById('imageWrap')
 const imageImg = document.getElementById('imageImg')
 const imageClickLayer = document.getElementById('imageClickLayer')
 const imageMarker = document.getElementById('imageMarker')
-const imageZonesReveal = document.getElementById('imageZonesReveal')
+const imageZonesRevealPath = document.getElementById('imageZonesRevealPath')
 const imageErrorMsg = document.getElementById('imageErrorMsg')
 const blindtestArea = document.getElementById('blindtestArea')
 const blindtestAudio = document.getElementById('blindtestAudio')
@@ -428,7 +428,7 @@ const buildImageAnswerArea = (src) => {
   imageSelectedPoint = null
   imageDisabled = true
   if (imageMarker) imageMarker.classList.add('d-none')
-  if (imageZonesReveal) imageZonesReveal.innerHTML = ''
+  if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
   if (imageWrap) applyTileReveal(imageWrap, 0)
 }
 
@@ -472,25 +472,16 @@ const imageMinZoneDistance = (point, zones) => {
   return dists.length ? Math.min(...dists) : null
 }
 
-// Révélation : la ou les zones correctes s'affichent comme des rectangles
-// verts directement sur l'image ; le marqueur du joueur passe au vert s'il
-// était dans l'une d'elles, au rouge sinon — pour comparer les deux d'un
-// coup d'œil, sans jamais avoir eu à cliquer sur une case précise.
+// Révélation : la ou les zones correctes s'affichent comme UN contour vert
+// fusionné (voir rect-union.js) qui suit le pourtour réel de l'union des
+// rectangles ; le marqueur du joueur passe au vert s'il était dans l'une
+// d'elles, au rouge sinon — pour comparer les deux d'un coup d'œil, sans
+// jamais avoir eu à cliquer sur une case précise.
 const revealImageZones = (zones) => {
-  if (!imageZonesReveal) return
+  if (!imageZonesRevealPath) return
   imageDisabled = true
-  imageZonesReveal.innerHTML = ''
-  const list = Array.isArray(zones) ? zones : []
-  list.forEach(zone => {
-    if (!zone || typeof zone.x0 !== 'number') return
-    const el = document.createElement('div')
-    el.className = 'image-zone-overlay zone-correct-reveal'
-    el.style.left = `${zone.x0 * 100}%`
-    el.style.top = `${zone.y0 * 100}%`
-    el.style.width = `${(zone.x1 - zone.x0) * 100}%`
-    el.style.height = `${(zone.y1 - zone.y0) * 100}%`
-    imageZonesReveal.appendChild(el)
-  })
+  const list = (Array.isArray(zones) ? zones : []).filter(z => z && typeof z.x0 === 'number')
+  imageZonesRevealPath.setAttribute('d', rectUnionContoursToSvgPath(list))
   if (imageMarker && imageSelectedPoint) {
     const dist = imageMinZoneDistance(imageSelectedPoint, list)
     imageMarker.classList.toggle('marker-correct', dist === 0)
@@ -693,7 +684,7 @@ const clearRevealState = () => {
     const badge = el.querySelector('.order-item-mybadge')
     if (badge) { badge.classList.add('d-none'); badge.classList.remove('badge-correct-pos') }
   })
-  if (imageZonesReveal) imageZonesReveal.innerHTML = ''
+  if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
   if (imageMarker) imageMarker.classList.remove('marker-correct', 'marker-incorrect')
 }
 

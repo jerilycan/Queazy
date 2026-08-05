@@ -32,6 +32,9 @@
          fluide/organique "gratuite" (chaque tuile suit la souris en continu,
          les autres glissent pour faire de la place) sans avoir à la retravailler nous-mêmes. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" defer></script>
+    <!-- Contour fusionné des zones "image" (voir index.js revealImageZones) —
+         doit précéder index.js dans l'ordre du document. -->
+    <script src="/js/rect-union.js" defer></script>
   </head>
   <body>
     <div class="navbar">
@@ -207,7 +210,13 @@
           <div id="imageArea" class="image-area d-none">
             <div id="imageWrap" class="image-wrap">
               <img id="imageImg" class="image-img" alt="" />
-              <div id="imageZonesReveal" class="image-zones-reveal"></div>
+              <!-- Contour fusionné de la/les zone(s) correcte(s) révélées (voir
+                   rect-union.js + index.js revealImageZones) : même principe
+                   que côté éditeur, un seul <path> qui suit le pourtour réel
+                   de l'union des rectangles au lieu de rectangles empilés. -->
+              <svg id="imageZonesReveal" class="rect-union-svg image-zones-reveal" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <path id="imageZonesRevealPath" fill-rule="evenodd"></path>
+              </svg>
               <div id="imageClickLayer" class="image-click-layer"></div>
               <div id="imageMarker" class="image-marker d-none"></div>
             </div>

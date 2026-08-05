@@ -152,7 +152,8 @@ const imageSection = document.getElementById('imageSection')
 const imageUploadInput = document.getElementById('imageUpload')
 const imageEditWrap = document.getElementById('imageEditWrap')
 const imageEditImg = document.getElementById('imageEditImg')
-const imageEditZone = document.getElementById('imageEditZone')
+const imageEditZoneSvg = document.getElementById('imageEditZoneSvg')
+const imageEditZonePath = document.getElementById('imageEditZonePath')
 const clearImageZoneBtn = document.getElementById('clearImageZoneBtn')
 
 // Illustration optionnelle (tous les types SAUF "image", qui a déjà sa propre
@@ -353,27 +354,21 @@ const populateTrueFalseFields = (q) => {
 // département) sans déborder sur ses voisins, alors qu'un rectangle libre
 // peut se caler au pixel près. Plusieurs rectangles indépendants sont
 // autorisés (ex. deux zones disjointes toutes les deux valides).
+// Affichage : un seul contour SVG qui suit le pourtour réel de l'union des
+// rectangles (voir rect-union.js) — deux rectangles adjacents/en L se
+// retrouvent fusionnés sans couture visible, deux rectangles éloignés qui ne
+// se touchent qu'en diagonale restent deux formes distinctes plutôt qu'une
+// boîte englobante qui engloutirait tout l'espace vide entre elles.
 const renderImageZones = (zones) => {
-  if (!imageEditZone) return
-  const container = imageEditZone.parentElement
-  if (!container) return
-  Array.from(container.querySelectorAll('.image-zone-overlay:not(#imageEditZone)')).forEach(el => el.remove())
+  if (!imageEditZoneSvg || !imageEditZonePath) return
   const list = Array.isArray(zones) ? zones : []
-  list.forEach((rect, i) => {
-    // Réutilise l'élément #imageEditZone pour le premier rectangle (déjà dans
-    // le DOM/lié au CSS), en crée des clones SANS id pour les suivants (sinon
-    // le sélecteur ":not(#imageEditZone)" ci-dessus ne retrouverait plus
-    // l'original au prochain appel, une fois son id retiré par erreur).
-    const el = i === 0 ? imageEditZone : imageEditZone.cloneNode(false)
-    if (i > 0) el.removeAttribute('id')
-    el.classList.remove('d-none')
-    el.style.left = `${rect.x0 * 100}%`
-    el.style.top = `${rect.y0 * 100}%`
-    el.style.width = `${(rect.x1 - rect.x0) * 100}%`
-    el.style.height = `${(rect.y1 - rect.y0) * 100}%`
-    if (i > 0) container.appendChild(el)
-  })
-  if (list.length === 0) imageEditZone.classList.add('d-none')
+  if (list.length === 0) {
+    imageEditZoneSvg.classList.add('d-none')
+    imageEditZonePath.setAttribute('d', '')
+    return
+  }
+  imageEditZoneSvg.classList.remove('d-none')
+  imageEditZonePath.setAttribute('d', rectUnionContoursToSvgPath(list))
 }
 
 // En dessous de cette taille (normalisée), on considère le tracé comme un
@@ -381,15 +376,34 @@ const renderImageZones = (zones) => {
 const IMAGE_ZONE_MIN_SIZE = 0.015
 
 // Si le rectangle qu'on vient de tracer "mord" sur un autre déjà validé, on
-// les fusionne en un seul rectangle englobant plutôt que de laisser deux
-// contours se chevaucher visuellement (moins propre, et redondant : le
-// scoring ne regarde que la distance à la zone la plus proche de toute façon).
-const rectsOverlap = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0
+// les fusionne en un seul rectangle englobant — MAIS seulement si cette boîte
+// englobante reste "pleine" (peu de vide ajouté). Un simple test de
+// chevauchement ne suffit pas : deux rectangles très différents qui ne se
+// touchent qu'en diagonale (ex. un petit sur l'Europe, un immense sur
+// Asie+Océanie) chevauchent techniquement, mais leur boîte englobante
+// engloutirait tout l'espace vide entre les deux (Afrique/Moyen-Orient...) —
+// un rectangle géant absurde, pas une vraie fusion. On ne fusionne donc que
+// si la part de vide dans la boîte englobante reste sous ce seuil (rectangles
+// alignés qui se prolongent, ou l'un contenu dans l'autre : vide ≈ 0).
+const RECT_MERGE_MAX_WASTE = 0.15
+const shouldMergeRects = (a, b) => {
+  const overlaps = a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0
+  if (!overlaps) return false
+  const interArea = Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) *
+                     Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0))
+  const areaA = (a.x1 - a.x0) * (a.y1 - a.y0)
+  const areaB = (b.x1 - b.x0) * (b.y1 - b.y0)
+  const usefulArea = areaA + areaB - interArea // surface réellement couverte par l'un OU l'autre
+  const boundingArea = (Math.max(a.x1, b.x1) - Math.min(a.x0, b.x0)) * (Math.max(a.y1, b.y1) - Math.min(a.y0, b.y0))
+  if (boundingArea <= 0) return false
+  const wasted = (boundingArea - usefulArea) / boundingArea
+  return wasted <= RECT_MERGE_MAX_WASTE
+}
 const mergeOverlappingZones = (zones) => {
   const list = zones.slice()
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
-      if (rectsOverlap(list[i], list[j])) {
+      if (shouldMergeRects(list[i], list[j])) {
         list[i] = {
           x0: Math.min(list[i].x0, list[j].x0), y0: Math.min(list[i].y0, list[j].y0),
           x1: Math.max(list[i].x1, list[j].x1), y1: Math.max(list[i].y1, list[j].y1)
