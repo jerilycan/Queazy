@@ -7,6 +7,13 @@
       "runtimeArgs": ["server/index.js"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "yams-dev",
+      "runtimeExecutable": "C:\\nvm4w\\nodejs\\node.exe",
+      "runtimeArgs": ["C:\\Users\\Jer\\Documents\\trae_projects\\yams\\node_modules\\vite\\bin\\vite.js", "C:\\Users\\Jer\\Documents\\trae_projects\\yams"],
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }

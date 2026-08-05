@@ -200,9 +200,11 @@ const imageErrorMsg = document.getElementById('imageErrorMsg')
 const blindtestArea = document.getElementById('blindtestArea')
 const blindtestAudio = document.getElementById('blindtestAudio')
 const blindtestOrb = document.getElementById('blindtestOrb')
+const blindtestUnlockBtn = document.getElementById('blindtestUnlockBtn')
 const blindtestFields = document.getElementById('blindtestFields')
 const blindtestTitleInput = document.getElementById('blindtestTitleInput')
 const blindtestArtistInput = document.getElementById('blindtestArtistInput')
+const audioModeRemoteInput = document.getElementById('audioModeRemote')
 // Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
 // décorative au-dessus de l'énoncé.
@@ -497,17 +499,29 @@ const revealImageZones = (zones) => {
 }
 
 // --- Question "blind test" : extrait audio + orbe néon réactif ---
-// Tout le monde (hôte ET joueurs) charge et décode le même extrait, synchronisé
-// sur le même startTs que les autres types — mais seul l'hôte (l'écran
-// partagé/branché aux enceintes) l'entend réellement : les joueurs restent en
-// muet pour éviter la cacophonie de plusieurs téléphones décalés, tout en
-// gardant un orbe réactif au son EN VRAI sur chaque écran (analysé localement
-// depuis le fichier audio décodé, pas une fausse animation générique).
+// Deux modes, choisis par l'hôte (case à cocher dans #hostPanel) :
+//  - "IRL" (par défaut) : seul l'écran de l'hôte (branché aux enceintes de la
+//    salle) diffuse le son ; les joueurs restent en muet pour éviter la
+//    cacophonie de plusieurs téléphones décalés.
+//  - "À distance" : tout le monde entend, chacun sur son propre poste.
+// Dans les deux cas, TOUT LE MONDE charge et décode le même extrait (même
+// muet) pour que l'orbe pulse en vrai sur chaque écran, pas une fausse
+// animation générique.
 let blindtestAudioCtx = null
 let blindtestAnalyser = null
 let blindtestPulseRAF = null
 let myBlindTestSubmission = null // { title, artist } — capturé à l'envoi (voir sendBtn.onclick)
+let audioMode = 'irl' // 'irl' | 'remote' — lu depuis #audioModeRemote côté hôte, transmis dans le payload
+if (audioModeRemoteInput) {
+  audioModeRemoteInput.checked = audioMode === 'remote'
+  audioModeRemoteInput.onchange = () => { audioMode = audioModeRemoteInput.checked ? 'remote' : 'irl' }
+}
 
+// Monte le graphe Web Audio <audio> -> analyser -> destination UNE SEULE FOIS
+// (createMediaElementSource ne peut être appelé qu'une fois par élément, sinon
+// il lève une exception) — après ça, <audio> ne sort plus jamais le son
+// directement, tout passe par ce graphe (d'où l'importance que le contexte
+// soit bien "running", voir resumeBlindTestAudioCtx ci-dessous).
 const ensureBlindTestAnalyser = () => {
   if (blindtestAnalyser || !blindtestAudio) return blindtestAnalyser
   try {
@@ -527,6 +541,73 @@ const ensureBlindTestAnalyser = () => {
   return blindtestAnalyser
 }
 
+// Un AudioContext démarre (ou repasse) "suspended" tant qu'aucun geste
+// utilisateur ne l'a débloqué — et une fois <audio> routé à travers lui (voir
+// ci-dessus), un contexte suspendu coupe le son en silence total MÊME SI
+// <audio>.play() a réussi et n'est pas en pause. C'est la cause la plus
+// probable d'un "ça ne joue pas" silencieux (aucune erreur visible). On
+// tente le resume() à chaque geste utilisateur ET juste avant chaque lecture.
+const resumeBlindTestAudioCtx = () => {
+  ensureBlindTestAnalyser()
+  if (blindtestAudioCtx && blindtestAudioCtx.state === 'suspended') {
+    return blindtestAudioCtx.resume().catch(() => {})
+  }
+  return Promise.resolve()
+}
+
+// "Débloque" l'audio dès le tout premier geste (tap/clic) de CE visiteur sur
+// la page — bien avant qu'une question blind test ne démarre. Sans ça, le
+// premier play() programmatique (déclenché par le minuteur, pas un geste)
+// peut être refusé par le navigateur, ou le contexte Web Audio rester
+// suspendu. {once:true} : un seul geste suffit, pas besoin de répéter.
+document.addEventListener('pointerdown', () => { resumeBlindTestAudioCtx() }, { once: true, passive: true })
+
+const hideBlindTestUnlockPrompt = () => {
+  if (blindtestUnlockBtn) blindtestUnlockBtn.classList.add('d-none')
+}
+const showBlindTestUnlockPrompt = () => {
+  if (blindtestUnlockBtn) blindtestUnlockBtn.classList.remove('d-none')
+}
+if (blindtestUnlockBtn) {
+  // Filet de sécurité si le déblocage "au premier geste" n'a pas suffi
+  // (rare, mais les politiques d'autoplay varient beaucoup d'un navigateur à
+  // l'autre) : un tap direct sur ce bouton est TOUJOURS un geste valide.
+  blindtestUnlockBtn.onclick = () => {
+    resumeBlindTestAudioCtx().then(() => {
+      blindtestAudio.play().then(() => { startBlindTestPulse(); hideBlindTestUnlockPrompt() }).catch(() => {})
+    })
+  }
+}
+
+// Bouton "Tester le son" (popup de personnalisation, avant "Je suis prêt !") :
+// utile surtout pour un quiz "à distance" (chacun doit entendre sur son
+// poste) — un joueur qui a coupé le son de son téléphone ou refusé
+// l'autoplay ne le découvrirait sinon qu'en plein blind test, trop tard.
+// Un bip synthétique (pas besoin de fichier) suffit à confirmer "j'entends",
+// et le geste du clic débloque au passage l'AudioContext pour plus tard.
+const soundCheckBtn = document.getElementById('soundCheckBtn')
+const soundCheckStatus = document.getElementById('soundCheckStatus')
+if (soundCheckBtn) {
+  soundCheckBtn.onclick = () => {
+    resumeBlindTestAudioCtx().then(() => {
+      if (!blindtestAudioCtx) return
+      const now = blindtestAudioCtx.currentTime
+      const osc = blindtestAudioCtx.createOscillator()
+      const gain = blindtestAudioCtx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(880, now)
+      osc.frequency.setValueAtTime(1320, now + 0.15)
+      gain.gain.setValueAtTime(0.2, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35)
+      osc.connect(gain)
+      gain.connect(blindtestAudioCtx.destination)
+      osc.start(now)
+      osc.stop(now + 0.35)
+      if (soundCheckStatus) soundCheckStatus.classList.remove('d-none')
+    })
+  }
+}
+
 const stopBlindTestPulse = () => {
   if (blindtestPulseRAF) cancelAnimationFrame(blindtestPulseRAF)
   blindtestPulseRAF = null
@@ -540,7 +621,6 @@ const stopBlindTestPulse = () => {
 const startBlindTestPulse = () => {
   const analyser = ensureBlindTestAnalyser()
   if (!analyser || !blindtestOrb) return
-  if (blindtestAudioCtx.state === 'suspended') blindtestAudioCtx.resume().catch(() => {})
   blindtestOrb.classList.remove('orb-idle')
   const data = new Uint8Array(analyser.frequencyBinCount)
   const loop = () => {
@@ -556,13 +636,16 @@ const startBlindTestPulse = () => {
   loop()
 }
 
-const buildBlindTestArea = (audioUrl) => {
+const buildBlindTestArea = (audioUrl, mode) => {
   if (!blindtestAudio) return
   stopBlindTestPulse()
+  hideBlindTestUnlockPrompt()
   if (blindtestTitleInput) blindtestTitleInput.value = ''
   if (blindtestArtistInput) blindtestArtistInput.value = ''
   myBlindTestSubmission = null
-  blindtestAudio.muted = !isHost
+  // "à distance" : personne n'est muet, chacun entend sur son poste.
+  // "irl" (par défaut) : seul l'hôte (l'écran/les enceintes de la salle) entend.
+  blindtestAudio.muted = mode === 'remote' ? false : !isHost
   blindtestAudio.pause()
   blindtestAudio.currentTime = 0
   blindtestAudio.src = audioUrl || ''
@@ -570,11 +653,22 @@ const buildBlindTestArea = (audioUrl) => {
 
 const playBlindTestAudio = () => {
   if (!blindtestAudio || !blindtestAudio.src) return
-  blindtestAudio.play().then(() => startBlindTestPulse()).catch(() => {})
+  resumeBlindTestAudioCtx().then(() => {
+    blindtestAudio.play().then(() => {
+      startBlindTestPulse()
+      hideBlindTestUnlockPrompt()
+    }).catch(() => {
+      // Le navigateur a refusé la lecture programmatique (pas de geste
+      // récent) : au lieu d'échouer en silence, on propose un bouton qui,
+      // lui, EST un geste — garantit que la musique démarre au pire au tap.
+      showBlindTestUnlockPrompt()
+    })
+  })
 }
 
 const stopBlindTestAudio = () => {
   if (blindtestAudio) blindtestAudio.pause()
+  hideBlindTestUnlockPrompt()
   stopBlindTestPulse()
 }
 
@@ -1571,6 +1665,7 @@ const emitQuestion = (index) => {
     options: q.type === 'order' ? shuffleArray(correctOrder) : (Array.isArray(q.options) ? q.options : []),
     min: q.min,
     max: q.max,
+    audioMode: q.type === 'blindtest' ? audioMode : undefined,
     singleAttempt: currentSingleAttempt
   }
   // L'image (cliquable pour le type "image", ou simple illustration au-dessus
@@ -1791,7 +1886,7 @@ socket.on('question:show', payload => {
     buildImageAnswerArea(payload.imageUrl)
   }
   if (payload.type === 'blindtest') {
-    buildBlindTestArea(payload.audioUrl)
+    buildBlindTestArea(payload.audioUrl, payload.audioMode)
   } else {
     stopBlindTestAudio()
   }

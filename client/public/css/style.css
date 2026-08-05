@@ -1105,6 +1105,26 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   border-radius: 50%;
   border: 2px solid rgba(var(--color-accent-rgb), 0.3);
 }
+.blindtest-orb-wrap { position: relative; display: inline-flex; }
+/* Filet de secours si la lecture programmatique est refusée par le
+   navigateur (voir index.js playBlindTestAudio) : un tap direct dessus est
+   toujours un geste valide, garantit que le son démarre au pire au clic. */
+.blindtest-unlock-btn {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: rgba(5, 5, 15, 0.72);
+  color: white;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 /* Deux champs (titre/artiste) à la place du champ unique du type "free",
    dans le même conteneur .free-text-input (voir index.html) — l'un ou
    l'autre est affiché selon le type, jamais les deux. */
