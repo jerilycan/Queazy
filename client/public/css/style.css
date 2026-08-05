@@ -1964,6 +1964,95 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 }
 
 /* Classement plein écran */
+/* Popup "en attente de validation" (modération d'une réponse libre) — flotte
+   PAR-DESSUS l'écran de jeu (qui reste visible, juste flouté/assombri en
+   dessous) au lieu de basculer sur un classement figé en dur : garde la
+   partie "vivante" pendant l'attente plutôt qu'un vrai temps mort. */
+.moderation-wait-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 5, 15, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.moderation-wait-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 36px 44px;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-lg), 0 0 40px rgba(var(--color-accent-rgb), 0.25);
+  text-align: center;
+  max-width: 90vw;
+  animation: moderationCardIn 0.4s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes moderationCardIn {
+  from { opacity: 0; transform: scale(0.85) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.moderation-wait-icon {
+  font-size: 56px;
+  animation: moderationIconBounce 1.4s ease-in-out infinite;
+}
+@keyframes moderationIconBounce {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-12px) rotate(6deg); }
+}
+.moderation-wait-text {
+  color: var(--color-text);
+  font-weight: 700;
+  font-size: 17px;
+  min-height: 1.4em;
+  transition: opacity 0.25s ease;
+}
+.moderation-wait-text.is-fading { opacity: 0; }
+.moderation-wait-reactions { display: flex; gap: 10px; margin-top: 6px; }
+.reaction-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-surface-2);
+  font-size: 24px;
+  cursor: pointer;
+  transition: transform 0.15s cubic-bezier(.34,1.56,.64,1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reaction-btn:hover { transform: scale(1.12); }
+.reaction-btn:active { transform: scale(0.9); }
+.reaction-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+/* Réactions qui montent à l'écran depuis le bas (voir index.js
+   spawnFloatingReaction) — visibles par toute la salle, hôte compris, dès
+   qu'un joueur tape un bouton ci-dessus. Purement décoratif : jamais au-dessus
+   des vraies interactions du jeu. */
+.reaction-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  pointer-events: none;
+  overflow: hidden;
+}
+.floating-reaction {
+  position: absolute;
+  bottom: -60px;
+  font-size: 32px;
+  animation: reactionFloatUp 2.6s ease-out forwards;
+}
+@keyframes reactionFloatUp {
+  0% { transform: translateY(0) translateX(0) rotate(0deg) scale(0.6); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateY(-100vh) translateX(var(--drift, 0px)) rotate(var(--spin, 20deg)) scale(1.1); opacity: 0; }
+}
+
 .leader-overlay {
   position: fixed; inset: 0; z-index: 1000;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start;

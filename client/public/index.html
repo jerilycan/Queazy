@@ -248,6 +248,30 @@
       </div>
     </div>
 
+    <!-- Popup "en attente de validation" (modération d'une réponse libre) —
+         flotte devant l'écran de jeu (qui reste visible/dimmé derrière),
+         plutôt que de basculer sur le classement en dur : garde le rythme
+         de la partie. Quelques réactions cliquables pour patienter, visibles
+         par toute la salle en direct (voir #reactionLayer plus bas). -->
+    <div id="moderationWaitOverlay" class="moderation-wait-overlay d-none">
+      <div class="moderation-wait-card">
+        <div class="moderation-wait-icon">⏳</div>
+        <div id="moderationWaitText" class="moderation-wait-text">Le chef fignole son jugement...</div>
+        <div class="moderation-wait-reactions">
+          <button type="button" class="reaction-btn" data-emoji="🎉" title="Confettis">🎉</button>
+          <button type="button" class="reaction-btn" data-emoji="👏" title="Applaudissements">👏</button>
+          <button type="button" class="reaction-btn" data-emoji="🔥" title="Feu">🔥</button>
+          <button type="button" class="reaction-btn" data-emoji="😂" title="Rire">😂</button>
+          <button type="button" class="reaction-btn" data-emoji="❤️" title="Coeur">❤️</button>
+        </div>
+      </div>
+    </div>
+    <!-- Réactions qui montent à l'écran (voir index.js spawnFloatingReaction)
+         — visibles par tout le monde (hôte compris), pas seulement pendant
+         l'attente ci-dessus : purement décoratif, jamais au-dessus des
+         interactions réelles du jeu. -->
+    <div id="reactionLayer" class="reaction-layer"></div>
+
     <!-- Leaderboard Overlay -->
     <div id="leaderOverlay" class="d-none leader-overlay">
       <h2 class="leader-title">Classement</h2>

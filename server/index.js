@@ -250,6 +250,12 @@ const start = async () => {
     return raw
   }
   const GRAD_CORRECT_THRESHOLD = 0.8
+  // Réactions "fun" pendant l'attente de validation d'une réponse libre (voir
+  // index.js showModerationWait) : liste blanche stricte (jamais de contenu
+  // arbitraire relayé à toute la salle) + cooldown par socket pour éviter
+  // qu'un seul joueur ne spam la même réaction en boucle.
+  const FUN_REACTION_EMOJIS = ['🎉', '👏', '🔥', '😂', '❤️']
+  const REACTION_COOLDOWN_MS = 500
   // Question "image" : le joueur clique directement sur l'image (coordonnées
   // normalisées 0-1, pas de grille — voir index.js) ; le créateur définit une
   // ou plusieurs zones rectangulaires (idem, voir editor.js). Distance
@@ -761,6 +767,20 @@ const start = async () => {
       if (room.pending.size === 0) {
         io.to(code).emit('moderation:finished')
       }
+    })
+
+    socket.on('fun:react', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room) return
+      const emoji = payload?.emoji
+      if (!FUN_REACTION_EMOJIS.includes(emoji)) return
+      const now = Date.now()
+      if (!room.lastReactionTs) room.lastReactionTs = new Map()
+      const last = room.lastReactionTs.get(socket.id) || 0
+      if (now - last < REACTION_COOLDOWN_MS) return
+      room.lastReactionTs.set(socket.id, now)
+      io.to(code).emit('fun:react', { emoji })
     })
 
     socket.on('leaderboard:show', payload => {

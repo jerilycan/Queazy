@@ -763,6 +763,78 @@ const navMyQuizzes = document.getElementById('navMyQuizzes')
 const podiumOverlay = document.getElementById('podium')
 const isAvatarUrl = (s) => typeof s === 'string' && /^(data:|https?:|blob:|\/)/.test(s)
 
+// --- Popup "en attente de validation" + réactions partagées ---
+// Remplace l'ancien basculement brutal sur le classement pendant qu'une
+// réponse libre attend d'être validée par l'hôte : une petite carte flotte
+// devant l'écran de jeu (qui reste visible en dessous, juste assombri) au
+// lieu de couper le rythme avec un écran figé. Quelques boutons "fun"
+// permettent de patienter, avec un effet visible par toute la salle en
+// direct (voir socket.on('fun:react', ...) plus bas).
+const moderationWaitOverlay = document.getElementById('moderationWaitOverlay')
+const moderationWaitText = document.getElementById('moderationWaitText')
+const reactionLayer = document.getElementById('reactionLayer')
+const MODERATION_WAIT_CAPTIONS = [
+  'Le chef fignole son jugement...',
+  'Analyse des pépites en cours...',
+  'Presque bon...',
+  'Un peu de patience, ça arrive !',
+  'Dégustation en cours...'
+]
+let moderationWaitCaptionInt = null
+
+const showModerationWait = () => {
+  if (!moderationWaitOverlay) return
+  moderationWaitOverlay.classList.remove('d-none')
+  let idx = 0
+  if (moderationWaitText) moderationWaitText.textContent = MODERATION_WAIT_CAPTIONS[idx]
+  clearInterval(moderationWaitCaptionInt)
+  moderationWaitCaptionInt = setInterval(() => {
+    if (!moderationWaitText) return
+    idx = (idx + 1) % MODERATION_WAIT_CAPTIONS.length
+    moderationWaitText.classList.add('is-fading')
+    setTimeout(() => {
+      moderationWaitText.textContent = MODERATION_WAIT_CAPTIONS[idx]
+      moderationWaitText.classList.remove('is-fading')
+    }, 250)
+  }, 2600)
+}
+const hideModerationWait = () => {
+  if (moderationWaitOverlay) moderationWaitOverlay.classList.add('d-none')
+  clearInterval(moderationWaitCaptionInt)
+  moderationWaitCaptionInt = null
+}
+
+// Emoji qui monte à l'écran et se retire seul une fois l'animation finie —
+// léger cooldown CLIENT en plus de la limite serveur (voir server/index.js),
+// juste pour éviter le double-tap accidentel.
+const spawnFloatingReaction = (emoji) => {
+  if (!reactionLayer) return
+  const el = document.createElement('span')
+  el.className = 'floating-reaction'
+  el.textContent = emoji
+  el.style.left = `${5 + Math.random() * 90}%`
+  el.style.setProperty('--drift', `${Math.round((Math.random() - 0.5) * 160)}px`)
+  el.style.setProperty('--spin', `${Math.round((Math.random() - 0.5) * 60)}deg`)
+  reactionLayer.appendChild(el)
+  el.addEventListener('animationend', () => el.remove(), { once: true })
+}
+
+let lastReactionSentTs = 0
+const REACTION_CLIENT_COOLDOWN_MS = 600
+document.querySelectorAll('.reaction-btn').forEach(btn => {
+  btn.onclick = () => {
+    const now = Date.now()
+    if (now - lastReactionSentTs < REACTION_CLIENT_COOLDOWN_MS) return
+    lastReactionSentTs = now
+    const roomCode = roomInput.value.trim()
+    socket.emit('fun:react', { roomCode, emoji: btn.dataset.emoji })
+  }
+})
+
+socket.on('fun:react', ({ emoji }) => {
+  if (typeof emoji === 'string') spawnFloatingReaction(emoji)
+})
+
 // Quiz Selection Popup elements
 const quizSelectPopup = document.getElementById('quizSelectPopup')
 const quizList = document.getElementById('quizList')
@@ -2311,11 +2383,6 @@ const leaderRows = new Map() // socketId -> élément ligne
 const renderBoard = () => {
   const ordered = computeOrder().filter(([id, s]) => !s.isHost)
 
-  // Retire le message ponctuel "validation en cours" s'il est encore affiché :
-  // il ne doit jamais rester une fois que le vrai classement est rendu.
-  const notice = document.getElementById('moderationNotice')
-  if (notice) notice.remove()
-
   const first = new Map()
   leaderRows.forEach((row, id) => { first.set(id, row.getBoundingClientRect()) })
 
@@ -2411,10 +2478,7 @@ socket.on('timer:end', () => {
     if (ft) ft.classList.add('d-none')
     hideAnswerStatus()
     if (isModerationPending) {
-      leaderRows.clear()
-      leaderboard.innerHTML = '<div id="moderationNotice"><h2 style="margin-bottom:20px; color:white">Validation des réponses par l\'hôte...</h2><p class="text-white" style="opacity:0.85">Un peu de patience, l\'hôte vérifie les dernières pépites !</p></div>'
-      leaderOverlay.classList.remove('d-none')
-      leaderOverlay.style.display = 'flex'
+      showModerationWait()
     }
     // Sinon : on attend l'évènement question:reveal, qui affiche la bonne réponse
     // sur l'écran de question actuel — plus de saut automatique vers le classement.
@@ -2509,6 +2573,7 @@ socket.on('leaderboard:show', () => {
 
 socket.on('moderation:finished', () => {
   isModerationPending = false
+  hideModerationWait()
   const beforeOrder = preQuestionOrder
   preQuestionOrder = []
   // Overlay visible avant renderBoard() — voir le commentaire équivalent
@@ -2526,6 +2591,7 @@ socket.on('moderation:finished', () => {
 })
 socket.on('question:show', () => {
   leaderOverlay.style.display = 'none'
+  hideModerationWait()
   if (isHost) { hostPhase = 'answering'; updateHostControls() }
 })
 
