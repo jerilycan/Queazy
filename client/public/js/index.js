@@ -195,6 +195,10 @@ const imageWrap = document.getElementById('imageWrap')
 const imageImg = document.getElementById('imageImg')
 const imageGrid = document.getElementById('imageGrid')
 const imageErrorMsg = document.getElementById('imageErrorMsg')
+// Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
+// propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
+// décorative au-dessus de l'énoncé.
+const illustrationImg = document.getElementById('illustrationImg')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
@@ -796,7 +800,8 @@ const loadQuizById = (id) => {
         options: Array.isArray(q.options) ? q.options : [],
         min: q.min,
         max: q.max,
-        image: q.image
+        image: q.image,
+        illustration: q.illustration
       })) : []
       loadedQuiz = {
         id: data.id,
@@ -1358,6 +1363,22 @@ socket.on('lobby:readyStatus', ({ allReady }) => {
 
 let hostQuestionLabel = ''
 
+// Upload générique d'une image vers /api/room-image/:code (voir server/index.js) :
+// utilisé aussi bien pour l'image cliquable du type "image" que pour
+// l'illustration optionnelle des autres types. Retourne l'URL à placer dans
+// le payload (le paramètre ?v= sert de cache-bust pour éviter qu'un navigateur
+// affiche l'image d'une question précédente sur la même URL de salle).
+const uploadRoomImage = (roomCode, base64Image) => {
+  return fetch(`/api/room-image/${encodeURIComponent(roomCode)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64Image })
+  }).then(res => {
+    if (!res.ok) throw new Error('upload failed')
+    return `/api/room-image/${encodeURIComponent(roomCode)}?v=${Date.now()}`
+  })
+}
+
 const emitQuestion = (index) => {
   const roomCode = roomInput.value.trim()
   if (!roomCode || !loadedQuiz) return
@@ -1387,18 +1408,16 @@ const emitQuestion = (index) => {
     max: q.max,
     singleAttempt: currentSingleAttempt
   }
-  // L'image ne transite plus par le socket (voir server/index.js) : on la
-  // dépose d'abord via une requête HTTP classique, puis on démarre la
-  // question avec juste son URL. Si l'upload échoue, on ne démarre pas la
-  // question plutôt que de l'afficher sans image à personne.
-  if (q.type === 'image' && q.image) {
-    fetch(`/api/room-image/${encodeURIComponent(roomCode)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: q.image })
-    }).then(res => {
-      if (!res.ok) throw new Error('upload failed')
-      payload.imageUrl = `/api/room-image/${encodeURIComponent(roomCode)}?v=${Date.now()}`
+  // L'image (cliquable pour le type "image", ou simple illustration au-dessus
+  // de la question pour les autres types) ne transite plus par le socket (voir
+  // server/index.js) : on la dépose d'abord via une requête HTTP classique,
+  // puis on démarre la question avec juste son URL. Si l'upload échoue, on ne
+  // démarre pas la question plutôt que de l'afficher sans image à personne.
+  const imageToUpload = q.type === 'image' ? q.image : q.illustration
+  if (imageToUpload) {
+    uploadRoomImage(roomCode, imageToUpload).then(url => {
+      if (q.type === 'image') payload.imageUrl = url
+      else payload.illustrationUrl = url
       socket.emit('question:show', payload)
     }).catch(() => {
       log('Échec de l\'envoi de l\'image, question non démarrée')
@@ -1548,6 +1567,17 @@ socket.on('question:show', payload => {
   if (imageArea) {
     imageArea.classList.toggle('d-none', payload.type !== 'image')
   }
+  if (illustrationImg) {
+    if (payload.illustrationUrl) {
+      illustrationImg.onerror = () => { illustrationImg.classList.add('d-none') }
+      illustrationImg.src = payload.illustrationUrl
+      illustrationImg.classList.remove('d-none')
+      applyTileReveal(illustrationImg, 0)
+    } else {
+      illustrationImg.classList.add('d-none')
+      illustrationImg.removeAttribute('src')
+    }
+  }
   answerInput.value = ''
   answerInput.disabled = false
   sendBtn.disabled = true
@@ -1597,7 +1627,7 @@ socket.on('question:show', payload => {
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
-    timerBarFill.style.width = '100%'
+    timerBarFill.style.transform = 'scaleX(1)'
   }
 
   // Déverrouillage à startTs (fin de la révélation) : tuiles/curseur/liste et
@@ -1624,7 +1654,7 @@ socket.on('question:show', payload => {
     if (now < start) {
       // Phase de révélation : la barre reste pleine, pas de décompte affiché.
       if (timerBarFill) {
-        timerBarFill.style.width = '100%'
+        timerBarFill.style.transform = 'scaleX(1)'
         timerBarFill.classList.remove('timer-urgent')
       }
       if (timerLabel) timerLabel.textContent = '···'
@@ -1634,7 +1664,7 @@ socket.on('question:show', payload => {
     const pct = (remaining / total) * 100
 
     if (timerBarFill) {
-      timerBarFill.style.width = `${pct}%`
+      timerBarFill.style.transform = `scaleX(${pct / 100})`
       if (pct <= 20) {
         timerBarFill.classList.add('timer-urgent')
       }

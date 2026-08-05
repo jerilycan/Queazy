@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;600;700;800;900&display=swap');
+/* La police est chargée via <link> dans le <head> de chaque page HTML (pas
+   @import ici) : un @import en tête de CSS bloque le rendu le temps d'un
+   aller-retour réseau supplémentaire avant même que le reste de cette feuille
+   ne s'applique. Un <link rel="stylesheet"> se télécharge en parallèle. */
 
 :root {
   color-scheme: dark;
@@ -80,7 +83,10 @@ body {
     radial-gradient(circle at 50% 90%, rgba(123,47,247,0.24) 0%, transparent 50%),
     linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
   background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
-  background-attachment: fixed;
+  /* Pas de background-attachment: fixed : sur mobile (surtout iOS Safari),
+     un fond fixe combiné à une animation de background-position force des
+     repaints synchrones coûteux. Aucune différence visible ici (les pages
+     ne défilent quasiment jamais) mais nettement moins cher à faire tourner. */
   animation: bg-drift 26s ease-in-out infinite alternate;
   color: var(--color-text);
   font-family: 'Nunito', system-ui, -apple-system, sans-serif;
@@ -599,7 +605,12 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   width: 100%;
   background: linear-gradient(90deg, var(--color-cyan), var(--color-accent));
   border-radius: 0 12px 12px 0;
-  transition: width 0.1s linear, background-color 0.3s ease;
+  /* scaleX plutôt que width : la barre se met à jour 10x/seconde pendant
+     toute la durée de chaque question, sur tous les écrans connectés — animer
+     width force un recalcul de layout + repaint à chaque tick, alors que
+     transform ne coûte qu'une recomposition (accéléré GPU). */
+  transform-origin: left;
+  transition: transform 0.1s linear, background-color 0.3s ease;
   box-shadow: 0 0 15px rgba(var(--color-cyan-rgb), 0.5);
 }
 
@@ -931,6 +942,49 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   padding: 40px 16px;
   color: var(--color-text-muted, #888);
   font-weight: 600;
+}
+
+/* Illustration optionnelle (tous les types sauf "image") : juste une image
+   au-dessus de la question, pas cliquable, contrairement à .image-wrap. */
+.illustration-preview-wrap {
+  position: relative;
+  max-width: 360px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  line-height: 0;
+}
+.illustration-preview-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.illustration-remove-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.55);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.illustration-remove-btn:hover { background: rgba(0,0,0,0.75); }
+
+.illustration-img {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  width: auto;
+  margin: 0 auto var(--space-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Badge de confirmation après l'envoi d'une réponse */

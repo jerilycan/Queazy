@@ -158,6 +158,16 @@ const imageEditGrid = document.getElementById('imageEditGrid')
 const IMAGE_GRID_COLS = 10
 const IMAGE_GRID_ROWS = 6
 
+// Illustration optionnelle (tous les types SAUF "image", qui a déjà sa propre
+// image cliquable ci-dessus) : simple photo affichée au-dessus de la question,
+// stockée dans un champ distinct (q.illustration) pour ne jamais se marcher
+// dessus avec q.image.
+const illustrationSection = document.getElementById('illustrationSection')
+const illustrationUploadInput = document.getElementById('illustrationUpload')
+const illustrationPreviewWrap = document.getElementById('illustrationPreviewWrap')
+const illustrationPreviewImg = document.getElementById('illustrationPreviewImg')
+const removeIllustrationBtn = document.getElementById('removeIllustrationBtn')
+
 const bindGradStepper = (input, minusBtn, plusBtn, onCommit) => {
   const commit = (val) => { input.value = val; onCommit(Number(val) || 0) }
   minusBtn.onclick = () => commit((Number(input.value) || 0) - 1)
@@ -187,6 +197,7 @@ const applyReadOnly = () => {
     titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
     qGradMin, qGradMax, qGradTarget, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
+    illustrationUploadInput, removeIllustrationBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
     document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus')
@@ -361,9 +372,45 @@ const populateImageFields = (q) => {
 // vérifie le type réel, on plafonne la taille brute, puis on redimensionne
 // et recompresse systématiquement via un canvas. Ça évite à la fois les
 // fichiers énormes/mal formés et les lignes de quiz qui gonflent en base.
+// Partagé entre l'image cliquable du type "image" et l'illustration
+// optionnelle des autres types (même pipeline, juste stocké différemment).
 const IMAGE_MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10 Mo, avant compression
 const IMAGE_MAX_DIMENSION = 1280
 const IMAGE_JPEG_QUALITY = 0.8
+
+const compressImageFile = (file, onSuccess) => {
+  if (!file) return
+  if (!file.type || !file.type.startsWith('image/')) {
+    showToast('Ce fichier n\'est pas une image', 'error')
+    return
+  }
+  if (file.size > IMAGE_MAX_UPLOAD_BYTES) {
+    showToast('Image trop lourde (10 Mo max)', 'error')
+    return
+  }
+  const img = new Image()
+  const objectUrl = URL.createObjectURL(file)
+  img.onload = () => {
+    URL.revokeObjectURL(objectUrl)
+    const scale = Math.min(1, IMAGE_MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    // Recompressée en JPEG : plus léger que le PNG d'origine pour une
+    // photo, et taille finale plafonnée quelle que soit l'image importée.
+    onSuccess(canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY))
+  }
+  img.onerror = () => {
+    // Le type MIME annonçait une image mais le navigateur n'a pas pu la
+    // décoder : fichier corrompu ou pas réellement une image malgré
+    // l'extension/le type déclaré.
+    URL.revokeObjectURL(objectUrl)
+    showToast('Impossible de lire cette image', 'error')
+  }
+  img.src = objectUrl
+}
 
 if (imageUploadInput) {
   imageUploadInput.onchange = () => {
@@ -372,39 +419,40 @@ if (imageUploadInput) {
     // navigateur ne redéclenche pas onchange si on reprend le même fichier).
     imageUploadInput.value = ''
     if (!file || !questions[activeIndex]) return
-
-    if (!file.type || !file.type.startsWith('image/')) {
-      showToast('Ce fichier n\'est pas une image', 'error')
-      return
-    }
-    if (file.size > IMAGE_MAX_UPLOAD_BYTES) {
-      showToast('Image trop lourde (10 Mo max)', 'error')
-      return
-    }
-
-    const img = new Image()
-    const objectUrl = URL.createObjectURL(file)
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl)
-      const scale = Math.min(1, IMAGE_MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight))
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      // Recompressée en JPEG : plus léger que le PNG d'origine pour une
-      // photo, et taille finale plafonnée quelle que soit l'image importée.
-      questions[activeIndex].image = canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY)
+    compressImageFile(file, (dataUrl) => {
+      questions[activeIndex].image = dataUrl
       populateImageFields(questions[activeIndex])
-    }
-    img.onerror = () => {
-      // Le type MIME annonçait une image mais le navigateur n'a pas pu la
-      // décoder : fichier corrompu ou pas réellement une image malgré
-      // l'extension/le type déclaré.
-      URL.revokeObjectURL(objectUrl)
-      showToast('Impossible de lire cette image', 'error')
-    }
-    img.src = objectUrl
+    })
+  }
+}
+
+const populateIllustrationFields = (q) => {
+  if (!illustrationPreviewWrap) return
+  if (q.illustration) {
+    illustrationPreviewImg.src = q.illustration
+    illustrationPreviewWrap.classList.remove('d-none')
+  } else {
+    illustrationPreviewWrap.classList.add('d-none')
+  }
+}
+
+if (illustrationUploadInput) {
+  illustrationUploadInput.onchange = () => {
+    const file = illustrationUploadInput.files && illustrationUploadInput.files[0]
+    illustrationUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    compressImageFile(file, (dataUrl) => {
+      questions[activeIndex].illustration = dataUrl
+      populateIllustrationFields(questions[activeIndex])
+    })
+  }
+}
+
+if (removeIllustrationBtn) {
+  removeIllustrationBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    questions[activeIndex].illustration = null
+    populateIllustrationFields(questions[activeIndex])
   }
 }
 
@@ -421,6 +469,7 @@ const selectQuestion = (index) => {
   populateGradFields(q)
   populateTrueFalseFields(q)
   populateImageFields(q)
+  populateIllustrationFields(q)
 
   renderOptions()
   renderCorrects()
@@ -460,6 +509,10 @@ const toggleTypeSections = () => {
   if (trueFalseSection) trueFalseSection.classList.toggle('d-none', qType.value !== 'truefalse')
   if (orderSection) orderSection.classList.toggle('d-none', qType.value !== 'order')
   if (imageSection) imageSection.classList.toggle('d-none', qType.value !== 'image')
+  // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
+  // déjà leur propre image (le type "image" utilise la sienne comme cible
+  // cliquable, pas comme simple décoration).
+  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image')
   if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse' || qType.value === 'order' || qType.value === 'image')
   if (qType.value === 'mcq') {
     correctLabel.textContent = 'Réponses correctes'
@@ -715,6 +768,7 @@ deleteQuestionBtn.onclick = () => {
   populateGradFields(q)
   populateTrueFalseFields(q)
   populateImageFields(q)
+  populateIllustrationFields(q)
 
   renderOptions()
   renderCorrects()

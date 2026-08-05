@@ -4,13 +4,29 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>QuEazy</title>
+    <!-- Préconnexions aux origines externes : la poignée de main (DNS/TLS) se
+         fait pendant que le reste de la page se charge, au lieu d'attendre le
+         premier script/police qui en a besoin. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://cdn.socket.io" crossorigin />
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <!-- <link> plutôt que @import dans le CSS : se télécharge en parallèle du
+         reste, au lieu de bloquer le rendu le temps d'un aller-retour de plus. -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;600;700;800;900&display=swap" />
     <link rel="stylesheet" href="/css/style.css" />
+    <!-- theme.js reste bloquant et en premier : il fixe data-theme sur <html>
+         avant le premier rendu pour éviter un flash du mauvais thème. Tous les
+         autres scripts sont en "defer" : ils se téléchargent en parallèle sans
+         bloquer l'affichage de la page, et s'exécutent dans l'ordre du document
+         juste avant DOMContentLoaded — donc toujours après supabase-js/socket.io. -->
     <script src="/js/theme.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    <script src="/js/supabase-config.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js" defer></script>
+    <script src="/js/supabase-config.js" defer></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
   </head>
   <body>
     <div class="navbar">
@@ -148,6 +164,7 @@
 
       <!-- Zone de jeu -->
       <div id="main" class="mt-40">
+        <img id="illustrationImg" class="illustration-img d-none" alt="" />
         <div id="question" class="question-text"></div>
         
         <div class="timer-container d-none" id="timerContainer">
@@ -237,6 +254,6 @@
       </div>
     </div>
 
-    <script src="/js/index.js"></script>
+    <script src="/js/index.js" defer></script>
   </body>
 </html>

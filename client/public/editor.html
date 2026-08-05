@@ -4,10 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>QuEazy – Éditeur de Quizz</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;600;700;800;900&display=swap" />
     <link rel="stylesheet" href="/css/style.css" />
     <script src="/js/theme.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/js/supabase-config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="/js/supabase-config.js" defer></script>
   </head>
   <body>
     <div class="navbar">
@@ -93,6 +97,16 @@
                 <button id="timerPlus" class="btn-timer">+</button>
               </div>
             </div>
+          </div>
+
+          <div id="illustrationSection" class="detail-section">
+            <label>Image d'illustration (optionnelle)</label>
+            <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
+            <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
+              <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
+              <button type="button" id="removeIllustrationBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+            </div>
+            <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
           </div>
 
           <div id="mcqSection" class="detail-section d-none">
@@ -187,6 +201,6 @@
       </div>
     </div>
 
-    <script src="/js/editor.js"></script>
+    <script src="/js/editor.js" defer></script>
   </body>
 </html>
