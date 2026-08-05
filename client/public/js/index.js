@@ -250,6 +250,15 @@ const applyTileReveal = (el, index) => {
   el.style.animation = 'none'
   void el.offsetWidth
   el.style.animation = `tileRevealIn 0.5s cubic-bezier(.34,1.56,.64,1) ${REVEAL_QUESTION_BEAT_MS + index * REVEAL_STAGGER_MS}ms both`
+  // Le "both" maintient l'état final (transform: translateY(0) scale(1)) une
+  // fois l'animation terminée — ce qui, tant que l'animation reste attachée à
+  // l'élément, continue de l'emporter sur tout style "transform" posé
+  // ensuite en JS (ex. le glisser de la question "ordre"), même bien après
+  // la fin visuelle de l'entrée. On la détache donc une fois jouée.
+  el.addEventListener('animationend', function onEnd () {
+    el.removeEventListener('animationend', onEnd)
+    el.style.animation = ''
+  }, { once: true })
 }
 
 // --- Curseur classique sur piste : les bornes min/max sont les deux bouts
@@ -320,23 +329,107 @@ if (gradSlider) {
 }
 
 // --- Liste réordonnable (question "order") ---
-// SortableJS (chargé en CDN, voir index.html) plutôt qu'une implémentation
-// maison au pointeur : animation fluide/organique "gratuite" (chaque tuile
-// suit le doigt/la souris en continu, les autres glissent pour faire de la
-// place), avec un vrai support tactile éprouvé. dataIdAttr utilise le texte
-// de chaque tuile comme identifiant stable (déjà supposé unique ailleurs
-// dans ce fichier) — sert à demander un tri animé vers l'ordre correct au
-// reveal via sortable.sort(...).
+// Glisser au pointeur fait maison (remplace SortableJS, testé sur prototype
+// et validé) : pendant le geste, SEULE la tuile saisie bouge réellement
+// (transform, pilotée par le pointeur) ; les autres se poussent en pur
+// visuel à partir de positions figées au tout début du geste, jamais
+// recalculées en cours de route. Le DOM lui-même n'est réordonné qu'UNE
+// SEULE FOIS, au relâchement — une première version qui retouchait le DOM à
+// chaque frame provoquait des échanges en cascade sur des positions déjà
+// périmées (tuiles qui "bougeaient" avec leur voisine, plantages).
 let orderDisabled = false
-const orderState = { itemEls: [], sortable: null }
-// Garde orderState.sortable.option('disabled', ...) synchronisé avec le
-// simple booléen orderDisabled utilisé partout ailleurs dans ce fichier.
-const setOrderDisabled = (v) => {
-  orderDisabled = v
-  if (orderState.sortable) orderState.sortable.option('disabled', v)
-}
+const orderState = { itemEls: [] }
+const setOrderDisabled = (v) => { orderDisabled = v }
 
 const getCurrentOrderTexts = () => Array.from(orderList.children).map(el => el.dataset.text)
+
+// Écart réel entre deux tuiles à l'écran = leur hauteur + le gap CSS de
+// .order-list (10px) — sert à calculer de combien pousser les tuiles
+// traversées pendant le glisser.
+const ORDER_LIST_GAP = 10
+
+const wireOrderDrag = (el) => {
+  const handle = el.querySelector('.order-item-handle')
+  if (!handle) return
+  let dragActive = false // évite qu'un pointerdown ne démarre un 2e glisser
+  // par-dessus un premier dont le pointerup/pointercancel n'aurait pas été
+  // reçu (perte du geste par le navigateur) — sans ça, les écouteurs
+  // pointermove/pointerup s'empilent indéfiniment sur la même poignée et
+  // finissent par se marcher dessus.
+  handle.addEventListener('pointerdown', (e) => {
+    if (orderDisabled || dragActive) return
+    if (currentSingleAttempt && sendBtn.disabled) return
+    e.preventDefault()
+    dragActive = true
+    const startY = e.clientY
+    el.classList.add('dragging')
+    el.style.zIndex = '10'
+    try { handle.setPointerCapture(e.pointerId) } catch {}
+
+    // Positions des AUTRES tuiles figées ici, une fois pour toutes : jamais
+    // recalculées pendant le glisser (voir le commentaire plus haut).
+    const others = Array.from(orderList.children).filter(c => c !== el)
+    const baseRects = others.map(c => c.getBoundingClientRect())
+    const startSlot = Array.from(orderList.children).indexOf(el)
+    const itemHeight = el.getBoundingClientRect().height + ORDER_LIST_GAP
+    let currentSlot = startSlot
+
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY
+      el.style.transform = `translateY(${dy}px) scale(1.03)`
+
+      const rect = el.getBoundingClientRect()
+      const center = rect.top + rect.height / 2
+      let newSlot = 0
+      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      if (newSlot === currentSlot) return
+      currentSlot = newSlot
+
+      // Pousse (en pur visuel) chaque tuile comprise entre son ancienne
+      // place et la nouvelle place de la tuile saisie — recalculé à neuf à
+      // partir de baseRects à chaque fois, jamais en cumulant les déplacements
+      // précédents (ce qui évite toute dérive/cascade).
+      others.forEach((c, i) => {
+        let shift = 0
+        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
+        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
+        c.style.transition = 'transform 0.18s ease'
+        c.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+
+    const cleanup = (applyReorder) => {
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onCancel)
+      if (applyReorder && currentSlot !== startSlot) {
+        orderList.insertBefore(el, others[currentSlot] || null)
+      }
+      others.forEach(c => { c.style.transition = ''; c.style.transform = '' })
+      el.classList.remove('dragging')
+      el.style.zIndex = ''
+      el.style.transition = 'transform 0.2s ease'
+      el.style.transform = ''
+      setTimeout(() => { el.style.transition = '' }, 200)
+      dragActive = false
+    }
+
+    const onUp = (ev) => {
+      try { handle.releasePointerCapture(ev.pointerId) } catch {}
+      // Ordre final appliqué UNE SEULE FOIS ici, puis tous les transforms
+      // manuels sont effacés.
+      cleanup(true)
+    }
+    // Le navigateur peut annuler le geste (perte du pointeur, geste système
+    // qui prend le dessus...) sans jamais envoyer pointerup — sans ce
+    // nettoyage, les écouteurs restent accrochés indéfiniment sur la poignée.
+    const onCancel = () => cleanup(false)
+
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onCancel)
+  })
+}
 
 const buildOrderList = (items) => {
   if (!orderList) return
@@ -352,28 +445,34 @@ const buildOrderList = (items) => {
     el.querySelector('.order-item-text').textContent = text
     orderList.appendChild(el)
     orderState.itemEls.push(el)
+    wireOrderDrag(el)
     applyTileReveal(el, uid)
   })
+}
 
-  if (orderState.sortable) { orderState.sortable.destroy(); orderState.sortable = null }
-  if (window.Sortable) {
-    orderState.sortable = window.Sortable.create(orderList, {
-      animation: 250,
-      easing: 'cubic-bezier(.22,1,.36,1)',
-      disabled: true, // se débloque à startTs, comme avant (voir question:show)
-      dataIdAttr: 'data-text',
-      ghostClass: 'order-item-ghost',
-      chosenClass: 'order-item-chosen',
-      dragClass: 'order-item-drag',
-      // Sans ça, SortableJS utilise le drag natif HTML5 : au relâchement, le
-      // navigateur joue sa propre animation de "retour" de l'élément fantôme
-      // avant que Sortable ne la remplace par la sienne — d'où le délai/à-coup
-      // ressenti. En forçant l'émulation souris/tactile maison de Sortable,
-      // le dépôt est immédiat.
-      forceFallback: true,
-      fallbackClass: 'order-item-drag'
+// Réarrange visuellement la liste vers l'ordre correct avec une transition
+// FLIP (même principe que le classement), au lieu du sortable.sort() d'avant.
+const animateOrderTo = (correctOrder) => {
+  const els = orderState.itemEls
+  const first = new Map()
+  els.forEach(el => first.set(el, el.getBoundingClientRect()))
+  correctOrder.forEach(text => {
+    const el = els.find(e => e.dataset.text === text)
+    if (el) orderList.appendChild(el)
+  })
+  els.forEach(el => {
+    const before = first.get(el)
+    const after = el.getBoundingClientRect()
+    const dy = before.top - after.top
+    if (!dy) return
+    el.style.transition = 'none'
+    el.style.transform = `translateY(${dy}px)`
+    void el.offsetHeight
+    requestAnimationFrame(() => {
+      el.style.transition = 'transform 0.5s cubic-bezier(.22,1,.36,1)'
+      el.style.transform = ''
     })
-  }
+  })
 }
 
 // Révélation : la liste se réarrange dans l'ordre correct (le score déjà
@@ -384,10 +483,8 @@ const buildOrderList = (items) => {
 const revealOrderList = (correctOrder) => {
   if (!orderState.itemEls.length) return
   setOrderDisabled(true)
-  // sort(ids, useAnimation) : SortableJS anime lui-même le réarrangement vers
-  // l'ordre correct (même mécanisme FLIP que le glisser, "gratuit").
-  if (orderState.sortable && Array.isArray(correctOrder) && correctOrder.length === orderState.itemEls.length) {
-    orderState.sortable.sort(correctOrder, true)
+  if (Array.isArray(correctOrder) && correctOrder.length === orderState.itemEls.length) {
+    animateOrderTo(correctOrder)
   }
   orderState.itemEls.forEach(el => {
     el.classList.add('correct-reveal')
@@ -2034,6 +2131,13 @@ socket.on('question:show', payload => {
       sendBtn.disabled = false
       gradState.disabled = false
       setOrderDisabled(false)
+      // Garde-fou en plus du nettoyage normal dans applyTileReveal
+      // (animationend) : au cas où cet évènement ne se déclencherait pas
+      // (onglet mis en arrière-plan pendant l'entrée, navigateur capricieux...),
+      // on force le détachement de l'animation d'entrée ici — sans ça, elle
+      // continue de bloquer tout style "transform" posé ensuite par le
+      // glisser, même largement après la fin visuelle de l'entrée.
+      orderState.itemEls.forEach(el => { el.style.animation = '' })
       imageDisabled = false
       freeTextEl.classList.remove('d-none')
       applyTileReveal(freeTextEl, 0)

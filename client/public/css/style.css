@@ -899,19 +899,13 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   cursor: grab;
   user-select: none;
 }
-/* Classes injectées par SortableJS (voir index.js buildOrderList) — pas de
-   transition CSS maison ici, SortableJS gère lui-même l'animation du
-   réarrangement (options animation/easing passées à Sortable.create). */
-.order-item-chosen {
+/* Tuile activement saisie (voir index.js wireOrderDrag) — la transform
+   scale/translate elle-même est pilotée en JS (suit le pointeur), cette
+   classe ne porte que l'habillage visuel pendant le geste. */
+.order-item.dragging {
   cursor: grabbing;
   z-index: 10;
   box-shadow: var(--shadow-lg);
-  transform: scale(1.03);
-}
-.order-item-ghost {
-  opacity: 0.4;
-  background: var(--color-surface);
-  box-shadow: none;
 }
 .order-item-handle { opacity: 0.35; font-size: 18px; cursor: grab; }
 .order-item-text { flex: 1; }
