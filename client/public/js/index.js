@@ -1110,7 +1110,12 @@ socket.on('room:created', ({ roomCode, serverUrl, hostToken }) => {
   // Use hostToken if provided to ensure match
   const token = hostToken || getToken()
   if (hostToken) localStorage.setItem('queazy_token', hostToken)
-    
+
+  // Même mécanisme de reconnexion que les joueurs (voir rememberJoin) : le
+  // serveur sait déjà réassocier room.hostId au nouveau socket.id via ce
+  // même token (voir room:join côté serveur), il ne manquait que ce réflexe
+  // client pour que l'hôte redevienne opérationnel après un accroc réseau.
+  rememberJoin(roomCode, hName, hAv, token)
   socket.emit('room:join', { roomCode, playerName: hName, token: token, avatar: hAv })
   socket.emit('player:ready', { roomCode, ready: true })
 })
@@ -1286,6 +1291,26 @@ socket.on('player:token', ({ token }) => {
   }
 })
 
+// Nécessaire pour se "rattacher" automatiquement à la même place après une
+// reconnexion socket.io (perte de réseau, mise en veille de l'onglet sur
+// mobile, tab backgrounded pendant un appui long...) : un socket.id change à
+// chaque reconnexion, et sans réémettre room:join avec le MÊME token, on ne
+// revient jamais dans la room socket.io -> plus aucune mise à jour reçue
+// (classement figé/désynchronisé, ligne qui semble "disparaître" au prochain
+// rendu). Le serveur, lui, sait déjà très bien réassocier un token à un
+// nouveau socket.id (voir room:join côté serveur) — il ne manquait que ce
+// réflexe côté client.
+let myJoinedRoomCode = null
+let myJoinedName = null
+let myJoinedAvatar = null
+let myJoinedToken = null
+const rememberJoin = (roomCode, playerName, avatar, token) => {
+  myJoinedRoomCode = roomCode
+  myJoinedName = playerName
+  myJoinedAvatar = avatar
+  myJoinedToken = token
+}
+
 joinBtn.onclick = () => {
   const roomCode = roomInput.value.trim()
   const playerName = nameInput.value.trim()
@@ -1308,7 +1333,9 @@ joinBtn.onclick = () => {
   }
 
   const avatar = selectedIcon || localStorage.getItem('queazy_profile_avatar') || '🙂'
-  socket.emit('room:join', { roomCode, playerName, token: getToken(), avatar })
+  const token = getToken()
+  rememberJoin(roomCode, playerName, avatar, token)
+  socket.emit('room:join', { roomCode, playerName, token, avatar })
 }
 
 confirmGuestJoin.onclick = () => {
@@ -1318,7 +1345,13 @@ confirmGuestJoin.onclick = () => {
   if (!guestName) { log('Veuillez entrer un pseudo invité'); return }
 
   const guestAvatar = '🙂' // Default guest avatar
-  socket.emit('room:join', { roomCode, playerName: guestName, token: genToken(), avatar: guestAvatar })
+  // genToken() (pas getToken()) : un invité n'a pas de compte, son jeton
+  // n'est PAS persisté dans localStorage — mais il doit rester identique le
+  // temps de cette session d'onglet pour que la reconnexion fonctionne (voir
+  // rememberJoin ci-dessus), d'où la variable plutôt qu'un nouvel appel.
+  const guestToken = genToken()
+  rememberJoin(roomCode, guestName, guestAvatar, guestToken)
+  socket.emit('room:join', { roomCode, playerName: guestName, token: guestToken, avatar: guestAvatar })
 }
 
 cancelGuestJoin.onclick = () => {
@@ -1335,9 +1368,19 @@ cancelGuestJoin.onclick = () => {
 
 socket.on('connect', () => {
   window.myId = socket.id
-  if (preRoom) {
+  if (myJoinedRoomCode) {
+    // Reconnexion (pas la toute première connexion de l'onglet) : on était
+    // déjà dans une room avant que ce socket ne change d'id (coupure réseau,
+    // onglet mis en veille...) — on se réémet en room:join avec le MÊME
+    // token pour se faire rattacher à notre entrée existante (score compris)
+    // sous ce nouveau socket.id, et revenir dans la room socket.io (sinon
+    // plus aucune mise à jour n'arrive : classement figé, ligne qui semble
+    // "disparaître" au prochain rendu).
+    socket.emit('room:join', { roomCode: myJoinedRoomCode, playerName: myJoinedName, token: myJoinedToken, avatar: myJoinedAvatar })
+  } else if (preRoom) {
     const nm = nameInput.value.trim() || localStorage.getItem('queazy_profile_name') || 'Joueur'
     const av = selectedIcon || localStorage.getItem('queazy_profile_avatar') || '🙂'
+    rememberJoin(preRoom.toUpperCase(), nm, av, getToken())
     socket.emit('room:join', { roomCode: preRoom.toUpperCase(), playerName: nm, token: getToken(), avatar: av })
   }
 })

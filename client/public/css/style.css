@@ -1977,6 +1977,14 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   background: var(--gradient-card);
   border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 12px 18px;
   transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Sans ça, un appui long sur mobile lance la sélection de texte native du
+     navigateur sur ces lignes (jamais censées être sélectionnables/déplacées
+     à la main) — combiné au réarrangement FLIP qui déplace le nœud DOM sous
+     le doigt, ça pouvait donner l'impression que la ligne "disparaît"/se
+     comporte n'importe comment pendant l'appui. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 .leader-row.is-me { border: 2px solid var(--color-accent); box-shadow: 0 0 0 4px var(--color-accent-soft); }
 .leader-row.row-enter { opacity: 0; transform: translateY(16px) scale(0.96); }

@@ -328,15 +328,6 @@ const start = async () => {
       if (token === room.hostToken) {
         room.hostId = socket.id
       }
-      
-      console.log('DEBUG room:join', { 
-        socketId: socket.id, 
-        roomHostId: room.hostId, 
-        token, 
-        roomHostToken: room.hostToken,
-        matchId: socket.id === room.hostId,
-        matchToken: token === room.hostToken
-      })
 
       const existing = room.tokens.get(token)
       if (existing) {
