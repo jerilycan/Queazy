@@ -165,6 +165,25 @@ const illustrationPreviewWrap = document.getElementById('illustrationPreviewWrap
 const illustrationPreviewImg = document.getElementById('illustrationPreviewImg')
 const removeIllustrationBtn = document.getElementById('removeIllustrationBtn')
 
+// Question "blind test" : upload du morceau + recadrage (début/durée) en un
+// extrait court, encodé en WAV mono côté client (voir plus bas) — q.audio
+// stocke directement l'extrait déjà coupé, jamais le fichier complet importé.
+const blindtestSection = document.getElementById('blindtestSection')
+const audioUploadInput = document.getElementById('audioUpload')
+const audioTrimWrap = document.getElementById('audioTrimWrap')
+const audioTrimPlayer = document.getElementById('audioTrimPlayer')
+const audioStartInput = document.getElementById('audioStartInput')
+const audioDurationInput = document.getElementById('audioDurationInput')
+const audioPreviewBtn = document.getElementById('audioPreviewBtn')
+const audioExtractBtn = document.getElementById('audioExtractBtn')
+const audioClipWrap = document.getElementById('audioClipWrap')
+const audioClipPlayer = document.getElementById('audioClipPlayer')
+const removeAudioClipBtn = document.getElementById('removeAudioClipBtn')
+const correctTitleList = document.getElementById('correctTitleList')
+const correctArtistList = document.getElementById('correctArtistList')
+const addCorrectTitleBtn = document.getElementById('addCorrectTitle')
+const addCorrectArtistBtn = document.getElementById('addCorrectArtist')
+
 const bindGradStepper = (input, minusBtn, plusBtn, onCommit) => {
   const commit = (val) => { input.value = val; onCommit(Number(val) || 0) }
   minusBtn.onclick = () => commit((Number(input.value) || 0) - 1)
@@ -195,6 +214,8 @@ const applyReadOnly = () => {
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
     qGradMin, qGradMax, qGradTarget, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
+    audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
+    removeAudioClipBtn, addCorrectTitleBtn, addCorrectArtistBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
     document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus')
@@ -536,6 +557,201 @@ if (removeIllustrationBtn) {
   }
 }
 
+// --- Question "blind test" : upload + recadrage audio ---
+// q.audio stocke directement l'extrait déjà coupé (jamais le fichier
+// complet importé) : on décode le fichier importé en mémoire (Web Audio
+// API), l'utilisateur choisit un début/une durée en le prévisualisant via
+// un <audio> classique, puis on découpe le buffer décodé et on le
+// réencode nous-mêmes en WAV mono (pas de librairie : juste écrire
+// l'en-tête WAV + les échantillons PCM 16 bits à la main). Mono plutôt que
+// stéréo : divise le poids par 2, largement suffisant pour reconnaître un
+// morceau dans un quiz.
+const AUDIO_MAX_UPLOAD_BYTES = 25 * 1024 * 1024 // 25 Mo — le fichier importé (piste complète ou déjà coupée), jamais stocké tel quel
+const AUDIO_CLIP_MAX_DURATION = 30 // secondes — plafond de l'extrait réellement conservé, pour garder un poids raisonnable
+let pendingAudioBuffer = null // AudioBuffer décodé du fichier en cours d'import, tant que l'extrait n'a pas été validé
+let pendingAudioObjectUrl = null
+let audioPreviewTimeout = null
+
+const clampAudioTrimInputs = () => {
+  if (!pendingAudioBuffer) return
+  const maxDuration = Math.min(AUDIO_CLIP_MAX_DURATION, pendingAudioBuffer.duration)
+  let duration = Math.min(maxDuration, Math.max(1, Number(audioDurationInput.value) || 1))
+  let start = Math.max(0, Math.min(Number(audioStartInput.value) || 0, pendingAudioBuffer.duration - duration))
+  audioDurationInput.value = Math.round(duration)
+  audioStartInput.value = Math.round(start)
+}
+
+const encodeWavMono = (audioBuffer, startSec, durationSec) => {
+  const sampleRate = audioBuffer.sampleRate
+  const startSample = Math.max(0, Math.floor(startSec * sampleRate))
+  const numSamples = Math.max(0, Math.min(Math.floor(durationSec * sampleRate), audioBuffer.length - startSample))
+  const channels = audioBuffer.numberOfChannels
+  const mono = new Float32Array(numSamples)
+  for (let c = 0; c < channels; c++) {
+    const data = audioBuffer.getChannelData(c)
+    for (let i = 0; i < numSamples; i++) mono[i] += data[startSample + i] / channels
+  }
+  const bytesPerSample = 2
+  const byteRate = sampleRate * bytesPerSample
+  const dataSize = numSamples * bytesPerSample
+  const buffer = new ArrayBuffer(44 + dataSize)
+  const view = new DataView(buffer)
+  const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)) }
+  writeStr(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); writeStr(8, 'WAVE')
+  writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true) // PCM
+  view.setUint16(22, 1, true) // mono
+  view.setUint32(24, sampleRate, true); view.setUint32(28, byteRate, true)
+  view.setUint16(32, bytesPerSample, true); view.setUint16(34, 16, true)
+  writeStr(36, 'data'); view.setUint32(40, dataSize, true)
+  let offset = 44
+  for (let i = 0; i < numSamples; i++) {
+    const s = Math.max(-1, Math.min(1, mono[i]))
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+    offset += 2
+  }
+  return new Blob([buffer], { type: 'audio/wav' })
+}
+
+const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result)
+  reader.onerror = reject
+  reader.readAsDataURL(blob)
+})
+
+const populateAudioFields = (q) => {
+  if (!audioClipWrap) return
+  if (q.audio) {
+    audioClipPlayer.src = q.audio
+    audioClipWrap.classList.remove('d-none')
+  } else {
+    audioClipPlayer.removeAttribute('src')
+    audioClipWrap.classList.add('d-none')
+  }
+}
+
+if (audioUploadInput) {
+  audioUploadInput.onchange = () => {
+    const file = audioUploadInput.files && audioUploadInput.files[0]
+    audioUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    if (!file.type || !file.type.startsWith('audio/')) {
+      showToast('Ce fichier n\'est pas un audio', 'error')
+      return
+    }
+    if (file.size > AUDIO_MAX_UPLOAD_BYTES) {
+      showToast('Fichier audio trop lourd (25 Mo max)', 'error')
+      return
+    }
+    if (pendingAudioObjectUrl) URL.revokeObjectURL(pendingAudioObjectUrl)
+    pendingAudioObjectUrl = URL.createObjectURL(file)
+    audioTrimPlayer.src = pendingAudioObjectUrl
+    file.arrayBuffer().then(buf => {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      const ctx = new AudioCtx()
+      return ctx.decodeAudioData(buf).finally(() => ctx.close())
+    }).then(audioBuffer => {
+      pendingAudioBuffer = audioBuffer
+      audioStartInput.value = 0
+      audioDurationInput.value = Math.min(15, Math.floor(audioBuffer.duration))
+      clampAudioTrimInputs()
+      audioTrimWrap.classList.remove('d-none')
+    }).catch(() => {
+      showToast('Impossible de lire ce fichier audio', 'error')
+    })
+  }
+}
+
+if (audioStartInput) audioStartInput.oninput = clampAudioTrimInputs
+if (audioDurationInput) audioDurationInput.oninput = clampAudioTrimInputs
+
+if (audioPreviewBtn) {
+  audioPreviewBtn.onclick = () => {
+    if (!pendingAudioBuffer) return
+    clampAudioTrimInputs()
+    const start = Number(audioStartInput.value) || 0
+    const duration = Number(audioDurationInput.value) || 1
+    if (audioPreviewTimeout) clearTimeout(audioPreviewTimeout)
+    audioTrimPlayer.currentTime = start
+    audioTrimPlayer.play().catch(() => {})
+    audioPreviewTimeout = setTimeout(() => audioTrimPlayer.pause(), duration * 1000)
+  }
+}
+
+if (audioExtractBtn) {
+  audioExtractBtn.onclick = async () => {
+    if (!pendingAudioBuffer || !questions[activeIndex]) {
+      showToast('Importe d\'abord un fichier audio', 'error')
+      return
+    }
+    clampAudioTrimInputs()
+    const start = Number(audioStartInput.value) || 0
+    const duration = Number(audioDurationInput.value) || 1
+    const blob = encodeWavMono(pendingAudioBuffer, start, duration)
+    const dataUrl = await blobToDataUrl(blob)
+    questions[activeIndex].audio = dataUrl
+    populateAudioFields(questions[activeIndex])
+    showToast('Extrait audio prêt !')
+  }
+}
+
+if (removeAudioClipBtn) {
+  removeAudioClipBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    questions[activeIndex].audio = null
+    populateAudioFields(questions[activeIndex])
+  }
+}
+
+// Deux listes indépendantes de réponses acceptées (titre / artiste), sur le
+// même composant createInputRow que les autres types — juste dupliqué une
+// fois par champ. q.correct = { title: [...], artist: [...] } pour ce type
+// (au lieu d'un simple tableau comme les autres types).
+const renderCorrectFieldList = (field, listEl) => {
+  if (!listEl) return
+  listEl.innerHTML = ''
+  const q = questions[activeIndex]
+  // Appelée sans condition à chaque sélection de question (voir selectQuestion
+  // ci-dessous), comme les autres render*() : sans ce garde-fou par type, elle
+  // écraserait le q.correct (tableau) d'un AUTRE type par l'objet {title,artist}.
+  if (!q || q.type !== 'blindtest') return
+  if (!q.correct || Array.isArray(q.correct)) q.correct = { title: [''], artist: [''] }
+  if (!Array.isArray(q.correct[field]) || q.correct[field].length === 0) q.correct[field] = ['']
+
+  q.correct[field].forEach((val, idx) => {
+    const row = createInputRow(val, (v) => {
+      q.correct[field][idx] = v
+    }, () => {
+      if (q.correct[field].length > 1) {
+        q.correct[field].splice(idx, 1)
+        renderCorrectFieldList(field, listEl)
+      } else {
+        showToast('Il faut au moins une réponse acceptée', 'error')
+      }
+    }, false)
+    listEl.appendChild(row)
+  })
+}
+const renderCorrectTitleList = () => renderCorrectFieldList('title', correctTitleList)
+const renderCorrectArtistList = () => renderCorrectFieldList('artist', correctArtistList)
+
+if (addCorrectTitleBtn) {
+  addCorrectTitleBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    if (!questions[activeIndex].correct || Array.isArray(questions[activeIndex].correct)) questions[activeIndex].correct = { title: [''], artist: [''] }
+    questions[activeIndex].correct.title.push('')
+    renderCorrectTitleList()
+  }
+}
+if (addCorrectArtistBtn) {
+  addCorrectArtistBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    if (!questions[activeIndex].correct || Array.isArray(questions[activeIndex].correct)) questions[activeIndex].correct = { title: [''], artist: [''] }
+    questions[activeIndex].correct.artist.push('')
+    renderCorrectArtistList()
+  }
+}
+
 const selectQuestion = (index) => {
   if (hasSelectedOnce) saveCurrentQuestionState()
   activeIndex = index
@@ -550,10 +766,13 @@ const selectQuestion = (index) => {
   populateTrueFalseFields(q)
   populateImageFields(q)
   populateIllustrationFields(q)
+  populateAudioFields(q)
 
   renderOptions()
   renderCorrects()
   renderOrderItems()
+  renderCorrectTitleList()
+  renderCorrectArtistList()
   toggleTypeSections()
   updateSidebar()
 
@@ -589,11 +808,14 @@ const toggleTypeSections = () => {
   if (trueFalseSection) trueFalseSection.classList.toggle('d-none', qType.value !== 'truefalse')
   if (orderSection) orderSection.classList.toggle('d-none', qType.value !== 'order')
   if (imageSection) imageSection.classList.toggle('d-none', qType.value !== 'image')
+  if (blindtestSection) blindtestSection.classList.toggle('d-none', qType.value !== 'blindtest')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
   // déjà leur propre image (le type "image" utilise la sienne comme cible
   // cliquable, pas comme simple décoration).
   if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image')
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse' || qType.value === 'order' || qType.value === 'image')
+  // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
+  // blindtestSection ci-dessus) au lieu de la liste générique "correct".
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse' || qType.value === 'order' || qType.value === 'image' || qType.value === 'blindtest')
   if (qType.value === 'mcq') {
     correctLabel.textContent = 'Réponses correctes'
   } else {
@@ -610,6 +832,10 @@ const renderOptions = () => {
   optionsList.innerHTML = ''
   const q = questions[activeIndex]
   if (!q) return
+  // "blindtest" range ses réponses acceptées dans q.correct = {title, artist}
+  // (pas un tableau) : les .includes/.indexOf ci-dessous plantent sur un objet,
+  // et cette fonction ne sert de toute façon à rien pour ce type (pas d'options QCM).
+  if (q.type === 'blindtest') return
   if (!q.options) q.options = []
   
   q.options.forEach((opt, idx) => {
@@ -645,6 +871,9 @@ const renderCorrects = () => {
   correctList.innerHTML = ''
   const q = questions[activeIndex]
   if (!q) return
+  // "blindtest" a ses deux propres listes (renderCorrectTitleList/Artist) et
+  // q.correct = {title, artist}, pas un tableau — voir renderOptions ci-dessus.
+  if (q.type === 'blindtest') return
   if (!q.correct) q.correct = ['']
   
   q.correct.forEach((cor, idx) => {
@@ -671,6 +900,10 @@ const renderOrderItems = () => {
   orderEditList.innerHTML = ''
   const q = questions[activeIndex]
   if (!q) return
+  // Sans ce garde-fou, le "!Array.isArray(q.correct)" juste en dessous serait
+  // vrai pour "blindtest" (q.correct = {title, artist}, pas un tableau) et
+  // écraserait silencieusement ses réponses acceptées à chaque sélection.
+  if (q.type === 'blindtest') return
   if (!Array.isArray(q.correct) || q.correct.length === 0) q.correct = ['', '']
 
   q.correct.forEach((item, idx) => {
@@ -808,11 +1041,19 @@ qType.onchange = () => {
     // bonne forme (ex. retour sur ce type).
     if (!Array.isArray(q.correct) || typeof q.correct[0]?.x0 !== 'number') q.correct = []
     populateImageFields(q)
+  } else if (qType.value === 'blindtest') {
+    // q.correct venant d'un autre type est un tableau, pas l'objet
+    // {title, artist} attendu ici : on repart propre sauf s'il a déjà la bonne
+    // forme (ex. retour sur ce type).
+    if (!q.correct || Array.isArray(q.correct)) q.correct = { title: [''], artist: [''] }
+    populateAudioFields(q)
   }
   toggleTypeSections()
   renderOptions()
   renderCorrects()
   renderOrderItems()
+  renderCorrectTitleList()
+  renderCorrectArtistList()
 }
 
 qPrompt.oninput = () => {
@@ -849,10 +1090,13 @@ deleteQuestionBtn.onclick = () => {
   populateTrueFalseFields(q)
   populateImageFields(q)
   populateIllustrationFields(q)
+  populateAudioFields(q)
 
   renderOptions()
   renderCorrects()
   renderOrderItems()
+  renderCorrectTitleList()
+  renderCorrectArtistList()
   toggleTypeSections()
   updateSidebar()
 
@@ -949,6 +1193,28 @@ saveQuizBtn.onclick = async () => {
       if (typeof q.correct?.[0]?.x0 !== 'number') {
         selectQuestion(i)
         showToast(`La question ${i + 1} : trace un rectangle sur l'image pour indiquer la zone correcte`, 'error')
+        return
+      }
+    }
+
+    // Pour "blindtest", il faut un extrait audio validé et au moins une
+    // réponse acceptée pour CHAQUE champ (titre ET artiste)
+    if (q.type === 'blindtest') {
+      if (!q.audio) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : importe et valide un extrait audio`, 'error')
+        return
+      }
+      const hasTitle = (q.correct?.title || []).some(c => c && c.trim() !== '')
+      if (!hasTitle) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : renseigne au moins un titre accepté`, 'error')
+        return
+      }
+      const hasArtist = (q.correct?.artist || []).some(c => c && c.trim() !== '')
+      if (!hasArtist) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : renseigne au moins un artiste accepté`, 'error')
         return
       }
     }

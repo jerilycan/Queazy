@@ -1067,6 +1067,54 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   box-shadow: var(--shadow-lg);
 }
 
+/* Question "blind test" : orbe néon qui pulse en direct avec le volume de
+   l'extrait audio (voir index.js startBlindTestPulse — Web Audio API, analyse
+   locale du fichier décodé). "orb-idle" est la respiration CSS générique
+   affichée tant que rien ne joue encore (avant startTs) ou si Web Audio est
+   indisponible ; retirée en JS dès que la vraie analyse audio prend le relais. */
+.blindtest-area {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto var(--space-lg);
+}
+.blindtest-orb {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffc2f0 0%, var(--color-accent) 55%, var(--color-accent-2) 100%);
+  box-shadow: 0 0 40px 10px rgba(var(--color-accent-rgb), 0.35);
+  transition: transform 0.05s linear, box-shadow 0.05s linear;
+  will-change: transform, box-shadow;
+}
+.blindtest-orb.orb-idle { animation: orbBreathe 2.2s ease-in-out infinite; }
+@keyframes orbBreathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 40px 10px rgba(var(--color-accent-rgb), 0.3); }
+  50% { transform: scale(1.08); box-shadow: 0 0 55px 18px rgba(var(--color-accent-rgb), 0.45); }
+}
+.blindtest-orb-core {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.28);
+  filter: blur(3px);
+}
+.blindtest-orb-ring {
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--color-accent-rgb), 0.3);
+}
+/* Deux champs (titre/artiste) à la place du champ unique du type "free",
+   dans le même conteneur .free-text-input (voir index.html) — l'un ou
+   l'autre est affiché selon le type, jamais les deux. */
+.blindtest-fields { display: flex; flex: 1; gap: 10px; }
+.blindtest-fields input { flex: 1; }
+
+/* Éditeur : recadreur audio (voir editor.js encodeWavMono) */
+.audio-trim-wrap, .audio-clip-wrap { max-width: 480px; }
+.audio-trim-wrap audio, .audio-clip-wrap audio { width: 100%; }
+
 /* Badge de confirmation après l'envoi d'une réponse */
 .answer-status {
   display: flex;

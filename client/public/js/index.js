@@ -197,6 +197,12 @@ const imageClickLayer = document.getElementById('imageClickLayer')
 const imageMarker = document.getElementById('imageMarker')
 const imageZonesReveal = document.getElementById('imageZonesReveal')
 const imageErrorMsg = document.getElementById('imageErrorMsg')
+const blindtestArea = document.getElementById('blindtestArea')
+const blindtestAudio = document.getElementById('blindtestAudio')
+const blindtestOrb = document.getElementById('blindtestOrb')
+const blindtestFields = document.getElementById('blindtestFields')
+const blindtestTitleInput = document.getElementById('blindtestTitleInput')
+const blindtestArtistInput = document.getElementById('blindtestArtistInput')
 // Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
 // décorative au-dessus de l'énoncé.
@@ -488,6 +494,99 @@ const revealImageZones = (zones) => {
     imageMarker.classList.toggle('marker-correct', dist === 0)
     imageMarker.classList.toggle('marker-incorrect', dist !== 0)
   }
+}
+
+// --- Question "blind test" : extrait audio + orbe néon réactif ---
+// Tout le monde (hôte ET joueurs) charge et décode le même extrait, synchronisé
+// sur le même startTs que les autres types — mais seul l'hôte (l'écran
+// partagé/branché aux enceintes) l'entend réellement : les joueurs restent en
+// muet pour éviter la cacophonie de plusieurs téléphones décalés, tout en
+// gardant un orbe réactif au son EN VRAI sur chaque écran (analysé localement
+// depuis le fichier audio décodé, pas une fausse animation générique).
+let blindtestAudioCtx = null
+let blindtestAnalyser = null
+let blindtestPulseRAF = null
+let myBlindTestSubmission = null // { title, artist } — capturé à l'envoi (voir sendBtn.onclick)
+
+const ensureBlindTestAnalyser = () => {
+  if (blindtestAnalyser || !blindtestAudio) return blindtestAnalyser
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    blindtestAudioCtx = new AudioCtx()
+    const source = blindtestAudioCtx.createMediaElementSource(blindtestAudio)
+    blindtestAnalyser = blindtestAudioCtx.createAnalyser()
+    blindtestAnalyser.fftSize = 256
+    source.connect(blindtestAnalyser)
+    blindtestAnalyser.connect(blindtestAudioCtx.destination)
+  } catch (e) {
+    // Web Audio indisponible/bloqué (ex. navigateur trop restrictif) : l'orbe
+    // retombe simplement sur sa respiration CSS générique (voir orb-idle),
+    // l'audio continue de jouer normalement via l'élément <audio> lui-même.
+    blindtestAnalyser = null
+  }
+  return blindtestAnalyser
+}
+
+const stopBlindTestPulse = () => {
+  if (blindtestPulseRAF) cancelAnimationFrame(blindtestPulseRAF)
+  blindtestPulseRAF = null
+  if (blindtestOrb) {
+    blindtestOrb.style.transform = ''
+    blindtestOrb.style.boxShadow = ''
+    blindtestOrb.classList.add('orb-idle')
+  }
+}
+
+const startBlindTestPulse = () => {
+  const analyser = ensureBlindTestAnalyser()
+  if (!analyser || !blindtestOrb) return
+  if (blindtestAudioCtx.state === 'suspended') blindtestAudioCtx.resume().catch(() => {})
+  blindtestOrb.classList.remove('orb-idle')
+  const data = new Uint8Array(analyser.frequencyBinCount)
+  const loop = () => {
+    analyser.getByteFrequencyData(data)
+    let sum = 0
+    for (let i = 0; i < data.length; i++) sum += data[i]
+    const avg = sum / data.length / 255 // 0..1
+    const scale = 1 + avg * 0.5
+    blindtestOrb.style.transform = `scale(${scale.toFixed(3)})`
+    blindtestOrb.style.boxShadow = `0 0 ${40 + avg * 60}px ${10 + avg * 20}px rgba(var(--color-accent-rgb), ${0.35 + avg * 0.4})`
+    blindtestPulseRAF = requestAnimationFrame(loop)
+  }
+  loop()
+}
+
+const buildBlindTestArea = (audioUrl) => {
+  if (!blindtestAudio) return
+  stopBlindTestPulse()
+  if (blindtestTitleInput) blindtestTitleInput.value = ''
+  if (blindtestArtistInput) blindtestArtistInput.value = ''
+  myBlindTestSubmission = null
+  blindtestAudio.muted = !isHost
+  blindtestAudio.pause()
+  blindtestAudio.currentTime = 0
+  blindtestAudio.src = audioUrl || ''
+}
+
+const playBlindTestAudio = () => {
+  if (!blindtestAudio || !blindtestAudio.src) return
+  blindtestAudio.play().then(() => startBlindTestPulse()).catch(() => {})
+}
+
+const stopBlindTestAudio = () => {
+  if (blindtestAudio) blindtestAudio.pause()
+  stopBlindTestPulse()
+}
+
+const revealBlindTestAnswer = (correctTitle, correctArtist) => {
+  if (!revealAnswerText) return
+  const parts = []
+  parts.push(`Bonne réponse : ${correctTitle || '?'} — ${correctArtist || '?'}`)
+  if (myBlindTestSubmission && (myBlindTestSubmission.title || myBlindTestSubmission.artist)) {
+    parts.push(`Toi : ${myBlindTestSubmission.title || '—'} / ${myBlindTestSubmission.artist || '—'}`)
+  }
+  revealAnswerText.innerHTML = parts.map(p => `<div>${p.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>`).join('')
+  revealAnswerText.classList.remove('d-none')
 }
 
 const clearRevealState = () => {
@@ -1429,6 +1528,19 @@ const uploadRoomImage = (roomCode, base64Image) => {
   })
 }
 
+// Même principe que uploadRoomImage ci-dessus, pour l'extrait audio du type
+// "blindtest" (voir server/index.js /api/room-audio/:code).
+const uploadRoomAudio = (roomCode, base64Audio) => {
+  return fetch(`/api/room-audio/${encodeURIComponent(roomCode)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ audio: base64Audio })
+  }).then(res => {
+    if (!res.ok) throw new Error('upload failed')
+    return `/api/room-audio/${encodeURIComponent(roomCode)}?v=${Date.now()}`
+  })
+}
+
 const emitQuestion = (index) => {
   const roomCode = roomInput.value.trim()
   if (!roomCode || !loadedQuiz) return
@@ -1448,7 +1560,10 @@ const emitQuestion = (index) => {
     type: q.type || 'free',
     prompt: q.prompt || 'Question',
     timerMs: q.timerMs || 15000,
-    correct: correctOrder,
+    // "blindtest" range ses réponses acceptées dans un objet {title, artist},
+    // pas un tableau comme les autres types (voir editor.js) : correctOrder
+    // serait vide dans ce cas (Array.isArray renvoie false), d'où le cas à part.
+    correct: q.type === 'blindtest' ? (q.correct || { title: [], artist: [] }) : correctOrder,
     // Pour 'order', les joueurs voient les items dans un ordre mélangé (pas
     // l'ordre correct saisi dans l'éditeur, ni toujours le même mélange) —
     // le mélange est fait une fois ici, avant l'envoi ; le serveur retire
@@ -1459,18 +1574,28 @@ const emitQuestion = (index) => {
     singleAttempt: currentSingleAttempt
   }
   // L'image (cliquable pour le type "image", ou simple illustration au-dessus
-  // de la question pour les autres types) ne transite plus par le socket (voir
-  // server/index.js) : on la dépose d'abord via une requête HTTP classique,
-  // puis on démarre la question avec juste son URL. Si l'upload échoue, on ne
-  // démarre pas la question plutôt que de l'afficher sans image à personne.
+  // de la question pour les autres types) et l'extrait audio du type
+  // "blindtest" ne transitent plus par le socket (voir server/index.js) : on
+  // les dépose d'abord via une requête HTTP classique, puis on démarre la
+  // question avec juste leur URL. Si un upload échoue, on ne démarre pas la
+  // question plutôt que de l'afficher sans média à personne.
   const imageToUpload = q.type === 'image' ? q.image : q.illustration
+  const audioToUpload = q.type === 'blindtest' ? q.audio : null
+  const uploads = []
   if (imageToUpload) {
-    uploadRoomImage(roomCode, imageToUpload).then(url => {
+    uploads.push(uploadRoomImage(roomCode, imageToUpload).then(url => {
       if (q.type === 'image') payload.imageUrl = url
       else payload.illustrationUrl = url
+    }))
+  }
+  if (audioToUpload) {
+    uploads.push(uploadRoomAudio(roomCode, audioToUpload).then(url => { payload.audioUrl = url }))
+  }
+  if (uploads.length > 0) {
+    Promise.all(uploads).then(() => {
       socket.emit('question:show', payload)
     }).catch(() => {
-      log('Échec de l\'envoi de l\'image, question non démarrée')
+      log('Échec de l\'envoi du média, question non démarrée')
     })
     return
   }
@@ -1617,6 +1742,9 @@ socket.on('question:show', payload => {
   if (imageArea) {
     imageArea.classList.toggle('d-none', payload.type !== 'image')
   }
+  if (blindtestArea) {
+    blindtestArea.classList.toggle('d-none', payload.type !== 'blindtest')
+  }
   if (illustrationImg) {
     if (payload.illustrationUrl) {
       illustrationImg.onerror = () => { illustrationImg.classList.add('d-none') }
@@ -1643,15 +1771,12 @@ socket.on('question:show', payload => {
   const freeTextEl = document.getElementById('freeText')
   freeTextEl.classList.add('d-none')
   if (!isHost) {
-    if (payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image') {
-      freeTextEl.classList.add('mcq-mode')
-      answerInput.classList.add('d-none')
-      sendBtn.textContent = 'Valider'
-    } else {
-      freeTextEl.classList.remove('mcq-mode')
-      answerInput.classList.remove('d-none')
-      sendBtn.textContent = 'Envoyer'
-    }
+    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image'
+    const isBlindtest = payload.type === 'blindtest'
+    freeTextEl.classList.toggle('mcq-mode', isTileType)
+    answerInput.classList.toggle('d-none', isTileType || isBlindtest)
+    if (blindtestFields) blindtestFields.classList.toggle('d-none', !isBlindtest)
+    sendBtn.textContent = isTileType ? 'Valider' : 'Envoyer'
   }
   if (payload.type === 'graduation' && gradSlider) {
     const min = Number(payload.min ?? 0)
@@ -1664,6 +1789,11 @@ socket.on('question:show', payload => {
   }
   if (payload.type === 'image' && payload.imageUrl) {
     buildImageAnswerArea(payload.imageUrl)
+  }
+  if (payload.type === 'blindtest') {
+    buildBlindTestArea(payload.audioUrl)
+  } else {
+    stopBlindTestAudio()
   }
 
   currentSingleAttempt = payload.singleAttempt !== false
@@ -1696,6 +1826,16 @@ socket.on('question:show', payload => {
       imageDisabled = false
       freeTextEl.classList.remove('d-none')
       applyTileReveal(freeTextEl, 0)
+    }, Math.max(0, start - Date.now()))
+  }
+  // La musique démarre pile à startTs comme le reste (même rendez-vous que le
+  // déverrouillage ci-dessus) — mais CÔTÉ HÔTE AUSSI (contrairement au bloc
+  // précédent, réservé aux joueurs) : c'est son écran/ses enceintes qui
+  // diffusent réellement le son au groupe, voir buildBlindTestArea plus haut.
+  if (payload.type === 'blindtest') {
+    setTimeout(() => {
+      if (revealToken !== myRevealToken) return
+      playBlindTestAudio()
     }, Math.max(0, start - Date.now()))
   }
 
@@ -1804,6 +1944,15 @@ sendBtn.onclick = () => {
       return
     }
     content = JSON.stringify(imageSelectedPoint)
+  } else if (currentQuestionType === 'blindtest') {
+    const title = (blindtestTitleInput?.value || '').trim()
+    const artist = (blindtestArtistInput?.value || '').trim()
+    if (!title && !artist) {
+      showAnnounce('Tente au moins le titre ou l\'artiste')
+      return
+    }
+    myBlindTestSubmission = { title, artist }
+    content = JSON.stringify(myBlindTestSubmission)
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -1819,6 +1968,8 @@ sendBtn.onclick = () => {
     gradState.disabled = true
     setOrderDisabled(true)
     imageDisabled = true
+    if (blindtestTitleInput) blindtestTitleInput.disabled = true
+    if (blindtestArtistInput) blindtestArtistInput.disabled = true
     Array.from(optionsDiv.children).forEach(c => {
       c.style.pointerEvents = 'none'
       if (!c.classList.contains('selected')) {
@@ -1845,7 +1996,7 @@ moderationDiv.style.marginTop = '16px'
 moderationDiv.style.display = 'none' // Caché par défaut
 document.querySelector('.container').appendChild(moderationDiv)
 let isModerationPending = false
-socket.on('answer:queue', ({ answerId, playerId, content }) => {
+socket.on('answer:queue', ({ answerId, playerId, content, blindtest, fields }) => {
   if (!isHost) {
     const isMcq = !optionsDiv.classList.contains('d-none')
     if (!isMcq) {
@@ -1853,25 +2004,101 @@ socket.on('answer:queue', ({ answerId, playerId, content }) => {
     }
     return
   }
-  
+
   moderationDiv.style.display = 'block'
-  
+
   const item = document.createElement('div')
+  item.style.padding = '12px'
+  item.style.borderBottom = '1px solid var(--color-border)'
+
+  if (blindtest && fields) {
+    // Deux champs (titre/artiste), chacun peut avoir besoin d'un jugement
+    // séparé — seuls ceux encore "pending" ont des boutons, les autres
+    // (déjà tranchés automatiquement à l'envoi) sont juste affichés à titre
+    // indicatif. La carte n'est retirée qu'une fois les deux champs réglés
+    // (voir removeIfDone ci-dessous).
+    const removeIfDone = () => {
+      if (item.querySelectorAll('[data-pending="1"]').length > 0) return
+      item.remove()
+      if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
+    }
+    const buildFieldRow = (label, field) => {
+      const entry = fields[field]
+      const row = document.createElement('div')
+      row.style.display = 'flex'
+      row.style.alignItems = 'center'
+      row.style.justifyContent = 'space-between'
+      row.style.gap = '12px'
+      row.style.padding = '6px 0'
+
+      const text = document.createElement('div')
+      text.innerHTML = `<span style="opacity:0.7">${label} :</span> <strong>${(entry.content || '(vide)').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</strong>`
+      row.appendChild(text)
+
+      if (entry.status !== 'pending') {
+        const badge = document.createElement('span')
+        badge.textContent = entry.status === 'correct' ? '✓ validé' : '✗ refusé'
+        badge.style.opacity = '0.7'
+        row.appendChild(badge)
+        row.dataset.pending = '0'
+        return row
+      }
+
+      row.dataset.pending = '1'
+      const resolveRow = (status) => {
+        row.dataset.pending = '0'
+        row.innerHTML = ''
+        row.appendChild(text)
+        const badge = document.createElement('span')
+        badge.textContent = status === 'correct' ? '✓ validé' : '✗ refusé'
+        badge.style.opacity = '0.7'
+        row.appendChild(badge)
+        removeIfDone()
+      }
+      const btns = document.createElement('div')
+      btns.style.display = 'flex'
+      btns.style.gap = '8px'
+      const approve = document.createElement('button')
+      approve.className = 'btn btn-primary'
+      approve.style.padding = '6px 14px'
+      approve.textContent = 'Valider'
+      approve.onclick = () => {
+        socket.emit('moderation:approve', { roomCode: roomInput.value.trim(), answerId, field })
+        resolveRow('correct')
+      }
+      const reject = document.createElement('button')
+      reject.className = 'btn'
+      reject.style.padding = '6px 14px'
+      reject.textContent = 'Refuser'
+      reject.onclick = () => {
+        socket.emit('moderation:reject', { roomCode: roomInput.value.trim(), answerId, field })
+        resolveRow('incorrect')
+      }
+      btns.appendChild(approve)
+      btns.appendChild(reject)
+      row.appendChild(btns)
+      return row
+    }
+
+    item.appendChild(buildFieldRow('Titre', 'title'))
+    item.appendChild(buildFieldRow('Artiste', 'artist'))
+    moderationDiv.appendChild(item)
+    return
+  }
+
   item.style.display = 'flex'
   item.style.alignItems = 'center'
   item.style.justifyContent = 'space-between'
-  item.style.padding = '12px'
-  item.style.borderBottom = '1px solid var(--color-border)'
   item.style.gap = '12px'
-  
+
   const label = document.createElement('div')
   label.style.fontWeight = '600'
   label.textContent = content
-  
+
   const btns = document.createElement('div')
   btns.style.display = 'flex'
   btns.style.gap = '8px'
-  
+
   const approve = document.createElement('button')
   approve.className = 'btn btn-primary'
   approve.style.padding = '8px 16px'
@@ -1882,7 +2109,7 @@ socket.on('answer:queue', ({ answerId, playerId, content }) => {
     item.remove()
     if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
   }
-  
+
   const reject = document.createElement('button')
   reject.className = 'btn'
   reject.style.padding = '8px 16px'
@@ -1893,7 +2120,7 @@ socket.on('answer:queue', ({ answerId, playerId, content }) => {
     item.remove()
     if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
   }
-  
+
   btns.appendChild(approve)
   btns.appendChild(reject)
   item.appendChild(label)
@@ -2031,6 +2258,10 @@ socket.on('player:joined', ({ id, name }) => {
 })
 
 socket.on('timer:end', () => {
+  // Coupe l'extrait s'il n'était pas déjà terminé (le chrono peut être plus
+  // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
+  // instance <audio> (voir buildBlindTestArea).
+  if (currentQuestionType === 'blindtest') stopBlindTestAudio()
   if (!isHost) {
     // Ne PAS masquer inputArea : la révélation (surbrillance QCM, règle,
     // réponse acceptée) s'affiche dedans. On verrouille juste les interactions.
@@ -2093,6 +2324,25 @@ socket.on('question:reveal', payload => {
       showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
     } else {
       showMyResultBanner()
+    }
+  } else if (payload.type === 'blindtest') {
+    const correctTitles = payload.correct?.title || []
+    const correctArtists = payload.correct?.artist || []
+    revealBlindTestAnswer(correctTitles[0] || '', correctArtists[0] || '')
+    // Comparaison simplifiée (pas de distance de Levenshtein côté client) :
+    // fiable ici car cette branche ne se déclenche QUE quand aucun champ,
+    // pour aucun joueur, n'a eu besoin de modération (voir server/index.js,
+    // question:reveal n'est émis que si room.pending est vide) — donc chaque
+    // champ était forcément soit une correspondance exacte, soit un raté net.
+    const normLite = s => (s || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim()
+    const titleOk = !!myBlindTestSubmission?.title && correctTitles.some(t => normLite(t) === normLite(myBlindTestSubmission.title))
+    const artistOk = !!myBlindTestSubmission?.artist && correctArtists.some(a => normLite(a) === normLite(myBlindTestSubmission.artist))
+    if (titleOk && artistOk) {
+      showMyResultBanner()
+    } else if ((titleOk || artistOk) && myAnsweredCorrectlyThisQuestion) {
+      showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
+    } else {
+      showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }
   }
   if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')

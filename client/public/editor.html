@@ -87,6 +87,7 @@
                 <option value="graduation">Curseur numérique</option>
                 <option value="order">Ordre / classement</option>
                 <option value="image">Image (où se trouve ?)</option>
+                <option value="blindtest">Blind Test (extrait audio)</option>
               </select>
             </div>
             <div class="detail-section">
@@ -170,6 +171,55 @@
             <div class="d-flex justify-between align-center mt-8">
               <p class="text-muted font-13 m-0">Trace un ou plusieurs rectangles (glisser-déposer) pour définir la ou les zones de bonne réponse. Reclique dans un rectangle pour le retirer.</p>
               <button type="button" id="clearImageZoneBtn" class="btn btn-nav-secondary font-13">Tout effacer</button>
+            </div>
+          </div>
+
+          <div id="blindtestSection" class="detail-section d-none">
+            <label>Extrait audio</label>
+            <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
+            <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
+              <audio id="audioTrimPlayer" controls></audio>
+              <div class="d-grid grid-cols-split gap-lg mt-8">
+                <div class="detail-section">
+                  <label>Début (secondes)</label>
+                  <div class="timer-controls">
+                    <button id="audioStartMinus" class="btn-timer" type="button">-</button>
+                    <input type="number" id="audioStartInput" class="stepper-input" value="0" min="0" />
+                    <button id="audioStartPlus" class="btn-timer" type="button">+</button>
+                  </div>
+                </div>
+                <div class="detail-section">
+                  <label>Durée (secondes)</label>
+                  <div class="timer-controls">
+                    <button id="audioDurationMinus" class="btn-timer" type="button">-</button>
+                    <input type="number" id="audioDurationInput" class="stepper-input" value="15" min="5" max="30" />
+                    <button id="audioDurationPlus" class="btn-timer" type="button">+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex gap-sm mt-8">
+                <button type="button" id="audioPreviewBtn" class="btn btn-nav-secondary">▶ Prévisualiser l'extrait</button>
+                <button type="button" id="audioExtractBtn" class="btn btn-primary">Utiliser cet extrait</button>
+              </div>
+            </div>
+            <div id="audioClipWrap" class="audio-clip-wrap d-none mt-8">
+              <p class="text-muted font-13 m-0">Extrait actuel :</p>
+              <audio id="audioClipPlayer" controls></audio>
+              <button type="button" id="removeAudioClipBtn" class="btn btn-nav-secondary font-13 mt-8">Retirer l'extrait</button>
+            </div>
+            <p class="text-muted font-13 mt-8">Importe le morceau (extrait déjà coupé ou piste complète), choisis le début et la durée de l'extrait à faire deviner (30s max), puis valide.</p>
+
+            <div class="d-grid grid-cols-split gap-lg mt-16">
+              <div class="detail-section">
+                <label>Titre(s) accepté(s)</label>
+                <div id="correctTitleList" class="options-editor"><!-- Rempli par JS --></div>
+                <button id="addCorrectTitle" type="button" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse</button>
+              </div>
+              <div class="detail-section">
+                <label>Artiste(s) accepté(s)</label>
+                <div id="correctArtistList" class="options-editor"><!-- Rempli par JS --></div>
+                <button id="addCorrectArtist" type="button" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse</button>
+              </div>
             </div>
           </div>
 

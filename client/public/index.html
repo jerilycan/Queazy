@@ -207,8 +207,19 @@
             </div>
             <div id="imageErrorMsg" class="image-error-msg d-none">🖼️ Image indisponible</div>
           </div>
+          <div id="blindtestArea" class="blindtest-area d-none">
+            <audio id="blindtestAudio" preload="auto"></audio>
+            <div id="blindtestOrb" class="blindtest-orb orb-idle">
+              <div class="blindtest-orb-core"></div>
+              <div class="blindtest-orb-ring"></div>
+            </div>
+          </div>
           <div id="freeText" class="free-text-input">
             <input id="answer" placeholder="Votre réponse..." class="h-60 border-none bg-transparent font-18" />
+            <div id="blindtestFields" class="blindtest-fields d-none">
+              <input id="blindtestTitleInput" placeholder="Titre du morceau..." class="h-56 border-none bg-transparent font-16" />
+              <input id="blindtestArtistInput" placeholder="Artiste..." class="h-56 border-none bg-transparent font-16" />
+            </div>
             <button id="send" class="btn btn-primary w-140 h-60 font-16">Envoyer</button>
           </div>
           <div id="revealAnswerText" class="reveal-answer d-none"></div>

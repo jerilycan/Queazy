@@ -175,6 +175,33 @@ const start = async () => {
     return Buffer.from(match[2], 'base64')
   })
 
+  // Question "blind test" : même principe que /api/room-image ci-dessus (pas
+  // de gros blob dans une frame websocket), pour le clip audio déjà recadré
+  // par le créateur (voir editor.js, encodé en WAV mono côté client). Cap plus
+  // large que l'image (~4,5 Mo de binaire) : même un extrait recadré à 30s
+  // reste bien plus lourd qu'une photo compressée.
+  app.post('/api/room-audio/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    if (!room) return reply.code(404).send({ error: 'room_not_found' })
+    const audio = req.body?.audio
+    if (typeof audio !== 'string' || !/^data:audio\/(wav|x-wav|mpeg|mp3|ogg|webm|mp4);base64,/i.test(audio) || audio.length > 6_000_000) {
+      return reply.code(400).send({ error: 'invalid_audio' })
+    }
+    room.pendingAudio = audio
+    return { ok: true }
+  })
+
+  app.get('/api/room-audio/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    const dataUri = room?.pendingAudio
+    if (!dataUri) return reply.code(404).send()
+    const match = /^data:([^;]+);base64,(.+)$/.exec(dataUri)
+    if (!match) return reply.code(404).send()
+    reply.header('Cache-Control', 'no-store')
+    reply.type(match[1])
+    return Buffer.from(match[2], 'base64')
+  })
+
   await app.listen({ port: PORT, host: '0.0.0.0' })
   const io = new Server(app.server, { cors: { origin: '*' } })
 
@@ -245,11 +272,11 @@ const start = async () => {
     const hasTiles = payload?.type === 'mcq' || payload?.type === 'truefalse' || payload?.type === 'order'
     const tileCount = hasTiles && Array.isArray(payload?.options) ? Math.max(1, payload.options.length) : 1
     const staggerSpan = hasTiles ? (tileCount - 1) * REVEAL_STAGGER_MS : 0
-    // "free" n'a ni tuiles à faire apparaître une à une ni animation à
-    // attendre (un seul champ texte) : le tampon de fin d'animation ne sert
-    // donc à rien pour ce type, contrairement aux autres — on ne garde que le
-    // temps de lecture de la question.
-    const isFree = payload?.type === 'free'
+    // "free" et "blindtest" n'ont ni tuiles à faire apparaître une à une ni
+    // animation à attendre (un ou deux champs texte) : le tampon de fin
+    // d'animation ne sert donc à rien pour ces types, contrairement aux
+    // autres — on ne garde que le temps de lecture de la question.
+    const isFree = payload?.type === 'free' || payload?.type === 'blindtest'
     const tileAnim = isFree ? 0 : REVEAL_TILE_ANIM_MS
     const buffer = isFree ? 0 : REVEAL_BUFFER_MS
     return REVEAL_QUESTION_BEAT_MS + staggerSpan + tileAnim + buffer
@@ -409,7 +436,7 @@ const start = async () => {
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
       // lisible dans la frame WebSocket (devtools) avant même de répondre.
       const { correct, ...payloadWithoutCorrect } = payload || {}
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image') ? payloadWithoutCorrect : payload
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest') ? payloadWithoutCorrect : payload
 
       // Diffusé immédiatement (pas au bout de revealMs) : chaque client anime
       // lui-même la révélation de la question/des tuiles jusqu'à startTs, pour
@@ -520,6 +547,72 @@ const start = async () => {
         return
       }
 
+      if (q.type === 'blindtest') {
+        // Deux champs indépendants (titre / artiste), chacun évalué comme le
+        // ferait le type "free" (fuzzy() ci-dessus) : correspondance exacte ->
+        // validé tout de suite, proche mais pas exact -> mis en attente de
+        // modération PAR CHAMP (l'hôte tranche titre et artiste séparément),
+        // aucune correspondance -> raté direct. Chaque champ vaut la moitié
+        // des points "vitesse" habituels (pointsFor) : 100% si les deux sont
+        // bons, 50% si un seul, 0% sinon.
+        let content
+        try { content = JSON.parse(payload?.content || 'null') } catch { content = null }
+        const titleInput = typeof content?.title === 'string' ? content.title : ''
+        const artistInput = typeof content?.artist === 'string' ? content.artist : ''
+        const acceptedTitle = Array.isArray(q.correct?.title) ? q.correct.title : []
+        const acceptedArtist = Array.isArray(q.correct?.artist) ? q.correct.artist : []
+
+        const submitTs = Date.now()
+        const halfDelta = Math.round(pointsFor(q.startTs, submitTs) / 2)
+
+        const evalField = (input, accepted) => {
+          if (!accepted.length || !input.trim()) return 'incorrect'
+          const res = fuzzy(input, accepted)
+          if (res.ok && res.exact) return 'correct'
+          if (res.ok && !res.exact) return 'pending'
+          return 'incorrect'
+        }
+        const titleStatus = evalField(titleInput, acceptedTitle)
+        const artistStatus = evalField(artistInput, acceptedArtist)
+
+        const p = room.players.get(socket.id)
+        let deltaApplied = 0
+        for (const status of [titleStatus, artistStatus]) {
+          if (status !== 'correct') continue
+          deltaApplied += halfDelta
+        }
+        let total = room.scores.get(socket.id) || 0
+        if (deltaApplied > 0) {
+          total += deltaApplied
+          room.scores.set(socket.id, total)
+          if (p?.token) room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+          io.to(code).emit('score:update', { playerId: socket.id, delta: deltaApplied, total })
+        }
+
+        q.submissions?.set(socket.id, `${socket.id}:${submitTs}`)
+
+        if (titleStatus === 'pending' || artistStatus === 'pending') {
+          const answerId = `${socket.id}:${submitTs}`
+          const fields = {
+            title: { content: titleInput, status: titleStatus },
+            artist: { content: artistInput, status: artistStatus }
+          }
+          room.pending.set(answerId, { playerId: socket.id, ts: submitTs, historyEntry: q.historyEntry, halfDelta, fields })
+          io.to(code).emit('answer:queue', { answerId, playerId: socket.id, blindtest: true, fields })
+          emitProgress()
+          return
+        }
+
+        // Les deux champs sont déjà tranchés (correct ou incorrect) : rien à
+        // envoyer en modération, le résultat final est connu tout de suite.
+        q.answered?.add(socket.id)
+        if (p?.token && q.historyEntry) {
+          q.historyEntry.results[p.token] = (titleStatus === 'correct' && artistStatus === 'correct') ? 'correct' : 'incorrect'
+        }
+        emitProgress()
+        return
+      }
+
       if (q.type === 'order') {
         // Tout ou rien : l'ordre soumis (JSON d'un tableau) doit correspondre
         // exactement, élément par élément, à q.correct. Pas de fuzzy matching
@@ -591,12 +684,48 @@ const start = async () => {
       }
     })
 
+    // Résout un champ (titre OU artiste) d'un item de modération "blindtest" —
+    // contrairement aux autres types, un même item peut avoir besoin de DEUX
+    // passages en modération (un par champ) avant d'être retiré de la file :
+    // on ne le supprime de room.pending et on ne fige le résultat définitif
+    // (historyEntry, q.answered) qu'une fois qu'aucun champ n'est plus "pending".
+    const resolveBlindTestField = (io, code, room, answerId, item, field, correct) => {
+      const entry = item.fields[field]
+      if (!entry || entry.status !== 'pending') return
+      entry.status = correct ? 'correct' : 'incorrect'
+      if (correct) {
+        const total = (room.scores.get(item.playerId) || 0) + item.halfDelta
+        room.scores.set(item.playerId, total)
+        const p = room.players.get(item.playerId)
+        if (p?.token) room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
+        io.to(code).emit('score:update', { playerId: item.playerId, delta: item.halfDelta, total })
+      }
+      const stillPending = Object.values(item.fields).some(f => f.status === 'pending')
+      if (stillPending) return
+      room.pending.delete(answerId)
+      const q = room.currentQuestion
+      q?.answered?.add(item.playerId)
+      const p = room.players.get(item.playerId)
+      if (p?.token && item.historyEntry) {
+        const bothCorrect = item.fields.title.status === 'correct' && item.fields.artist.status === 'correct'
+        item.historyEntry.results[p.token] = bothCorrect ? 'correct' : 'incorrect'
+      }
+      if (room.pending.size === 0) io.to(code).emit('moderation:finished')
+    }
+
     socket.on('moderation:approve', payload => {
       const code = payload?.roomCode
       const room = rooms.get(code)
       if (!room) return
       const item = room.pending.get(payload?.answerId)
       if (!item) return
+
+      if (item.fields) {
+        const field = payload?.field === 'artist' ? 'artist' : 'title'
+        resolveBlindTestField(io, code, room, payload.answerId, item, field, true)
+        return
+      }
+
       room.pending.delete(payload?.answerId)
       const q = room.currentQuestion
       if (q?.answered?.has(item.playerId)) return
@@ -622,6 +751,14 @@ const start = async () => {
       const room = rooms.get(code)
       if (!room) return
       const item = room.pending.get(payload?.answerId)
+      if (!item) return
+
+      if (item.fields) {
+        const field = payload?.field === 'artist' ? 'artist' : 'title'
+        resolveBlindTestField(io, code, room, payload.answerId, item, field, false)
+        return
+      }
+
       room.pending.delete(payload?.answerId)
       if (item?.historyEntry) {
         const p = room.players.get(item.playerId)
