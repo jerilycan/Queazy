@@ -1817,6 +1817,53 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   cursor: pointer;
 }
 
+/* Liste complète des résultats finaux : lignes réutilisées d'un rendu à
+   l'autre (voir renderFullTable dans results.js) pour pouvoir animer un
+   changement de position, comme le classement en cours de partie. */
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.result-row-rank { font-weight: 600; color: var(--color-text); }
+.result-row-score { color: var(--color-accent); font-weight: 700; }
+
+/* Hauteurs/largeurs sorties du HTML (styles inline) pour pouvoir les
+   réduire sur mobile ci-dessous — sinon un style inline ne peut pas être
+   réécrit par une media query. */
+.podium-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px 8px 0 0;
+  transition: height 0.3s ease, width 0.3s ease;
+}
+.podium-step.step-1 .podium-bar { height: 160px; width: 100px; }
+.podium-step.step-2 .podium-bar { height: 120px; width: 80px; }
+.podium-step.step-3 .podium-bar { height: 80px; width: 80px; }
+
+.podium-crown {
+  font-size: 40px;
+  margin-bottom: -10px;
+  position: relative;
+  z-index: 10;
+}
+
+@media (max-width: 640px) {
+  /* Le podium prenait ~400px fixes avant même d'arriver à la liste complète
+     des joueurs, obligeant à scroller beaucoup sur mobile pour tout voir. */
+  .podium-container { height: 250px; gap: 8px; margin-top: 20px; }
+  .podium-step { width: 76px; }
+  .podium-avatar { width: 56px; height: 56px; font-size: 22px; margin-bottom: 10px; }
+  .podium-crown { font-size: 30px; }
+  .podium-step.step-1 .podium-bar { height: 110px; width: 76px; }
+  .podium-step.step-2 .podium-bar { height: 85px; width: 62px; }
+  .podium-step.step-3 .podium-bar { height: 60px; width: 62px; }
+}
+
 .history-tooltip {
   position: fixed;
   z-index: 3000;

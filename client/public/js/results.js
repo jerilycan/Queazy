@@ -138,24 +138,57 @@ const render = (players) => {
     }, 2900)
   }
 
+  renderFullTable(ordered)
+}
+
+// Réutilise les mêmes lignes DOM d'un rendu à l'autre (au lieu de tout
+// reconstruire) pour pouvoir animer leur déplacement — technique FLIP
+// identique à renderBoard() dans index.js (classement en cours de partie).
+const fullTableRows = new Map() // playerId -> élément ligne
+
+const renderFullTable = (ordered) => {
   const tbl = document.getElementById('fullTable')
-  if (tbl) {
-    tbl.innerHTML = ''
-    ordered.forEach((p, i) => {
-      const row = document.createElement('div')
-      row.style.display = 'flex'
-      row.style.justifyContent = 'space-between'
-      row.style.padding = '12px 0'
-      row.style.borderBottom = '1px solid var(--color-border)'
-      row.style.cursor = 'pointer'
-      if (p.id) row.dataset.playerId = p.id
-      row.innerHTML = `
-        <span style="font-weight:600">${i + 1}. ${p.name}</span>
-        <span style="color:var(--color-accent); font-weight:700">${p.score} pts</span>
-      `
-      tbl.appendChild(row)
-    })
-  }
+  if (!tbl) return
+
+  const first = new Map()
+  fullTableRows.forEach((row, id) => { first.set(id, row.getBoundingClientRect()) })
+
+  const currentIds = new Set(ordered.map(p => p.id))
+  fullTableRows.forEach((row, id) => {
+    if (!currentIds.has(id)) { row.remove(); fullTableRows.delete(id) }
+  })
+
+  ordered.forEach((p, i) => {
+    let row = fullTableRows.get(p.id)
+    if (!row) {
+      row = document.createElement('div')
+      row.className = 'result-row'
+      row.innerHTML = `<span class="result-row-rank"></span><span class="result-row-score"></span>`
+      fullTableRows.set(p.id, row)
+    }
+    if (p.id) row.dataset.playerId = p.id
+    row.querySelector('.result-row-rank').textContent = `${i + 1}. ${p.name}`
+    row.querySelector('.result-row-score').textContent = `${p.score} pts`
+    tbl.appendChild(row) // déplace le nœud existant : préserve son identité pour le FLIP
+  })
+
+  ordered.forEach(p => {
+    const row = fullTableRows.get(p.id)
+    if (!row) return
+    const before = first.get(p.id)
+    if (!before) return // ligne neuve : pas d'état "avant" à animer depuis
+    const after = row.getBoundingClientRect()
+    const dy = before.top - after.top
+    if (dy) {
+      row.style.transition = 'none'
+      row.style.transform = `translateY(${dy}px)`
+      void row.offsetHeight // force le navigateur à appliquer la position de départ avant de ré-activer la transition
+      requestAnimationFrame(() => {
+        row.style.transition = ''
+        row.style.transform = ''
+      })
+    }
+  })
 }
 
 const historyTooltip = document.createElement('div')
