@@ -194,6 +194,7 @@ const imageArea = document.getElementById('imageArea')
 const imageWrap = document.getElementById('imageWrap')
 const imageImg = document.getElementById('imageImg')
 const imageGrid = document.getElementById('imageGrid')
+const imageErrorMsg = document.getElementById('imageErrorMsg')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const prevQuestionBtn = document.getElementById('prevQuestion')
@@ -393,6 +394,17 @@ let imageSelectedCell = null
 
 const buildImageGrid = (src) => {
   if (!imageImg || !imageGrid) return
+  imageImg.classList.remove('d-none')
+  if (imageErrorMsg) imageErrorMsg.classList.add('d-none')
+  imageImg.onerror = () => {
+    // Ne devrait normalement jamais arriver (l'hôte upload avant d'émettre
+    // question:show) — si ça arrive quand même (upload raté, salle nettoyée
+    // entre-temps...), au moins le signaler clairement plutôt qu'une grille
+    // flottant sur une image cassée invisible.
+    console.error('[image] échec de chargement de l\'image:', src)
+    imageImg.classList.add('d-none')
+    if (imageErrorMsg) imageErrorMsg.classList.remove('d-none')
+  }
   imageImg.src = src
   imageGrid.innerHTML = ''
   imageSelectedCell = null
@@ -416,15 +428,18 @@ const buildImageGrid = (src) => {
   if (imageWrap) applyTileReveal(imageWrap, 0)
 }
 
-// Révélation : la bonne case en vert ; si le joueur avait cliqué ailleurs,
+// Révélation : toutes les cases correctes (une "zone" possible, pas
+// forcément une seule case) en vert ; si le joueur avait cliqué ailleurs,
 // sa case à lui reste visible mais marquée fausse — pour comparer les deux.
-const revealImageCell = (correctCell) => {
-  if (!imageGrid || !correctCell) return
+const revealImageCell = (correctCells) => {
+  if (!imageGrid) return
+  const cells = Array.isArray(correctCells) ? correctCells : (correctCells ? [correctCells] : [])
+  if (cells.length === 0) return
   imageDisabled = true
   Array.from(imageGrid.children).forEach(cell => {
     const col = Number(cell.dataset.col)
     const row = Number(cell.dataset.row)
-    if (col === correctCell.col && row === correctCell.row) cell.classList.add('correct-reveal')
+    if (cells.some(c => c.col === col && c.row === row)) cell.classList.add('correct-reveal')
     else if (cell.classList.contains('selected')) cell.classList.add('incorrect-reveal')
   })
 }
@@ -1360,8 +1375,25 @@ const emitQuestion = (index) => {
     options: q.type === 'order' ? shuffleArray(correctOrder) : (Array.isArray(q.options) ? q.options : []),
     min: q.min,
     max: q.max,
-    image: q.type === 'image' ? q.image : undefined,
     singleAttempt: currentSingleAttempt
+  }
+  // L'image ne transite plus par le socket (voir server/index.js) : on la
+  // dépose d'abord via une requête HTTP classique, puis on démarre la
+  // question avec juste son URL. Si l'upload échoue, on ne démarre pas la
+  // question plutôt que de l'afficher sans image à personne.
+  if (q.type === 'image' && q.image) {
+    fetch(`/api/room-image/${encodeURIComponent(roomCode)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: q.image })
+    }).then(res => {
+      if (!res.ok) throw new Error('upload failed')
+      payload.imageUrl = `/api/room-image/${encodeURIComponent(roomCode)}?v=${Date.now()}`
+      socket.emit('question:show', payload)
+    }).catch(() => {
+      log('Échec de l\'envoi de l\'image, question non démarrée')
+    })
+    return
   }
   socket.emit('question:show', payload)
 }
@@ -1540,8 +1572,8 @@ socket.on('question:show', payload => {
   if (payload.type === 'order' && Array.isArray(payload.options)) {
     buildOrderList(payload.options)
   }
-  if (payload.type === 'image' && payload.image) {
-    buildImageGrid(payload.image)
+  if (payload.type === 'image' && payload.imageUrl) {
+    buildImageGrid(payload.imageUrl)
   }
 
   currentSingleAttempt = payload.singleAttempt !== false
@@ -1929,10 +1961,10 @@ socket.on('question:reveal', payload => {
     revealOrderList(payload.correct || [])
     showMyResultBanner()
   } else if (payload.type === 'image') {
-    const correctCell = (payload.correct || [])[0]
-    revealImageCell(correctCell)
-    const dist = (imageSelectedCell && correctCell)
-      ? Math.max(Math.abs(imageSelectedCell.col - correctCell.col), Math.abs(imageSelectedCell.row - correctCell.row))
+    const correctCells = payload.correct || []
+    revealImageCell(correctCells)
+    const dist = (imageSelectedCell && correctCells.length > 0)
+      ? Math.min(...correctCells.map(c => Math.max(Math.abs(imageSelectedCell.col - c.col), Math.abs(imageSelectedCell.row - c.row))))
       : null
     if (dist !== null && dist > 0 && myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! ${dist} case${dist > 1 ? 's' : ''} d'écart, +${myLastDelta} points`, 'is-close')

@@ -3,7 +3,9 @@ const Fastify = require('fastify')
 const fastifyStatic = require('@fastify/static')
 const { Server } = require('socket.io')
 
-const app = Fastify({ logger: true, trustProxy: true })
+// bodyLimit relevé (défaut Fastify 1 Mo) : la route /api/room-image accepte
+// une image compressée en base64 (~jusqu'à ~1,3 Mo pour 1 Mo de binaire brut).
+const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 5 * 1024 * 1024 })
 const PORT = process.env.PORT || 3000
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
@@ -93,11 +95,43 @@ const getBaseUrl = (headers) => {
 }
 
 const start = async () => {
+  const rooms = new Map()
+
   app.get('/server-info', async (req) => ({ url: getBaseUrl(req.headers), port: PORT }))
+
+  // Question "image" : l'image ne transite plus par socket.io (un gros blob
+  // base64 embarqué dans un message temps réel s'est révélé peu fiable une
+  // fois déployé — coupures/pertes silencieuses observées en prod alors que
+  // tout fonctionnait en local). L'hôte la dépose ici via une requête HTTP
+  // classique juste avant de démarrer la question ; tout le monde (hôte
+  // compris, pour un seul chemin de code) la récupère ensuite via un simple
+  // <img src>, bien mieux géré par un hébergeur/proxy qu'un frame websocket
+  // géant. Stockée en mémoire par code de salle (écrasée à chaque nouvelle
+  // question "image" — une seule à la fois par salle, pas besoin de plus).
+  app.post('/api/room-image/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    if (!room) return reply.code(404).send({ error: 'room_not_found' })
+    const image = req.body?.image
+    if (typeof image !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(image) || image.length > 2_000_000) {
+      return reply.code(400).send({ error: 'invalid_image' })
+    }
+    room.pendingImage = image
+    return { ok: true }
+  })
+
+  app.get('/api/room-image/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    const dataUri = room?.pendingImage
+    if (!dataUri) return reply.code(404).send()
+    const match = /^data:([^;]+);base64,(.+)$/.exec(dataUri)
+    if (!match) return reply.code(404).send()
+    reply.header('Cache-Control', 'no-store')
+    reply.type(match[1])
+    return Buffer.from(match[2], 'base64')
+  })
+
   await app.listen({ port: PORT, host: '0.0.0.0' })
   const io = new Server(app.server, { cors: { origin: '*' } })
-
-  const rooms = new Map()
 
   const norm = s => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim()
   const lev = (a, b) => {
@@ -369,21 +403,6 @@ const start = async () => {
         return
       }
 
-      // Filet de sécurité côté serveur pour le champ image (question type
-      // "image") : l'éditeur redimensionne/compresse déjà avant l'envoi, mais
-      // il ne faut jamais dépendre uniquement du client — un client modifié
-      // pourrait émettre ce payload directement. Seuil volontairement bien
-      // en dessous de maxHttpBufferSize de socket.io (1 Mo par défaut) : au-delà,
-      // c'est le transport qui coupe la connexion de l'hôte entièrement (testé
-      // en direct), ce qui est bien pire qu'ignorer une seule question — mieux
-      // vaut rejeter proprement ici, largement avant cette limite. ~700 Ko en
-      // base64 laisse une bonne marge au-dessus de ce que produit la
-      // compression normale (une photo 1280px en JPEG fait plutôt 100-500 Ko).
-      if (typeof payload?.image === 'string' && payload.image.length > 700_000) {
-        console.warn(`[question:show] image trop lourde ignorée (room ${code}, ${payload.image.length} caractères)`)
-        return
-      }
-
       const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {} }
       room.history.push(historyEntry)
 
@@ -471,14 +490,17 @@ const start = async () => {
       }
 
       if (q.type === 'image') {
-        // Distance en cases jusqu'à la bonne réponse -> facteur de proximité,
-        // même principe que la tolérance de "graduation" mais sur une grille
-        // 2D (Chebyshev = la plus grande des deux distances, col et ligne).
+        // Distance en cases jusqu'à la case correcte la plus proche -> facteur
+        // de proximité, même principe que la tolérance de "graduation" mais
+        // sur une grille 2D (Chebyshev = la plus grande des deux distances,
+        // col et ligne). "correct" peut contenir plusieurs cases (une "zone"
+        // dessinée par le créateur) : cliquer n'importe où dans la zone vaut
+        // les points max (dist 0), le reste dégrade selon la case la plus proche.
         let cell
         try { cell = JSON.parse(payload?.content || 'null') } catch { cell = null }
-        const correctCell = Array.isArray(q.correct) ? q.correct[0] : null
-        if (!cell || typeof cell.col !== 'number' || typeof cell.row !== 'number' || !correctCell) return
-        const dist = Math.max(Math.abs(cell.col - correctCell.col), Math.abs(cell.row - correctCell.row))
+        const correctCells = Array.isArray(q.correct) ? q.correct.filter(c => c && typeof c.col === 'number' && typeof c.row === 'number') : []
+        if (!cell || typeof cell.col !== 'number' || typeof cell.row !== 'number' || correctCells.length === 0) return
+        const dist = Math.min(...correctCells.map(c => Math.max(Math.abs(cell.col - c.col), Math.abs(cell.row - c.row))))
         const closeness = Math.max(0, 1 - dist / IMAGE_PROXIMITY_MAX_DIST)
         const delta = Math.round(pointsFor(q.startTs, Date.now()) * closeness)
         const total = (room.scores.get(socket.id) || 0) + delta

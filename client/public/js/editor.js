@@ -317,21 +317,26 @@ const populateTrueFalseFields = (q) => {
   tfFalseBtn.classList.toggle('active', !isTrue)
 }
 
-// Grille de sélection de la bonne case, réutilisée depuis l'écran de jeu
-// (mêmes classes .image-grid/.image-cell) mais en mode "choisir" plutôt que
-// "répondre" : un clic désigne directement q.correct, pas de soumission.
+// Grille de sélection de la (ou des) bonne(s) case(s), réutilisée depuis
+// l'écran de jeu (mêmes classes .image-grid/.image-cell) mais en mode
+// "choisir" plutôt que "répondre" : sélection multiple — chaque clic
+// ajoute/retire une case de q.correct, formant une "zone" de tolérance.
+// Cliquer n'importe où dedans en jeu vaut les points max (voir server/index.js).
 const renderImageGrid = (q) => {
   if (!imageEditGrid) return
   imageEditGrid.innerHTML = ''
-  const correctCell = q.correct?.[0]
+  if (!Array.isArray(q.correct)) q.correct = []
+  const isSelected = (col, row) => q.correct.some(c => c && c.col === col && c.row === row)
   for (let row = 0; row < IMAGE_GRID_ROWS; row++) {
     for (let col = 0; col < IMAGE_GRID_COLS; col++) {
       const cell = document.createElement('div')
       cell.className = 'image-cell'
-      if (correctCell && correctCell.col === col && correctCell.row === row) cell.classList.add('selected')
+      if (isSelected(col, row)) cell.classList.add('selected')
       if (!readOnly) {
         cell.onclick = () => {
-          q.correct = [{ col, row }]
+          const idx = q.correct.findIndex(c => c && c.col === col && c.row === row)
+          if (idx >= 0) q.correct.splice(idx, 1)
+          else q.correct.push({ col, row })
           renderImageGrid(q)
         }
       }
