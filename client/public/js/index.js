@@ -356,7 +356,14 @@ const buildOrderList = (items) => {
       dataIdAttr: 'data-text',
       ghostClass: 'order-item-ghost',
       chosenClass: 'order-item-chosen',
-      dragClass: 'order-item-drag'
+      dragClass: 'order-item-drag',
+      // Sans ça, SortableJS utilise le drag natif HTML5 : au relâchement, le
+      // navigateur joue sa propre animation de "retour" de l'élément fantôme
+      // avant que Sortable ne la remplace par la sienne — d'où le délai/à-coup
+      // ressenti. En forçant l'émulation souris/tactile maison de Sortable,
+      // le dépôt est immédiat.
+      forceFallback: true,
+      fallbackClass: 'order-item-drag'
     })
   }
 }

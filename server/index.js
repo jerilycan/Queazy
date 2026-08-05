@@ -3,10 +3,16 @@ const Fastify = require('fastify')
 const fastifyStatic = require('@fastify/static')
 const { Server } = require('socket.io')
 
-// bodyLimit relevé (défaut Fastify 1 Mo) : la route /api/room-image accepte
-// une image compressée en base64 (~jusqu'à ~1,3 Mo pour 1 Mo de binaire brut).
-const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 5 * 1024 * 1024 })
+// bodyLimit relevé (défaut Fastify 1 Mo) : /api/room-image accepte une image
+// compressée en base64, /api/room-audio un clip audio recadré (voir plus bas)
+// — plus lourd, d'où les 8 Mo (contre 5 initialement).
+const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 8 * 1024 * 1024 })
 const PORT = process.env.PORT || 3000
+
+// Bump manuellement à chaque changement notable — affiché en discret dans un
+// coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
+// coup d'œil si le déploiement en cours est bien à jour.
+const APP_VERSION = '1.1.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -136,7 +142,7 @@ const start = async () => {
     return { id: h.id, prompt: h.prompt, type: h.type, results: idResults }
   })
 
-  app.get('/server-info', async (req) => ({ url: getBaseUrl(req.headers), port: PORT }))
+  app.get('/server-info', async (req) => ({ url: getBaseUrl(req.headers), port: PORT, version: APP_VERSION }))
 
   // Question "image" : l'image ne transite plus par socket.io (un gros blob
   // base64 embarqué dans un message temps réel s'est révélé peu fiable une

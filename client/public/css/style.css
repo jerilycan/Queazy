@@ -970,10 +970,16 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   inset: 0;
   pointer-events: none;
 }
-/* Marqueur du point cliqué par CE joueur : un pin (goutte) centré exactement
-   sur les coordonnées choisies (le coin sans arrondi, tourné à -45°, forme la
-   pointe qui indique le point précis) — neutre avant la révélation, coloré
-   vert/rouge une fois la bonne réponse connue. */
+/* Marqueur du point cliqué par CE joueur : un pin (goutte, coin sans arrondi
+   tourné à -45° pour former la pointe) — neutre avant la révélation, coloré
+   vert/rouge une fois la bonne réponse connue.
+   La pointe doit tomber exactement sur les coordonnées choisies, pas le
+   centre du pin : translate(-50%,-50%) seul ne centre que la BOÎTE (28x28)
+   sur le point, or après rotation la pointe se retrouve visuellement à
+   ~14*√2 ≈ 19.8px SOUS ce centre (demi-diagonale du carré tourné) — d'où le
+   décalage perçu entre le clic et l'endroit pointé. Le -19.8px supplémentaire
+   remonte la boîte d'autant pour que ce soit la pointe, et non le centre, qui
+   s'aligne sur left/top. */
 .image-marker {
   position: absolute;
   width: 28px;
@@ -986,8 +992,8 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   animation: markerDrop 0.3s cubic-bezier(.34,1.56,.64,1) both;
 }
 @keyframes markerDrop {
-  from { transform: translate(-50%, -50%) rotate(-45deg) scale(0.3); opacity: 0; }
-  to { transform: translate(-50%, -50%) rotate(-45deg) scale(1); opacity: 1; }
+  from { transform: translate(-50%, calc(-50% - 19.8px)) rotate(-45deg) scale(0.3); opacity: 0; }
+  to { transform: translate(-50%, calc(-50% - 19.8px)) rotate(-45deg) scale(1); opacity: 1; }
 }
 .image-marker.marker-correct { background: var(--tile-green); }
 .image-marker.marker-incorrect { background: var(--tile-red); }

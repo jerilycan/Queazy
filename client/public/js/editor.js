@@ -359,6 +359,29 @@ const renderImageZones = (zones) => {
 // clic accidentel plutôt qu'une vraie sélection, et on ignore le résultat.
 const IMAGE_ZONE_MIN_SIZE = 0.015
 
+// Si le rectangle qu'on vient de tracer "mord" sur un autre déjà validé, on
+// les fusionne en un seul rectangle englobant plutôt que de laisser deux
+// contours se chevaucher visuellement (moins propre, et redondant : le
+// scoring ne regarde que la distance à la zone la plus proche de toute façon).
+const rectsOverlap = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0
+const mergeOverlappingZones = (zones) => {
+  const list = zones.slice()
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      if (rectsOverlap(list[i], list[j])) {
+        list[i] = {
+          x0: Math.min(list[i].x0, list[j].x0), y0: Math.min(list[i].y0, list[j].y0),
+          x1: Math.max(list[i].x1, list[j].x1), y1: Math.max(list[i].y1, list[j].y1)
+        }
+        list.splice(j, 1)
+        i-- // ré-examine ce rectangle agrandi contre le reste depuis le début (fusions en chaîne)
+        break
+      }
+    }
+  }
+  return list
+}
+
 if (imageEditWrap) {
   let dragStart = null
   const pointFromEvent = (e) => {
@@ -400,6 +423,7 @@ if (imageEditWrap) {
       return
     }
     q.correct.push(zone)
+    q.correct = mergeOverlappingZones(q.correct)
     renderImageZones(q.correct)
   })
 }

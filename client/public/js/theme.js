@@ -73,9 +73,35 @@
     else navbar.appendChild(btn)
   }
 
+  // Numéro de version discret, en bas à droite de la fenêtre — juste de quoi
+  // vérifier d'un coup d'œil que le déploiement en cours est bien à jour, sans
+  // gêner le reste de l'UI (opacité faible, ignore les clics, jamais au-dessus
+  // d'une popup grâce à un z-index modeste).
+  function initVersionBadge() {
+    var badge = document.createElement('div')
+    badge.id = 'appVersionBadge'
+    badge.style.position = 'fixed'
+    badge.style.right = '8px'
+    badge.style.bottom = '6px'
+    badge.style.fontSize = '11px'
+    badge.style.fontFamily = 'monospace'
+    badge.style.color = 'var(--color-text, #888)'
+    badge.style.opacity = '0.35'
+    badge.style.pointerEvents = 'none'
+    badge.style.zIndex = '10'
+    badge.style.userSelect = 'none'
+    badge.style.transition = 'opacity 0.2s ease'
+    document.body.appendChild(badge)
+
+    fetch('/server-info').then(function (res) { return res.json() }).then(function (info) {
+      if (info && info.version) badge.textContent = 'v' + info.version
+    }).catch(function () {})
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initToggle)
+    document.addEventListener('DOMContentLoaded', function () { initToggle(); initVersionBadge() })
   } else {
     initToggle()
+    initVersionBadge()
   }
 })()
