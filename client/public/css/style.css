@@ -763,17 +763,17 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 20px;
-  padding: 40px 20px;
-  min-height: 240px;
-  font-size: 28px;
+  gap: 14px;
+  padding: 26px 20px;
+  min-height: 160px;
+  font-size: 21px;
   text-align: center;
 }
 .option-btn.truefalse-btn::before {
   content: '';
   position: static;
-  width: 72px;
-  height: 72px;
+  width: 50px;
+  height: 50px;
   background: rgba(255,255,255,0.92);
   margin: 0;
 }
@@ -782,8 +782,8 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .options-grid.truefalse-grid .option-btn.truefalse-btn:nth-child(2) { background: var(--tile-red); }
 .options-grid.truefalse-grid .option-btn.truefalse-btn:nth-child(2)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
 @media (max-width: 640px) {
-  .option-btn.truefalse-btn { min-height: 160px; font-size: 22px; }
-  .option-btn.truefalse-btn::before { width: 52px; height: 52px; }
+  .option-btn.truefalse-btn { min-height: 120px; font-size: 18px; gap: 10px; padding: 20px 16px; }
+  .option-btn.truefalse-btn::before { width: 38px; height: 38px; }
 }
 .option-btn { 
   padding: var(--space-md) var(--space-md) var(--space-md) 56px;
@@ -1292,6 +1292,24 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .my-result-banner.is-incorrect { background: var(--color-surface); color: var(--color-text-muted); border: 2px solid var(--color-border); }
 .my-result-banner.is-close { background: var(--tile-yellow); color: #3a2e00; }
 
+/* Texte explicatif optionnel, écrit par le créateur du quiz, affiché sous le
+   bandeau de résultat au moment de la révélation (ex. "Faux, l'entreprise a
+   été créée en 1986"). Volontairement plus sobre que .my-result-banner : ce
+   n'est pas un verdict, juste un complément de lecture. */
+.reveal-explanation {
+  max-width: 700px;
+  margin: var(--space-sm) auto 0;
+  padding: 12px 20px;
+  background: var(--color-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.5;
+  animation: fadeIn 0.3s ease;
+}
+
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
 
 .bg-accent { background: var(--color-accent) !important; }
@@ -1442,15 +1460,30 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   box-shadow: var(--shadow-sm);
 }
 
+/* Auparavant un bandeau plein dégradé accent, bord à bord, coins carrés en
+   bas : partout ailleurs dans l'appli, ce dégradé n'habille QUE des boutons
+   pilule arrondis (Rejoindre, Lancer...), jamais un simple panneau de fond —
+   d'où l'impression de bloc qui jure. Le dégradé reste, mais seulement sur le
+   bouton "+" (une vraie pilule), le bandeau lui-même redevient un fond neutre
+   avec un simple séparateur. */
 .sidebar-header {
   padding: var(--space-md);
-  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.sidebar-header h3 { color: white; }
+.sidebar-header h3 { color: var(--color-text); }
+
+.sidebar-header .btn-icon {
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 4px 12px rgba(var(--color-accent-rgb), 0.35);
+}
+.sidebar-header .btn-icon:hover { filter: brightness(1.08); }
 
 .question-list {
   flex: 1;
@@ -1739,9 +1772,23 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   flex: 1;
 }
 
-.order-edit-row { cursor: grab; }
-.order-edit-row.dragging { opacity: 0.4; }
-.order-edit-row.drag-over { border-color: var(--tile-yellow); box-shadow: 0 0 0 2px var(--tile-yellow) inset; }
+/* Même glisser au pointeur (pointerdown/move/up, un seul réordonnancement DOM
+   au relâchement — voir wireOrderEditDrag) que la liste "ordre" en jeu (voir
+   index.js wireOrderDrag), pour un rendu et un ressenti identiques. Seule la
+   poignée déclenche le geste (pas toute la ligne, contrairement au jeu) : la
+   ligne contient aussi un champ de texte éditable au clic. */
+.order-edit-row { position: relative; }
+.order-edit-row.dragging { z-index: 10; box-shadow: var(--shadow-lg); }
+.order-edit-row .q-drag-handle {
+  cursor: grab;
+  opacity: 0.4;
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+  touch-action: none;
+}
+.order-edit-row .q-drag-handle:hover { opacity: 0.8; }
+.order-edit-row.dragging .q-drag-handle { cursor: grabbing; }
 .order-edit-num {
   font-weight: 800;
   font-size: 13px;
@@ -2070,8 +2117,8 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   touch-action: manipulation;
 }
 .leader-row.is-me { border: 2px solid var(--color-accent); box-shadow: 0 0 0 4px var(--color-accent-soft); }
-.leader-row.row-enter { opacity: 0; transform: translateY(16px) scale(0.96); }
-.leader-row.row-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .35s, transform .35s cubic-bezier(0.34,1.56,0.64,1); }
+.leader-row.row-enter { opacity: 0; transform: translateY(18px) scale(0.96); }
+.leader-row.row-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .55s, transform .55s cubic-bezier(0.22,1,0.36,1); }
 /* Effet "dépassement" pendant le glissement FLIP (voir renderBoard() dans
    index.js) : un halo doré qui accompagne la ligne tant qu'elle grimpe dans
    le classement, plus discret en descendant — histoire qu'un dépassement se

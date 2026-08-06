@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.1.0'
+const APP_VERSION = '1.2.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -250,6 +250,18 @@ const start = async () => {
     return raw
   }
   const GRAD_CORRECT_THRESHOLD = 0.8
+  // Les scores "graduation"/"image" sont continus (proximité 0-1) : sans
+  // courbe, un "presque" à closeness=0.9 touchait encore 90% des points,
+  // trop proche d'une réponse parfaite. On élève la proximité à une
+  // puissance > 1 avant de la multiplier aux points de vitesse : ça ne
+  // change rien à closeness=1 (toujours 100%), mais creuse l'écart pour
+  // tout ce qui n'est pas exact (0.9 -> 81%, 0.7 -> 49%, 0.5 -> 25%).
+  const CLOSENESS_EXPONENT = 2
+  // Un champ blind test "pending" (fuzzy, pas une correspondance exacte)
+  // validé manuellement par l'hôte ne doit pas rapporter autant qu'un champ
+  // qui matchait déjà exactement tout seul — sinon une réponse approximative
+  // approuvée vaut la même chose qu'une réponse parfaite.
+  const FUZZY_APPROVAL_FACTOR = 0.6
   // Réactions "fun" pendant l'attente de validation d'une réponse libre (voir
   // index.js showModerationWait) : liste blanche stricte (jamais de contenu
   // arbitraire relayé à toute la salle) + cooldown par socket pour éviter
@@ -428,12 +440,16 @@ const start = async () => {
       room.history.push(historyEntry)
 
       const revealMs = computeRevealMs(payload)
-      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry }
+      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry }
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
       // lisible dans la frame WebSocket (devtools) avant même de répondre.
-      const { correct, ...payloadWithoutCorrect } = payload || {}
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest') ? payloadWithoutCorrect : payload
+      // 'explanation' est retiré pour TOUS les types, même raison : elle
+      // spoilerait souvent la réponse si elle était visible avant le reveal.
+      const { correct, explanation, ...payloadWithoutCorrectOrExplanation } = payload || {}
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest')
+        ? payloadWithoutCorrectOrExplanation
+        : { ...payloadWithoutCorrectOrExplanation, correct }
 
       // Diffusé immédiatement (pas au bout de revealMs) : chaque client anime
       // lui-même la révélation de la question/des tuiles jusqu'à startTs, pour
@@ -457,6 +473,7 @@ const start = async () => {
             id: room.currentQuestion.id,
             type: room.currentQuestion.type,
             correct: room.currentQuestion.correct,
+            explanation: room.currentQuestion.explanation || '',
             target: room.currentQuestion.type === 'graduation' ? room.currentQuestion.correct?.[0] : undefined
           })
         }
@@ -494,7 +511,7 @@ const start = async () => {
         const clamped = Math.min(max, Math.max(min, guess))
         const range = Math.max(1e-9, max - min)
         const closeness = Math.max(0, 1 - Math.abs(clamped - target) / range)
-        const delta = Math.round(pointsFor(q.startTs, Date.now()) * closeness)
+        const delta = Math.round(pointsFor(q.startTs, Date.now()) * (closeness ** CLOSENESS_EXPONENT))
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
@@ -529,7 +546,7 @@ const start = async () => {
         }
         const dist = Math.min(...zones.map(distToZone))
         const closeness = Math.max(0, 1 - dist / IMAGE_PROXIMITY_MAX_DIST)
-        const delta = Math.round(pointsFor(q.startTs, Date.now()) * closeness)
+        const delta = Math.round(pointsFor(q.startTs, Date.now()) * (closeness ** CLOSENESS_EXPONENT))
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
@@ -691,11 +708,15 @@ const start = async () => {
       if (!entry || entry.status !== 'pending') return
       entry.status = correct ? 'correct' : 'incorrect'
       if (correct) {
-        const total = (room.scores.get(item.playerId) || 0) + item.halfDelta
+        // Champ toujours "fuzzy" ici (seul cas qui passe par la modération,
+        // voir evalField) : on applique le facteur de réduction plutôt que
+        // le plein halfDelta, qui est réservé aux correspondances exactes.
+        const delta = Math.round(item.halfDelta * FUZZY_APPROVAL_FACTOR)
+        const total = (room.scores.get(item.playerId) || 0) + delta
         room.scores.set(item.playerId, total)
         const p = room.players.get(item.playerId)
         if (p?.token) room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
-        io.to(code).emit('score:update', { playerId: item.playerId, delta: item.halfDelta, total })
+        io.to(code).emit('score:update', { playerId: item.playerId, delta, total })
       }
       const stillPending = Object.values(item.fields).some(f => f.status === 'pending')
       if (stillPending) return

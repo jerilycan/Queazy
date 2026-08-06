@@ -188,6 +188,7 @@ const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
 const revealAnswerText = document.getElementById('revealAnswerText')
 const myResultBanner = document.getElementById('myResultBanner')
+const revealExplanationText = document.getElementById('revealExplanationText')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
 const imageArea = document.getElementById('imageArea')
@@ -236,6 +237,11 @@ let timerInt = null
 let selectedMcqOptions = []
 let currentQuestionType = 'free'
 let isGameEnded = false
+// "order" et "truefalse" n'ont pas de bouton "Valider" (voir question:show) —
+// l'envoi se fait automatiquement (clic pour truefalse, approche de la fin du
+// chrono pour order).
+let hasSubmitBtn = true
+let orderAutoSubmitted = false
 
 // --- Révélation « écran principal » : la question apparaît en grand, puis
 // les réponses une à une avec une animation, avant que le chrono ne démarre
@@ -775,6 +781,7 @@ const clearRevealState = () => {
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
+  if (revealExplanationText) { revealExplanationText.classList.add('d-none'); revealExplanationText.textContent = '' }
   if (gradSlider) gradSlider.classList.remove('reveal')
   orderState.itemEls.forEach(el => {
     el.classList.remove('correct-reveal', 'incorrect-reveal')
@@ -1211,7 +1218,8 @@ const loadQuizById = (id) => {
         // Même oubli que q.image en son temps : sans ce champ, l'extrait audio
         // du blind test disparaissait silencieusement au chargement du quiz
         // (question démarrée sans le moindre son, aucune erreur visible).
-        audio: q.audio
+        audio: q.audio,
+        explanation: q.explanation || ''
       })) : []
       loadedQuiz = {
         id: data.id,
@@ -1879,7 +1887,11 @@ const emitQuestion = (index) => {
     min: q.min,
     max: q.max,
     audioMode: q.type === 'blindtest' ? audioMode : undefined,
-    singleAttempt: currentSingleAttempt
+    singleAttempt: currentSingleAttempt,
+    // Texte optionnel affiché SEULEMENT à la révélation (voir server/index.js,
+    // jamais diffusé dans question:show — sinon lisible en devtools avant
+    // même de répondre), ex. "Faux, l'entreprise a été créée en 1986".
+    explanation: q.explanation || ''
   }
   // L'image (cliquable pour le type "image", ou simple illustration au-dessus
   // de la question pour les autres types) et l'extrait audio du type
@@ -2081,6 +2093,13 @@ socket.on('question:show', payload => {
   if (!isHost) {
     const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image'
     const isBlindtest = payload.type === 'blindtest'
+    // "order" (glisser-déposer) et "truefalse" (tape et c'est envoyé, comme
+    // un vrai Kahoot) n'ont pas besoin d'un bouton "Valider" séparé : l'action
+    // elle-même vaut confirmation (voir wireOrderDrag / le onclick truefalse
+    // plus bas pour "order"/"truefalse" ; le chrono se charge d'envoyer
+    // automatiquement l'ordre courant pour "order" si le joueur n'y touche
+    // plus, voir la boucle du minuteur ci-dessous).
+    hasSubmitBtn = payload.type !== 'order' && payload.type !== 'truefalse'
     freeTextEl.classList.toggle('mcq-mode', isTileType)
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
     if (blindtestFields) blindtestFields.classList.toggle('d-none', !isBlindtest)
@@ -2113,6 +2132,7 @@ socket.on('question:show', payload => {
   hasAnsweredThisQuestion = false
   myGradAnswerValue = null
   myOrderSubmission = null
+  orderAutoSubmitted = false
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -2139,8 +2159,13 @@ socket.on('question:show', payload => {
       // glisser, même largement après la fin visuelle de l'entrée.
       orderState.itemEls.forEach(el => { el.style.animation = '' })
       imageDisabled = false
-      freeTextEl.classList.remove('d-none')
-      applyTileReveal(freeTextEl, 0)
+      // "order"/"truefalse" n'ont pas de bouton "Valider" : freeTextEl ne
+      // contient plus que ça pour ces deux types, inutile de l'afficher (une
+      // boîte vide sous les tuiles n'apporterait rien).
+      if (hasSubmitBtn) {
+        freeTextEl.classList.remove('d-none')
+        applyTileReveal(freeTextEl, 0)
+      }
     }, Math.max(0, start - Date.now()))
   }
   // La musique démarre pile à startTs comme le reste (même rendez-vous que le
@@ -2187,6 +2212,16 @@ socket.on('question:show', payload => {
       playSound('tick')
     }
 
+    // "order" n'a pas de bouton "Valider" (voir question:show) : l'ordre
+    // affiché à l'écran EST la réponse, envoyée toute seule juste avant la
+    // fin — un peu en avance (500ms) plutôt que pile sur le dernier top pour
+    // laisser le temps à l'aller-retour réseau (le serveur rejette toute
+    // réponse arrivée après son propre décompte).
+    if (!isHost && payload.type === 'order' && !hasAnsweredThisQuestion && !orderAutoSubmitted && remaining <= 500) {
+      orderAutoSubmitted = true
+      submitCurrentAnswer()
+    }
+
     if (remaining <= 0) {
       clearInterval(timerInt)
     }
@@ -2229,6 +2264,9 @@ socket.on('question:show', payload => {
         selectedMcqOptions = [opt]
         Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'))
         el.classList.add('selected')
+        // Pas de bouton "Valider" pour ce type : taper une tuile envoie tout
+        // de suite la réponse, comme un vrai Kahoot.
+        submitCurrentAnswer()
       }
       optionsDiv.appendChild(el)
       applyTileReveal(el, i)
@@ -2236,7 +2274,11 @@ socket.on('question:show', payload => {
   }
 })
 
-sendBtn.onclick = () => {
+// Extrait en fonction nommée (au lieu d'un simple sendBtn.onclick) : "order"
+// et "truefalse" n'ont plus de bouton Valider (voir question:show) et doivent
+// pouvoir déclencher le même envoi automatiquement — au clic pour truefalse,
+// à l'approche de la fin du chrono pour order (voir plus bas).
+const submitCurrentAnswer = () => {
   const roomCode = roomInput.value.trim()
 
   let content = ''
@@ -2293,6 +2335,7 @@ sendBtn.onclick = () => {
     })
   }
 }
+sendBtn.onclick = submitCurrentAnswer
 
 answerInput.addEventListener('keydown', e => { if (e.key === 'Enter') { sendBtn.click() } })
 
@@ -2483,24 +2526,34 @@ const showAnnounce = (msg) => {
 const computeOrder = () => Array.from(scores.entries()).sort(([,a],[,b]) => (b.total - a.total))
 
 const leaderRows = new Map() // socketId -> élément ligne
+// Ids dont l'entrée a déjà été JOUÉE À L'ÉCRAN (overlay visible) — distinct de
+// "présent dans leaderRows", car renderBoard() est aussi appelé pendant le
+// salon d'attente (à chaque joueur qui rejoint, overlay encore caché) pour
+// garder les données à jour. Sans cette distinction, la ligne passait déjà de
+// opacity:0 à 1 pendant qu'elle était invisible (display:none ne joue aucune
+// transition) : à la vraie première ouverture du classement, tout était donc
+// déjà à son état final, sans la moindre animation visible — le fameux
+// "on ne voit toujours rien".
+const leaderRowsRevealed = new Set()
+const LEADER_ENTER_STAGGER_MS = 130
 
 const renderBoard = () => {
   const ordered = computeOrder().filter(([id, s]) => !s.isHost)
+  const overlayVisible = !!leaderOverlay && !leaderOverlay.classList.contains('d-none') && leaderOverlay.style.display !== 'none'
 
   const first = new Map()
   leaderRows.forEach((row, id) => { first.set(id, row.getBoundingClientRect()) })
 
   const currentIds = new Set(ordered.map(([id]) => id))
   leaderRows.forEach((row, id) => {
-    if (!currentIds.has(id)) { row.remove(); leaderRows.delete(id) }
+    if (!currentIds.has(id)) { row.remove(); leaderRows.delete(id); leaderRowsRevealed.delete(id) }
   })
 
   ordered.forEach(([id, s], idx) => {
     let row = leaderRows.get(id)
-    const isNew = !row
-    if (isNew) {
+    if (!row) {
       row = document.createElement('div')
-      row.className = 'leader-row row-enter'
+      row.className = 'leader-row'
       row.innerHTML = `<span class="leader-rank"></span><span class="leader-name"></span><span class="leader-score"></span>`
       leaderRows.set(id, row)
     }
@@ -2511,14 +2564,24 @@ const renderBoard = () => {
     leaderboard.appendChild(row) // déplace le nœud existant : préserve son identité pour le FLIP
   })
 
-  leaderRows.forEach((row) => {
-    if (row.classList.contains('row-enter')) {
+  // Entrée en cascade, du 1er rang au dernier — mais seulement pour les
+  // lignes jamais révélées pendant que l'overlay était réellement affiché.
+  if (overlayVisible) {
+    ordered.forEach(([id], idx) => {
+      const row = leaderRows.get(id)
+      if (!row || leaderRowsRevealed.has(id)) return
+      leaderRowsRevealed.add(id)
+      row.classList.add('row-enter')
+      row.style.transitionDelay = `${Math.min(idx, 12) * LEADER_ENTER_STAGGER_MS}ms`
       requestAnimationFrame(() => {
         row.classList.add('row-enter-active')
-        row.addEventListener('transitionend', () => row.classList.remove('row-enter', 'row-enter-active'), { once: true })
+        row.addEventListener('transitionend', () => {
+          row.classList.remove('row-enter', 'row-enter-active')
+          row.style.transitionDelay = ''
+        }, { once: true })
       })
-    }
-  })
+    })
+  }
 
   ordered.forEach(([id]) => {
     const row = leaderRows.get(id)
@@ -2592,6 +2655,10 @@ socket.on('timer:end', () => {
 })
 
 socket.on('question:reveal', payload => {
+  if (revealExplanationText && payload.explanation) {
+    revealExplanationText.textContent = payload.explanation
+    revealExplanationText.classList.remove('d-none')
+  }
   if ((payload.type === 'mcq' || payload.type === 'truefalse') && optionsDiv) {
     Array.from(optionsDiv.children).forEach(el => {
       if ((payload.correct || []).includes(el.textContent)) el.classList.add('correct-reveal')

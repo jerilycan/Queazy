@@ -100,6 +100,7 @@ const toastsEl = document.getElementById('toasts')
 
 // Champs de détail de question
 const qPrompt = document.getElementById('qPrompt')
+const qExplanation = document.getElementById('qExplanation')
 const qType = document.getElementById('qType')
 const qTimer = document.getElementById('qTimer')
 const timerMinus = document.getElementById('timerMinus')
@@ -774,6 +775,7 @@ const selectQuestion = (index) => {
 
   // Mettre à jour les champs
   qPrompt.value = q.prompt || ''
+  if (qExplanation) qExplanation.value = q.explanation || ''
   qType.value = q.type || 'free'
   qTimer.value = (q.timerMs || 15000) / 1000
   populateGradFields(q)
@@ -802,6 +804,7 @@ const saveCurrentQuestionState = () => {
 
   const q = questions[activeIndex]
   q.prompt = qPrompt.value.trim()
+  if (qExplanation) q.explanation = qExplanation.value.trim()
   q.type = qType.value
   q.timerMs = parseInt(qTimer.value) * 1000 || 15000
   if (q.type === 'graduation') {
@@ -905,9 +908,72 @@ const renderCorrects = () => {
   })
 }
 
-// Réutilise le même glisser-déposer HTML5 que la sidebar des questions
-// (moveQuestion) : ici on réordonne q.correct, la séquence "bonne réponse".
-let orderDragSrcIndex = null
+// Même glisser au pointeur que la liste "ordre" en jeu (voir index.js
+// wireOrderDrag) : rects des AUTRES lignes figés une seule fois au
+// pointerdown, la ligne saisie suit le pointeur via son propre transform, un
+// "newSlot" recalculé à chaque mouvement à partir de ces rects figés, et un
+// seul réordonnancement (ici : un seul splice de q.correct) au relâchement —
+// jamais de mutation cumulative pendant le geste.
+const ORDER_EDIT_LIST_GAP = 8
+let orderEditDragActive = false
+
+const wireOrderEditDrag = (row, handle) => {
+  if (!handle) return
+  handle.addEventListener('pointerdown', (e) => {
+    if (readOnly || orderEditDragActive) return
+    e.preventDefault()
+    orderEditDragActive = true
+    const startY = e.clientY
+    row.classList.add('dragging')
+    try { handle.setPointerCapture(e.pointerId) } catch {}
+
+    const others = Array.from(orderEditList.children).filter(c => c !== row)
+    const baseRects = others.map(c => c.getBoundingClientRect())
+    const startSlot = Array.from(orderEditList.children).indexOf(row)
+    const itemHeight = row.getBoundingClientRect().height + ORDER_EDIT_LIST_GAP
+    let currentSlot = startSlot
+
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY
+      row.style.transform = `translateY(${dy}px) scale(1.02)`
+      const rect = row.getBoundingClientRect()
+      const center = rect.top + rect.height / 2
+      let newSlot = 0
+      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      if (newSlot === currentSlot) return
+      currentSlot = newSlot
+      others.forEach((c, i) => {
+        let shift = 0
+        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
+        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
+        c.style.transition = 'transform 0.18s ease'
+        c.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+
+    const cleanup = (applyReorder) => {
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onCancel)
+      orderEditDragActive = false
+      const q = questions[activeIndex]
+      if (applyReorder && currentSlot !== startSlot && q && Array.isArray(q.correct)) {
+        const [moved] = q.correct.splice(startSlot, 1)
+        q.correct.splice(currentSlot, 0, moved)
+      }
+      // Reconstruction complète plutôt qu'un simple insertBefore : les lignes
+      // portent un <input> texte librement édité, un rendu frais à partir de
+      // q.correct est la seule source de vérité fiable (numéros, closures).
+      renderOrderItems()
+    }
+    const onUp = (ev) => { try { handle.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
+    const onCancel = () => cleanup(false)
+
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onCancel)
+  })
+}
 
 const renderOrderItems = () => {
   if (!orderEditList) return
@@ -923,34 +989,15 @@ const renderOrderItems = () => {
   q.correct.forEach((item, idx) => {
     const row = document.createElement('div')
     row.className = 'option-row order-edit-row'
-    row.draggable = !readOnly
     row.dataset.index = idx
 
+    let handle = null
     if (!readOnly) {
-      row.addEventListener('dragstart', () => { orderDragSrcIndex = idx; row.classList.add('dragging') })
-      row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over') })
-      row.addEventListener('dragleave', () => row.classList.remove('drag-over'))
-      row.addEventListener('drop', (e) => {
-        e.preventDefault()
-        row.classList.remove('drag-over')
-        if (orderDragSrcIndex === null || orderDragSrcIndex === idx) return
-        const [moved] = q.correct.splice(orderDragSrcIndex, 1)
-        q.correct.splice(idx, 0, moved)
-        orderDragSrcIndex = null
-        renderOrderItems()
-      })
-      row.addEventListener('dragend', () => {
-        row.classList.remove('dragging')
-        Array.from(orderEditList.children).forEach(c => c.classList.remove('drag-over'))
-        orderDragSrcIndex = null
-      })
-    }
-
-    if (!readOnly) {
-      const handle = document.createElement('span')
+      handle = document.createElement('span')
       handle.className = 'q-drag-handle'
       handle.textContent = '⠿'
       row.appendChild(handle)
+      wireOrderEditDrag(row, handle)
     }
 
     const num = document.createElement('span')
@@ -1078,6 +1125,9 @@ qPrompt.oninput = () => {
     activeItem.querySelector('.q-text').textContent = qPrompt.value || '(Nouvelle question)'
   }
 }
+if (qExplanation) {
+  qExplanation.oninput = () => { questions[activeIndex].explanation = qExplanation.value }
+}
 
 addQuestionBtn.onclick = () => {
   questions.push(createDefaultQuestion())
@@ -1098,6 +1148,7 @@ deleteQuestionBtn.onclick = () => {
   const q = questions[activeIndex]
   
   qPrompt.value = q.prompt || ''
+  if (qExplanation) qExplanation.value = q.explanation || ''
   qType.value = q.type || 'free'
   qTimer.value = (q.timerMs || 15000) / 1000
   populateGradFields(q)
