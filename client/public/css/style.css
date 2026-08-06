@@ -1652,21 +1652,23 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   overflow: hidden;
 }
 
+/* Trait net sur les tout premiers pixels (garde l'identité "étiquette de
+   couleur" bien lisible), puis dégradé vers l'intérieur de la case jusqu'à
+   transparent — un halo qui s'éteint en douceur plutôt qu'un bloc plat qui
+   s'arrête net. */
 .question-item::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
+  inset: 0;
+  pointer-events: none;
 }
 
-.question-item.type-mcq::before { background: var(--tile-blue); }
-.question-item.type-free::before { background: var(--tile-green); }
-.question-item.type-graduation::before { background: var(--tile-yellow); }
-.question-item.type-truefalse::before { background: var(--tile-red); }
-.question-item.type-order::before { background: var(--color-accent); }
-.question-item.type-image::before { background: var(--color-cyan); }
+.question-item.type-mcq::before { background: linear-gradient(90deg, var(--tile-blue) 0, var(--tile-blue) 3px, transparent 60%); }
+.question-item.type-free::before { background: linear-gradient(90deg, var(--tile-green) 0, var(--tile-green) 3px, transparent 60%); }
+.question-item.type-graduation::before { background: linear-gradient(90deg, var(--tile-yellow) 0, var(--tile-yellow) 3px, transparent 60%); }
+.question-item.type-truefalse::before { background: linear-gradient(90deg, var(--tile-red) 0, var(--tile-red) 3px, transparent 60%); }
+.question-item.type-order::before { background: linear-gradient(90deg, var(--color-accent) 0, var(--color-accent) 3px, transparent 60%); }
+.question-item.type-image::before { background: linear-gradient(90deg, var(--color-cyan) 0, var(--color-cyan) 3px, transparent 60%); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
@@ -1680,7 +1682,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   box-shadow: 0 4px 12px rgba(var(--color-accent-rgb),0.35);
 }
 
-.question-item.active::before { background: var(--tile-yellow); }
+.question-item.active::before { background: linear-gradient(90deg, var(--tile-yellow) 0, var(--tile-yellow) 3px, rgba(255,210,63,0.35) 30%, transparent 65%); }
 
 .question-item .q-num {
   font-weight: 800;
