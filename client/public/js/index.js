@@ -237,11 +237,6 @@ let timerInt = null
 let selectedMcqOptions = []
 let currentQuestionType = 'free'
 let isGameEnded = false
-// "order" et "truefalse" n'ont pas de bouton "Valider" (voir question:show) —
-// l'envoi se fait automatiquement (clic pour truefalse, approche de la fin du
-// chrono pour order).
-let hasSubmitBtn = true
-let orderAutoSubmitted = false
 
 // --- Révélation « écran principal » : la question apparaît en grand, puis
 // les réponses une à une avec une animation, avant que le chrono ne démarre
@@ -2093,13 +2088,6 @@ socket.on('question:show', payload => {
   if (!isHost) {
     const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image'
     const isBlindtest = payload.type === 'blindtest'
-    // "order" (glisser-déposer) et "truefalse" (tape et c'est envoyé, comme
-    // un vrai Kahoot) n'ont pas besoin d'un bouton "Valider" séparé : l'action
-    // elle-même vaut confirmation (voir wireOrderDrag / le onclick truefalse
-    // plus bas pour "order"/"truefalse" ; le chrono se charge d'envoyer
-    // automatiquement l'ordre courant pour "order" si le joueur n'y touche
-    // plus, voir la boucle du minuteur ci-dessous).
-    hasSubmitBtn = payload.type !== 'order' && payload.type !== 'truefalse'
     freeTextEl.classList.toggle('mcq-mode', isTileType)
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
     if (blindtestFields) blindtestFields.classList.toggle('d-none', !isBlindtest)
@@ -2132,7 +2120,6 @@ socket.on('question:show', payload => {
   hasAnsweredThisQuestion = false
   myGradAnswerValue = null
   myOrderSubmission = null
-  orderAutoSubmitted = false
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -2159,13 +2146,8 @@ socket.on('question:show', payload => {
       // glisser, même largement après la fin visuelle de l'entrée.
       orderState.itemEls.forEach(el => { el.style.animation = '' })
       imageDisabled = false
-      // "order"/"truefalse" n'ont pas de bouton "Valider" : freeTextEl ne
-      // contient plus que ça pour ces deux types, inutile de l'afficher (une
-      // boîte vide sous les tuiles n'apporterait rien).
-      if (hasSubmitBtn) {
-        freeTextEl.classList.remove('d-none')
-        applyTileReveal(freeTextEl, 0)
-      }
+      freeTextEl.classList.remove('d-none')
+      applyTileReveal(freeTextEl, 0)
     }, Math.max(0, start - Date.now()))
   }
   // La musique démarre pile à startTs comme le reste (même rendez-vous que le
@@ -2212,16 +2194,6 @@ socket.on('question:show', payload => {
       playSound('tick')
     }
 
-    // "order" n'a pas de bouton "Valider" (voir question:show) : l'ordre
-    // affiché à l'écran EST la réponse, envoyée toute seule juste avant la
-    // fin — un peu en avance (500ms) plutôt que pile sur le dernier top pour
-    // laisser le temps à l'aller-retour réseau (le serveur rejette toute
-    // réponse arrivée après son propre décompte).
-    if (!isHost && payload.type === 'order' && !hasAnsweredThisQuestion && !orderAutoSubmitted && remaining <= 500) {
-      orderAutoSubmitted = true
-      submitCurrentAnswer()
-    }
-
     if (remaining <= 0) {
       clearInterval(timerInt)
     }
@@ -2264,9 +2236,6 @@ socket.on('question:show', payload => {
         selectedMcqOptions = [opt]
         Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'))
         el.classList.add('selected')
-        // Pas de bouton "Valider" pour ce type : taper une tuile envoie tout
-        // de suite la réponse, comme un vrai Kahoot.
-        submitCurrentAnswer()
       }
       optionsDiv.appendChild(el)
       applyTileReveal(el, i)
