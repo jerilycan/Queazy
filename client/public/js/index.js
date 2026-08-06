@@ -877,15 +877,13 @@ const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
   blindtestAudio.pause()
   blindtestAudio.currentTime = 0
   blindtestAudio.src = audioUrl || ''
-  // Volume : la préférence perso du joueur (localStorage) gagne toujours si
-  // elle existe déjà ; sinon on part du défaut choisi par l'hôte pour cette
-  // question (voir hostAudioVolume). SAUF pour l'hôte lui-même : il a déjà
-  // SON propre réglage direct (le curseur "volume par défaut" du panneau de
-  // contrôle) — sans cette exception, une préférence perso enregistrée sur
-  // SON navigateur (ex. lors d'un essai précédent en tant que joueur) restait
-  // collée pour toujours et masquait silencieusement chaque nouveau réglage
-  // du "défaut", donnant l'impression qu'il "ne comptait pas".
-  const myVolumePct = isHost ? null : getMyBlindTestVolumePct()
+  // Volume : la valeur "par défaut" choisie par l'hôte ne sert QUE de point
+  // de départ pour quelqu'un qui n'a JAMAIS touché à son propre curseur (ni
+  // en tant que joueur, ni en tant qu'hôte, sur CE navigateur) — dès qu'une
+  // préférence perso existe (même une seule fois, n'importe quand), elle
+  // gagne pour toujours, y compris pour l'hôte lui-même : le "défaut" ne
+  // doit jamais écraser un réglage volontaire déjà fait.
+  const myVolumePct = getMyBlindTestVolumePct()
   const startVolumePct = myVolumePct !== null ? myVolumePct : (typeof hostVolumePct === 'number' ? hostVolumePct : 70)
   blindtestAudio.volume = Math.min(1, Math.max(0, startVolumePct / 100))
   blindtestVolumeSlider.setPct(startVolumePct)
