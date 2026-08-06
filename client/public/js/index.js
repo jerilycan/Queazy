@@ -212,9 +212,13 @@ const blindtestFields = document.getElementById('blindtestFields')
 const blindtestTitleInput = document.getElementById('blindtestTitleInput')
 const blindtestArtistInput = document.getElementById('blindtestArtistInput')
 const audioModeRemoteInput = document.getElementById('audioModeRemote')
-const audioVolumeInput = document.getElementById('audioVolumeInput')
+const audioVolumeTrack = document.getElementById('audioVolumeTrack')
+const audioVolumeFill = document.getElementById('audioVolumeFill')
+const audioVolumeThumb = document.getElementById('audioVolumeThumb')
 const audioVolumeLabel = document.getElementById('audioVolumeLabel')
-const blindtestVolumeInput = document.getElementById('blindtestVolumeInput')
+const blindtestVolumeTrack = document.getElementById('blindtestVolumeTrack')
+const blindtestVolumeFill = document.getElementById('blindtestVolumeFill')
+const blindtestVolumeThumb = document.getElementById('blindtestVolumeThumb')
 // Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
 // décorative au-dessus de l'énoncé.
@@ -673,18 +677,60 @@ if (audioModeRemoteInput) {
   audioModeRemoteInput.onchange = () => { audioMode = audioModeRemoteInput.checked ? 'remote' : 'irl' }
 }
 
+// Curseur de volume "maison" (div + pointer events) plutôt qu'un
+// <input type="range"> restylé — voir style.css .volume-track pour le
+// pourquoi (bug visuel cross-navigateur avec le halo de focus global). Même
+// principe que le curseur du type "graduation" : rects des autres éléments
+// non pertinents ici (une seule piste, pas de tuiles à pousser), juste la
+// position du pointeur relative à SA PROPRE piste — donc jamais de décalage
+// entre l'endroit cliqué et l'endroit où le pouce atterrit, à n'importe
+// quelle largeur d'écran.
+const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
+  if (!track || !fill || !thumb) return { setPct: () => {}, getPct: () => initialPct }
+  let pct = initialPct
+  const render = () => {
+    fill.style.width = pct + '%'
+    thumb.style.left = pct + '%'
+  }
+  const setFromClientX = (clientX) => {
+    const r = track.getBoundingClientRect()
+    pct = Math.round(Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * 100)
+    render()
+    onChange(pct)
+  }
+  let dragging = false
+  track.addEventListener('pointerdown', e => {
+    dragging = true
+    try { track.setPointerCapture(e.pointerId) } catch {}
+    track.classList.add('grabbing')
+    setFromClientX(e.clientX)
+  })
+  track.addEventListener('pointermove', e => { if (dragging) setFromClientX(e.clientX) })
+  const endDrag = e => {
+    if (!dragging) return
+    dragging = false
+    try { track.releasePointerCapture(e.pointerId) } catch {}
+    track.classList.remove('grabbing')
+  }
+  track.addEventListener('pointerup', endDrag)
+  track.addEventListener('pointercancel', endDrag)
+  render()
+  return {
+    setPct: (v) => { pct = Math.min(100, Math.max(0, Math.round(v))); render() },
+    getPct: () => pct
+  }
+}
+
 // Volume par défaut choisi par l'hôte (0-100, transmis dans le payload de
 // question:show) : sert de point de départ pour un joueur qui n'a encore
-// jamais touché à SON propre curseur (voir plus bas, blindtestVolumeInput) —
+// jamais touché à SON propre curseur (voir plus bas, blindtestVolumeSlider) —
 // une fois qu'il l'a fait, sa préférence perso (localStorage) prend toujours
 // le dessus, y compris pour les questions suivantes du même quiz.
 let hostAudioVolume = 70
-if (audioVolumeInput) {
-  audioVolumeInput.oninput = () => {
-    hostAudioVolume = Number(audioVolumeInput.value)
-    if (audioVolumeLabel) audioVolumeLabel.textContent = hostAudioVolume + '%'
-  }
-}
+const audioVolumeSlider = wireVolumeSlider(audioVolumeTrack, audioVolumeFill, audioVolumeThumb, hostAudioVolume, (pct) => {
+  hostAudioVolume = pct
+  if (audioVolumeLabel) audioVolumeLabel.textContent = pct + '%'
+})
 
 // Volume LOCAL du joueur, jamais envoyé au serveur — juste pour lui, en cas
 // de son trop fort à son goût. Persisté en localStorage pour ne pas avoir à
@@ -694,15 +740,10 @@ const getMyBlindTestVolumePct = () => {
   const saved = localStorage.getItem(BLINDTEST_VOLUME_KEY)
   return saved !== null ? Math.min(100, Math.max(0, Number(saved))) : null
 }
-if (blindtestVolumeInput) {
-  const saved = getMyBlindTestVolumePct()
-  if (saved !== null) blindtestVolumeInput.value = saved
-  blindtestVolumeInput.oninput = () => {
-    const pct = Number(blindtestVolumeInput.value)
-    localStorage.setItem(BLINDTEST_VOLUME_KEY, String(pct))
-    if (blindtestAudio) blindtestAudio.volume = Math.min(1, Math.max(0, pct / 100))
-  }
-}
+const blindtestVolumeSlider = wireVolumeSlider(blindtestVolumeTrack, blindtestVolumeFill, blindtestVolumeThumb, getMyBlindTestVolumePct() ?? 70, (pct) => {
+  localStorage.setItem(BLINDTEST_VOLUME_KEY, String(pct))
+  if (blindtestAudio) blindtestAudio.volume = Math.min(1, Math.max(0, pct / 100))
+})
 
 // Monte le graphe Web Audio <audio> -> analyser -> destination UNE SEULE FOIS
 // (createMediaElementSource ne peut être appelé qu'une fois par élément, sinon
@@ -842,7 +883,7 @@ const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
   const myVolumePct = getMyBlindTestVolumePct()
   const startVolumePct = myVolumePct !== null ? myVolumePct : (typeof hostVolumePct === 'number' ? hostVolumePct : 70)
   blindtestAudio.volume = Math.min(1, Math.max(0, startVolumePct / 100))
-  if (blindtestVolumeInput) blindtestVolumeInput.value = startVolumePct
+  blindtestVolumeSlider.setPct(startVolumePct)
 }
 
 const playBlindTestAudio = () => {

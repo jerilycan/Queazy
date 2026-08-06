@@ -1193,8 +1193,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
    centrée) plutôt qu'à côté (l'ancien flex row les mettait côte à côte, d'où
    la disposition bancale signalée). Présenté comme une vraie petite pilule
    de contrôle, cohérente avec le reste de l'UI, pas juste un curseur nu qui
-   flotte sous l'orbe. Le curseur natif est restylé via .volume-slider
-   (partagé avec le panneau de l'hôte, "volume par défaut"). */
+   flotte sous l'orbe. */
 .blindtest-volume-row {
   display: flex;
   align-items: center;
@@ -1207,50 +1206,54 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   box-shadow: var(--shadow-sm);
   font-size: 15px;
 }
-input[type="range"].volume-slider {
-  -webkit-appearance: none;
-  appearance: none;
+
+/* Curseur de volume "maison" (div + pointer events, voir index.js
+   wireVolumeSlider) plutôt qu'un <input type="range"> restylé : ce dernier
+   souffrait d'un vrai bug visuel cross-navigateur (le halo de la règle
+   globale input:focus débordait largement du fin curseur, donnant
+   l'impression que le pouce n'atteignait jamais le minimum/maximum — voir
+   les versions précédentes). Même principe que le curseur du type
+   "graduation" déjà dans le jeu : aucun rendu natif de navigateur en jeu,
+   donc aucune surprise cross-navigateur possible. Partagé entre le panneau
+   de l'hôte ("volume par défaut") et la pilule du joueur ci-dessus. */
+.volume-track {
+  position: relative;
   flex: 1;
   width: 100px;
   height: 4px;
   border-radius: 999px;
   background: var(--color-border);
-  outline: none;
   cursor: pointer;
+  touch-action: none;
 }
-/* La règle globale "input:focus" (voir plus haut, pensée pour les champs
-   texte) pose un halo (box-shadow 4px) + un autre fond au focus — sur ce
-   curseur fin de 4px de haut, ce halo débordait largement au-dessus/en
-   dessous en formant une pilule bien plus grande que la vraie piste : le
-   pouce, positionné correctement sur la piste réelle, semblait alors ne
-   jamais atteindre les bords de cette pilule décorative, donnant
-   l'impression fausse qu'il restait coincé au milieu même au minimum ou au
-   maximum. On neutralise ce halo spécifiquement ici (spécificité plus
-   élevée que la règle globale, donc elle gagne). */
-input[type="range"].volume-slider:focus {
-  outline: none;
-  background: var(--color-border);
-  border-color: transparent;
-  box-shadow: none;
+.volume-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-cyan), var(--color-accent));
 }
-input[type="range"].volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
+.volume-thumb {
+  position: absolute;
+  top: 50%;
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.25);
-  cursor: pointer;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.28), 0 2px 6px rgba(0,0,0,0.4);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  transition: box-shadow 0.15s ease;
 }
-input[type="range"].volume-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 50%;
-  background: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.25);
-  cursor: pointer;
+.volume-track.grabbing .volume-thumb { cursor: grabbing; }
+/* Même raison que .grad-value (curseur "graduation") : sans largeur
+   minimale, "70%" -> "100%" (2 -> 3 chiffres) décale légèrement tout ce qui
+   suit dans la ligne. */
+#audioVolumeLabel {
+  display: inline-block;
+  min-width: 4ch;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Éditeur : recadreur audio (voir editor.js encodeWavMono) */

@@ -131,11 +131,14 @@
             <input id="audioModeRemote" type="checkbox" class="checkbox-custom" />
             🎵 Blind test à distance (musique sur chaque poste, sinon seulement le tien)
           </label>
-          <label class="align-center d-flex gap-xs font-bold font-14" title="Volume par défaut de la musique des Blind Tests — chaque joueur peut ensuite l'ajuster de son côté">
+          <div class="align-center d-flex gap-xs font-bold font-14" title="Volume par défaut de la musique des Blind Tests — chaque joueur peut ensuite l'ajuster de son côté">
             🔊 Volume musique par défaut
-            <input id="audioVolumeInput" type="range" min="0" max="100" value="70" class="volume-slider" />
+            <div id="audioVolumeTrack" class="volume-track">
+              <div id="audioVolumeFill" class="volume-fill"></div>
+              <div id="audioVolumeThumb" class="volume-thumb"></div>
+            </div>
             <span id="audioVolumeLabel" class="font-13 text-muted">70%</span>
-          </label>
+          </div>
         </div>
         <div class="d-flex gap-sm">
           <button id="selectQuizBtn" class="btn h-48 px-32">Sélectionner un Quiz</button>
@@ -237,9 +240,12 @@
               </div>
               <button type="button" id="blindtestUnlockBtn" class="blindtest-unlock-btn d-none">🔇 Touche pour activer le son</button>
             </div>
-            <div class="blindtest-volume-row">
+            <div class="blindtest-volume-row" title="Ton volume, juste pour toi">
               <span aria-hidden="true">🔉</span>
-              <input id="blindtestVolumeInput" type="range" min="0" max="100" value="70" class="volume-slider" title="Ton volume, juste pour toi" />
+              <div id="blindtestVolumeTrack" class="volume-track">
+                <div id="blindtestVolumeFill" class="volume-fill"></div>
+                <div id="blindtestVolumeThumb" class="volume-thumb"></div>
+              </div>
               <span aria-hidden="true">🔊</span>
             </div>
           </div>
