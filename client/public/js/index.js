@@ -311,8 +311,13 @@ const buildGradSlider = (min, max, value) => {
 
 if (gradSlider) {
   let dragging = false
+  // Mesuré sur .grad-slider-track (pas .grad-slider lui-même) : c'est CE
+  // conteneur, pas le padding autour, qui sert de repère à gradSliderThumb
+  // (style.left en %, voir setGradValue) — mesurer sur le mauvais élément
+  // décalait le pouce, qui n'atteignait jamais vraiment les deux bouts.
+  const gradTrackEl = gradSlider.querySelector('.grad-slider-track') || gradSlider
   const setFromClientX = (clientX) => {
-    const r = gradSlider.getBoundingClientRect()
+    const r = gradTrackEl.getBoundingClientRect()
     const pct = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
     setGradValue(gradState.min + pct * (gradState.max - gradState.min))
   }

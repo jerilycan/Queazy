@@ -728,6 +728,11 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   justify-content: space-between;
   align-items: baseline;
   max-width: 520px;
+  /* Même padding horizontal que .grad-slider : sans ça, ces bornes (posées
+     sur toute la largeur, sans marge) tombent plus écartées que les deux
+     bouts réels de la piste juste au-dessus (elle, inset par ce padding),
+     donnant l'impression que le curseur "n'atteint jamais" le repère 0/100. */
+  padding: 0 4px;
   margin: 6px auto 0;
   color: white;
 }
@@ -736,6 +741,16 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   font-weight: 600;
   opacity: 0.7;
   font-size: 14px;
+}
+
+.grad-value {
+  /* "3ch" = largeur de trois "0" : encaisse le passage de 2 à 3 chiffres
+     (ex. 99 -> 100) sans que le nombre, centré dans son conteneur, ne
+     déplace quoi que ce soit autour de lui à chaque frappe/glissement. */
+  display: inline-block;
+  min-width: 3ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* box-shadow plutôt que transform : le JS pose déjà transform:scaleX(pct) en
@@ -1115,7 +1130,9 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
    indisponible ; retirée en JS dès que la vraie analyse audio prend le relais. */
 .blindtest-area {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
   margin: 0 auto var(--space-lg);
 }
 .blindtest-orb {
@@ -1172,17 +1189,22 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .blindtest-fields { display: flex; flex: 1; gap: 10px; }
 .blindtest-fields input { flex: 1; }
 
-/* Volume, côté joueur (dans .blindtest-area) ET côté hôte (panneau de
-   contrôle, "volume par défaut") — même curseur natif restylé. Le joueur
-   règle SON volume local (voir index.js, persisté en localStorage, jamais
-   envoyé au serveur) ; l'hôte règle juste le point de départ pour ceux qui
-   n'ont encore jamais touché au leur. */
+/* Volume, côté joueur — en dessous de l'orbe (voir .blindtest-area, colonne
+   centrée) plutôt qu'à côté (l'ancien flex row les mettait côte à côte, d'où
+   la disposition bancale signalée). Présenté comme une vraie petite pilule
+   de contrôle, cohérente avec le reste de l'UI, pas juste un curseur nu qui
+   flotte sous l'orbe. Le curseur natif est restylé via .volume-slider
+   (partagé avec le panneau de l'hôte, "volume par défaut"). */
 .blindtest-volume-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: 260px;
-  margin: 14px auto 0;
+  width: 200px;
+  padding: 9px 16px;
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
   font-size: 15px;
 }
 input[type="range"].volume-slider {
