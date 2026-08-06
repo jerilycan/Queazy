@@ -227,6 +227,13 @@ const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const leaderNextBtn = document.getElementById('leaderNextBtn')
 const startQuizBtn = document.getElementById('startQuiz')
+// Récap rapide de la question (hôte uniquement), voir socket.on('question:recap')
+const questionRecapCard = document.getElementById('questionRecapCard')
+const recapBarFill = document.getElementById('recapBarFill')
+const recapPctText = document.getElementById('recapPctText')
+const recapTopAnswerRow = document.getElementById('recapTopAnswerRow')
+const recapTopAnswerText = document.getElementById('recapTopAnswerText')
+const recapTopAnswerCount = document.getElementById('recapTopAnswerCount')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
 const AVATAR_CHOICES = [
@@ -934,6 +941,7 @@ const clearRevealState = () => {
   })
   if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
   if (imageMarker) imageMarker.classList.remove('marker-correct', 'marker-incorrect')
+  if (questionRecapCard) questionRecapCard.classList.add('d-none')
 }
 
 // Bandeau perso "Bonne réponse !/Mauvaise réponse" au reveal — nécessaire
@@ -2774,6 +2782,30 @@ socket.on('timer:end', () => {
   } else {
     leaderOverlay.style.display = 'none'
   }
+})
+
+// Récap rapide de la question, diffusé à toute la salle juste avant
+// question:reveal (voir server/index.js endQuestion) mais affiché
+// uniquement côté hôte — même convention que les autres évènements
+// "hôte seulement" (ex. answer:queue). Utile pour rebondir à l'oral entre
+// deux questions sans avoir à deviner combien de monde a trouvé.
+socket.on('question:recap', payload => {
+  if (!isHost || !questionRecapCard) return
+  const pct = Math.max(0, Math.min(100, Math.round(payload?.correctPct ?? 0)))
+  if (recapPctText) recapPctText.textContent = pct + '%'
+  if (recapBarFill) {
+    recapBarFill.style.width = pct + '%'
+    recapBarFill.classList.remove('tier-low', 'tier-mid', 'tier-high')
+    recapBarFill.classList.add(pct < 40 ? 'tier-low' : pct < 70 ? 'tier-mid' : 'tier-high')
+  }
+  if (payload?.topAnswer && recapTopAnswerRow) {
+    if (recapTopAnswerText) recapTopAnswerText.textContent = payload.topAnswer.text
+    if (recapTopAnswerCount) recapTopAnswerCount.textContent = `(${payload.topAnswer.count} joueurs)`
+    recapTopAnswerRow.classList.remove('d-none')
+  } else if (recapTopAnswerRow) {
+    recapTopAnswerRow.classList.add('d-none')
+  }
+  questionRecapCard.classList.remove('d-none')
 })
 
 socket.on('question:reveal', payload => {

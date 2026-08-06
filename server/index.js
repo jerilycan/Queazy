@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.7.3'
+const APP_VERSION = '1.8.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -150,6 +150,53 @@ const start = async () => {
     }
     return { id: h.id, prompt: h.prompt, type: h.type, results: idResults, deltas: idDeltas }
   })
+
+  // Petit récap affiché côté hôte juste après la révélation (voir
+  // question.endQuestion) : "X% ont trouvé" + la réponse la plus donnée,
+  // utile pour rebondir à l'oral. Se base sur historyEntry.results (déjà
+  // rempli pour TOUS les tokens de room.tokens au moment de la clôture, y
+  // compris "incorrect" pour qui n'a pas répondu — voir endQuestion) pour le
+  // %, et sur historyEntry.answers (texte brut soumis, uniquement
+  // enregistré pour les types à réponse textuelle courte :
+  // mcq/truefalse/free/blindtest) pour la réponse la plus donnée. Ne
+  // concerne pas "order"/"image" (pas de texte comparable) : le % reste
+  // calculé, juste pas de "réponse la plus donnée" pour ces types-là.
+  // room.tokens contient AUSSI le token de l'hôte lui-même (il rejoint la
+  // salle via room:join comme un joueur, voir plus bas) : sans l'exclure
+  // explicitement ici, il compterait à tort comme un "incorrect"
+  // supplémentaire et fausserait le %.
+  const buildRecap = (room, question) => {
+    const he = question?.historyEntry
+    if (!he) return null
+    const entries = Object.entries(he.results || {}).filter(([tok]) => tok !== room.hostToken)
+    const total = entries.length
+    if (total === 0) return null
+    const correct = entries.filter(([, v]) => v === 'correct').length
+    const correctPct = Math.round((100 * correct) / total)
+
+    let topAnswer = null
+    const counts = new Map() // clé normalisée -> { text, count }
+    for (const [tok, raw] of Object.entries(he.answers || {})) {
+      if (tok === room.hostToken) continue
+      if (typeof raw !== 'string') continue
+      const trimmed = raw.trim()
+      if (!trimmed) continue
+      const key = norm(trimmed)
+      const entry = counts.get(key)
+      if (entry) entry.count += 1
+      else counts.set(key, { text: trimmed, count: 1 })
+    }
+    let best = null
+    for (const entry of counts.values()) {
+      if (!best || entry.count > best.count) best = entry
+    }
+    // N'affiche "la réponse la plus donnée" que si au moins 2 joueurs sont
+    // vraiment tombés d'accord — sinon ce serait juste "la première réponse
+    // au hasard parmi des réponses toutes différentes", pas une vraie tendance.
+    if (best && best.count >= 2) topAnswer = { text: best.text, count: best.count }
+
+    return { id: question.id, type: question.type, correct, total, correctPct, topAnswer }
+  }
 
   app.get('/server-info', async (req) => ({ url: getBaseUrl(req.headers), port: PORT, version: APP_VERSION }))
 
@@ -495,7 +542,7 @@ const start = async () => {
         return
       }
 
-      const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {}, deltas: {} }
+      const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {}, deltas: {}, answers: {} }
       room.history.push(historyEntry)
 
       const revealMs = computeRevealMs(payload)
@@ -546,6 +593,11 @@ const start = async () => {
         // on ne révèle pas la bonne réponse : le flux de modération existant continue
         // de gérer la transition vers le classement une fois la modération terminée.
         if (room.pending.size === 0) {
+          // Diffusé à toute la salle (comme le reveal) mais affiché côté
+          // client uniquement pour l'hôte — même convention que les autres
+          // évènements "hôte seulement" de ce serveur (ex. answer:queue).
+          const recap = buildRecap(room, question)
+          if (recap) io.to(code).emit('question:recap', recap)
           io.to(code).emit('question:reveal', {
             id: question.id,
             type: question.type,
@@ -699,6 +751,10 @@ const start = async () => {
         // acquis, plutôt que d'écraser une valeur posée par l'autre champ.
         if (p?.token && q.historyEntry) {
           q.historyEntry.deltas[p.token] = (q.historyEntry.deltas[p.token] || 0) + deltaApplied
+          // Seul le titre sert au récap hôte ("réponse la plus donnée") —
+          // l'artiste n'y participe pas, deux champs combinés dans une seule
+          // statistique n'auraient pas de sens.
+          if (titleInput.trim()) q.historyEntry.answers[p.token] = titleInput
         }
 
         q.submissions?.set(socket.id, `${socket.id}:${submitTs}`)
@@ -771,6 +827,7 @@ const start = async () => {
           if (q.historyEntry) {
             q.historyEntry.results[p.token] = 'correct'
             q.historyEntry.deltas[p.token] = delta
+            q.historyEntry.answers[p.token] = payload?.content || ''
           }
         }
         q.answered?.add(socket.id)
@@ -783,7 +840,10 @@ const start = async () => {
         if (q.type === 'mcq' || q.type === 'truefalse') {
           q.submissions?.set(socket.id, 'incorrect')
           const p = room.players.get(socket.id)
-          if (p?.token && q.historyEntry) q.historyEntry.results[p.token] = 'incorrect'
+          if (p?.token && q.historyEntry) {
+            q.historyEntry.results[p.token] = 'incorrect'
+            q.historyEntry.answers[p.token] = payload?.content || ''
+          }
           emitProgress()
           return
         }
@@ -795,6 +855,8 @@ const start = async () => {
         const submitTs = Date.now()
         const delta = pointsFor(q.startTs, submitTs)
         const answerId = `${socket.id}:${submitTs}`
+        const p = room.players.get(socket.id)
+        if (p?.token && q.historyEntry) q.historyEntry.answers[p.token] = payload?.content || ''
         room.pending.set(answerId, { playerId: socket.id, content: payload?.content, ts: submitTs, delta, historyEntry: q.historyEntry })
         q.submissions?.set(socket.id, answerId)
         io.to(code).emit('answer:queue', { answerId, playerId: socket.id, content: payload?.content })

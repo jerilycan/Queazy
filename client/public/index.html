@@ -147,6 +147,23 @@
         </div>
       </div>
 
+      <!-- Récap rapide de la question (hôte uniquement) : apparaît à la
+           révélation (voir socket.on('question:recap', ...) dans index.js),
+           utile pour rebondir à l'oral entre deux questions. -->
+      <div id="questionRecapCard" class="card d-none mt-20 max-w-500 m-auto question-recap-card">
+        <div class="question-recap-head">📊 Récap de la question</div>
+        <div class="question-recap-bar-row">
+          <div class="question-recap-bar-track">
+            <div id="recapBarFill" class="question-recap-bar-fill"></div>
+          </div>
+          <span id="recapPctText" class="question-recap-pct">0%</span>
+        </div>
+        <div class="question-recap-caption">ont trouvé la bonne réponse</div>
+        <div id="recapTopAnswerRow" class="question-recap-top d-none">
+          Réponse la plus donnée : <strong id="recapTopAnswerText"></strong> <span id="recapTopAnswerCount" class="text-muted"></span>
+        </div>
+      </div>
+
       <!-- Popup de sélection de quiz (cachée par défaut) -->
       <div id="quizSelectPopup" class="modal-overlay d-none">
         <div class="modal-content card">

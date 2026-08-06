@@ -1241,6 +1241,36 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
    générique (4px) était pensé pour du texte, trop serré une fois qu'il y a
    une vraie piste de curseur au milieu. */
 .host-volume-row { gap: 10px; }
+
+/* Récap rapide de la question (hôte uniquement), voir index.html
+   #questionRecapCard + index.js socket.on('question:recap', ...). */
+.question-recap-card { padding: 20px 28px; text-align: left; }
+.question-recap-head {
+  font-weight: 800; font-size: 13px; color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 14px;
+}
+.question-recap-bar-row { display: flex; align-items: center; gap: 14px; }
+.question-recap-bar-track {
+  flex: 1; height: 14px; border-radius: 999px;
+  background: rgba(255,255,255,0.08); overflow: hidden;
+}
+.question-recap-bar-fill {
+  height: 100%; width: 0%; border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.question-recap-bar-fill.tier-low { background: linear-gradient(90deg, var(--tile-red) 0%, var(--tile-red-deep) 100%); }
+.question-recap-bar-fill.tier-mid { background: linear-gradient(90deg, var(--tile-yellow) 0%, var(--tile-yellow-deep) 100%); }
+.question-recap-bar-fill.tier-high { background: linear-gradient(90deg, var(--tile-green) 0%, var(--tile-green-deep) 100%); }
+.question-recap-pct {
+  font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums;
+  min-width: 3.5ch; text-align: right; color: var(--color-text);
+}
+.question-recap-caption { font-size: 13px; color: var(--color-text-muted); margin-top: 8px; }
+.question-recap-top {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--color-border);
+  font-size: 14px; color: var(--color-text);
+}
+.question-recap-top strong { color: var(--color-accent); }
 .volume-fill {
   position: absolute;
   top: 0;
