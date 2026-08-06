@@ -2694,6 +2694,17 @@ socket.on('player:joined', ({ id, name }) => {
 })
 
 socket.on('timer:end', () => {
+  // Le serveur peut clore la question bien avant la fin nominale du chrono
+  // (tout le monde a déjà répondu, voir server/index.js emitProgress) : sans
+  // ça, la barre continuerait de descendre toute seule pendant que la
+  // révélation est déjà affichée en dessous — on la fige à vide tout de
+  // suite pour rester cohérent avec ce qui s'affiche.
+  clearInterval(timerInt)
+  if (timerBarFill) {
+    timerBarFill.style.transform = 'scaleX(0)'
+    timerBarFill.classList.remove('timer-urgent')
+  }
+  if (timerLabel) timerLabel.textContent = '0'
   // Coupe l'extrait s'il n'était pas déjà terminé (le chrono peut être plus
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).

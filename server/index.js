@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.4.0'
+const APP_VERSION = '1.5.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -490,7 +490,13 @@ const start = async () => {
       room.history.push(historyEntry)
 
       const revealMs = computeRevealMs(payload)
-      room.currentQuestion = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry }
+      // Référence stable (pas juste room.currentQuestion, qui sera écrasé par
+      // la question SUIVANTE dès que l'hôte enchaîne) : indispensable pour
+      // que endQuestion (déclenché soit par le minuteur, soit en avance dès
+      // que tout le monde a répondu — voir emitProgress dans answer:submit)
+      // referme toujours la BONNE question, même s'il se déclenche tard.
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
+      room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
       // lisible dans la frame WebSocket (devtools) avant même de répondre.
@@ -504,30 +510,43 @@ const start = async () => {
       // Diffusé immédiatement (pas au bout de revealMs) : chaque client anime
       // lui-même la révélation de la question/des tuiles jusqu'à startTs, pour
       // que l'hôte (écran principal) et les joueurs la voient au même moment.
-      io.to(code).emit('question:show', { ...broadcastPayload, singleAttempt: room.currentQuestion.singleAttempt, startTs: room.currentQuestion.startTs })
-      setTimeout(() => {
-        // Tout token sans résultat pour cette question au moment où le temps est écoulé
-        // n'a simplement pas répondu (couvre aussi une soumission graduation avec des
-        // bornes invalides, déjà ignorée silencieusement côté scoring).
+      io.to(code).emit('question:show', { ...broadcastPayload, singleAttempt: question.singleAttempt, startTs: question.startTs })
+
+      // Termine la question : à la fin normale du chrono (setTimeout ci-
+      // dessous), OU en avance dès que tout le monde a répondu (voir
+      // emitProgress dans answer:submit, qui appelle question.endQuestion()).
+      // "ended" protège contre un double déclenchement (le setTimeout est
+      // annulé dans le second cas, mais mieux vaut ne jamais dépendre que de
+      // ça).
+      question.endQuestion = () => {
+        if (question.ended) return
+        question.ended = true
+        clearTimeout(question.timeoutId)
+
+        // Tout token sans résultat pour cette question à la fermeture n'a
+        // simplement pas répondu (couvre aussi une soumission graduation
+        // avec des bornes invalides, déjà ignorée silencieusement côté
+        // scoring).
         for (const [token] of room.tokens) {
           if (!(token in historyEntry.results)) historyEntry.results[token] = 'incorrect'
         }
 
-        io.to(code).emit('timer:end', { id: room.currentQuestion.id })
+        io.to(code).emit('timer:end', { id: question.id })
 
         // Si une réponse texte libre est encore en attente de validation par l'hôte,
         // on ne révèle pas la bonne réponse : le flux de modération existant continue
         // de gérer la transition vers le classement une fois la modération terminée.
         if (room.pending.size === 0) {
           io.to(code).emit('question:reveal', {
-            id: room.currentQuestion.id,
-            type: room.currentQuestion.type,
-            correct: room.currentQuestion.correct,
-            explanation: room.currentQuestion.explanation || '',
-            target: room.currentQuestion.type === 'graduation' ? room.currentQuestion.correct?.[0] : undefined
+            id: question.id,
+            type: question.type,
+            correct: question.correct,
+            explanation: question.explanation || '',
+            target: question.type === 'graduation' ? question.correct?.[0] : undefined
           })
         }
-      }, revealMs + room.currentQuestion.timerMs)
+      }
+      question.timeoutId = setTimeout(question.endQuestion, revealMs + question.timerMs)
     })
 
     socket.on('answer:submit', payload => {
@@ -547,10 +566,16 @@ const start = async () => {
 
       // Compteur « X/Y ont répondu » pour l'écran de l'hôte : émis après chaque
       // soumission enregistrée (peu importe qu'elle soit juste, fausse ou en
-      // attente de modération).
+      // attente de modération). Point de passage commun à TOUTES les branches
+      // de ce handler (chacune l'appelle juste après avoir enregistré une
+      // soumission) : c'est donc l'endroit naturel pour enchaîner sur la
+      // révélation dès que tout le monde a répondu, sans attendre la fin du
+      // chrono.
       const emitProgress = () => {
         const total = activePlayers(room).length
-        io.to(code).emit('answer:progress', { answered: q.submissions?.size || 0, total })
+        const answered = q.submissions?.size || 0
+        io.to(code).emit('answer:progress', { answered, total })
+        if (total > 0 && answered >= total) q.endQuestion?.()
       }
 
       if (q.type === 'graduation') {
