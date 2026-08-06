@@ -265,11 +265,6 @@ const createDefaultQuestion = () => ({
   timerMs: 15000
 })
 
-// Glisser-déposer pour réordonner les questions (souris/desktop uniquement :
-// l'API HTML5 Drag and Drop n'est pas fiable au toucher sur mobile, ce qui
-// est acceptable ici puisque l'éditeur de quiz n'est pas pensé pour mobile).
-let dragSrcIndex = null
-
 const moveQuestion = (fromIdx, toIdx) => {
   if (fromIdx === toIdx) return
   const [moved] = questions.splice(fromIdx, 1)
@@ -284,41 +279,105 @@ const moveQuestion = (fromIdx, toIdx) => {
   qIndexLabel.textContent = `Question ${activeIndex + 1} / ${questions.length}`
 }
 
+// Même glisser au pointeur que la liste "ordre" en jeu (voir index.js
+// wireOrderDrag) et que la liste de réponses "ordre" de cet éditeur (voir
+// wireOrderEditDrag plus bas) : rects des AUTRES lignes figés une seule fois
+// au pointerdown, la ligne saisie suit le pointeur via son propre transform,
+// un "newSlot" recalculé à chaque mouvement à partir de ces rects figés, et
+// un seul réordonnancement (via moveQuestion) au relâchement. Remplace
+// l'ancienne implémentation en API HTML5 Drag and Drop (ghost par défaut du
+// navigateur, moins fluide, pas de retour visuel de poussée).
+// Toute la tuile reste cliquable pour sélectionner la question (comme avant)
+// : le geste n'est traité comme un glisser qu'au-delà d'un petit seuil de
+// déplacement, sinon un simple clic (sans bouger) sélectionne normalement.
+const QUESTION_LIST_GAP = 8
+const QUESTION_DRAG_THRESHOLD = 4
+let questionDragActive = false
+
+const wireQuestionDrag = (item, idx) => {
+  let dragMoved = false
+
+  item.addEventListener('click', () => {
+    if (dragMoved) { dragMoved = false; return }
+    selectQuestion(idx)
+  })
+
+  if (readOnly) return
+
+  item.addEventListener('pointerdown', (e) => {
+    if (questionDragActive || e.button) return
+    questionDragActive = true
+    dragMoved = false
+    const startY = e.clientY
+    let dragStarted = false
+    let others, baseRects, startSlot, itemHeight, currentSlot
+
+    const beginDrag = () => {
+      dragStarted = true
+      dragMoved = true
+      item.classList.add('dragging')
+      item.style.zIndex = '10'
+      try { item.setPointerCapture(e.pointerId) } catch {}
+      others = Array.from(questionListEl.children).filter(c => c !== item)
+      baseRects = others.map(c => c.getBoundingClientRect())
+      startSlot = Array.from(questionListEl.children).indexOf(item)
+      itemHeight = item.getBoundingClientRect().height + QUESTION_LIST_GAP
+      currentSlot = startSlot
+    }
+
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY
+      if (!dragStarted) {
+        if (Math.abs(dy) < QUESTION_DRAG_THRESHOLD) return
+        beginDrag()
+      }
+      item.style.transform = `translateY(${dy}px) scale(1.02)`
+      const rect = item.getBoundingClientRect()
+      const center = rect.top + rect.height / 2
+      let newSlot = 0
+      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      if (newSlot === currentSlot) return
+      currentSlot = newSlot
+      others.forEach((c, i) => {
+        let shift = 0
+        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
+        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
+        c.style.transition = 'transform 0.18s ease'
+        c.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+
+    const cleanup = (applyReorder) => {
+      item.removeEventListener('pointermove', onMove)
+      item.removeEventListener('pointerup', onUp)
+      item.removeEventListener('pointercancel', onCancel)
+      questionDragActive = false
+      if (!dragStarted) return
+      others.forEach(c => { c.style.transition = ''; c.style.transform = '' })
+      item.classList.remove('dragging')
+      item.style.zIndex = ''
+      item.style.transform = ''
+      if (applyReorder && currentSlot !== startSlot) {
+        if (hasSelectedOnce) saveCurrentQuestionState()
+        moveQuestion(startSlot, currentSlot)
+      }
+    }
+    const onUp = (ev) => { try { item.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
+    const onCancel = () => cleanup(false)
+
+    item.addEventListener('pointermove', onMove)
+    item.addEventListener('pointerup', onUp)
+    item.addEventListener('pointercancel', onCancel)
+  })
+}
+
 const updateSidebar = () => {
   questionListEl.innerHTML = ''
   questions.forEach((q, idx) => {
     const item = document.createElement('div')
     item.className = `question-item type-${q.type || 'free'} ${idx === activeIndex ? 'active' : ''}`.trim()
-    item.onclick = () => selectQuestion(idx)
-    item.draggable = !readOnly
     item.dataset.index = idx
-
-    if (!readOnly) {
-      item.addEventListener('dragstart', (e) => {
-        dragSrcIndex = idx
-        item.classList.add('dragging')
-        e.dataTransfer.effectAllowed = 'move'
-      })
-      item.addEventListener('dragover', (e) => {
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
-        item.classList.add('drag-over')
-      })
-      item.addEventListener('dragleave', () => item.classList.remove('drag-over'))
-      item.addEventListener('drop', (e) => {
-        e.preventDefault()
-        item.classList.remove('drag-over')
-        if (dragSrcIndex === null || dragSrcIndex === idx) return
-        if (hasSelectedOnce) saveCurrentQuestionState()
-        moveQuestion(dragSrcIndex, idx)
-        dragSrcIndex = null
-      })
-      item.addEventListener('dragend', () => {
-        item.classList.remove('dragging')
-        Array.from(questionListEl.children).forEach(c => c.classList.remove('drag-over'))
-        dragSrcIndex = null
-      })
-    }
+    wireQuestionDrag(item, idx)
 
     const handle = document.createElement('span')
     handle.className = 'q-drag-handle'
