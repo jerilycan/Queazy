@@ -1642,6 +1642,14 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   background: var(--color-surface);
   touch-action: none;
   user-select: none;
+  /* La barre de couleur (::before) est une bande pleine hauteur avec son
+     propre petit rayon (4px) : bien plus serré que le radius-md (16px) de
+     la case elle-même, ses coins ne suivaient donc pas la courbe du coin
+     arrondi et débordaient visuellement dessus. En clippant sur le rayon de
+     LA CASE (overflow:hidden), la bande est automatiquement découpée par la
+     même courbe que le reste de la case, sans avoir besoin d'un rayon
+     "manuel" sur le pseudo-élément (voir juste en dessous). */
+  overflow: hidden;
 }
 
 .question-item::before {
@@ -1651,7 +1659,6 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   top: 0;
   bottom: 0;
   width: 4px;
-  border-radius: 4px 0 0 4px;
 }
 
 .question-item.type-mcq::before { background: var(--tile-blue); }
