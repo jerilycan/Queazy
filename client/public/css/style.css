@@ -39,6 +39,12 @@
   --tile-green: #39ff88;
   --tile-green-deep: #0f8a45;
   --tile-green-rgb: 57,255,136;
+  /* Podium final (voir .race-* plus bas) : argent/bronze n'existaient pas
+     encore dans la palette, l'or réutilise --tile-yellow. */
+  --tile-silver: #cfd8ea;
+  --tile-silver-deep: #6b7690;
+  --tile-bronze: #ff9f5a;
+  --tile-bronze-deep: #a1571f;
 
   --radius-lg: 24px;
   --radius-md: 16px;
@@ -2267,54 +2273,159 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .leader-name { flex: 1; font-weight: 700; color: var(--color-text); font-family: 'Nunito', sans-serif; }
 .leader-score { color: var(--color-accent); font-weight: 700; font-family: 'Baloo 2', sans-serif; }
 
-/* Podium Styles */
-.podium-container {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 16px;
+/* Podium final — "course arcade néon" : chaque barre grimpe question par
+   question au rythme des vrais points gagnés (voir js/results.js), au lieu
+   d'une simple apparition statique. Prototype validé avant implémentation :
+   voir historique de conversation (comparatif de 3 pistes puis affinage). */
+.race-status-pill {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  font-size: 12px; font-weight: 800; letter-spacing: 0.03em;
+  padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,0.07);
+  border: 1px solid var(--color-border); color: var(--color-text-muted);
+  z-index: 6; transition: color .2s, border-color .2s, background .2s;
+  font-variant-numeric: tabular-nums;
+}
+.race-status-pill.live { color: var(--tile-green); border-color: rgba(var(--tile-green-rgb),0.35); background: rgba(var(--tile-green-rgb),0.1); }
+.race-status-pill.done { color: var(--tile-yellow); border-color: rgba(255,210,63,0.4); background: rgba(255,210,63,0.12); text-transform: uppercase; letter-spacing: 0.06em; }
+.race-status-pill .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; animation: raceBlink 1s ease-in-out infinite; }
+.race-status-pill.done .dot { display: none; }
+@keyframes raceBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.race-qstrip { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.race-qdot {
+  width: 18px; height: 18px; border-radius: 5px; background: rgba(255,255,255,0.06); border: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: center; font-size: 9.5px; color: var(--color-text-muted);
+  transition: background .2s, border-color .2s, color .2s; font-variant-numeric: tabular-nums;
+}
+.race-qdot.active { border-color: var(--color-accent); color: var(--color-text); background: var(--color-accent-soft); }
+.race-qdot.done { color: var(--color-text-muted); }
+
+.race-stage {
+  position: relative;
   height: 400px;
-  margin-top: 40px;
-  padding-bottom: 20px;
-  perspective: 1000px; /* Adds depth for 3D transforms */
+  border-radius: var(--radius-md);
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 38px),
+    radial-gradient(600px 300px at 50% 100%, var(--color-accent-soft), transparent 70%),
+    var(--color-bg-deep);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+.race-stage.shake { animation: raceShake .4s ease; }
+@keyframes raceShake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+.race-finish-flash {
+  position: absolute; left: 0; right: 0; bottom: 40px; height: 3px;
+  background: linear-gradient(90deg, transparent, #fff, transparent); opacity: 0; z-index: 4; pointer-events: none;
+}
+.race-finish-flash.go { animation: raceSweep .5s ease forwards; }
+@keyframes raceSweep {
+  0% { opacity: 0; transform: scaleY(1); box-shadow: none; }
+  30% { opacity: 1; box-shadow: 0 0 30px 4px rgba(255,255,255,0.7); }
+  100% { opacity: 0; transform: scaleY(8); box-shadow: none; }
+}
+.race-bigflash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 55%, #fff, transparent 60%); opacity: 0; pointer-events: none; z-index: 7; }
+.race-bigflash.go { animation: raceFlashPop .5s ease forwards; }
+@keyframes raceFlashPop { 0% { opacity: 0; } 15% { opacity: 0.8; } 100% { opacity: 0; } }
+
+.race-particle { position: absolute; border-radius: 50%; background: var(--color-accent-soft); pointer-events: none; animation: raceFloatUp linear infinite; z-index: 1; }
+@keyframes raceFloatUp { from { transform: translateY(0); opacity: 0.55; } to { transform: translateY(-360px); opacity: 0; } }
+
+.race-lanes { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 40px; }
+.race-lane { position: relative; width: 100px; height: 100%; }
+.race-lane-track {
+  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
+  width: 78px; height: 280px; border-radius: 10px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--color-border);
+}
+.race-lane-bar {
+  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
+  width: 78px; height: 0px; border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, var(--color-accent-2) 0%, var(--color-accent-deep) 100%);
+  box-shadow: 0 0 16px rgba(123,47,247,0.4);
+  transition: height .38s cubic-bezier(0.34, 1.56, 0.64, 1), background .5s ease, box-shadow .5s ease;
+}
+.race-lane-bar.gold { background: linear-gradient(180deg, var(--tile-yellow) 0%, var(--tile-yellow-deep) 100%); box-shadow: 0 0 30px rgba(255,210,63,0.55); }
+.race-lane-bar.silver { background: linear-gradient(180deg, var(--tile-silver) 0%, var(--tile-silver-deep) 100%); box-shadow: 0 0 18px rgba(207,216,234,0.3); }
+.race-lane-bar.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(255,159,90,0.35); }
+
+.race-lane-avatar {
+  position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, 50%);
+  width: 40px; height: 40px; border-radius: 50%; background: var(--color-surface);
+  background-size: cover; background-position: center;
+  border: 2px solid rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;
+  font-size: 18px; z-index: 2; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1), border-color .3s;
+}
+.race-lane-avatar.hop { animation: raceHop .35s ease; }
+@keyframes raceHop { 30% { transform: translate(-50%, 50%) scale(1.18); } 100% { transform: translate(-50%, 50%) scale(1); } }
+.race-lane-avatar.miss { animation: raceMissShake .3s ease; }
+@keyframes raceMissShake {
+  20% { transform: translate(calc(-50% - 3px), 50%); }
+  40% { transform: translate(calc(-50% + 3px), 50%); }
+  60% { transform: translate(calc(-50% - 2px), 50%); }
+  100% { transform: translate(-50%, 50%); }
+}
+.race-lane.rank-1 .race-lane-avatar { border-color: var(--tile-yellow); }
+.race-lane.rank-2 .race-lane-avatar { border-color: var(--tile-silver); }
+.race-lane.rank-3 .race-lane-avatar { border-color: var(--tile-bronze); }
+
+.race-lane-crown {
+  position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, -100%);
+  font-size: 20px; opacity: 0; z-index: 3; transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.race-lane-crown.show { animation: raceDropCrown .45s cubic-bezier(.34,1.56,.64,1) forwards; }
+@keyframes raceDropCrown { from { opacity: 0; transform: translate(-50%,-100%) translateY(-20px) rotate(-10deg); } to { opacity: 1; transform: translate(-50%,-100%) translateY(0) rotate(0); } }
+
+.race-lane-score {
+  position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, calc(-100% - 28px));
+  font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; z-index: 2; color: var(--color-text);
+  transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.race-lane-badge {
+  position: absolute; left: 50%; bottom: 40px; transform: translate(calc(-50% + 32px), calc(-100% - 24px));
+  font-size: 15px; opacity: 0; transition: opacity .3s, bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 2;
+}
+.race-lane-badge.show { opacity: 1; }
+.race-lane-streak {
+  position: absolute; left: 50%; bottom: 40px; transform: translate(calc(-50% - 38px), calc(-100% - 6px));
+  font-size: 11.5px; font-weight: 800; color: var(--tile-yellow); white-space: nowrap; z-index: 3;
+  opacity: 0; transition: opacity .25s, bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-shadow: 0 0 8px rgba(255,210,63,0.55);
+}
+.race-lane-streak.show { opacity: 1; }
+
+.race-lane-name {
+  position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
+  font-size: 12.5px; font-weight: 700; color: var(--color-text-muted); white-space: nowrap;
+  transition: color .3s;
+}
+.race-lane-name.glitch { color: var(--tile-yellow); animation: raceGlitch .4s steps(2,end) 3; }
+@keyframes raceGlitch {
+  0% { transform: translateX(-50%); text-shadow: none; }
+  25% { transform: translate(calc(-50% - 2px), 1px); text-shadow: 2px 0 var(--color-accent), -2px 0 var(--color-accent-2); }
+  50% { transform: translate(calc(-50% + 2px), -1px); text-shadow: -2px 0 var(--color-accent-2), 2px 0 var(--color-accent); }
+  75% { transform: translate(calc(-50% - 1px), 0); text-shadow: 1px 0 var(--tile-yellow); }
+  100% { transform: translateX(-50%); text-shadow: none; }
 }
 
-.podium-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100px;
-  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy effect */
-  opacity: 1;
-  transform: translateY(0) scale(1);
+.race-float-pop {
+  position: absolute; left: 50%; font-weight: 800; font-size: 12.5px; white-space: nowrap; color: var(--tile-green);
+  transform: translate(-50%, 0); pointer-events: none; z-index: 4; animation: raceFloatPop .8s ease forwards;
 }
+@keyframes raceFloatPop { 0% { opacity: 0; transform: translate(-50%, 0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -32px); } }
 
-.podium-step.hidden {
-  opacity: 0;
-  transform: translateY(100px) scale(0.5); /* Start lower and smaller */
-}
-
-.podium-avatar {
-  width: 80px; /* Bigger avatars */
-  height: 80px;
-  border-radius: 50%;
-  background-color: var(--color-surface);
-  background-size: cover;
-  background-position: center;
-  border: 4px solid white;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.55);
-  margin-bottom: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  z-index: 2; /* Ensure on top of bar */
-  transition: transform 0.3s;
-}
-
-.podium-step:hover .podium-avatar {
-  transform: scale(1.04);
-  cursor: pointer;
+@media (max-width: 640px) {
+  .race-stage { height: 320px; }
+  .race-lanes { gap: 18px; }
+  .race-lane { width: 78px; }
+  .race-lane-track, .race-lane-bar { width: 58px; }
+  .race-lane-avatar { width: 34px; height: 34px; font-size: 15px; }
+  .race-lane-score { font-size: 12px; }
 }
 
 /* Liste complète des résultats finaux : lignes réutilisées d'un rendu à
@@ -2343,38 +2454,6 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   box-shadow: inset 3px 0 0 rgba(var(--tile-red-rgb),0.4);
 }
 
-/* Hauteurs/largeurs sorties du HTML (styles inline) pour pouvoir les
-   réduire sur mobile ci-dessous — sinon un style inline ne peut pas être
-   réécrit par une media query. */
-.podium-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px 8px 0 0;
-  transition: height 0.3s ease, width 0.3s ease;
-}
-.podium-step.step-1 .podium-bar { height: 160px; width: 100px; }
-.podium-step.step-2 .podium-bar { height: 120px; width: 80px; }
-.podium-step.step-3 .podium-bar { height: 80px; width: 80px; }
-
-.podium-crown {
-  font-size: 40px;
-  margin-bottom: -10px;
-  position: relative;
-  z-index: 10;
-}
-
-@media (max-width: 640px) {
-  /* Le podium prenait ~400px fixes avant même d'arriver à la liste complète
-     des joueurs, obligeant à scroller beaucoup sur mobile pour tout voir. */
-  .podium-container { height: 250px; gap: 8px; margin-top: 20px; }
-  .podium-step { width: 76px; }
-  .podium-avatar { width: 56px; height: 56px; font-size: 22px; margin-bottom: 10px; }
-  .podium-crown { font-size: 30px; }
-  .podium-step.step-1 .podium-bar { height: 110px; width: 76px; }
-  .podium-step.step-2 .podium-bar { height: 85px; width: 62px; }
-  .podium-step.step-3 .podium-bar { height: 60px; width: 62px; }
-}
 
 .history-tooltip {
   position: fixed;

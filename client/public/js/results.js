@@ -91,53 +91,210 @@ const getToken = () => {
 const computeOrder = (entries) => entries.sort((a, b) => (b.score - a.score))
 const isAvatarUrl = (s) => typeof s === 'string' && /^(data:|https?:|blob:|\/)/.test(s)
 
-let revealed = false
 let history = []
+let historyReceived = false
+let latestPlayers = null
+let raceStarted = false
+
+// ---------------------------------------------------------------------
+// Podium final "course arcade néon" : chaque barre grimpe question par
+// question au rythme des points RÉELLEMENT gagnés à chaque tour (voir
+// historyEntry.deltas côté serveur), au lieu d'une simple apparition
+// statique — une bonne réponse fait bondir la barre, une mauvaise la
+// laisse plate, un enchaînement de bonnes réponses affiche un badge 🔥.
+// Prototype comparé et validé avant implémentation (voir historique de
+// conversation) : montée classique / révélation cinématique / arcade néon,
+// puis affinage "course" sur cette dernière piste à la demande de l'utilisateur.
+// ---------------------------------------------------------------------
+const RACE_LANE_BOTTOM = 40 // doit rester synchro avec `bottom: 40px` dans .race-lane-* (style.css)
+const RACE_TOTAL_MS = 3000 // durée cible totale, quel que soit le nombre de questions
+const RACE_MIN_STEP_MS = 220 // plancher pour rester lisible si beaucoup de questions
+const RACE_STREAK_THRESHOLD = 3
+
+const applyLaneAvatar = (el, p) => {
+  if (!el) return
+  const isImg = isAvatarUrl(p?.avatar)
+  el.style.backgroundImage = isImg ? `url(${p.avatar})` : ''
+  el.textContent = isImg ? '' : (p?.avatar || (p ? p.name.slice(0, 2).toUpperCase() : ''))
+}
+
+const runRace = (top) => {
+  const stage = document.getElementById('raceStage')
+  const lanesEl = document.getElementById('raceLanes')
+  const qStrip = document.getElementById('raceQstrip')
+  const statusPill = document.getElementById('raceStatusPill')
+  const finishFlash = document.getElementById('raceFinishFlash')
+  const bigFlash = document.getElementById('raceBigflash')
+  if (!stage || !lanesEl || top.length === 0) return
+
+  // Ordre classique d'un podium (2e - 1er - 3e), la position ne change plus
+  // ensuite : seule la hauteur de chaque barre évolue pendant la course.
+  const lanesOrder = top.length === 3 ? [top[1], top[0], top[2]] : top
+
+  lanesEl.innerHTML = lanesOrder.map(p => `
+    <div class="race-lane" data-key="${p.id}" data-player-id="${p.id}">
+      <div class="race-lane-track"></div>
+      <div class="race-lane-bar" data-bar></div>
+      <div class="race-lane-crown" data-crown>👑</div>
+      <div class="race-lane-badge" data-badge></div>
+      <div class="race-lane-streak" data-streak></div>
+      <div class="race-lane-score" data-score>0 pts</div>
+      <div class="race-lane-avatar" data-avatar></div>
+      <div class="race-lane-name" data-name>${p.name}</div>
+    </div>
+  `).join('')
+
+  const refs = {}
+  lanesOrder.forEach(p => {
+    const lane = lanesEl.querySelector(`.race-lane[data-key="${p.id}"]`)
+    refs[p.id] = {
+      lane,
+      track: lane.querySelector('.race-lane-track'),
+      bar: lane.querySelector('[data-bar]'),
+      score: lane.querySelector('[data-score]'),
+      crown: lane.querySelector('[data-crown]'),
+      badge: lane.querySelector('[data-badge]'),
+      streak: lane.querySelector('[data-streak]'),
+      avatar: lane.querySelector('[data-avatar]'),
+      name: lane.querySelector('[data-name]'),
+    }
+    applyLaneAvatar(refs[p.id].avatar, p)
+  })
+
+  const trackHeight = refs[lanesOrder[0].id].track.getBoundingClientRect().height || 280
+  const maxScale = Math.max(1, ...top.map(p => p.score)) * 1.08
+
+  const setLanePosition = (id, heightPx) => {
+    const r = refs[id]
+    r.bar.style.height = heightPx + 'px'
+    const bottom = (RACE_LANE_BOTTOM + heightPx) + 'px'
+    r.avatar.style.bottom = bottom
+    r.score.style.bottom = bottom
+    r.crown.style.bottom = bottom
+    r.badge.style.bottom = bottom
+    r.streak.style.bottom = bottom
+  }
+
+  const spawnFloatPop = (id, text, heightPx) => {
+    const r = refs[id]
+    const el = document.createElement('div')
+    el.className = 'race-float-pop'
+    el.textContent = text
+    el.style.bottom = (RACE_LANE_BOTTOM + heightPx + 40) + 'px'
+    r.lane.appendChild(el)
+    setTimeout(() => el.remove(), 850)
+  }
+
+  const finishRace = () => {
+    statusPill.className = 'race-status-pill done'
+    statusPill.textContent = '🏁 Arrivée !'
+    finishFlash.classList.add('go')
+    qStrip.querySelectorAll('.race-qdot').forEach(d => { d.classList.remove('active'); d.classList.add('done') })
+
+    const ranked = [...top] // déjà trié par score décroissant
+    const rankClass = ['rank-1', 'rank-2', 'rank-3']
+    const rankColor = ['gold', 'silver', 'bronze']
+    const rankBadge = ['🥇', '🥈', '🥉']
+
+    setTimeout(() => {
+      ranked.forEach((p, i) => {
+        const r = refs[p.id]
+        r.lane.classList.add(rankClass[i])
+        r.bar.classList.add(rankColor[i])
+        r.badge.textContent = rankBadge[i]
+        r.badge.classList.add('show')
+      })
+      const winner = refs[ranked[0].id]
+      winner.crown.classList.add('show')
+      winner.name.classList.add('glitch')
+      bigFlash.classList.add('go')
+      stage.classList.add('shake')
+      if (window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.55 } })
+      try { fanfareSound.currentTime = 0; fanfareSound.play().catch(() => {}) } catch {}
+      setTimeout(() => stage.classList.remove('shake'), 450)
+    }, 300)
+  }
+
+  // Historique vide (aucune question jouée) : pas de course à rejouer, on
+  // saute directement les barres à leur hauteur finale puis l'arrivée.
+  if (history.length === 0) {
+    qStrip.innerHTML = ''
+    statusPill.className = 'race-status-pill live'
+    statusPill.innerHTML = '<span class="dot"></span>Podium'
+    top.forEach(p => {
+      const h = Math.min(trackHeight, (p.score / maxScale) * trackHeight)
+      setLanePosition(p.id, h)
+      refs[p.id].score.textContent = `${p.score} pts`
+    })
+    setTimeout(finishRace, 400)
+    return
+  }
+
+  qStrip.innerHTML = history.map((_, i) => `<div class="race-qdot" data-q="${i}">${i + 1}</div>`).join('')
+  statusPill.className = 'race-status-pill live'
+
+  const running = {}; top.forEach(p => { running[p.id] = 0 })
+  const streaks = {}; top.forEach(p => { streaks[p.id] = 0 })
+  const stepMs = Math.max(RACE_MIN_STEP_MS, RACE_TOTAL_MS / history.length)
+
+  const applyQuestion = (i) => {
+    const h = history[i]
+    statusPill.innerHTML = `<span class="dot"></span>Question ${i + 1} / ${history.length}`
+    qStrip.querySelectorAll('.race-qdot').forEach((d, di) => {
+      d.classList.toggle('active', di === i)
+      d.classList.toggle('done', di < i)
+    })
+    top.forEach(p => {
+      const delta = Number(h.deltas?.[p.id]) || 0
+      const r = refs[p.id]
+      if (delta > 0) {
+        streaks[p.id] += 1
+        running[p.id] += delta
+        const heightPx = Math.min(trackHeight, (running[p.id] / maxScale) * trackHeight)
+        setLanePosition(p.id, heightPx)
+        r.score.textContent = Math.round(running[p.id]).toLocaleString('fr-FR') + ' pts'
+        r.avatar.classList.remove('hop'); void r.avatar.offsetWidth; r.avatar.classList.add('hop')
+        spawnFloatPop(p.id, '+' + delta, heightPx)
+        if (streaks[p.id] >= RACE_STREAK_THRESHOLD) {
+          r.streak.textContent = '🔥×' + streaks[p.id]
+          r.streak.classList.add('show')
+        } else {
+          r.streak.classList.remove('show')
+        }
+      } else {
+        streaks[p.id] = 0
+        r.streak.classList.remove('show')
+        r.avatar.classList.remove('miss'); void r.avatar.offsetWidth; r.avatar.classList.add('miss')
+      }
+    })
+  }
+
+  let qIndex = 0
+  applyQuestion(0)
+  const raceTimer = setInterval(() => {
+    qIndex += 1
+    if (qIndex >= history.length) {
+      clearInterval(raceTimer)
+      setTimeout(finishRace, 300)
+      return
+    }
+    applyQuestion(qIndex)
+  }, stepMs)
+}
+
+const tryStartRace = () => {
+  if (raceStarted || !historyReceived || !latestPlayers) return
+  const ordered = computeOrder(latestPlayers.slice())
+  const top = ordered.slice(0, 3)
+  if (top.length === 0) return
+  raceStarted = true
+  runRace(top)
+}
 
 const render = (players) => {
   const ordered = computeOrder(players.slice())
-  const top = ordered.slice(0, 3)
-  const byStep = (n) => document.querySelector(`.podium-step.step-${n}`)
-  const fill = (el, p) => {
-    if (!el) return
-    el.querySelector('.podium-name').textContent = p ? p.name : '—'
-    el.querySelector('.podium-score').textContent = p ? `${p.score} pts` : ''
-    const avatarEl = el.querySelector('.podium-avatar')
-    if (avatarEl) {
-      const isImg = isAvatarUrl(p?.avatar)
-      avatarEl.style.backgroundImage = isImg ? `url(${p.avatar})` : ''
-      avatarEl.textContent = isImg ? '' : (p?.avatar || (p ? p.name.slice(0, 2).toUpperCase() : ''))
-      if (p?.id) avatarEl.dataset.playerId = p.id
-      else delete avatarEl.dataset.playerId
-    }
-  }
-  fill(byStep(1), top[0])
-  fill(byStep(2), top[1])
-  fill(byStep(3), top[2])
-
-  if (!revealed) {
-    revealed = true
-    const step3 = byStep(3), step2 = byStep(2), step1 = byStep(1)
-    // Une place sans joueur (partie à 1-2 participants) ne doit pas apparaître
-    // du tout — pas de podium vide avec un "—" à la 3e place.
-    const reveal = (step, hasPlayer, delay) => {
-      if (!step) return
-      if (hasPlayer) {
-        step.style.display = ''
-        setTimeout(() => step.classList.remove('hidden'), delay)
-      } else {
-        step.style.display = 'none'
-      }
-    }
-    reveal(step3, !!top[2], 500)
-    reveal(step2, !!top[1], 1700)
-    setTimeout(() => {
-      reveal(step1, !!top[0], 0)
-      if (top[0] && window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } })
-      if (top[0]) { try { fanfareSound.currentTime = 0; fanfareSound.play().catch(() => {}) } catch {} }
-    }, 2900)
-  }
-
+  latestPlayers = players
+  tryStartRace()
   renderFullTable(ordered)
 }
 
@@ -240,6 +397,8 @@ socket.on('connect', () => {
 
 socket.on('history:sync', (payload) => {
   history = payload?.history || []
+  historyReceived = true
+  tryStartRace()
 })
 
 socket.on('lobby:list', (list) => {

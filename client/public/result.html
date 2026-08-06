@@ -34,31 +34,13 @@
     <div class="container mt-20">
       <div class="card max-w-700 m-auto text-center">
         <h1 class="font-32 mb-md">🏆 Résultats finaux 🏆</h1>
-        <div id="resultsPodium" class="podium-container m-auto mb-lg" style="max-width:540px">
-          <div class="podium-step step-2 hidden">
-            <div class="podium-avatar"></div>
-            <div class="podium-name text-dark font-bold mb-8"></div>
-            <div class="podium-bar bg-accent-light">
-              <span class="text-white font-24 font-bold">2</span>
-            </div>
-            <div class="podium-score text-accent font-bold mt-8"></div>
-          </div>
-          <div class="podium-step step-1 hidden">
-            <div class="podium-crown">👑</div>
-            <div class="podium-avatar"></div>
-            <div class="podium-name text-dark font-bold mb-8"></div>
-            <div class="podium-bar bg-accent">
-              <span class="text-white font-32 font-bold">1</span>
-            </div>
-            <div class="podium-score text-accent font-bold mt-8"></div>
-          </div>
-          <div class="podium-step step-3 hidden">
-            <div class="podium-avatar"></div>
-            <div class="podium-name text-dark font-bold mb-8"></div>
-            <div class="podium-bar bg-accent-light">
-              <span class="text-white font-24 font-bold">3</span>
-            </div>
-            <div class="podium-score text-accent font-bold mt-8"></div>
+        <div id="resultsPodium" class="m-auto mb-lg" style="max-width:560px">
+          <div class="race-qstrip" id="raceQstrip"></div>
+          <div class="race-stage" id="raceStage">
+            <div class="race-status-pill" id="raceStatusPill">Podium…</div>
+            <div class="race-finish-flash" id="raceFinishFlash"></div>
+            <div class="race-bigflash" id="raceBigflash"></div>
+            <div class="race-lanes" id="raceLanes"></div>
           </div>
         </div>
         <div id="fullTable" class="mt-lg"></div>

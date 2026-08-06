@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.6.4'
+const APP_VERSION = '1.7.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -139,7 +139,16 @@ const start = async () => {
       const t = room.tokens.get(tok)
       if (t) idResults[t.id] = val
     }
-    return { id: h.id, prompt: h.prompt, type: h.type, results: idResults }
+    // Delta de points réellement gagné à cette question (0/absent si aucun
+    // point) — traduit token -> id courant comme results ci-dessus. Sert au
+    // podium final (page résultats) pour rejouer la progression question par
+    // question au lieu d'une simple animation cosmétique.
+    const idDeltas = {}
+    for (const [tok, val] of Object.entries(h.deltas || {})) {
+      const t = room.tokens.get(tok)
+      if (t) idDeltas[t.id] = val
+    }
+    return { id: h.id, prompt: h.prompt, type: h.type, results: idResults, deltas: idDeltas }
   })
 
   app.get('/server-info', async (req) => ({ url: getBaseUrl(req.headers), port: PORT, version: APP_VERSION }))
@@ -486,7 +495,7 @@ const start = async () => {
         return
       }
 
-      const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {} }
+      const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {}, deltas: {} }
       room.history.push(historyEntry)
 
       const revealMs = computeRevealMs(payload)
@@ -592,7 +601,10 @@ const start = async () => {
         const p = room.players.get(socket.id)
         if (p?.token) {
           room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
-          if (q.historyEntry) q.historyEntry.results[p.token] = closeness >= GRAD_CORRECT_THRESHOLD ? 'correct' : 'incorrect'
+          if (q.historyEntry) {
+            q.historyEntry.results[p.token] = closeness >= GRAD_CORRECT_THRESHOLD ? 'correct' : 'incorrect'
+            q.historyEntry.deltas[p.token] = delta
+          }
         }
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'graded')
@@ -622,7 +634,10 @@ const start = async () => {
         const p = room.players.get(socket.id)
         if (p?.token) {
           room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
-          if (q.historyEntry) q.historyEntry.results[p.token] = dist === 0 ? 'correct' : 'incorrect'
+          if (q.historyEntry) {
+            q.historyEntry.results[p.token] = dist === 0 ? 'correct' : 'incorrect'
+            q.historyEntry.deltas[p.token] = delta
+          }
         }
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'graded')
@@ -678,6 +693,13 @@ const start = async () => {
           if (p?.token) room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
           io.to(code).emit('score:update', { playerId: socket.id, delta: deltaApplied, total })
         }
+        // Un des deux champs peut encore partir en modération juste en-dessous
+        // (delta additionnel à venir plus tard, voir resolveBlindTestField) :
+        // on initialise/complète quand même dès maintenant avec ce qui est déjà
+        // acquis, plutôt que d'écraser une valeur posée par l'autre champ.
+        if (p?.token && q.historyEntry) {
+          q.historyEntry.deltas[p.token] = (q.historyEntry.deltas[p.token] || 0) + deltaApplied
+        }
 
         q.submissions?.set(socket.id, `${socket.id}:${submitTs}`)
 
@@ -721,7 +743,10 @@ const start = async () => {
           room.scores.set(socket.id, total)
           if (p?.token) {
             room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
-            if (q.historyEntry) q.historyEntry.results[p.token] = 'correct'
+            if (q.historyEntry) {
+              q.historyEntry.results[p.token] = 'correct'
+              q.historyEntry.deltas[p.token] = delta
+            }
           }
           q.answered?.add(socket.id)
           q.submissions?.set(socket.id, 'correct')
@@ -743,7 +768,10 @@ const start = async () => {
         const p = room.players.get(socket.id)
         if (p?.token) {
           room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
-          if (q.historyEntry) q.historyEntry.results[p.token] = 'correct'
+          if (q.historyEntry) {
+            q.historyEntry.results[p.token] = 'correct'
+            q.historyEntry.deltas[p.token] = delta
+          }
         }
         q.answered?.add(socket.id)
         q.submissions?.set(socket.id, 'correct')
@@ -791,7 +819,10 @@ const start = async () => {
         const total = (room.scores.get(item.playerId) || 0) + delta
         room.scores.set(item.playerId, total)
         const p = room.players.get(item.playerId)
-        if (p?.token) room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
+        if (p?.token) {
+          room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
+          if (item.historyEntry) item.historyEntry.deltas[p.token] = (item.historyEntry.deltas[p.token] || 0) + delta
+        }
         io.to(code).emit('score:update', { playerId: item.playerId, delta, total })
       }
       const stillPending = Object.values(item.fields).some(f => f.status === 'pending')
@@ -829,7 +860,10 @@ const start = async () => {
       const p = room.players.get(item.playerId)
       if (p?.token) {
         room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
-        if (item.historyEntry) item.historyEntry.results[p.token] = 'correct'
+        if (item.historyEntry) {
+          item.historyEntry.results[p.token] = 'correct'
+          item.historyEntry.deltas[p.token] = delta
+        }
       }
       q?.answered?.add(item.playerId)
       io.to(code).emit('score:update', { playerId: item.playerId, delta, total })

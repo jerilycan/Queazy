@@ -1008,7 +1008,6 @@ const leaderboard = document.getElementById('leaderboard')
 const navCreate = document.getElementById('navCreate')
 const navJoin = document.getElementById('navJoin')
 const navMyQuizzes = document.getElementById('navMyQuizzes')
-const podiumOverlay = document.getElementById('podium')
 const isAvatarUrl = (s) => typeof s === 'string' && /^(data:|https?:|blob:|\/)/.test(s)
 
 // --- Popup "en attente de validation" + réactions partagées ---
