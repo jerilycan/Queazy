@@ -1023,20 +1023,22 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   stroke: var(--tile-green);
 }
 
-/* Viewport de zoom (éditeur, type "image") : #imageEditWrap reçoit une
-   largeur en PIXELS posée en JS (voir editor.js applyImageEditZoom :
-   IMAGE_ZOOM_BASE_WIDTH * imageEditZoom), pas de largeur en % ni de
-   max-width fixe dans son propre CSS — c'est ce qui le fait vraiment
-   grandir. Ce viewport fournit juste le cadre défilable (scrollbars) pour se
-   déplacer une fois l'image plus large que la place disponible.
+/* Viewport de zoom (éditeur ET jeu, type "image") : le .image-wrap qu'il
+   contient reçoit une largeur en PIXELS posée en JS (voir editor.js
+   applyImageEditZoom / index.js applyImageZoom : IMAGE_ZOOM_BASE_WIDTH *
+   zoom), pas de largeur en % ni de max-width fixe dans son propre CSS —
+   c'est ce qui le fait vraiment grandir. Ce viewport fournit le cadre
+   défilable (scrollbars) pour se déplacer une fois l'image plus large que la
+   place disponible ; la molette dessus zoome vers le curseur plutôt que de
+   faire défiler (voir zoomTowardPoint dans les deux fichiers JS).
    max-height plutôt que height fixe : pas de bande vide quand l'image est
    plus petite que le cadre. */
-.image-edit-viewport {
+.image-zoom-viewport {
   max-height: 480px;
   overflow: auto;
   border-radius: var(--radius-lg);
 }
-.image-edit-viewport .image-wrap { flex-shrink: 0; }
+.image-zoom-viewport .image-wrap { flex-shrink: 0; }
 .image-zoom-controls {
   display: flex;
   align-items: center;
@@ -1169,6 +1171,50 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
    l'autre est affiché selon le type, jamais les deux. */
 .blindtest-fields { display: flex; flex: 1; gap: 10px; }
 .blindtest-fields input { flex: 1; }
+
+/* Volume, côté joueur (dans .blindtest-area) ET côté hôte (panneau de
+   contrôle, "volume par défaut") — même curseur natif restylé. Le joueur
+   règle SON volume local (voir index.js, persisté en localStorage, jamais
+   envoyé au serveur) ; l'hôte règle juste le point de départ pour ceux qui
+   n'ont encore jamais touché au leur. */
+.blindtest-volume-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 260px;
+  margin: 14px auto 0;
+  font-size: 15px;
+}
+input[type="range"].volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  width: 100px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"].volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.25);
+  cursor: pointer;
+}
+input[type="range"].volume-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.25);
+  cursor: pointer;
+}
 
 /* Éditeur : recadreur audio (voir editor.js encodeWavMono) */
 .audio-trim-wrap, .audio-clip-wrap { max-width: 480px; }

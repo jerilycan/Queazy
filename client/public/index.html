@@ -131,6 +131,11 @@
             <input id="audioModeRemote" type="checkbox" class="checkbox-custom" />
             🎵 Blind test à distance (musique sur chaque poste, sinon seulement le tien)
           </label>
+          <label class="align-center d-flex gap-xs font-bold font-14" title="Volume par défaut de la musique des Blind Tests — chaque joueur peut ensuite l'ajuster de son côté">
+            🔊 Volume musique par défaut
+            <input id="audioVolumeInput" type="range" min="0" max="100" value="70" class="volume-slider" />
+            <span id="audioVolumeLabel" class="font-13 text-muted">70%</span>
+          </label>
         </div>
         <div class="d-flex gap-sm">
           <button id="selectQuizBtn" class="btn h-48 px-32">Sélectionner un Quiz</button>
@@ -202,17 +207,24 @@
             <div id="orderList" class="order-list"></div>
           </div>
           <div id="imageArea" class="image-area d-none">
-            <div id="imageWrap" class="image-wrap">
-              <img id="imageImg" class="image-img" alt="" />
-              <!-- Contour fusionné de la/les zone(s) correcte(s) révélées (voir
-                   rect-union.js + index.js revealImageZones) : même principe
-                   que côté éditeur, un seul <path> qui suit le pourtour réel
-                   de l'union des rectangles au lieu de rectangles empilés. -->
-              <svg id="imageZonesReveal" class="rect-union-svg image-zones-reveal" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <path id="imageZonesRevealPath" fill-rule="evenodd"></path>
-              </svg>
-              <div id="imageClickLayer" class="image-click-layer"></div>
-              <div id="imageMarker" class="image-marker d-none"></div>
+            <div id="imageViewport" class="image-zoom-viewport">
+              <div id="imageWrap" class="image-wrap">
+                <img id="imageImg" class="image-img" alt="" />
+                <!-- Zone(s) correcte(s) révélées (voir zone-geometry.js +
+                     index.js revealImageZones) : un seul <path>, une
+                     sous-forme indépendante par zone. -->
+                <svg id="imageZonesReveal" class="rect-union-svg image-zones-reveal" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <path id="imageZonesRevealPath" fill-rule="evenodd"></path>
+                </svg>
+                <div id="imageClickLayer" class="image-click-layer"></div>
+                <div id="imageMarker" class="image-marker d-none"></div>
+              </div>
+            </div>
+            <div id="imageZoomControls" class="image-zoom-controls d-none mt-8">
+              <button type="button" id="imageZoomOutBtn" class="btn-icon" title="Zoom arrière">−</button>
+              <span id="imageZoomLabel" class="image-zoom-label">100%</span>
+              <button type="button" id="imageZoomInBtn" class="btn-icon" title="Zoom avant (molette sur l'image)">+</button>
+              <button type="button" id="imageZoomResetBtn" class="btn btn-nav-secondary font-13">Réinitialiser le zoom</button>
             </div>
             <div id="imageErrorMsg" class="image-error-msg d-none">🖼️ Image indisponible</div>
           </div>
@@ -224,6 +236,11 @@
                 <div class="blindtest-orb-ring"></div>
               </div>
               <button type="button" id="blindtestUnlockBtn" class="blindtest-unlock-btn d-none">🔇 Touche pour activer le son</button>
+            </div>
+            <div class="blindtest-volume-row">
+              <span aria-hidden="true">🔉</span>
+              <input id="blindtestVolumeInput" type="range" min="0" max="100" value="70" class="volume-slider" title="Ton volume, juste pour toi" />
+              <span aria-hidden="true">🔊</span>
             </div>
           </div>
           <div id="freeText" class="free-text-input">

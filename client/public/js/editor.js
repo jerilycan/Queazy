@@ -486,17 +486,41 @@ const setImageEditZoom = (z) => {
   applyImageEditZoom()
 }
 
+// Zoom centré sur le curseur (comme Google Maps/Figma) : le point de l'image
+// qui se trouve sous la souris reste visuellement au même endroit à l'écran
+// avant/après le zoom, en rattrapant le scroll du viewport en conséquence.
+// clientX/clientY en coordonnées écran (comme un event de souris).
+const IMAGE_ZOOM_WHEEL_STEP = 0.18
+const zoomImageEditTowardPoint = (newZoom, clientX, clientY) => {
+  if (!imageEditWrap || !imageEditViewport) { setImageEditZoom(newZoom); return }
+  const viewportRect = imageEditViewport.getBoundingClientRect()
+  const mouseX = clientX - viewportRect.left
+  const mouseY = clientY - viewportRect.top
+  const oldWidth = imageEditWrap.offsetWidth || 1
+  const oldHeight = imageEditWrap.offsetHeight || 1
+  // Position du point visé, en fraction (0-1) de l'image entière — repère
+  // stable qui ne dépend pas du zoom courant.
+  const fracX = (imageEditViewport.scrollLeft + mouseX) / oldWidth
+  const fracY = (imageEditViewport.scrollTop + mouseY) / oldHeight
+
+  setImageEditZoom(newZoom)
+
+  imageEditViewport.scrollLeft = fracX * imageEditWrap.offsetWidth - mouseX
+  imageEditViewport.scrollTop = fracY * imageEditWrap.offsetHeight - mouseY
+}
+
 if (imageZoomInBtn) imageZoomInBtn.onclick = () => setImageEditZoom(imageEditZoom + IMAGE_ZOOM_STEP)
 if (imageZoomOutBtn) imageZoomOutBtn.onclick = () => setImageEditZoom(imageEditZoom - IMAGE_ZOOM_STEP)
 if (imageZoomResetBtn) imageZoomResetBtn.onclick = () => setImageEditZoom(1)
-// Ctrl+molette pour zoomer sans quitter la souris (en plus des boutons) —
-// seulement avec Ctrl : sans ce garde-fou, un simple scroll pour faire
-// défiler la page zoomerait l'image par erreur.
+// Molette directement sur l'image = zoome vers le curseur (pas besoin de
+// Ctrl) : c'est le geste demandé pour viser précisément sans lâcher la
+// souris. Le viewport garde ses scrollbars pour se déplacer une fois zoomé
+// (glisser la barre, ou dézoomer).
 if (imageEditViewport) {
   imageEditViewport.addEventListener('wheel', (e) => {
-    if (!e.ctrlKey) return
     e.preventDefault()
-    setImageEditZoom(imageEditZoom + (e.deltaY < 0 ? IMAGE_ZOOM_STEP : -IMAGE_ZOOM_STEP))
+    const step = e.deltaY < 0 ? IMAGE_ZOOM_WHEEL_STEP : -IMAGE_ZOOM_WHEEL_STEP
+    zoomImageEditTowardPoint(imageEditZoom + step, e.clientX, e.clientY)
   }, { passive: false })
 }
 

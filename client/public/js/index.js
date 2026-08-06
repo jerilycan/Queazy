@@ -192,12 +192,18 @@ const revealExplanationText = document.getElementById('revealExplanationText')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
 const imageArea = document.getElementById('imageArea')
+const imageViewport = document.getElementById('imageViewport')
 const imageWrap = document.getElementById('imageWrap')
 const imageImg = document.getElementById('imageImg')
 const imageClickLayer = document.getElementById('imageClickLayer')
 const imageMarker = document.getElementById('imageMarker')
 const imageZonesRevealPath = document.getElementById('imageZonesRevealPath')
 const imageErrorMsg = document.getElementById('imageErrorMsg')
+const imageZoomControls = document.getElementById('imageZoomControls')
+const imageZoomInBtn = document.getElementById('imageZoomInBtn')
+const imageZoomOutBtn = document.getElementById('imageZoomOutBtn')
+const imageZoomResetBtn = document.getElementById('imageZoomResetBtn')
+const imageZoomLabel = document.getElementById('imageZoomLabel')
 const blindtestArea = document.getElementById('blindtestArea')
 const blindtestAudio = document.getElementById('blindtestAudio')
 const blindtestOrb = document.getElementById('blindtestOrb')
@@ -206,6 +212,9 @@ const blindtestFields = document.getElementById('blindtestFields')
 const blindtestTitleInput = document.getElementById('blindtestTitleInput')
 const blindtestArtistInput = document.getElementById('blindtestArtistInput')
 const audioModeRemoteInput = document.getElementById('audioModeRemote')
+const audioVolumeInput = document.getElementById('audioVolumeInput')
+const audioVolumeLabel = document.getElementById('audioVolumeLabel')
+const blindtestVolumeInput = document.getElementById('blindtestVolumeInput')
 // Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
 // décorative au-dessus de l'énoncé.
@@ -508,6 +517,58 @@ const revealOrderList = (correctOrder) => {
 let imageDisabled = true
 let imageSelectedPoint = null // { x, y } normalisé 0-1
 
+// Zoom sur l'image (même mécanique que l'éditeur, voir editor.js) : utile ici
+// pour cliquer plus précisément quand la zone correcte est petite. Purement
+// une aide visuelle — le clic marche identiquement à n'importe quel niveau
+// de zoom, voir imageClickLayer.onclick plus bas (getBoundingClientRect
+// reflète toujours la vraie taille affichée).
+const IMAGE_ZOOM_BASE_WIDTH = 640 // px, correspond au max-width de .image-area (zoom = 1)
+const IMAGE_ZOOM_MIN = 1
+const IMAGE_ZOOM_MAX = 4
+const IMAGE_ZOOM_STEP = 0.25
+const IMAGE_ZOOM_WHEEL_STEP = 0.18
+let imageZoom = 1
+
+const applyImageZoom = () => {
+  if (!imageWrap) return
+  imageWrap.style.width = Math.round(IMAGE_ZOOM_BASE_WIDTH * imageZoom) + 'px'
+  if (imageZoomLabel) imageZoomLabel.textContent = Math.round(imageZoom * 100) + '%'
+  if (imageZoomOutBtn) imageZoomOutBtn.disabled = imageZoom <= IMAGE_ZOOM_MIN
+  if (imageZoomInBtn) imageZoomInBtn.disabled = imageZoom >= IMAGE_ZOOM_MAX
+}
+const setImageZoom = (z) => {
+  imageZoom = Math.min(IMAGE_ZOOM_MAX, Math.max(IMAGE_ZOOM_MIN, z))
+  applyImageZoom()
+}
+// Zoom centré sur le curseur (comme Google Maps/Figma) : le point de l'image
+// sous la souris reste visuellement au même endroit à l'écran avant/après le
+// zoom, en rattrapant le scroll du viewport en conséquence.
+const zoomImageTowardPoint = (newZoom, clientX, clientY) => {
+  if (!imageWrap || !imageViewport) { setImageZoom(newZoom); return }
+  const viewportRect = imageViewport.getBoundingClientRect()
+  const mouseX = clientX - viewportRect.left
+  const mouseY = clientY - viewportRect.top
+  const oldWidth = imageWrap.offsetWidth || 1
+  const oldHeight = imageWrap.offsetHeight || 1
+  const fracX = (imageViewport.scrollLeft + mouseX) / oldWidth
+  const fracY = (imageViewport.scrollTop + mouseY) / oldHeight
+  setImageZoom(newZoom)
+  imageViewport.scrollLeft = fracX * imageWrap.offsetWidth - mouseX
+  imageViewport.scrollTop = fracY * imageWrap.offsetHeight - mouseY
+}
+if (imageZoomInBtn) imageZoomInBtn.onclick = () => setImageZoom(imageZoom + IMAGE_ZOOM_STEP)
+if (imageZoomOutBtn) imageZoomOutBtn.onclick = () => setImageZoom(imageZoom - IMAGE_ZOOM_STEP)
+if (imageZoomResetBtn) imageZoomResetBtn.onclick = () => setImageZoom(1)
+// Molette directement sur l'image = zoome vers le curseur, sans avoir à
+// lâcher la souris pour viser précisément.
+if (imageViewport) {
+  imageViewport.addEventListener('wheel', (e) => {
+    e.preventDefault()
+    const step = e.deltaY < 0 ? IMAGE_ZOOM_WHEEL_STEP : -IMAGE_ZOOM_WHEEL_STEP
+    zoomImageTowardPoint(imageZoom + step, e.clientX, e.clientY)
+  }, { passive: false })
+}
+
 const buildImageAnswerArea = (src) => {
   if (!imageImg || !imageClickLayer) return
   imageImg.classList.remove('d-none')
@@ -527,6 +588,8 @@ const buildImageAnswerArea = (src) => {
   if (imageMarker) imageMarker.classList.add('d-none')
   if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
   if (imageWrap) applyTileReveal(imageWrap, 0)
+  if (imageZoomControls) imageZoomControls.classList.remove('d-none')
+  setImageZoom(1) // pas de zoom qui traîne d'une question à l'autre
 }
 
 if (imageClickLayer) {
@@ -603,6 +666,37 @@ let audioMode = 'irl' // 'irl' | 'remote' — lu depuis #audioModeRemote côté 
 if (audioModeRemoteInput) {
   audioModeRemoteInput.checked = audioMode === 'remote'
   audioModeRemoteInput.onchange = () => { audioMode = audioModeRemoteInput.checked ? 'remote' : 'irl' }
+}
+
+// Volume par défaut choisi par l'hôte (0-100, transmis dans le payload de
+// question:show) : sert de point de départ pour un joueur qui n'a encore
+// jamais touché à SON propre curseur (voir plus bas, blindtestVolumeInput) —
+// une fois qu'il l'a fait, sa préférence perso (localStorage) prend toujours
+// le dessus, y compris pour les questions suivantes du même quiz.
+let hostAudioVolume = 70
+if (audioVolumeInput) {
+  audioVolumeInput.oninput = () => {
+    hostAudioVolume = Number(audioVolumeInput.value)
+    if (audioVolumeLabel) audioVolumeLabel.textContent = hostAudioVolume + '%'
+  }
+}
+
+// Volume LOCAL du joueur, jamais envoyé au serveur — juste pour lui, en cas
+// de son trop fort à son goût. Persisté en localStorage pour ne pas avoir à
+// le refaire à chaque question/partie.
+const BLINDTEST_VOLUME_KEY = 'queazy_blindtest_volume'
+const getMyBlindTestVolumePct = () => {
+  const saved = localStorage.getItem(BLINDTEST_VOLUME_KEY)
+  return saved !== null ? Math.min(100, Math.max(0, Number(saved))) : null
+}
+if (blindtestVolumeInput) {
+  const saved = getMyBlindTestVolumePct()
+  if (saved !== null) blindtestVolumeInput.value = saved
+  blindtestVolumeInput.oninput = () => {
+    const pct = Number(blindtestVolumeInput.value)
+    localStorage.setItem(BLINDTEST_VOLUME_KEY, String(pct))
+    if (blindtestAudio) blindtestAudio.volume = Math.min(1, Math.max(0, pct / 100))
+  }
 }
 
 // Monte le graphe Web Audio <audio> -> analyser -> destination UNE SEULE FOIS
@@ -724,7 +818,7 @@ const startBlindTestPulse = () => {
   loop()
 }
 
-const buildBlindTestArea = (audioUrl, mode) => {
+const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
   if (!blindtestAudio) return
   stopBlindTestPulse()
   hideBlindTestUnlockPrompt()
@@ -737,6 +831,13 @@ const buildBlindTestArea = (audioUrl, mode) => {
   blindtestAudio.pause()
   blindtestAudio.currentTime = 0
   blindtestAudio.src = audioUrl || ''
+  // Volume : la préférence perso du joueur (localStorage) gagne toujours si
+  // elle existe déjà ; sinon on part du défaut choisi par l'hôte pour cette
+  // question (voir hostAudioVolume).
+  const myVolumePct = getMyBlindTestVolumePct()
+  const startVolumePct = myVolumePct !== null ? myVolumePct : (typeof hostVolumePct === 'number' ? hostVolumePct : 70)
+  blindtestAudio.volume = Math.min(1, Math.max(0, startVolumePct / 100))
+  if (blindtestVolumeInput) blindtestVolumeInput.value = startVolumePct
 }
 
 const playBlindTestAudio = () => {
@@ -1616,9 +1717,17 @@ socket.on('lobby:list', arr => {
 
   arr.forEach(p => {
     const isMe = p.id === window.myId || p.token === getToken()
-    
+
+    // Un joueur qui se reconnecte arrive avec un NOUVEAU socket.id : scores
+    // ne connaît pas encore cet id, donc ce lookup renvoyait toujours
+    // { total: 0 } et écrasait silencieusement son vrai score aux yeux de
+    // tout le monde jusqu'à sa prochaine réponse — alors que le serveur, lui,
+    // reportait déjà correctement le total sur son nouveau socket.id
+    // (voir room:join côté serveur). p.score est la source de vérité
+    // serveur : on lui fait toujours confiance plutôt qu'au Map local.
     const s = scores.get(p.id) || { name: p.name, total: 0 }
     if (p.name) s.name = p.name // rafraîchit un nom générique posé trop tôt (ex. player:joined avant le vrai pseudo)
+    if (typeof p.score === 'number') s.total = p.score
     s.isHost = p.isHost
     scores.set(p.id, s)
     
@@ -1878,6 +1987,7 @@ const emitQuestion = (index) => {
     min: q.min,
     max: q.max,
     audioMode: q.type === 'blindtest' ? audioMode : undefined,
+    audioVolume: q.type === 'blindtest' ? hostAudioVolume : undefined,
     singleAttempt: currentSingleAttempt,
     // Texte optionnel affiché SEULEMENT à la révélation (voir server/index.js,
     // jamais diffusé dans question:show — sinon lisible en devtools avant
@@ -2090,7 +2200,7 @@ socket.on('question:show', payload => {
     buildImageAnswerArea(payload.imageUrl)
   }
   if (payload.type === 'blindtest') {
-    buildBlindTestArea(payload.audioUrl, payload.audioMode)
+    buildBlindTestArea(payload.audioUrl, payload.audioMode, payload.audioVolume)
   } else {
     stopBlindTestAudio()
   }
