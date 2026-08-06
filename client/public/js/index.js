@@ -234,6 +234,12 @@ const recapPctText = document.getElementById('recapPctText')
 const recapTopAnswerRow = document.getElementById('recapTopAnswerRow')
 const recapTopAnswerText = document.getElementById('recapTopAnswerText')
 const recapTopAnswerCount = document.getElementById('recapTopAnswerCount')
+// Mode équipe (hôte uniquement), voir socket.on('team:list') plus bas.
+const teamModePanel = document.getElementById('teamModePanel')
+const teamModeToggle = document.getElementById('teamModeToggle')
+const teamModeControls = document.getElementById('teamModeControls')
+const teamCountInput = document.getElementById('teamCountInput')
+const teamAutoAssignBtn = document.getElementById('teamAutoAssignBtn')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
 const AVATAR_CHOICES = [
@@ -1728,13 +1734,56 @@ socket.on('room:join:success', ({ roomCode, isHost: hostStatus }) => {
   isHost = hostStatus
   roomInput.value = roomCode
   originalShowLobby()
-  
+
   if (!isHost) {
     showBuilder()
   }
 })
 
-socket.on('lobby:list', arr => {
+// --- Mode équipe (salon d'attente uniquement, voir server/index.js) ---
+// teamsById tient les métadonnées (nom/couleur) de chaque équipe, tenues à
+// jour par team:list (diffusé à l'activation, à la réassignation en masse et
+// à chaque room:join) — lobby:list (rafraîchi bien plus souvent) ne porte
+// que le teamId de chaque joueur, jamais les métadonnées elles-mêmes.
+let teamModeActive = false
+let teamsById = {}
+let lastLobbyArr = [] // dernière liste reçue de lobby:list, réutilisée par team:list pour redessiner sans attendre le prochain lobby:list
+let playerTeamById = {} // socket.id courant -> teamId, tenu à jour dans renderLobbyGrid, lu par le classement/podium par équipe
+
+socket.on('team:list', ({ teamMode, teams }) => {
+  teamModeActive = !!teamMode
+  teamsById = {}
+  ;(teams || []).forEach(t => { teamsById[t.id] = t })
+  if (teamModeToggle) teamModeToggle.checked = teamModeActive
+  if (teamModeControls) teamModeControls.classList.toggle('d-none', !teamModeActive)
+  if (teamCountInput && teams && teams.length > 0) teamCountInput.value = teams.length
+  renderLobbyGrid(lastLobbyArr)
+})
+
+if (teamModeToggle) {
+  teamModeToggle.addEventListener('change', () => {
+    const roomCode = roomInput.value.trim()
+    if (!roomCode) return
+    socket.emit('team:setMode', { roomCode, enabled: teamModeToggle.checked, count: Number(teamCountInput?.value) || 2 })
+  })
+}
+if (teamCountInput) {
+  teamCountInput.addEventListener('change', () => {
+    if (!teamModeToggle?.checked) return
+    const roomCode = roomInput.value.trim()
+    if (!roomCode) return
+    socket.emit('team:setMode', { roomCode, enabled: true, count: Number(teamCountInput.value) || 2 })
+  })
+}
+if (teamAutoAssignBtn) {
+  teamAutoAssignBtn.onclick = () => {
+    const roomCode = roomInput.value.trim()
+    if (roomCode) socket.emit('team:autoAssign', { roomCode })
+  }
+}
+
+const renderLobbyGrid = (arr) => {
+  lastLobbyArr = arr || []
   console.log('Lobby list received:', arr)
   const grid = document.getElementById('lobbyGrid')
   const hostArea = document.getElementById('lobbyHost')
@@ -1786,12 +1835,14 @@ socket.on('lobby:list', arr => {
     if (typeof p.score === 'number') s.total = p.score
     s.isHost = p.isHost
     scores.set(p.id, s)
-    
+    playerTeamById[p.id] = p.teamId || null
+
     if (isMe && p.isHost) {
       isHost = true
       hostPanel.classList.remove('d-none')
       hostPanel.style.display = 'flex'
-    
+      if (teamModePanel) teamModePanel.classList.remove('d-none')
+
       // Reset buttons visibility when entering lobby as host
       startQuizBtn.classList.remove('d-none')
       startQuizBtn.style.display = 'inline-flex'
@@ -1872,11 +1923,25 @@ socket.on('lobby:list', arr => {
         <div style="font-weight:700; font-size:14px; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
           ${p.name}${isMe ? ' (Moi)' : ''}
         </div>
+        ${p.teamId && teamsById[p.teamId] ? `
+          <div class="team-badge team-${teamsById[p.teamId].color} ${iAmHost ? 'clickable' : ''}" ${iAmHost ? 'title="Cliquer pour changer d\'équipe"' : ''}>
+            ${teamsById[p.teamId].name}
+          </div>
+        ` : ''}
         <div class="status-badge ${p.connected === false ? 'status-gone' : (p.ready ? 'status-ready' : 'status-waiting')} ${isMe ? 'btn-ready-toggle' : ''}">
           ${p.connected === false ? 'Parti' : (p.ready ? 'Prêt' : 'Attente')}
         </div>
       `
-      
+
+      if (iAmHost) {
+        const teamBadge = tile.querySelector('.team-badge')
+        if (teamBadge) {
+          teamBadge.onclick = () => {
+            socket.emit('team:cyclePlayer', { roomCode: roomInput.value.trim(), playerId: p.id })
+          }
+        }
+      }
+
       if (isMe) {
         const editBtn = tile.querySelector('.edit-tile-btn')
         if (editBtn) {
@@ -1937,8 +2002,9 @@ socket.on('lobby:list', arr => {
     }
   }
 
-  renderBoard()
-})
+  renderLeaderboard()
+}
+socket.on('lobby:list', renderLobbyGrid)
 
 const closePersoBtn = document.getElementById('closePersonalization')
 if (closePersoBtn) {
@@ -2733,6 +2799,110 @@ const renderBoard = () => {
   })
 }
 
+// Classement par équipe (mode équipe uniquement) : score cumulé = somme des
+// scores de ses membres, jamais stocké côté serveur — recalculé ici à partir
+// du même Map `scores` que le classement individuel (source de vérité déjà
+// tenue à jour par score:update/lobby:list). Clé stable teamId (pas
+// playerId) : contrairement à un joueur, une équipe ne "se reconnecte"
+// jamais avec un id différent, la ligne ne se recrée donc jamais en cours de
+// partie.
+const computeTeamOrder = () => {
+  const totals = {}
+  scores.forEach((s, id) => {
+    if (s.isHost) return
+    const teamId = playerTeamById[id]
+    if (!teamId) return
+    totals[teamId] = (totals[teamId] || 0) + (s.total || 0)
+  })
+  return Object.entries(totals)
+    .map(([teamId, total]) => [teamId, { name: teamsById[teamId]?.name || teamId, total }])
+    .sort(([, a], [, b]) => b.total - a.total)
+}
+
+// Même mécanique FLIP que renderBoard() ci-dessus (rects figés avant/après,
+// entrée en cascade au premier affichage, halo doré au dépassement) — voir
+// les commentaires de renderBoard(), non dupliqués ici. Dupliquée plutôt que
+// factorisée avec renderBoard() : ce classement est verrouillé au mode
+// équipe (jamais togglé en cours de partie), le risque de faire régresser
+// l'animation déjà éprouvée du classement individuel en la généralisant
+// dépassait le bénéfice d'éviter la répétition.
+const renderTeamBoard = () => {
+  const ordered = computeTeamOrder()
+  const overlayVisible = !!leaderOverlay && !leaderOverlay.classList.contains('d-none') && leaderOverlay.style.display !== 'none'
+  const myTeamId = playerTeamById[window.myId]
+
+  const first = new Map()
+  leaderRows.forEach((row, id) => { first.set(id, row.getBoundingClientRect()) })
+
+  const currentIds = new Set(ordered.map(([id]) => id))
+  leaderRows.forEach((row, id) => {
+    if (!currentIds.has(id)) { row.remove(); leaderRows.delete(id); leaderRowsRevealed.delete(id) }
+  })
+
+  ordered.forEach(([teamId, t], idx) => {
+    let row = leaderRows.get(teamId)
+    if (!row) {
+      row = document.createElement('div')
+      row.className = 'leader-row'
+      row.innerHTML = `<span class="leader-rank"></span><span class="leader-name"></span><span class="leader-score"></span>`
+      leaderRows.set(teamId, row)
+    }
+    row.classList.toggle('is-me', teamId === myTeamId)
+    row.querySelector('.leader-rank').textContent = idx + 1
+    row.querySelector('.leader-name').textContent = t.name
+    row.querySelector('.leader-score').textContent = `${t.total} pts`
+    leaderboard.appendChild(row)
+  })
+
+  if (overlayVisible) {
+    ordered.forEach(([teamId], idx) => {
+      const row = leaderRows.get(teamId)
+      if (!row || leaderRowsRevealed.has(teamId)) return
+      leaderRowsRevealed.add(teamId)
+      row.classList.add('row-enter')
+      row.style.transitionDelay = `${Math.min(idx, 12) * LEADER_ENTER_STAGGER_MS}ms`
+      requestAnimationFrame(() => {
+        row.classList.add('row-enter-active')
+        row.addEventListener('transitionend', () => {
+          row.classList.remove('row-enter', 'row-enter-active')
+          row.style.transitionDelay = ''
+        }, { once: true })
+      })
+    })
+  }
+
+  ordered.forEach(([teamId]) => {
+    const row = leaderRows.get(teamId)
+    if (!row || row.classList.contains('row-enter')) return
+    const before = first.get(teamId)
+    if (!before) return
+    const after = row.getBoundingClientRect()
+    const dy = before.top - after.top
+    if (dy) {
+      row.style.transition = 'none'
+      row.style.transform = `translateY(${dy}px)`
+      void row.offsetHeight
+      row.classList.add(dy > 0 ? 'rank-up' : 'rank-down')
+      row.style.zIndex = '5'
+      requestAnimationFrame(() => {
+        row.style.transition = ''
+        row.style.transform = ''
+      })
+      row.addEventListener('transitionend', function onEnd (e) {
+        if (e.propertyName !== 'transform') return
+        row.removeEventListener('transitionend', onEnd)
+        row.classList.remove('rank-up', 'rank-down')
+        row.style.zIndex = ''
+      })
+    }
+  })
+}
+
+// Point d'entrée unique appelé partout où l'ancien renderBoard() l'était :
+// bascule vers le classement par équipe si le mode équipe est actif pour
+// cette salle, sinon comportement inchangé.
+const renderLeaderboard = () => { teamModeActive ? renderTeamBoard() : renderBoard() }
+
 const showResults = () => {
   const roomCode = roomInput.value.trim()
   if (!roomCode) return
@@ -2744,9 +2914,9 @@ socket.on('quiz:end', () => {
   if (roomCode) window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}`
 })
 
-socket.on('player:joined', ({ id, name }) => { 
+socket.on('player:joined', ({ id, name }) => {
   if (!scores.has(id)) scores.set(id, { name, total: 0, isHost: false })
-  renderBoard() 
+  renderLeaderboard()
 })
 
 socket.on('timer:end', () => {
@@ -2888,11 +3058,14 @@ socket.on('leaderboard:show', () => {
   // que soit le changement de classement.
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
-  renderBoard()
+  renderLeaderboard()
   // Le message perso arrive une fois l'animation de réarrangement du
   // classement terminée (transform sur .leader-row, voir style.css), pas en
-  // même temps qu'elle.
-  setTimeout(() => revealMyPositionChange(beforeOrder), 1300)
+  // même temps qu'elle. "Tu es passé devant X" n'a de sens que sur un
+  // classement individuel — pas d'équivalent équipe pour l'instant, on le
+  // saute simplement en mode équipe plutôt que d'afficher un message
+  // individuel incohérent avec le classement par équipe affiché à l'écran.
+  if (!teamModeActive) setTimeout(() => revealMyPositionChange(beforeOrder), 1300)
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
 })
 
@@ -2906,8 +3079,8 @@ socket.on('moderation:finished', () => {
   // empêchait l'animation FLIP de se déclencher).
   leaderOverlay.classList.remove('d-none')
   leaderOverlay.style.display = 'flex'
-  renderBoard()
-  setTimeout(() => revealMyPositionChange(beforeOrder), 1300)
+  renderLeaderboard()
+  if (!teamModeActive) setTimeout(() => revealMyPositionChange(beforeOrder), 1300)
   // Aucune révélation visuelle n'a eu lieu pour cette question (texte libre
   // en attente de modération) : c'est ici qu'on apprend enfin si on avait
   // juste ou faux, donc c'est ici que le son doit jouer.

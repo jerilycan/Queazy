@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.8.0'
+const APP_VERSION = '1.9.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -103,6 +103,70 @@ const getBaseUrl = (headers) => {
 const start = async () => {
   const rooms = new Map()
 
+  // Mode équipe : palette fixe (couleur + nom), réutilisée telle quelle côté
+  // client (tile-red/tile-blue/... déjà dans style.css) — le serveur n'envoie
+  // qu'une clé de couleur, jamais de valeur CSS. Plafonne à 6 équipes.
+  const TEAM_PALETTE = [
+    { color: 'red', name: 'Équipe Rouge' },
+    { color: 'blue', name: 'Équipe Bleue' },
+    { color: 'yellow', name: 'Équipe Jaune' },
+    { color: 'green', name: 'Équipe Verte' },
+    { color: 'cyan', name: 'Équipe Cyan' },
+    { color: 'purple', name: 'Équipe Violette' }
+  ]
+  const MAX_TEAMS = TEAM_PALETTE.length
+
+  // La partie a démarré dès que la première question a été envoyée —
+  // room.currentQuestion n'est plus jamais remis à null ensuite (juste
+  // remplacé par la question suivante), donc ce test reste vrai aussi
+  // pendant l'écran de classement entre deux questions. Sert à verrouiller
+  // la configuration des équipes une fois la partie lancée.
+  const gameStarted = (room) => room.currentQuestion !== null
+
+  const buildTeamList = (room) => Array.from(room.teams.values())
+
+  const teamMemberCount = (room, teamId) =>
+    activePlayers(room).filter(p => p.teamId === teamId).length
+
+  // Équipe la moins fournie au moment de l'appel — sert à placer un joueur
+  // qui rejoint après la répartition initiale (ou dont l'équipe n'existe
+  // plus après une réduction du nombre d'équipes) sans jamais le laisser
+  // sans équipe.
+  const smallestTeamId = (room) => {
+    let best = null, bestCount = Infinity
+    for (const id of room.teams.keys()) {
+      const c = teamMemberCount(room, id)
+      if (c < bestCount) { bestCount = c; best = id }
+    }
+    return best
+  }
+
+  // Répartition équilibrée : mélange les joueurs actifs puis les distribue
+  // en tourniquet sur les équipes existantes — pas un simple découpage en
+  // tranches (qui grouperait les premiers arrivés ensemble à chaque fois).
+  const shuffleAssignTeams = (room) => {
+    const teamIds = Array.from(room.teams.keys())
+    if (teamIds.length === 0) return
+    const players = activePlayers(room)
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[players[i], players[j]] = [players[j], players[i]]
+    }
+    players.forEach((p, i) => { p.teamId = teamIds[i % teamIds.length] })
+  }
+
+  // room.players porte le teamId "vivant" (source de vérité pendant que le
+  // joueur est connecté) ; room.tokens est ce qui survit à une déconnexion
+  // et permet de le restaurer à la reconnexion (voir room:join) — les deux
+  // doivent donc rester synchronisés après toute réassignation en masse.
+  const syncTeamIdsToTokens = (room) => {
+    for (const p of room.players.values()) {
+      if (!p.token) continue
+      const tok = room.tokens.get(p.token)
+      if (tok) room.tokens.set(p.token, { ...tok, teamId: p.teamId || null })
+    }
+  }
+
   // Construit la liste de joueurs envoyée au client (lobby, classement,
   // résultats finaux...). Les joueurs déconnectés restent dedans, avec leur
   // dernier score/nom connu (voir le handler 'disconnect' : il ne les
@@ -115,7 +179,8 @@ const start = async () => {
     score: room.scores.get(p.id) || 0,
     ready: !!p.ready,
     isHost: p.id === room.hostId || p.token === room.hostToken,
-    connected: p.connected !== false
+    connected: p.connected !== false,
+    teamId: p.teamId || null
   }))
 
   // Joueurs (hors hôte) actuellement connectés — sert à la fois pour "tout le
@@ -420,7 +485,9 @@ const start = async () => {
         scores: new Map(),
         tokens: new Map(),
         history: [],
-        ended: false
+        ended: false,
+        teamMode: false,
+        teams: new Map()
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
       await socket.join(code)
@@ -454,15 +521,26 @@ const start = async () => {
       }
 
       const existing = room.tokens.get(token)
+      const isHostJoining = token === room.hostToken
+      let player
       if (existing) {
         room.players.delete(existing.id)
-        room.players.set(socket.id, { id: socket.id, name: existing.name || name, score: existing.score || 0, token, avatar: payload?.avatar || existing.avatar || '', ready: false, connected: true })
+        player = { id: socket.id, name: existing.name || name, score: existing.score || 0, token, avatar: payload?.avatar || existing.avatar || '', ready: false, connected: true, teamId: existing.teamId || null }
+        room.players.set(socket.id, player)
         room.scores.set(socket.id, existing.score || 0)
       } else {
-        room.players.set(socket.id, { id: socket.id, name, score: 0, token, avatar: payload?.avatar || '', ready: false, connected: true })
+        player = { id: socket.id, name, score: 0, token, avatar: payload?.avatar || '', ready: false, connected: true, teamId: null }
+        room.players.set(socket.id, player)
         room.scores.set(socket.id, 0)
       }
-      room.tokens.set(token, { id: socket.id, name, score: room.scores.get(socket.id) })
+      // Un joueur (hors hôte) qui rejoint pendant que le mode équipe est déjà
+      // actif — nouveau joueur ou reconnexion d'un joueur dont l'équipe
+      // aurait entre-temps disparu (réduction du nombre d'équipes) — est
+      // placé sur l'équipe la moins fournie plutôt que de rester sans équipe.
+      if (room.teamMode && !isHostJoining && (!player.teamId || !room.teams.has(player.teamId))) {
+        player.teamId = smallestTeamId(room)
+      }
+      room.tokens.set(token, { id: socket.id, name, score: room.scores.get(socket.id), teamId: player.teamId })
 
       await socket.join(code)
       socket.emit('player:token', { token })
@@ -475,6 +553,7 @@ const start = async () => {
         io.to(code).emit('history:sync', { history: buildHistorySync(room) })
       }
 
+      io.to(code).emit('team:list', { teamMode: room.teamMode, teams: buildTeamList(room) })
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
     })
@@ -488,9 +567,62 @@ const start = async () => {
       if (payload?.name) p.name = String(payload.name).slice(0, MAX_NAME_LENGTH)
       if (typeof payload?.avatar === 'string') p.avatar = payload.avatar
       const tok = room.tokens.get(p.token)
-      if (tok) room.tokens.set(p.token, { id: socket.id, name: p.name, score: room.scores.get(socket.id) || 0 })
+      if (tok) room.tokens.set(p.token, { id: socket.id, name: p.name, score: room.scores.get(socket.id) || 0, teamId: p.teamId || null })
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
+    })
+
+    // --- Mode équipe (salon d'attente uniquement, voir gameStarted) ---
+
+    socket.on('team:setMode', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || room.hostId !== socket.id || gameStarted(room)) return
+
+      if (!payload?.enabled) {
+        room.teamMode = false
+        room.teams.clear()
+        for (const p of room.players.values()) p.teamId = null
+      } else {
+        const count = Math.min(MAX_TEAMS, Math.max(2, Number(payload?.count) || 2))
+        room.teamMode = true
+        room.teams.clear()
+        for (let i = 0; i < count; i++) {
+          const { color, name } = TEAM_PALETTE[i]
+          room.teams.set('t' + i, { id: 't' + i, name, color })
+        }
+        shuffleAssignTeams(room)
+      }
+      syncTeamIdsToTokens(room)
+      io.to(code).emit('team:list', { teamMode: room.teamMode, teams: buildTeamList(room) })
+      io.to(code).emit('lobby:list', buildPlayerList(room))
+    })
+
+    socket.on('team:autoAssign', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || room.hostId !== socket.id || gameStarted(room) || !room.teamMode) return
+      shuffleAssignTeams(room)
+      syncTeamIdsToTokens(room)
+      io.to(code).emit('lobby:list', buildPlayerList(room))
+    })
+
+    // Fait passer un joueur à l'équipe suivante de la palette (retour au
+    // début après la dernière) — réassignation manuelle simple par clic sur
+    // son badge d'équipe, plutôt qu'un glisser-déposer entre colonnes.
+    socket.on('team:cyclePlayer', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || room.hostId !== socket.id || gameStarted(room) || !room.teamMode) return
+      const p = room.players.get(payload?.playerId)
+      if (!p || p.id === room.hostId) return
+      const teamIds = Array.from(room.teams.keys())
+      if (teamIds.length === 0) return
+      const idx = teamIds.indexOf(p.teamId)
+      p.teamId = teamIds[(idx + 1) % teamIds.length]
+      const tok = room.tokens.get(p.token)
+      if (tok) room.tokens.set(p.token, { ...tok, teamId: p.teamId })
+      io.to(code).emit('lobby:list', buildPlayerList(room))
     })
 
     socket.on('player:ready', payload => {

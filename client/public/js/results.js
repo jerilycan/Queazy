@@ -96,6 +96,15 @@ let historyReceived = false
 let latestPlayers = null
 let raceStarted = false
 
+// Mode équipe : le podium regroupe alors par équipe (score cumulé des
+// membres) au lieu d'un joueur par piste — voir computeTeamEntities/
+// computeTeamHistory plus bas. La liste complète sous le podium, elle,
+// reste TOUJOURS par joueur individuel (voir renderFullTable) : c'est là
+// que le détail par personne demandé reste consultable.
+let teamModeActive = false
+let teamsById = {}
+const TEAM_EMOJI = { red: '🔴', blue: '🔵', yellow: '🟡', green: '🟢', cyan: '🩵', purple: '🟣' }
+
 // ---------------------------------------------------------------------
 // Podium final "course arcade néon" : chaque barre grimpe question par
 // question au rythme des points RÉELLEMENT gagnés à chaque tour (voir
@@ -118,7 +127,7 @@ const applyLaneAvatar = (el, p) => {
   el.textContent = isImg ? '' : (p?.avatar || (p ? p.name.slice(0, 2).toUpperCase() : ''))
 }
 
-const runRace = (top) => {
+const runRace = (top, raceHistory) => {
   const stage = document.getElementById('raceStage')
   const lanesEl = document.getElementById('raceLanes')
   const qStrip = document.getElementById('raceQstrip')
@@ -217,7 +226,7 @@ const runRace = (top) => {
 
   // Historique vide (aucune question jouée) : pas de course à rejouer, on
   // saute directement les barres à leur hauteur finale puis l'arrivée.
-  if (history.length === 0) {
+  if (raceHistory.length === 0) {
     qStrip.innerHTML = ''
     statusPill.className = 'race-status-pill live'
     statusPill.innerHTML = '<span class="dot"></span>Podium'
@@ -230,16 +239,16 @@ const runRace = (top) => {
     return
   }
 
-  qStrip.innerHTML = history.map((_, i) => `<div class="race-qdot" data-q="${i}">${i + 1}</div>`).join('')
+  qStrip.innerHTML = raceHistory.map((_, i) => `<div class="race-qdot" data-q="${i}">${i + 1}</div>`).join('')
   statusPill.className = 'race-status-pill live'
 
   const running = {}; top.forEach(p => { running[p.id] = 0 })
   const streaks = {}; top.forEach(p => { streaks[p.id] = 0 })
-  const stepMs = Math.max(RACE_MIN_STEP_MS, RACE_TOTAL_MS / history.length)
+  const stepMs = Math.max(RACE_MIN_STEP_MS, RACE_TOTAL_MS / raceHistory.length)
 
   const applyQuestion = (i) => {
-    const h = history[i]
-    statusPill.innerHTML = `<span class="dot"></span>Question ${i + 1} / ${history.length}`
+    const h = raceHistory[i]
+    statusPill.innerHTML = `<span class="dot"></span>Question ${i + 1} / ${raceHistory.length}`
     qStrip.querySelectorAll('.race-qdot').forEach((d, di) => {
       d.classList.toggle('active', di === i)
       d.classList.toggle('done', di < i)
@@ -273,7 +282,7 @@ const runRace = (top) => {
   applyQuestion(0)
   const raceTimer = setInterval(() => {
     qIndex += 1
-    if (qIndex >= history.length) {
+    if (qIndex >= raceHistory.length) {
       clearInterval(raceTimer)
       setTimeout(finishRace, 300)
       return
@@ -282,16 +291,64 @@ const runRace = (top) => {
   }, stepMs)
 }
 
+// Une "entité" équipe pour la course : mêmes champs qu'un joueur
+// (id/name/avatar/score) pour que runRace() n'ait besoin d'aucune branche
+// spécifique — seul un id d'équipe à la place d'un id de joueur, et un
+// historique reconstruit en conséquence (voir computeTeamHistory).
+const computeTeamEntities = () => {
+  const totals = {}
+  ;(latestPlayers || []).forEach(p => {
+    if (!p.teamId) return
+    totals[p.teamId] = (totals[p.teamId] || 0) + (p.score || 0)
+  })
+  return Object.entries(totals)
+    .map(([teamId, score]) => ({
+      id: teamId,
+      name: teamsById[teamId]?.name || teamId,
+      avatar: TEAM_EMOJI[teamsById[teamId]?.color] || '👥',
+      score
+    }))
+    .sort((a, b) => b.score - a.score)
+}
+
+// Reconstruit un historique "par équipe" à partir de l'historique par joueur
+// (history[].deltas est indexé par id de JOUEUR côté serveur) : chaque
+// entrée somme les deltas de tous les membres d'une même équipe pour cette
+// question-là.
+const computeTeamHistory = () => {
+  const teamByPlayer = {}
+  ;(latestPlayers || []).forEach(p => { if (p.teamId) teamByPlayer[p.id] = p.teamId })
+  return history.map(h => {
+    const deltas = {}
+    for (const [playerId, delta] of Object.entries(h.deltas || {})) {
+      const teamId = teamByPlayer[playerId]
+      if (!teamId) continue
+      deltas[teamId] = (deltas[teamId] || 0) + (Number(delta) || 0)
+    }
+    return { ...h, deltas }
+  })
+}
+
 const tryStartRace = () => {
   if (raceStarted || !historyReceived || !latestPlayers) return
+  if (teamModeActive) {
+    const topTeams = computeTeamEntities().slice(0, 3)
+    if (topTeams.length === 0) return
+    raceStarted = true
+    runRace(topTeams, computeTeamHistory())
+    return
+  }
   const ordered = computeOrder(latestPlayers.slice())
   const top = ordered.slice(0, 3)
   if (top.length === 0) return
   raceStarted = true
-  runRace(top)
+  runRace(top, history)
 }
 
 const render = (players) => {
+  // Le podium (top) veut le tri par équipe s'il est actif ; la liste
+  // complète en dessous, elle, reste TOUJOURS un classement individuel par
+  // joueur — voir renderFullTable, jamais agrégée par équipe.
   const ordered = computeOrder(players.slice())
   latestPlayers = players
   tryStartRace()
@@ -320,11 +377,24 @@ const renderFullTable = (ordered) => {
     if (!row) {
       row = document.createElement('div')
       row.className = 'result-row'
-      row.innerHTML = `<span class="result-row-rank"></span><span class="result-row-score"></span>`
+      row.innerHTML = `<span class="result-row-rank"></span><span class="result-row-team"></span><span class="result-row-score"></span>`
       fullTableRows.set(p.id, row)
     }
     if (p.id) row.dataset.playerId = p.id
     row.querySelector('.result-row-rank').textContent = `${i + 1}. ${p.name}`
+    // Le podium ne montre que les équipes en mode équipe (voir tryStartRace)
+    // — cette ligne-ci reste TOUJOURS individuelle, avec juste un badge pour
+    // situer le joueur dans son équipe (score cumulé visible sur le podium
+    // au-dessus, score personnel ici).
+    const teamEl = row.querySelector('.result-row-team')
+    const team = p.teamId ? teamsById[p.teamId] : null
+    if (team) {
+      teamEl.textContent = team.name
+      teamEl.className = `result-row-team team-badge team-${team.color}`
+      teamEl.classList.remove('d-none')
+    } else {
+      teamEl.className = 'result-row-team d-none'
+    }
     row.querySelector('.result-row-score').textContent = `${p.score} pts`
     tbl.appendChild(row) // déplace le nœud existant : préserve son identité pour le FLIP
   })
@@ -401,8 +471,19 @@ socket.on('history:sync', (payload) => {
   tryStartRace()
 })
 
+// Diffusé par le serveur juste avant lobby:list à chaque room:join (voir
+// server/index.js) — arrive donc toujours à temps pour la toute première
+// render(), mais on retente quand même ici au cas où (defensive, comme pour
+// history:sync ci-dessus).
+socket.on('team:list', ({ teamMode, teams }) => {
+  teamModeActive = !!teamMode
+  teamsById = {}
+  ;(teams || []).forEach(t => { teamsById[t.id] = t })
+  tryStartRace()
+})
+
 socket.on('lobby:list', (list) => {
-  const players = (list || []).filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name, score: p.score || 0, avatar: p.avatar || '' }))
+  const players = (list || []).filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name, score: p.score || 0, avatar: p.avatar || '', teamId: p.teamId || null }))
   render(players)
 })
 

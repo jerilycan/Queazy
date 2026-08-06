@@ -56,8 +56,25 @@
           <h1>Salon d’attente</h1>
           <p class="text-muted mt-8">Préparez-vous pour le début de la partie</p>
         </div>
-        
+
         <div id="lobbyHost" class="lobby-host-card"></div>
+
+        <!-- Mode équipe (hôte uniquement, verrouillé une fois la partie
+             lancée — voir index.js et server/index.js gameStarted). -->
+        <div id="teamModePanel" class="team-mode-panel d-none">
+          <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14">
+            <input id="teamModeToggle" type="checkbox" class="checkbox-custom" />
+            👥 Mode équipe (score cumulé par équipe)
+          </label>
+          <div id="teamModeControls" class="team-mode-controls d-none">
+            <label class="font-13 text-muted align-center d-flex gap-xs">
+              Nombre d'équipes
+              <input id="teamCountInput" type="number" min="2" max="6" value="2" class="team-count-input" />
+            </label>
+            <button id="teamAutoAssignBtn" type="button" class="btn h-36 px-16 font-13">🔀 Répartir automatiquement</button>
+            <span class="font-12 text-muted">Clique le badge d'un joueur pour changer son équipe à la main.</span>
+          </div>
+        </div>
 
         <h3 class="mb-md opacity-80">Joueurs connectés</h3>
         <div id="lobbyGrid" class="player-grid"></div>

@@ -34,11 +34,16 @@
   --tile-red-rgb: 255,59,92;
   --tile-blue: #2f8bff;
   --tile-blue-deep: #0d4faa;
+  --tile-blue-rgb: 47,139,255;
   --tile-yellow: #ffd23f;
   --tile-yellow-deep: #a67a00;
+  --tile-yellow-rgb: 255,210,63;
   --tile-green: #39ff88;
   --tile-green-deep: #0f8a45;
   --tile-green-rgb: 57,255,136;
+  /* Mode équipe (voir .team-* plus bas) : violet réutilise --color-accent-2,
+     manquait sa variante rgb pour les fonds/bordures translucides. */
+  --color-accent-2-rgb: 123,47,247;
   /* Podium final (voir .race-* plus bas) : argent/bronze n'existaient pas
      encore dans la palette, l'or réutilise --tile-yellow. */
   --tile-silver: #cfd8ea;
@@ -568,6 +573,63 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
    retrait pour ne pas laisser croire que c'est une tuile figée par erreur. */
 .player-tile.is-disconnected { opacity: 0.55; }
 .player-tile.is-disconnected .kick-tile-btn { display: none; }
+
+/* Mode équipe — voir index.html #teamModePanel, index.js et
+   server/index.js (room.teamMode/room.teams). */
+.team-mode-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  margin: 18px 0;
+}
+.team-mode-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+.team-count-input {
+  width: 52px;
+  text-align: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/* Badge d'équipe sur une tuile joueur : cliquable pour l'hôte uniquement
+   (voir index.js, .clickable posée seulement côté hôte) pour réassigner un
+   joueur à la main sans glisser-déposer. */
+.team-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 20px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+  transition: transform 0.15s ease;
+}
+.team-badge.clickable { cursor: pointer; }
+.team-badge.clickable:hover { transform: scale(1.06); }
+.team-badge.team-red    { background: rgba(var(--tile-red-rgb),0.16);       color: var(--tile-red);       border: 2px solid rgba(var(--tile-red-rgb),0.4); }
+.team-badge.team-blue   { background: rgba(var(--tile-blue-rgb),0.16);      color: var(--tile-blue);      border: 2px solid rgba(var(--tile-blue-rgb),0.4); }
+.team-badge.team-yellow { background: rgba(var(--tile-yellow-rgb),0.16);    color: var(--tile-yellow);    border: 2px solid rgba(var(--tile-yellow-rgb),0.4); }
+.team-badge.team-green  { background: rgba(var(--tile-green-rgb),0.16);     color: var(--tile-green);     border: 2px solid rgba(var(--tile-green-rgb),0.4); }
+.team-badge.team-cyan   { background: rgba(var(--color-cyan-rgb),0.16);     color: var(--color-cyan);     border: 2px solid rgba(var(--color-cyan-rgb),0.4); }
+.team-badge.team-purple { background: rgba(var(--color-accent-2-rgb),0.16); color: var(--color-accent-2); border: 2px solid rgba(var(--color-accent-2-rgb),0.4); }
 
 .icon-grid {
   display: grid;
@@ -2477,7 +2539,9 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
    changement de position, comme le classement en cours de partie. */
 .result-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
@@ -2485,6 +2549,10 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 }
 .result-row-rank { font-weight: 600; color: var(--color-text); }
 .result-row-score { color: var(--color-accent); font-weight: 700; }
+/* Badge d'équipe (mode équipe uniquement, voir results.js renderFullTable) —
+   réutilise .team-badge/.team-* déjà définis pour la tuile joueur du salon
+   d'attente, juste non cliquable ici (podium = lecture seule). */
+.result-row-team { flex-shrink: 0; }
 /* Même effet "dépassement" que le classement en cours de partie (voir
    .leader-row.rank-up dans ce même fichier) : halo doré tant qu'une ligne
    grimpe dans le classement final, plus discret en descendant. */
