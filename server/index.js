@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.2.1'
+const APP_VERSION = '1.3.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -270,11 +270,61 @@ const start = async () => {
   const REACTION_COOLDOWN_MS = 500
   // Question "image" : le joueur clique directement sur l'image (coordonnées
   // normalisées 0-1, pas de grille — voir index.js) ; le créateur définit une
-  // ou plusieurs zones rectangulaires (idem, voir editor.js). Distance
-  // Chebyshev (le plus grand des deux axes) du point cliqué au rectangle le
-  // plus proche, en unités normalisées : au-delà de ce seuil (30% de la
-  // largeur/hauteur de l'image), la proximité ne rapporte plus rien.
+  // ou plusieurs zones de forme libre tracées à main levée (idem, voir
+  // editor.js et client/public/js/zone-geometry.js — copie Node de ces mêmes
+  // fonctions ci-dessous, ce fichier n'a pas accès aux <script> du client).
+  // Distance du point cliqué au bord de la zone la plus proche (0 si dedans),
+  // en unités normalisées : au-delà de ce seuil (30% de la largeur/hauteur de
+  // l'image), la proximité ne rapporte plus rien.
   const IMAGE_PROXIMITY_MAX_DIST = 0.3
+
+  // Une zone stockée est soit un polygone { points:[{x,y},...] } (nouveau
+  // format, tracé à main levée), soit un rectangle legacy { x0,y0,x1,y1 }
+  // (anciens quiz) — ramené à une liste de points communs pour que le reste
+  // du calcul n'ait jamais à distinguer les deux formats.
+  const zoneToPolygonPoints = (zone) => {
+    if (!zone) return []
+    if (Array.isArray(zone.points)) return zone.points
+    if (typeof zone.x0 === 'number' && typeof zone.y0 === 'number' && typeof zone.x1 === 'number' && typeof zone.y1 === 'number') {
+      return [
+        { x: zone.x0, y: zone.y0 },
+        { x: zone.x1, y: zone.y0 },
+        { x: zone.x1, y: zone.y1 },
+        { x: zone.x0, y: zone.y1 }
+      ]
+    }
+    return []
+  }
+  const pointInPolygon = (pt, points) => {
+    let inside = false
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const xi = points[i].x, yi = points[i].y
+      const xj = points[j].x, yj = points[j].y
+      const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+        (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi)
+      if (intersect) inside = !inside
+    }
+    return inside
+  }
+  const pointToSegmentDist = (pt, a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y
+    const lenSq = dx * dx + dy * dy
+    if (lenSq === 0) return Math.hypot(pt.x - a.x, pt.y - a.y)
+    let t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / lenSq
+    t = Math.max(0, Math.min(1, t))
+    return Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy))
+  }
+  const distPointToPolygon = (pt, points) => {
+    if (points.length < 3) return Infinity
+    if (pointInPolygon(pt, points)) return 0
+    let min = Infinity
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i], b = points[(i + 1) % points.length]
+      const d = pointToSegmentDist(pt, a, b)
+      if (d < min) min = d
+    }
+    return min
+  }
 
   // Délai de révélation avant que le chrono ne démarre vraiment : le temps
   // que la question s'affiche puis que les réponses apparaissent une à une
@@ -528,23 +578,18 @@ const start = async () => {
 
       if (q.type === 'image') {
         // Distance jusqu'à la zone de bonne réponse la plus proche (une ou
-        // plusieurs rectangles {x0,y0,x1,y1}, tracés librement par le
-        // créateur, coordonnées normalisées 0-1) -> facteur de proximité,
+        // plusieurs formes libres tracées à main levée par le créateur, ou
+        // rectangles legacy {x0,y0,x1,y1} pour les anciens quiz — coordonnées
+        // normalisées 0-1, voir zoneToPolygonPoints) -> facteur de proximité,
         // même principe que la tolérance de "graduation". Le joueur clique
         // directement sur l'image (point normalisé, pas de grille) : dans
         // n'importe laquelle des zones -> distance 0 -> points max ; en
-        // dehors -> ça dégrade selon l'écart au rectangle le plus proche
-        // (Chebyshev : le plus grand des deux axes).
+        // dehors -> ça dégrade selon l'écart au bord le plus proche.
         let point
         try { point = JSON.parse(payload?.content || 'null') } catch { point = null }
-        const zones = Array.isArray(q.correct) ? q.correct.filter(z => z && typeof z.x0 === 'number') : []
+        const zones = (Array.isArray(q.correct) ? q.correct : []).map(z => zoneToPolygonPoints(z)).filter(pts => pts.length >= 3)
         if (!point || typeof point.x !== 'number' || typeof point.y !== 'number' || zones.length === 0) return
-        const distToZone = (z) => {
-          const dx = point.x < z.x0 ? z.x0 - point.x : point.x > z.x1 ? point.x - z.x1 : 0
-          const dy = point.y < z.y0 ? z.y0 - point.y : point.y > z.y1 ? point.y - z.y1 : 0
-          return Math.max(dx, dy)
-        }
-        const dist = Math.min(...zones.map(distToZone))
+        const dist = Math.min(...zones.map(pts => distPointToPolygon(point, pts)))
         const closeness = Math.max(0, 1 - dist / IMAGE_PROXIMITY_MAX_DIST)
         const delta = Math.round(pointsFor(q.startTs, Date.now()) * (closeness ** CLOSENESS_EXPONENT))
         const total = (room.scores.get(socket.id) || 0) + delta

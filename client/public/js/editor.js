@@ -151,11 +151,17 @@ const addOrderItemBtn = document.getElementById('addOrderItem')
 
 const imageSection = document.getElementById('imageSection')
 const imageUploadInput = document.getElementById('imageUpload')
+const imageEditViewport = document.getElementById('imageEditViewport')
 const imageEditWrap = document.getElementById('imageEditWrap')
 const imageEditImg = document.getElementById('imageEditImg')
 const imageEditZoneSvg = document.getElementById('imageEditZoneSvg')
 const imageEditZonePath = document.getElementById('imageEditZonePath')
 const clearImageZoneBtn = document.getElementById('clearImageZoneBtn')
+const imageZoomControls = document.getElementById('imageZoomControls')
+const imageZoomInBtn = document.getElementById('imageZoomInBtn')
+const imageZoomOutBtn = document.getElementById('imageZoomOutBtn')
+const imageZoomResetBtn = document.getElementById('imageZoomResetBtn')
+const imageZoomLabel = document.getElementById('imageZoomLabel')
 
 // Illustration optionnelle (tous les types SAUF "image", qui a déjà sa propre
 // image cliquable ci-dessus) : simple photo affichée au-dessus de la question,
@@ -348,18 +354,16 @@ const populateTrueFalseFields = (q) => {
   tfFalseBtn.classList.toggle('active', !isTrue)
 }
 
-// Zone(s) de bonne réponse (type "image") : un ou plusieurs rectangles tracés
-// au pixel par glisser-déposer directement sur l'image, chacun stocké en
-// coordonnées normalisées 0-1 (x0,y0,x1,y1) — pas de grille côté éditeur : une
-// grille fixe est trop grossière pour cadrer une forme irrégulière (ex. un
-// département) sans déborder sur ses voisins, alors qu'un rectangle libre
-// peut se caler au pixel près. Plusieurs rectangles indépendants sont
-// autorisés (ex. deux zones disjointes toutes les deux valides).
-// Affichage : un seul contour SVG qui suit le pourtour réel de l'union des
-// rectangles (voir rect-union.js) — deux rectangles adjacents/en L se
-// retrouvent fusionnés sans couture visible, deux rectangles éloignés qui ne
-// se touchent qu'en diagonale restent deux formes distinctes plutôt qu'une
-// boîte englobante qui engloutirait tout l'espace vide entre elles.
+// Zone(s) de bonne réponse (type "image") : une ou plusieurs formes tracées à
+// main levée directement sur l'image (voir zone-geometry.js), chacune
+// stockée en coordonnées normalisées 0-1 sous la forme { points: [{x,y},...] }.
+// Les anciens quiz stockent encore des rectangles { x0,y0,x1,y1 } : les deux
+// formats cohabitent, zoneToPolygonPoints() les ramène à une liste de points
+// commune partout où c'est nécessaire (affichage, clic pour supprimer, score).
+// Plusieurs zones indépendantes sont autorisées (ex. deux formes disjointes
+// toutes les deux valides) ; contrairement aux rectangles, pas de fusion —
+// une forme libre n'a pas de grille naturelle sur laquelle fusionner, et deux
+// formes qui se touchent restent correctes affichées superposées.
 const renderImageZones = (zones) => {
   if (!imageEditZoneSvg || !imageEditZonePath) return
   const list = Array.isArray(zones) ? zones : []
@@ -369,57 +373,21 @@ const renderImageZones = (zones) => {
     return
   }
   imageEditZoneSvg.classList.remove('d-none')
-  imageEditZonePath.setAttribute('d', rectUnionContoursToSvgPath(list))
+  imageEditZonePath.setAttribute('d', zonesToSvgPath(list))
 }
 
-// En dessous de cette taille (normalisée), on considère le tracé comme un
-// clic accidentel plutôt qu'une vraie sélection, et on ignore le résultat.
+// En dessous de cette taille (boîte englobante du tracé, normalisée), on
+// considère le geste comme un clic plutôt qu'un vrai tracé, et on regarde
+// s'il tombe dans une zone existante (pour la supprimer) au lieu de créer une
+// nouvelle zone quasi ponctuelle.
 const IMAGE_ZONE_MIN_SIZE = 0.015
-
-// Si le rectangle qu'on vient de tracer "mord" sur un autre déjà validé, on
-// les fusionne en un seul rectangle englobant — MAIS seulement si cette boîte
-// englobante reste "pleine" (peu de vide ajouté). Un simple test de
-// chevauchement ne suffit pas : deux rectangles très différents qui ne se
-// touchent qu'en diagonale (ex. un petit sur l'Europe, un immense sur
-// Asie+Océanie) chevauchent techniquement, mais leur boîte englobante
-// engloutirait tout l'espace vide entre les deux (Afrique/Moyen-Orient...) —
-// un rectangle géant absurde, pas une vraie fusion. On ne fusionne donc que
-// si la part de vide dans la boîte englobante reste sous ce seuil (rectangles
-// alignés qui se prolongent, ou l'un contenu dans l'autre : vide ≈ 0).
-const RECT_MERGE_MAX_WASTE = 0.15
-const shouldMergeRects = (a, b) => {
-  const overlaps = a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0
-  if (!overlaps) return false
-  const interArea = Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) *
-                     Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0))
-  const areaA = (a.x1 - a.x0) * (a.y1 - a.y0)
-  const areaB = (b.x1 - b.x0) * (b.y1 - b.y0)
-  const usefulArea = areaA + areaB - interArea // surface réellement couverte par l'un OU l'autre
-  const boundingArea = (Math.max(a.x1, b.x1) - Math.min(a.x0, b.x0)) * (Math.max(a.y1, b.y1) - Math.min(a.y0, b.y0))
-  if (boundingArea <= 0) return false
-  const wasted = (boundingArea - usefulArea) / boundingArea
-  return wasted <= RECT_MERGE_MAX_WASTE
-}
-const mergeOverlappingZones = (zones) => {
-  const list = zones.slice()
-  for (let i = 0; i < list.length; i++) {
-    for (let j = i + 1; j < list.length; j++) {
-      if (shouldMergeRects(list[i], list[j])) {
-        list[i] = {
-          x0: Math.min(list[i].x0, list[j].x0), y0: Math.min(list[i].y0, list[j].y0),
-          x1: Math.max(list[i].x1, list[j].x1), y1: Math.max(list[i].y1, list[j].y1)
-        }
-        list.splice(j, 1)
-        i-- // ré-examine ce rectangle agrandi contre le reste depuis le début (fusions en chaîne)
-        break
-      }
-    }
-  }
-  return list
-}
+// Distance minimale (normalisée) entre deux points consécutifs enregistrés
+// du tracé — sans ce filtre, un mousemove à haute fréquence produirait des
+// milliers de points quasi identiques pour un simple geste de la souris.
+const IMAGE_ZONE_MIN_POINT_DIST = 0.006
 
 if (imageEditWrap) {
-  let dragStart = null
+  let currentPath = null // tableau de points en cours de tracé, ou null si aucun tracé actif
   const pointFromEvent = (e) => {
     const rect = imageEditWrap.getBoundingClientRect()
     return {
@@ -427,39 +395,43 @@ if (imageEditWrap) {
       y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
     }
   }
-  const rectFrom = (a, b) => ({
-    x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y),
-    x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y)
-  })
   imageEditWrap.addEventListener('mousedown', (e) => {
     if (readOnly || !questions[activeIndex]?.image) return
-    dragStart = pointFromEvent(e)
+    currentPath = [pointFromEvent(e)]
     e.preventDefault()
   })
   window.addEventListener('mousemove', (e) => {
-    if (!dragStart || !questions[activeIndex]) return
-    // Prévisualisation en direct : les zones déjà validées + celle en cours de tracé.
-    renderImageZones([...(questions[activeIndex].correct || []), rectFrom(dragStart, pointFromEvent(e))])
+    if (!currentPath || !questions[activeIndex]) return
+    const pt = pointFromEvent(e)
+    const last = currentPath[currentPath.length - 1]
+    if (Math.hypot(pt.x - last.x, pt.y - last.y) < IMAGE_ZONE_MIN_POINT_DIST) return
+    currentPath.push(pt)
+    // Prévisualisation en direct : les zones déjà validées + le tracé en cours.
+    const preview = (questions[activeIndex].correct || []).slice()
+    if (currentPath.length >= 3) preview.push({ points: currentPath })
+    renderImageZones(preview)
   })
-  window.addEventListener('mouseup', (e) => {
-    if (!dragStart) return
-    const zone = rectFrom(dragStart, pointFromEvent(e))
-    dragStart = null
+  window.addEventListener('mouseup', () => {
+    if (!currentPath) return
+    const path = currentPath
+    currentPath = null
     const q = questions[activeIndex]
     if (!q) return
     if (!Array.isArray(q.correct)) q.correct = []
-    if (zone.x1 - zone.x0 < IMAGE_ZONE_MIN_SIZE || zone.y1 - zone.y0 < IMAGE_ZONE_MIN_SIZE) {
-      // Tracé trop petit pour être un vrai rectangle : traité comme un clic
-      // (zone.x0/y0 ≈ le point cliqué, vu l'écart minime entre début et fin).
-      // S'il tombe DANS un rectangle existant, on le retire (clic pour
+
+    const xs = path.map(p => p.x), ys = path.map(p => p.y)
+    const w = Math.max(...xs) - Math.min(...xs)
+    const h = Math.max(...ys) - Math.min(...ys)
+    if (w < IMAGE_ZONE_MIN_SIZE && h < IMAGE_ZONE_MIN_SIZE) {
+      // Tracé trop petit pour être une vraie forme : traité comme un clic.
+      // S'il tombe DANS une zone existante, on la retire (clic pour
       // désélectionner) ; sinon on ignore (clic accidentel dans le vide).
-      const idx = q.correct.findIndex(r => zone.x0 >= r.x0 - 0.005 && zone.x0 <= r.x1 + 0.005 && zone.y0 >= r.y0 - 0.005 && zone.y0 <= r.y1 + 0.005)
+      const idx = q.correct.findIndex(zone => pointInPolygon(path[0], zoneToPolygonPoints(zone)))
       if (idx !== -1) q.correct.splice(idx, 1)
       renderImageZones(q.correct)
       return
     }
-    q.correct.push(zone)
-    q.correct = mergeOverlappingZones(q.correct)
+    q.correct.push({ points: path })
     renderImageZones(q.correct)
   })
 }
@@ -472,14 +444,56 @@ if (clearImageZoneBtn) {
   }
 }
 
+// Zoom sur l'image pendant le tracé des zones (type "image") : la propriété
+// CSS "zoom" (pas "transform: scale") agrandit l'image ET son overlay SVG
+// SANS jamais désynchroniser les coordonnées de tracé — contrairement à
+// transform, "zoom" affecte la mise en page réelle, donc
+// getBoundingClientRect() (utilisé par pointFromEvent) reste toujours juste,
+// à n'importe quel niveau de zoom. Le viewport parent (overflow: auto) sert
+// juste de cadre défilable pour se déplacer une fois zoomé.
+const IMAGE_ZOOM_MIN = 1
+const IMAGE_ZOOM_MAX = 4
+const IMAGE_ZOOM_STEP = 0.25
+let imageEditZoom = 1
+
+const applyImageEditZoom = () => {
+  if (!imageEditWrap) return
+  imageEditWrap.style.zoom = imageEditZoom
+  if (imageZoomLabel) imageZoomLabel.textContent = Math.round(imageEditZoom * 100) + '%'
+  if (imageZoomOutBtn) imageZoomOutBtn.disabled = imageEditZoom <= IMAGE_ZOOM_MIN
+  if (imageZoomInBtn) imageZoomInBtn.disabled = imageEditZoom >= IMAGE_ZOOM_MAX
+}
+
+const setImageEditZoom = (z) => {
+  imageEditZoom = Math.min(IMAGE_ZOOM_MAX, Math.max(IMAGE_ZOOM_MIN, z))
+  applyImageEditZoom()
+}
+
+if (imageZoomInBtn) imageZoomInBtn.onclick = () => setImageEditZoom(imageEditZoom + IMAGE_ZOOM_STEP)
+if (imageZoomOutBtn) imageZoomOutBtn.onclick = () => setImageEditZoom(imageEditZoom - IMAGE_ZOOM_STEP)
+if (imageZoomResetBtn) imageZoomResetBtn.onclick = () => setImageEditZoom(1)
+// Ctrl+molette pour zoomer sans quitter la souris (en plus des boutons) —
+// seulement avec Ctrl : sans ce garde-fou, un simple scroll pour faire
+// défiler la page zoomerait l'image par erreur.
+if (imageEditViewport) {
+  imageEditViewport.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return
+    e.preventDefault()
+    setImageEditZoom(imageEditZoom + (e.deltaY < 0 ? IMAGE_ZOOM_STEP : -IMAGE_ZOOM_STEP))
+  }, { passive: false })
+}
+
 const populateImageFields = (q) => {
   if (!imageEditWrap) return
   if (q.image) {
     imageEditImg.src = q.image
     imageEditWrap.classList.remove('d-none')
+    if (imageZoomControls) imageZoomControls.classList.remove('d-none')
+    setImageEditZoom(1) // pas de zoom qui traîne d'une question à l'autre
     renderImageZones(q.correct)
   } else {
     imageEditWrap.classList.add('d-none')
+    if (imageZoomControls) imageZoomControls.classList.add('d-none')
   }
 }
 
@@ -917,15 +931,18 @@ const renderCorrects = () => {
 const ORDER_EDIT_LIST_GAP = 8
 let orderEditDragActive = false
 
-const wireOrderEditDrag = (row, handle) => {
-  if (!handle) return
-  handle.addEventListener('pointerdown', (e) => {
+// Toute la ligne est saisissable (pas seulement la poignée ⠿), sauf le champ
+// texte et le bouton supprimer, qui doivent garder leur propre comportement
+// (édition/clic) plutôt que de déclencher un glisser.
+const wireOrderEditDrag = (row) => {
+  row.addEventListener('pointerdown', (e) => {
     if (readOnly || orderEditDragActive) return
+    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
     e.preventDefault()
     orderEditDragActive = true
     const startY = e.clientY
     row.classList.add('dragging')
-    try { handle.setPointerCapture(e.pointerId) } catch {}
+    try { row.setPointerCapture(e.pointerId) } catch {}
 
     const others = Array.from(orderEditList.children).filter(c => c !== row)
     const baseRects = others.map(c => c.getBoundingClientRect())
@@ -952,9 +969,9 @@ const wireOrderEditDrag = (row, handle) => {
     }
 
     const cleanup = (applyReorder) => {
-      handle.removeEventListener('pointermove', onMove)
-      handle.removeEventListener('pointerup', onUp)
-      handle.removeEventListener('pointercancel', onCancel)
+      row.removeEventListener('pointermove', onMove)
+      row.removeEventListener('pointerup', onUp)
+      row.removeEventListener('pointercancel', onCancel)
       orderEditDragActive = false
       const q = questions[activeIndex]
       if (applyReorder && currentSlot !== startSlot && q && Array.isArray(q.correct)) {
@@ -966,12 +983,12 @@ const wireOrderEditDrag = (row, handle) => {
       // q.correct est la seule source de vérité fiable (numéros, closures).
       renderOrderItems()
     }
-    const onUp = (ev) => { try { handle.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
+    const onUp = (ev) => { try { row.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
     const onCancel = () => cleanup(false)
 
-    handle.addEventListener('pointermove', onMove)
-    handle.addEventListener('pointerup', onUp)
-    handle.addEventListener('pointercancel', onCancel)
+    row.addEventListener('pointermove', onMove)
+    row.addEventListener('pointerup', onUp)
+    row.addEventListener('pointercancel', onCancel)
   })
 }
 
@@ -991,13 +1008,12 @@ const renderOrderItems = () => {
     row.className = 'option-row order-edit-row'
     row.dataset.index = idx
 
-    let handle = null
     if (!readOnly) {
-      handle = document.createElement('span')
+      const handle = document.createElement('span')
       handle.className = 'q-drag-handle'
       handle.textContent = '⠿'
       row.appendChild(handle)
-      wireOrderEditDrag(row, handle)
+      wireOrderEditDrag(row)
     }
 
     const num = document.createElement('span')

@@ -212,7 +212,6 @@ const audioModeRemoteInput = document.getElementById('audioModeRemote')
 const illustrationImg = document.getElementById('illustrationImg')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
-const prevQuestionBtn = document.getElementById('prevQuestion')
 const leaderNextBtn = document.getElementById('leaderNextBtn')
 const startQuizBtn = document.getElementById('startQuiz')
 const loadedInfo = document.getElementById('loadedInfo')
@@ -350,14 +349,14 @@ const getCurrentOrderTexts = () => Array.from(orderList.children).map(el => el.d
 const ORDER_LIST_GAP = 10
 
 const wireOrderDrag = (el) => {
-  const handle = el.querySelector('.order-item-handle')
-  if (!handle) return
   let dragActive = false // évite qu'un pointerdown ne démarre un 2e glisser
   // par-dessus un premier dont le pointerup/pointercancel n'aurait pas été
   // reçu (perte du geste par le navigateur) — sans ça, les écouteurs
-  // pointermove/pointerup s'empilent indéfiniment sur la même poignée et
+  // pointermove/pointerup s'empilent indéfiniment sur la même tuile et
   // finissent par se marcher dessus.
-  handle.addEventListener('pointerdown', (e) => {
+  // Toute la tuile est saisissable (pas seulement la poignée ⠿, qui reste
+  // affichée comme simple indice visuel).
+  el.addEventListener('pointerdown', (e) => {
     if (orderDisabled || dragActive) return
     if (currentSingleAttempt && sendBtn.disabled) return
     e.preventDefault()
@@ -365,7 +364,7 @@ const wireOrderDrag = (el) => {
     const startY = e.clientY
     el.classList.add('dragging')
     el.style.zIndex = '10'
-    try { handle.setPointerCapture(e.pointerId) } catch {}
+    try { el.setPointerCapture(e.pointerId) } catch {}
 
     // Positions des AUTRES tuiles figées ici, une fois pour toutes : jamais
     // recalculées pendant le glisser (voir le commentaire plus haut).
@@ -400,9 +399,9 @@ const wireOrderDrag = (el) => {
     }
 
     const cleanup = (applyReorder) => {
-      handle.removeEventListener('pointermove', onMove)
-      handle.removeEventListener('pointerup', onUp)
-      handle.removeEventListener('pointercancel', onCancel)
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointercancel', onCancel)
       if (applyReorder && currentSlot !== startSlot) {
         orderList.insertBefore(el, others[currentSlot] || null)
       }
@@ -416,19 +415,19 @@ const wireOrderDrag = (el) => {
     }
 
     const onUp = (ev) => {
-      try { handle.releasePointerCapture(ev.pointerId) } catch {}
+      try { el.releasePointerCapture(ev.pointerId) } catch {}
       // Ordre final appliqué UNE SEULE FOIS ici, puis tous les transforms
       // manuels sont effacés.
       cleanup(true)
     }
     // Le navigateur peut annuler le geste (perte du pointeur, geste système
     // qui prend le dessus...) sans jamais envoyer pointerup — sans ce
-    // nettoyage, les écouteurs restent accrochés indéfiniment sur la poignée.
+    // nettoyage, les écouteurs restent accrochés indéfiniment sur la tuile.
     const onCancel = () => cleanup(false)
 
-    handle.addEventListener('pointermove', onMove)
-    handle.addEventListener('pointerup', onUp)
-    handle.addEventListener('pointercancel', onCancel)
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', onUp)
+    el.addEventListener('pointercancel', onCancel)
   })
 }
 
@@ -553,15 +552,16 @@ if (imageClickLayer) {
 }
 
 // Distance (en unités normalisées 0-1) entre le point cliqué et une zone
-// {x0,y0,x1,y1} (tracée librement dans l'éditeur) : 0 si le point tombe
-// dedans, sinon l'écart au bord le plus proche. Doit rester identique au
-// calcul serveur (server/index.js) pour que le message affiché ("Presque !
-// ...") corresponde exactement aux points réellement accordés.
+// (forme libre tracée dans l'éditeur, ou rectangle legacy — voir
+// zone-geometry.js) : 0 si le point tombe dedans, sinon l'écart au bord le
+// plus proche. Doit rester identique au calcul serveur (server/index.js)
+// pour que le message affiché ("Presque ! ...") corresponde exactement aux
+// points réellement accordés.
 const imageZoneDistance = (point, zone) => {
-  if (!point || !zone || typeof zone.x0 !== 'number') return null
-  const dx = point.x < zone.x0 ? zone.x0 - point.x : point.x > zone.x1 ? point.x - zone.x1 : 0
-  const dy = point.y < zone.y0 ? zone.y0 - point.y : point.y > zone.y1 ? point.y - zone.y1 : 0
-  return Math.max(dx, dy)
+  if (!point || !zone) return null
+  const pts = zoneToPolygonPoints(zone)
+  if (pts.length < 3) return null
+  return distPointToPolygon(point, pts)
 }
 // Distance à la zone la plus proche, quand il y en a plusieurs (voir editor.js).
 const imageMinZoneDistance = (point, zones) => {
@@ -570,16 +570,15 @@ const imageMinZoneDistance = (point, zones) => {
   return dists.length ? Math.min(...dists) : null
 }
 
-// Révélation : la ou les zones correctes s'affichent comme UN contour vert
-// fusionné (voir rect-union.js) qui suit le pourtour réel de l'union des
-// rectangles ; le marqueur du joueur passe au vert s'il était dans l'une
-// d'elles, au rouge sinon — pour comparer les deux d'un coup d'œil, sans
-// jamais avoir eu à cliquer sur une case précise.
+// Révélation : la ou les zones correctes s'affichent en vert (voir
+// zone-geometry.js), chacune comme sa propre forme ; le marqueur du joueur
+// passe au vert s'il était dans l'une d'elles, au rouge sinon — pour comparer
+// les deux d'un coup d'œil, sans jamais avoir eu à cliquer sur une case précise.
 const revealImageZones = (zones) => {
   if (!imageZonesRevealPath) return
   imageDisabled = true
-  const list = (Array.isArray(zones) ? zones : []).filter(z => z && typeof z.x0 === 'number')
-  imageZonesRevealPath.setAttribute('d', rectUnionContoursToSvgPath(list))
+  const list = (Array.isArray(zones) ? zones : []).filter(z => zoneToPolygonPoints(z).length >= 3)
+  imageZonesRevealPath.setAttribute('d', zonesToSvgPath(list))
   if (imageMarker && imageSelectedPoint) {
     const dist = imageMinZoneDistance(imageSelectedPoint, list)
     imageMarker.classList.toggle('marker-correct', dist === 0)
@@ -1635,9 +1634,7 @@ socket.on('lobby:list', arr => {
       selectQuizBtn.style.display = 'inline-flex'
       nextQuestionBtn.classList.add('d-none')
       nextQuestionBtn.style.display = 'none'
-      prevQuestionBtn.classList.add('d-none')
-      prevQuestionBtn.style.display = 'none'
-    
+
       hideBuilder()
       const jc = document.getElementById('joinCard')
       if (jc) {
@@ -1807,7 +1804,6 @@ socket.on('lobby:readyStatus', ({ allReady }) => {
     const hasPlayers = players.length > 0
     
     nextQuestionBtn.classList.toggle('is-disabled', !allReady || !hasPlayers)
-    prevQuestionBtn.classList.toggle('is-disabled', !allReady || !hasPlayers)
     startQuizBtn.classList.toggle('is-disabled', !allReady || !hasPlayers)
     
     if (!hasPlayers) {
@@ -1938,10 +1934,8 @@ const updateHostControls = () => {
   // En phase classement, le classement plein écran la recouvrirait — l'avancement
   // se fait donc via un bouton placé DANS l'overlay du classement.
   const revealed = hostPhase === 'revealed'
-  ;[nextQuestionBtn, prevQuestionBtn].forEach(btn => {
-    btn.classList.toggle('d-none', !revealed)
-    btn.style.display = revealed ? 'inline-flex' : 'none'
-  })
+  nextQuestionBtn.classList.toggle('d-none', !revealed)
+  nextQuestionBtn.style.display = revealed ? 'inline-flex' : 'none'
   if (revealed) {
     nextQuestionBtn.textContent = 'Suivant'
     nextQuestionBtn.onclick = () => {
@@ -1962,14 +1956,6 @@ const updateHostControls = () => {
       }
     }
   }
-}
-
-prevQuestionBtn.onclick = () => {
-  if (prevQuestionBtn.classList.contains('is-disabled')) return
-  if (quizIndex <= 1) return // Can't go back before first question
-  quizIndex -= 2 // Go back to the previous question index
-  emitQuestion(quizIndex)
-  quizIndex += 1 // Increment back to next question
 }
 
 startQuizBtn.onclick = () => {
@@ -1996,8 +1982,6 @@ startQuizBtn.onclick = () => {
   // Show navigation buttons
   nextQuestionBtn.classList.remove('d-none')
   nextQuestionBtn.style.display = 'inline-flex'
-  prevQuestionBtn.classList.remove('d-none')
-  prevQuestionBtn.style.display = 'inline-flex'
   nextQuestionBtn.textContent = 'Suivant'
   nextQuestionBtn.onclick = goNext
 

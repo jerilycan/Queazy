@@ -1022,6 +1022,39 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   fill: rgba(var(--tile-green-rgb), 0.35);
   stroke: var(--tile-green);
 }
+
+/* Viewport de zoom (éditeur, type "image") : la propriété CSS "zoom" (posée
+   en JS sur #imageEditWrap, voir editor.js applyImageEditZoom) agrandit
+   l'image ET son overlay SVG ensemble sans jamais désynchroniser les
+   coordonnées de tracé (contrairement à "transform: scale", "zoom" affecte
+   la mise en page, donc getBoundingClientRect() reste juste). Ce viewport
+   fournit juste le cadre défilable pour se déplacer une fois zoomé.
+   max-height plutôt que height fixe : pas de bande vide quand l'image est
+   plus petite que le cadre. */
+.image-edit-viewport {
+  max-height: 480px;
+  overflow: auto;
+  border-radius: var(--radius-lg);
+}
+.image-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.image-zoom-controls .btn-icon {
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.image-zoom-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .image-error-msg {
   text-align: center;
   padding: 40px 16px;
@@ -1596,7 +1629,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   letter-spacing: 0.05em;
 }
 
-#qPrompt, #reportReason {
+#qPrompt, #reportReason, #qExplanation {
   width: 100%;
   padding: 16px;
   border-radius: var(--radius-md);
@@ -1611,7 +1644,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   color: var(--color-text);
 }
 
-#qPrompt:focus, #reportReason:focus {
+#qPrompt:focus, #reportReason:focus, #qExplanation:focus {
   outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb),0.15);
@@ -1774,21 +1807,21 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 
 /* Même glisser au pointeur (pointerdown/move/up, un seul réordonnancement DOM
    au relâchement — voir wireOrderEditDrag) que la liste "ordre" en jeu (voir
-   index.js wireOrderDrag), pour un rendu et un ressenti identiques. Seule la
-   poignée déclenche le geste (pas toute la ligne, contrairement au jeu) : la
-   ligne contient aussi un champ de texte éditable au clic. */
-.order-edit-row { position: relative; }
-.order-edit-row.dragging { z-index: 10; box-shadow: var(--shadow-lg); }
+   index.js wireOrderDrag), pour un rendu et un ressenti identiques. Toute la
+   ligne est saisissable (pas seulement la poignée ⠿, simple indice visuel),
+   sauf le champ texte et le bouton supprimer qui gardent leur comportement
+   propre (voir l'exclusion e.target dans wireOrderEditDrag). */
+.order-edit-row { position: relative; cursor: grab; touch-action: none; }
+.order-edit-row.dragging { z-index: 10; box-shadow: var(--shadow-lg); cursor: grabbing; }
+.order-edit-row input[type="text"] { cursor: text; touch-action: auto; }
+.order-edit-row button { cursor: pointer; touch-action: auto; }
 .order-edit-row .q-drag-handle {
-  cursor: grab;
   opacity: 0.4;
   font-size: 16px;
   line-height: 1;
   user-select: none;
-  touch-action: none;
 }
-.order-edit-row .q-drag-handle:hover { opacity: 0.8; }
-.order-edit-row.dragging .q-drag-handle { cursor: grabbing; }
+.order-edit-row:hover .q-drag-handle { opacity: 0.8; }
 .order-edit-num {
   font-weight: 800;
   font-size: 13px;

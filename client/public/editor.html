@@ -15,7 +15,7 @@
     <!-- Contour fusionné des zones "image" (voir editor.js renderImageZones) —
          doit précéder editor.js dans l'ordre du document (tous deux en defer,
          donc exécutés dans cet ordre quel que soit le temps de téléchargement). -->
-    <script src="/js/rect-union.js" defer></script>
+    <script src="/js/zone-geometry.js" defer></script>
   </head>
   <body>
     <div class="navbar">
@@ -173,19 +173,25 @@
           <div id="imageSection" class="detail-section d-none">
             <label>Image</label>
             <input type="file" id="imageUpload" accept="image/*" class="cursor-pointer" />
-            <div id="imageEditWrap" class="image-wrap image-zone-wrap d-none mt-8" style="max-width: 480px;">
-              <img id="imageEditImg" class="image-img" alt="" draggable="false" />
-              <!-- Contour fusionné de la/les zone(s) de bonne réponse (voir
-                   rect-union.js + editor.js renderImageZones) : un seul <path>
-                   qui suit le pourtour réel de l'union des rectangles tracés,
-                   plutôt que des rectangles empilés avec des bordures qui se
-                   chevauchent visuellement. -->
-              <svg id="imageEditZoneSvg" class="rect-union-svg d-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <path id="imageEditZonePath" fill-rule="evenodd"></path>
-              </svg>
+            <div id="imageEditViewport" class="image-edit-viewport">
+              <div id="imageEditWrap" class="image-wrap image-zone-wrap d-none" style="max-width: 480px;">
+                <img id="imageEditImg" class="image-img" alt="" draggable="false" />
+                <!-- Zone(s) de bonne réponse tracées à main levée (voir
+                     zone-geometry.js + editor.js renderImageZones) : un seul
+                     <path>, une sous-forme indépendante par zone. -->
+                <svg id="imageEditZoneSvg" class="rect-union-svg d-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <path id="imageEditZonePath" fill-rule="evenodd"></path>
+                </svg>
+              </div>
+            </div>
+            <div id="imageZoomControls" class="image-zoom-controls d-none mt-8">
+              <button type="button" id="imageZoomOutBtn" class="btn-icon" title="Zoom arrière">−</button>
+              <span id="imageZoomLabel" class="image-zoom-label">100%</span>
+              <button type="button" id="imageZoomInBtn" class="btn-icon" title="Zoom avant (ou Ctrl+molette)">+</button>
+              <button type="button" id="imageZoomResetBtn" class="btn btn-nav-secondary font-13">Réinitialiser le zoom</button>
             </div>
             <div class="d-flex justify-between align-center mt-8">
-              <p class="text-muted font-13 m-0">Trace un ou plusieurs rectangles (glisser-déposer) pour définir la ou les zones de bonne réponse. Reclique dans un rectangle pour le retirer.</p>
+              <p class="text-muted font-13 m-0">Trace une ou plusieurs formes à main levée pour définir la ou les zones de bonne réponse. Reclique dans une zone pour la retirer. Zoome pour viser plus précisément.</p>
               <button type="button" id="clearImageZoneBtn" class="btn btn-nav-secondary font-13">Tout effacer</button>
             </div>
           </div>
