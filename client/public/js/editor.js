@@ -1131,9 +1131,9 @@ qType.onchange = () => {
     if (!Array.isArray(q.correct) || q.correct.length < 2) q.correct = ['', '']
   } else if (qType.value === 'image') {
     // q.correct venant d'un autre type (texte, séquence...) ne correspond pas
-    // au format {x0,y0,x1,y1} attendu : on repart propre sauf s'il a déjà la
-    // bonne forme (ex. retour sur ce type).
-    if (!Array.isArray(q.correct) || typeof q.correct[0]?.x0 !== 'number') q.correct = []
+    // au format zone attendu ({points:[...]} ou {x0,y0,x1,y1} legacy) : on
+    // repart propre sauf s'il a déjà la bonne forme (ex. retour sur ce type).
+    if (!Array.isArray(q.correct) || !q.correct.some(zone => zoneToPolygonPoints(zone).length >= 3)) q.correct = []
     populateImageFields(q)
   } else if (qType.value === 'blindtest') {
     // q.correct venant d'un autre type est un tableau, pas l'objet
@@ -1288,9 +1288,9 @@ saveQuizBtn.onclick = async () => {
         showToast(`La question ${i + 1} : importe une image`, 'error')
         return
       }
-      if (typeof q.correct?.[0]?.x0 !== 'number') {
+      if (!Array.isArray(q.correct) || !q.correct.some(zone => zoneToPolygonPoints(zone).length >= 3)) {
         selectQuestion(i)
-        showToast(`La question ${i + 1} : trace un rectangle sur l'image pour indiquer la zone correcte`, 'error')
+        showToast(`La question ${i + 1} : trace une zone sur l'image pour indiquer la bonne réponse`, 'error')
         return
       }
     }
