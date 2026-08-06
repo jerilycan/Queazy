@@ -84,6 +84,18 @@ function zonesToSvgPath (zones) {
   }).filter(Boolean).join(' ')
 }
 
+// Même chose qu'un sous-chemin de zonesToSvgPath, mais SANS le "Z" final —
+// pour prévisualiser un tracé EN COURS (voir editor.js) sans afficher le
+// segment droit qui le refermerait vers son point de départ tant que le
+// geste n'est pas terminé. Le remplissage SVG referme quand même la forme en
+// coulisses pour la surface colorée (comportement standard d'un path ouvert
+// rempli), seul le TRAIT ne montre pas ce bord de fermeture.
+function pointsToOpenSvgPath (points) {
+  if (!Array.isArray(points) || points.length < 2) return ''
+  const toStr = (p) => `${(p.x * 100).toFixed(3)},${(p.y * 100).toFixed(3)}`
+  return `M ${toStr(points[0])} L ${points.slice(1).map(toStr).join(' ')}`
+}
+
 // Nœuds Node.js (server/index.js) n'ont pas de scope global partagé avec le
 // navigateur : ce fichier n'y est de toute façon jamais chargé (le serveur a
 // sa propre copie de ces fonctions). Rien à exporter ici.

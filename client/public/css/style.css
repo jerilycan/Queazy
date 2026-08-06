@@ -1023,12 +1023,12 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   stroke: var(--tile-green);
 }
 
-/* Viewport de zoom (éditeur, type "image") : la propriété CSS "zoom" (posée
-   en JS sur #imageEditWrap, voir editor.js applyImageEditZoom) agrandit
-   l'image ET son overlay SVG ensemble sans jamais désynchroniser les
-   coordonnées de tracé (contrairement à "transform: scale", "zoom" affecte
-   la mise en page, donc getBoundingClientRect() reste juste). Ce viewport
-   fournit juste le cadre défilable pour se déplacer une fois zoomé.
+/* Viewport de zoom (éditeur, type "image") : #imageEditWrap reçoit une
+   largeur en PIXELS posée en JS (voir editor.js applyImageEditZoom :
+   IMAGE_ZOOM_BASE_WIDTH * imageEditZoom), pas de largeur en % ni de
+   max-width fixe dans son propre CSS — c'est ce qui le fait vraiment
+   grandir. Ce viewport fournit juste le cadre défilable (scrollbars) pour se
+   déplacer une fois l'image plus large que la place disponible.
    max-height plutôt que height fixe : pas de bande vide quand l'image est
    plus petite que le cadre. */
 .image-edit-viewport {
@@ -1036,6 +1036,7 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   overflow: auto;
   border-radius: var(--radius-lg);
 }
+.image-edit-viewport .image-wrap { flex-shrink: 0; }
 .image-zoom-controls {
   display: flex;
   align-items: center;

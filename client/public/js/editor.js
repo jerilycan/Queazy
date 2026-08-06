@@ -364,16 +364,24 @@ const populateTrueFalseFields = (q) => {
 // toutes les deux valides) ; contrairement aux rectangles, pas de fusion —
 // une forme libre n'a pas de grille naturelle sur laquelle fusionner, et deux
 // formes qui se touchent restent correctes affichées superposées.
-const renderImageZones = (zones) => {
+// Pose directement l'attribut "d" (déjà construit) — utilisé aussi bien pour
+// les zones confirmées (renderImageZones ci-dessous) que pour la
+// prévisualisation du tracé en cours, qui a besoin d'un "d" composite
+// (zones confirmées + tracé ouvert, voir plus bas).
+const setImageZonePathD = (d) => {
   if (!imageEditZoneSvg || !imageEditZonePath) return
-  const list = Array.isArray(zones) ? zones : []
-  if (list.length === 0) {
+  if (!d) {
     imageEditZoneSvg.classList.add('d-none')
     imageEditZonePath.setAttribute('d', '')
     return
   }
   imageEditZoneSvg.classList.remove('d-none')
-  imageEditZonePath.setAttribute('d', zonesToSvgPath(list))
+  imageEditZonePath.setAttribute('d', d)
+}
+
+const renderImageZones = (zones) => {
+  const list = Array.isArray(zones) ? zones : []
+  setImageZonePathD(list.length ? zonesToSvgPath(list) : '')
 }
 
 // En dessous de cette taille (boîte englobante du tracé, normalisée), on
@@ -406,10 +414,13 @@ if (imageEditWrap) {
     const last = currentPath[currentPath.length - 1]
     if (Math.hypot(pt.x - last.x, pt.y - last.y) < IMAGE_ZONE_MIN_POINT_DIST) return
     currentPath.push(pt)
-    // Prévisualisation en direct : les zones déjà validées + le tracé en cours.
-    const preview = (questions[activeIndex].correct || []).slice()
-    if (currentPath.length >= 3) preview.push({ points: currentPath })
-    renderImageZones(preview)
+    // Prévisualisation en direct : les zones déjà validées (fermées, comme
+    // d'habitude) + le tracé en cours EN OUVERT (pas de segment de fermeture
+    // tant que le clic n'est pas relâché — la fermeture géométrique réelle
+    // n'a lieu qu'au mouseup, voir plus bas).
+    const confirmedD = zonesToSvgPath(questions[activeIndex].correct || [])
+    const liveD = pointsToOpenSvgPath(currentPath)
+    setImageZonePathD([confirmedD, liveD].filter(Boolean).join(' '))
   })
   window.addEventListener('mouseup', () => {
     if (!currentPath) return
@@ -444,13 +455,18 @@ if (clearImageZoneBtn) {
   }
 }
 
-// Zoom sur l'image pendant le tracé des zones (type "image") : la propriété
-// CSS "zoom" (pas "transform: scale") agrandit l'image ET son overlay SVG
-// SANS jamais désynchroniser les coordonnées de tracé — contrairement à
-// transform, "zoom" affecte la mise en page réelle, donc
-// getBoundingClientRect() (utilisé par pointFromEvent) reste toujours juste,
-// à n'importe quel niveau de zoom. Le viewport parent (overflow: auto) sert
-// juste de cadre défilable pour se déplacer une fois zoomé.
+// Zoom sur l'image pendant le tracé des zones (type "image") : largeur en
+// pixels posée explicitement en JS (plutôt que la propriété CSS "zoom", qui
+// s'est révélée peu fiable selon les navigateurs — l'image ne grandissait
+// pas vraiment, seul le tracé semblait épaissir). #imageEditWrap n'a plus de
+// largeur en % ni de max-width fixe dans le CSS/HTML : sa largeur EST
+// IMAGE_ZOOM_BASE_WIDTH * imageEditZoom, un point. L'image et le SVG restent
+// à width:100% de ce wrap (voir CSS), donc les deux grandissent ensemble.
+// getBoundingClientRect() (utilisé par pointFromEvent) reste juste à
+// n'importe quel niveau de zoom puisque c'est une vraie taille de mise en
+// page, pas un simple effet visuel. Le viewport parent (overflow: auto) sert
+// de cadre défilable pour se déplacer une fois zoomé.
+const IMAGE_ZOOM_BASE_WIDTH = 480 // px, correspond à l'ancien max-width (zoom = 1)
 const IMAGE_ZOOM_MIN = 1
 const IMAGE_ZOOM_MAX = 4
 const IMAGE_ZOOM_STEP = 0.25
@@ -458,7 +474,8 @@ let imageEditZoom = 1
 
 const applyImageEditZoom = () => {
   if (!imageEditWrap) return
-  imageEditWrap.style.zoom = imageEditZoom
+  const px = Math.round(IMAGE_ZOOM_BASE_WIDTH * imageEditZoom)
+  imageEditWrap.style.width = px + 'px'
   if (imageZoomLabel) imageZoomLabel.textContent = Math.round(imageEditZoom * 100) + '%'
   if (imageZoomOutBtn) imageZoomOutBtn.disabled = imageEditZoom <= IMAGE_ZOOM_MIN
   if (imageZoomInBtn) imageZoomInBtn.disabled = imageEditZoom >= IMAGE_ZOOM_MAX
