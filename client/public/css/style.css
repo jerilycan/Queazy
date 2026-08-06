@@ -1225,7 +1225,16 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   background: var(--color-border);
   cursor: pointer;
   touch-action: none;
+  /* Un peu d'air par rapport au texte/icônes voisins (voir .host-volume-row
+     et .blindtest-volume-row) : le pouce (16px, déborde de 6px de chaque
+     côté de la piste elle-même) se retrouvait quasiment collé au texte sans
+     cette marge. */
+  margin: 0 6px;
 }
+/* Panneau de l'hôte : "🔊 Volume musique par défaut [piste] 70%" — le gap-xs
+   générique (4px) était pensé pour du texte, trop serré une fois qu'il y a
+   une vraie piste de curseur au milieu. */
+.host-volume-row { gap: 10px; }
 .volume-fill {
   position: absolute;
   top: 0;
