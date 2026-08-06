@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.5.1'
+const APP_VERSION = '1.6.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -632,13 +632,19 @@ const start = async () => {
       }
 
       if (q.type === 'blindtest') {
-        // Deux champs indépendants (titre / artiste), chacun évalué comme le
-        // ferait le type "free" (fuzzy() ci-dessus) : correspondance exacte ->
-        // validé tout de suite, proche mais pas exact -> mis en attente de
-        // modération PAR CHAMP (l'hôte tranche titre et artiste séparément),
-        // aucune correspondance -> raté direct. Chaque champ vaut la moitié
-        // des points "vitesse" habituels (pointsFor) : 100% si les deux sont
-        // bons, 50% si un seul, 0% sinon.
+        // Deux champs indépendants (titre / artiste) : champ VIDE -> raté
+        // direct (le joueur n'a pas tenté ce champ, rien à soumettre au
+        // jugement de l'hôte) ; champ rempli et EXACTEMENT identique à une
+        // réponse acceptée -> validé tout de suite, pas besoin de déranger
+        // l'hôte ; champ rempli mais pas une correspondance exacte -> TOUJOURS
+        // en attente de modération PAR CHAMP (l'hôte tranche titre et artiste
+        // séparément), même si la distance à la réponse attendue est grande —
+        // avant, un champ jugé "trop différent" par fuzzy() était rejeté
+        // automatiquement sans jamais passer par l'hôte, qui ne voyait donc
+        // jamais les réponses qu'il aurait pourtant pu vouloir valider à la
+        // main (typo réelle, orthographe alternative, etc.). Chaque champ
+        // vaut la moitié des points "vitesse" habituels (pointsFor) : 100% si
+        // les deux sont bons, 50% si un seul, 0% sinon.
         let content
         try { content = JSON.parse(payload?.content || 'null') } catch { content = null }
         const titleInput = typeof content?.title === 'string' ? content.title : ''
@@ -650,11 +656,11 @@ const start = async () => {
         const halfDelta = Math.round(pointsFor(q.startTs, submitTs) / 2)
 
         const evalField = (input, accepted) => {
-          if (!accepted.length || !input.trim()) return 'incorrect'
+          if (!input.trim()) return 'incorrect'
+          if (!accepted.length) return 'pending' // pas de réponse "officielle" définie : à l'hôte de juger
           const res = fuzzy(input, accepted)
           if (res.ok && res.exact) return 'correct'
-          if (res.ok && !res.exact) return 'pending'
-          return 'incorrect'
+          return 'pending'
         }
         const titleStatus = evalField(titleInput, acceptedTitle)
         const artistStatus = evalField(artistInput, acceptedArtist)

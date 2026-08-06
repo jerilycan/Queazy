@@ -1218,6 +1218,21 @@ input[type="range"].volume-slider {
   outline: none;
   cursor: pointer;
 }
+/* La règle globale "input:focus" (voir plus haut, pensée pour les champs
+   texte) pose un halo (box-shadow 4px) + un autre fond au focus — sur ce
+   curseur fin de 4px de haut, ce halo débordait largement au-dessus/en
+   dessous en formant une pilule bien plus grande que la vraie piste : le
+   pouce, positionné correctement sur la piste réelle, semblait alors ne
+   jamais atteindre les bords de cette pilule décorative, donnant
+   l'impression fausse qu'il restait coincé au milieu même au minimum ou au
+   maximum. On neutralise ce halo spécifiquement ici (spécificité plus
+   élevée que la règle globale, donc elle gagne). */
+input[type="range"].volume-slider:focus {
+  outline: none;
+  background: var(--color-border);
+  border-color: transparent;
+  box-shadow: none;
+}
 input[type="range"].volume-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
