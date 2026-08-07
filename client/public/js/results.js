@@ -345,6 +345,34 @@ const tryStartRace = () => {
   runRace(top, history)
 }
 
+// Une fois la course lancée (raceStarted), les pistes du podium gardent
+// l'id de joueur figé au moment du lancement (voir runRace, data-player-id
+// posé une seule fois). Si CE joueur se reconnecte ensuite (nouveau
+// socket.id — page rechargée, réseau coupé...), la piste continue de
+// porter l'ancien id, qui ne correspond plus à rien dans l'historique
+// (history:sync republie tout sous les ids COURANTS à chaque reconnexion,
+// voir server/index.js buildHistorySync) : le survol de sa piste
+// n'affichait donc plus jamais le bon récap par question — contrairement à
+// la liste complète en dessous, reconstruite avec les ids courants à
+// CHAQUE lobby:list (voir renderFullTable), donc toujours correcte. On
+// retrouve la piste concernée par NOM (seul repère qui survit à une
+// reconnexion côté client : le serveur ne diffuse jamais les tokens) et on
+// rafraîchit son id.
+const resyncRaceLaneIds = (players) => {
+  if (!raceStarted) return
+  const lanesEl = document.getElementById('raceLanes')
+  if (!lanesEl) return
+  const currentIdByName = new Map()
+  players.forEach(p => { if (p.name) currentIdByName.set(p.name, p.id) })
+  lanesEl.querySelectorAll('.race-lane').forEach(lane => {
+    const nameEl = lane.querySelector('[data-name]')
+    const freshId = nameEl ? currentIdByName.get(nameEl.textContent) : null
+    if (freshId && freshId !== lane.dataset.playerId) {
+      lane.dataset.playerId = freshId
+    }
+  })
+}
+
 const render = (players) => {
   // Le podium (top) veut le tri par équipe s'il est actif ; la liste
   // complète en dessous, elle, reste TOUJOURS un classement individuel par
@@ -352,6 +380,7 @@ const render = (players) => {
   const ordered = computeOrder(players.slice())
   latestPlayers = players
   tryStartRace()
+  resyncRaceLaneIds(players)
   renderFullTable(ordered)
 }
 
@@ -433,10 +462,25 @@ historyTooltip.id = 'historyTooltip'
 historyTooltip.className = 'history-tooltip d-none'
 document.body.appendChild(historyTooltip)
 
+// En mode équipe, les pistes du podium portent un id d'ÉQUIPE
+// (data-player-id, voir runRace) — jamais présent dans history[].results,
+// indexé lui par id de JOUEUR (buildHistorySync côté serveur). Sans cette
+// distinction, le survol d'une piste du podium ne trouvait jamais rien et
+// affichait "–" sur toutes les questions, alors que la liste complète en
+// dessous (toujours indexée par joueur, jamais par équipe) fonctionnait
+// normalement. Pour une équipe, faute d'un vrai "juste/faux" agrégé, on se
+// base sur le même signal que la course elle-même : l'équipe a-t-elle
+// gagné des points sur cette question (au moins un membre qui a trouvé).
 const showHistoryTooltip = (playerId, x, y) => {
   if (!playerId || history.length === 0) { historyTooltip.classList.add('d-none'); return }
-  const rows = history.map(h => {
-    const status = h.results ? h.results[playerId] : undefined
+  const isTeam = teamModeActive && !!teamsById[playerId]
+  const rows = (isTeam ? computeTeamHistory() : history).map(h => {
+    let status
+    if (isTeam) {
+      status = (Number(h.deltas?.[playerId]) || 0) > 0 ? 'correct' : 'incorrect'
+    } else {
+      status = h.results ? h.results[playerId] : undefined
+    }
     const icon = status === 'correct' ? '✓' : status === 'incorrect' ? '✗' : '–'
     const cls = status === 'correct' ? 'icon-correct' : status === 'incorrect' ? 'icon-incorrect' : 'icon-absent'
     return `<div class="history-tooltip-row"><span>${h.prompt || ''}</span><span class="${cls}">${icon}</span></div>`
