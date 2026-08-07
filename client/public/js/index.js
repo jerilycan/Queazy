@@ -191,6 +191,9 @@ const myResultBanner = document.getElementById('myResultBanner')
 const revealExplanationText = document.getElementById('revealExplanationText')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
+const orderCompare = document.getElementById('orderCompare')
+const orderCompareMine = document.getElementById('orderCompareMine')
+const orderCompareCorrect = document.getElementById('orderCompareCorrect')
 const imageArea = document.getElementById('imageArea')
 const imageViewport = document.getElementById('imageViewport')
 const imageWrap = document.getElementById('imageWrap')
@@ -472,62 +475,62 @@ const buildOrderList = (items) => {
     const el = document.createElement('div')
     el.className = 'order-item'
     el.dataset.text = text
-    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="order-item-text"></span><span class="order-item-mybadge d-none"></span>`
+    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="order-item-text"></span>`
     el.querySelector('.order-item-text').textContent = text
     orderList.appendChild(el)
     orderState.itemEls.push(el)
     wireOrderDrag(el)
     applyTileReveal(el, uid)
   })
+  // Question fraîche : on repart sur la liste glissable, la comparaison
+  // (peuplée seulement à la révélation, voir revealOrderList) redevient
+  // cachée si elle traînait encore de la question précédente.
+  if (orderCompare) orderCompare.classList.add('d-none')
+  orderList.classList.remove('d-none')
 }
 
-// Réarrange visuellement la liste vers l'ordre correct avec une transition
-// FLIP (même principe que le classement), au lieu du sortable.sort() d'avant.
-const animateOrderTo = (correctOrder) => {
-  const els = orderState.itemEls
-  const first = new Map()
-  els.forEach(el => first.set(el, el.getBoundingClientRect()))
-  correctOrder.forEach(text => {
-    const el = els.find(e => e.dataset.text === text)
-    if (el) orderList.appendChild(el)
-  })
-  els.forEach(el => {
-    const before = first.get(el)
-    const after = el.getBoundingClientRect()
-    const dy = before.top - after.top
-    if (!dy) return
-    el.style.transition = 'none'
-    el.style.transform = `translateY(${dy}px)`
-    void el.offsetHeight
-    requestAnimationFrame(() => {
-      el.style.transition = 'transform 0.5s cubic-bezier(.22,1,.36,1)'
-      el.style.transform = ''
-    })
-  })
-}
-
-// Révélation : la liste se réarrange dans l'ordre correct (le score déjà
-// attribué est "tout ou rien", donc pas de distinction case par case sur la
-// couleur) — mais chaque tuile affiche en plus un badge "Toi : #N" indiquant
-// la position que CE joueur avait donnée à cet élément, pour comparer les
-// deux d'un coup d'œil plutôt que de perdre sa propre réponse au reveal.
+// Révélation : au lieu de réordonner la liste sous les yeux du joueur (ce
+// qui effaçait sa mémoire de "où j'avais mis quoi" pendant l'animation —
+// illisible, cf. retours utilisateur), on fige "Ta réponse" telle que
+// soumise à côté de "Réponse correcte", ligne par ligne, chaque ligne de
+// "Ta réponse" coloriée verte/rouge selon si CETTE position précise était
+// la bonne. Le score reste tout-ou-rien côté serveur — cette coloration par
+// ligne est purement informative, pour situer où ça a dérapé d'un coup d'œil.
 const revealOrderList = (correctOrder) => {
-  if (!orderState.itemEls.length) return
+  if (!orderCompare || !orderCompareMine || !orderCompareCorrect) return
+  if (!Array.isArray(correctOrder) || correctOrder.length === 0) return
   setOrderDisabled(true)
-  if (Array.isArray(correctOrder) && correctOrder.length === orderState.itemEls.length) {
-    animateOrderTo(correctOrder)
+  orderList.classList.add('d-none')
+  orderCompare.classList.remove('d-none')
+
+  const mine = Array.isArray(myOrderSubmission) && myOrderSubmission.length === correctOrder.length
+    ? myOrderSubmission
+    : null
+
+  orderCompareCorrect.innerHTML = correctOrder.map((text, i) => `
+    <div class="order-compare-row">
+      <span class="order-compare-rank">${i + 1}</span>
+      <span class="order-compare-text"></span>
+    </div>
+  `).join('')
+  orderCompareCorrect.querySelectorAll('.order-compare-text').forEach((el, i) => { el.textContent = correctOrder[i] })
+
+  if (!mine) {
+    orderCompareMine.innerHTML = `<div class="order-compare-empty">Pas de réponse envoyée</div>`
+    return
   }
-  orderState.itemEls.forEach(el => {
-    el.classList.add('correct-reveal')
-    const badge = el.querySelector('.order-item-mybadge')
-    if (!badge || !myOrderSubmission) return
-    const myPos = myOrderSubmission.indexOf(el.dataset.text)
-    if (myPos === -1) return
-    const correctPos = correctOrder.indexOf(el.dataset.text)
-    badge.textContent = `Toi : #${myPos + 1}`
-    badge.classList.remove('d-none')
-    badge.classList.toggle('badge-correct-pos', correctPos !== -1 && myPos === correctPos)
-  })
+
+  orderCompareMine.innerHTML = mine.map((text, i) => {
+    const isCorrect = text === correctOrder[i]
+    return `
+      <div class="order-compare-row ${isCorrect ? 'is-correct' : 'is-incorrect'}">
+        <span class="order-compare-rank">${i + 1}</span>
+        <span class="order-compare-text"></span>
+        <span class="order-compare-icon">${isCorrect ? '✓' : '✗'}</span>
+      </div>
+    `
+  }).join('')
+  orderCompareMine.querySelectorAll('.order-compare-text').forEach((el, i) => { el.textContent = mine[i] })
 }
 
 // --- Question "image" : où sur l'image ? ---
@@ -940,11 +943,8 @@ const clearRevealState = () => {
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
   if (revealExplanationText) { revealExplanationText.classList.add('d-none'); revealExplanationText.textContent = '' }
   if (gradSlider) gradSlider.classList.remove('reveal')
-  orderState.itemEls.forEach(el => {
-    el.classList.remove('correct-reveal', 'incorrect-reveal')
-    const badge = el.querySelector('.order-item-mybadge')
-    if (badge) { badge.classList.add('d-none'); badge.classList.remove('badge-correct-pos') }
-  })
+  if (orderCompare) orderCompare.classList.add('d-none')
+  if (orderList) orderList.classList.remove('d-none')
   if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
   if (imageMarker) imageMarker.classList.remove('marker-correct', 'marker-incorrect')
   if (questionRecapCard) questionRecapCard.classList.add('d-none')

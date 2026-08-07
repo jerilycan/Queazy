@@ -992,27 +992,77 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 }
 .order-item-handle { opacity: 0.35; font-size: 18px; cursor: grab; }
 .order-item-text { flex: 1; }
-.order-item.correct-reveal {
+/* Révélation "order" : comparaison côte à côte plutôt qu'une seule liste
+   qui se réordonne sous les yeux (l'ancien système forçait à retenir "où
+   j'avais mis quoi" pendant l'animation, illisible — voir historique de
+   conversation). "Ta réponse" reste figée telle que soumise, colorée ligne
+   par ligne (verte/rouge) selon si CETTE position précise était la bonne ;
+   "Réponse correcte" sert de référence neutre juste à côté, sans avoir à
+   suivre aucune animation. */
+.order-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.order-compare-col { display: flex; flex-direction: column; gap: 10px; }
+.order-compare-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-bottom: 2px;
+}
+.order-compare-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  box-shadow: var(--shadow-md);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-text);
+  animation: tileRevealIn 0.35s cubic-bezier(0.22,1,0.36,1) both;
+}
+.order-compare-rank {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.5;
+}
+.order-compare-text { flex: 1; }
+.order-compare-icon { flex-shrink: 0; font-size: 16px; font-weight: 900; }
+.order-compare-row.is-correct {
   background: var(--tile-green);
   color: white;
   box-shadow: 0 0 0 3px rgba(var(--tile-green-rgb),0.4), var(--shadow-md);
 }
-.order-item.correct-reveal .order-item-handle { opacity: 0.7; }
-/* Badge de reveal : la position que CE joueur avait donnée à cet élément —
-   vert si ça correspond à la position correcte, neutre sinon. À côté de la
-   tuile qui, elle, a déjà été déplacée à sa VRAIE position (voir index.js). */
-.order-item-mybadge {
-  flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(255,255,255,0.18);
-  color: inherit;
+.order-compare-row.is-incorrect {
+  background: var(--tile-red);
+  color: white;
+  box-shadow: 0 0 0 3px rgba(var(--tile-red-rgb),0.4), var(--shadow-md);
 }
-.order-item-mybadge.badge-correct-pos {
-  background: rgba(255,255,255,0.9);
-  color: var(--tile-green);
+.order-compare-row.is-correct .order-compare-rank,
+.order-compare-row.is-incorrect .order-compare-rank { opacity: 0.75; }
+/* Colonne "Réponse correcte" : référence neutre, jamais rouge/vert (ce
+   n'est pas "une réponse", juste la vérité à côté de laquelle comparer). */
+.order-compare-col:last-child .order-compare-row { background: var(--color-card); }
+.order-compare-empty {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-style: italic;
+  text-align: center;
+}
+@media (max-width: 640px) {
+  .order-compare { grid-template-columns: 1fr; }
 }
 
 /* Question "image" : le joueur clique directement sur l'image (coordonnées
