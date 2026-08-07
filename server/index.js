@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.9.0'
+const APP_VERSION = '1.9.1'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -784,7 +784,7 @@ const start = async () => {
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
         if (p?.token) {
-          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
           if (q.historyEntry) {
             q.historyEntry.results[p.token] = closeness >= GRAD_CORRECT_THRESHOLD ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
@@ -817,7 +817,7 @@ const start = async () => {
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
         if (p?.token) {
-          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
           if (q.historyEntry) {
             q.historyEntry.results[p.token] = dist === 0 ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
@@ -874,7 +874,7 @@ const start = async () => {
         if (deltaApplied > 0) {
           total += deltaApplied
           room.scores.set(socket.id, total)
-          if (p?.token) room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+          if (p?.token) room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
           io.to(code).emit('score:update', { playerId: socket.id, delta: deltaApplied, total })
         }
         // Un des deux champs peut encore partir en modération juste en-dessous
@@ -897,7 +897,11 @@ const start = async () => {
             title: { content: titleInput, status: titleStatus },
             artist: { content: artistInput, status: artistStatus }
           }
-          room.pending.set(answerId, { playerId: socket.id, ts: submitTs, historyEntry: q.historyEntry, halfDelta, fields })
+          // token en plus de playerId : si ce joueur se reconnecte (nouveau
+          // socket.id) avant que l'hôte ne tranche ce champ, on doit pouvoir
+          // retrouver SON entrée actuelle plutôt que créditer un socket.id
+          // périmé que plus personne ne lit (voir resolvePendingId).
+          room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, ts: submitTs, historyEntry: q.historyEntry, halfDelta, fields })
           io.to(code).emit('answer:queue', { answerId, playerId: socket.id, blindtest: true, fields })
           emitProgress()
           return
@@ -930,7 +934,7 @@ const start = async () => {
           const total = (room.scores.get(socket.id) || 0) + delta
           room.scores.set(socket.id, total)
           if (p?.token) {
-            room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+            room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
             if (q.historyEntry) {
               q.historyEntry.results[p.token] = 'correct'
               q.historyEntry.deltas[p.token] = delta
@@ -955,7 +959,7 @@ const start = async () => {
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
         if (p?.token) {
-          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total })
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
           if (q.historyEntry) {
             q.historyEntry.results[p.token] = 'correct'
             q.historyEntry.deltas[p.token] = delta
@@ -989,12 +993,31 @@ const start = async () => {
         const answerId = `${socket.id}:${submitTs}`
         const p = room.players.get(socket.id)
         if (p?.token && q.historyEntry) q.historyEntry.answers[p.token] = payload?.content || ''
-        room.pending.set(answerId, { playerId: socket.id, content: payload?.content, ts: submitTs, delta, historyEntry: q.historyEntry })
+        // token en plus de playerId : voir le commentaire équivalent sur la
+        // file d'attente blindtest plus haut (resolvePendingId).
+        room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, content: payload?.content, ts: submitTs, delta, historyEntry: q.historyEntry })
         q.submissions?.set(socket.id, answerId)
         io.to(code).emit('answer:queue', { answerId, playerId: socket.id, content: payload?.content })
         emitProgress()
       }
     })
+
+    // Un joueur peut se reconnecter (nouveau socket.id) PENDANT qu'une de ses
+    // réponses est encore en attente de modération par l'hôte : le socket.id
+    // capturé au moment de la soumission (item.playerId) devient alors périmé
+    // (room:join a supprimé l'ancienne entrée room.players, voir plus haut) —
+    // sans ça, l'approbation/le rejet créditait silencieusement un id
+    // fantôme que plus personne ne lit, et le joueur perdait purement et
+    // simplement les points de cette question (bug réel constaté : un joueur
+    // gagnant terminait en bas du classement final). On retrouve son id
+    // ACTUEL via son token, stable lui à travers les reconnexions.
+    const resolvePendingId = (room, item) => {
+      if (item.token) {
+        const tok = room.tokens.get(item.token)
+        if (tok) return tok.id
+      }
+      return item.playerId
+    }
 
     // Résout un champ (titre OU artiste) d'un item de modération "blindtest" —
     // contrairement aux autres types, un même item peut avoir besoin de DEUX
@@ -1005,26 +1028,27 @@ const start = async () => {
       const entry = item.fields[field]
       if (!entry || entry.status !== 'pending') return
       entry.status = correct ? 'correct' : 'incorrect'
+      const currentId = resolvePendingId(room, item)
       if (correct) {
         // Champ toujours "fuzzy" ici (seul cas qui passe par la modération,
         // voir evalField) : on applique le facteur de réduction plutôt que
         // le plein halfDelta, qui est réservé aux correspondances exactes.
         const delta = Math.round(item.halfDelta * FUZZY_APPROVAL_FACTOR)
-        const total = (room.scores.get(item.playerId) || 0) + delta
-        room.scores.set(item.playerId, total)
-        const p = room.players.get(item.playerId)
+        const total = (room.scores.get(currentId) || 0) + delta
+        room.scores.set(currentId, total)
+        const p = room.players.get(currentId)
         if (p?.token) {
-          room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
+          room.tokens.set(p.token, { id: currentId, name: p.name, score: total, teamId: p.teamId || null })
           if (item.historyEntry) item.historyEntry.deltas[p.token] = (item.historyEntry.deltas[p.token] || 0) + delta
         }
-        io.to(code).emit('score:update', { playerId: item.playerId, delta, total })
+        io.to(code).emit('score:update', { playerId: currentId, delta, total })
       }
       const stillPending = Object.values(item.fields).some(f => f.status === 'pending')
       if (stillPending) return
       room.pending.delete(answerId)
       const q = room.currentQuestion
-      q?.answered?.add(item.playerId)
-      const p = room.players.get(item.playerId)
+      q?.answered?.add(currentId)
+      const p = room.players.get(currentId)
       if (p?.token && item.historyEntry) {
         const bothCorrect = item.fields.title.status === 'correct' && item.fields.artist.status === 'correct'
         item.historyEntry.results[p.token] = bothCorrect ? 'correct' : 'incorrect'
@@ -1047,20 +1071,21 @@ const start = async () => {
 
       room.pending.delete(payload?.answerId)
       const q = room.currentQuestion
-      if (q?.answered?.has(item.playerId)) return
+      const currentId = resolvePendingId(room, item)
+      if (q?.answered?.has(currentId)) return
       const delta = item.delta || pointsFor(q.startTs, item.ts)
-      const total = (room.scores.get(item.playerId) || 0) + delta
-      room.scores.set(item.playerId, total)
-      const p = room.players.get(item.playerId)
+      const total = (room.scores.get(currentId) || 0) + delta
+      room.scores.set(currentId, total)
+      const p = room.players.get(currentId)
       if (p?.token) {
-        room.tokens.set(p.token, { id: item.playerId, name: p.name, score: total })
+        room.tokens.set(p.token, { id: currentId, name: p.name, score: total, teamId: p.teamId || null })
         if (item.historyEntry) {
           item.historyEntry.results[p.token] = 'correct'
           item.historyEntry.deltas[p.token] = delta
         }
       }
-      q?.answered?.add(item.playerId)
-      io.to(code).emit('score:update', { playerId: item.playerId, delta, total })
+      q?.answered?.add(currentId)
+      io.to(code).emit('score:update', { playerId: currentId, delta, total })
 
       // Si plus aucune réponse en attente après approbation
       if (room.pending.size === 0) {
@@ -1083,7 +1108,7 @@ const start = async () => {
 
       room.pending.delete(payload?.answerId)
       if (item?.historyEntry) {
-        const p = room.players.get(item.playerId)
+        const p = room.players.get(resolvePendingId(room, item))
         if (p?.token) item.historyEntry.results[p.token] = 'incorrect'
       }
       io.to(code).emit('moderation:rejected', { answerId: payload?.answerId })
