@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.9.1'
+const APP_VERSION = '1.9.2'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -261,6 +261,26 @@ const start = async () => {
     if (best && best.count >= 2) topAnswer = { text: best.text, count: best.count }
 
     return { id: question.id, type: question.type, correct, total, correctPct, topAnswer }
+  }
+
+  // Diffuse la bonne réponse (+ le récap juste avant) à toute la salle.
+  // Point de sortie UNIQUE vers la révélation, appelé soit directement à la
+  // fermeture du chrono (endQuestion, si rien n'attend de modération), soit
+  // plus tard dès que la modération d'une question à texte libre/blindtest
+  // se termine (voir resolveBlindTestField / moderation:approve / reject) —
+  // avant, ce second cas sautait purement et simplement la révélation
+  // (comportement `moderation:finished`), ce qui laissait les joueurs sans
+  // jamais connaître la bonne réponse pour ces questions-là.
+  const revealQuestion = (io, code, room, question) => {
+    const recap = buildRecap(room, question)
+    if (recap) io.to(code).emit('question:recap', recap)
+    io.to(code).emit('question:reveal', {
+      id: question.id,
+      type: question.type,
+      correct: question.correct,
+      explanation: question.explanation || '',
+      target: question.type === 'graduation' ? question.correct?.[0] : undefined
+    })
   }
 
   app.get('/server-info', async (req) => ({ url: getBaseUrl(req.headers), port: PORT, version: APP_VERSION }))
@@ -721,23 +741,12 @@ const start = async () => {
 
         io.to(code).emit('timer:end', { id: question.id })
 
-        // Si une réponse texte libre est encore en attente de validation par l'hôte,
-        // on ne révèle pas la bonne réponse : le flux de modération existant continue
-        // de gérer la transition vers le classement une fois la modération terminée.
-        if (room.pending.size === 0) {
-          // Diffusé à toute la salle (comme le reveal) mais affiché côté
-          // client uniquement pour l'hôte — même convention que les autres
-          // évènements "hôte seulement" de ce serveur (ex. answer:queue).
-          const recap = buildRecap(room, question)
-          if (recap) io.to(code).emit('question:recap', recap)
-          io.to(code).emit('question:reveal', {
-            id: question.id,
-            type: question.type,
-            correct: question.correct,
-            explanation: question.explanation || '',
-            target: question.type === 'graduation' ? question.correct?.[0] : undefined
-          })
-        }
+        // Si une réponse texte libre est encore en attente de validation par
+        // l'hôte, on ne révèle pas tout de suite : voir revealQuestion, elle
+        // sera appelée dès que la modération de CETTE question sera terminée
+        // (voir resolveBlindTestField / moderation:approve / moderation:reject
+        // plus bas) — jamais sautée pour de bon comme c'était le cas avant.
+        if (room.pending.size === 0) revealQuestion(io, code, room, question)
       }
       question.timeoutId = setTimeout(question.endQuestion, revealMs + question.timerMs)
     })
@@ -1053,7 +1062,15 @@ const start = async () => {
         const bothCorrect = item.fields.title.status === 'correct' && item.fields.artist.status === 'correct'
         item.historyEntry.results[p.token] = bothCorrect ? 'correct' : 'incorrect'
       }
-      if (room.pending.size === 0) io.to(code).emit('moderation:finished')
+      // Dès que la file de modération est vide, la question peut enfin être
+      // révélée (voir revealQuestion) — mais seulement si c'est bien encore
+      // LA question concernée (comparaison par historyEntry, pas juste par
+      // référence à room.currentQuestion qui aurait pu avancer) et qu'elle
+      // est bien terminée (chrono écoulé / tout le monde a répondu).
+      if (room.pending.size === 0) {
+        const q = room.currentQuestion
+        if (q && q.historyEntry === item.historyEntry && q.ended) revealQuestion(io, code, room, q)
+      }
     }
 
     socket.on('moderation:approve', payload => {
@@ -1087,9 +1104,10 @@ const start = async () => {
       q?.answered?.add(currentId)
       io.to(code).emit('score:update', { playerId: currentId, delta, total })
 
-      // Si plus aucune réponse en attente après approbation
-      if (room.pending.size === 0) {
-        io.to(code).emit('moderation:finished')
+      // Si plus aucune réponse en attente après approbation, on peut enfin
+      // révéler la bonne réponse (voir revealQuestion).
+      if (room.pending.size === 0 && q && q.historyEntry === item.historyEntry && q.ended) {
+        revealQuestion(io, code, room, q)
       }
     })
 
@@ -1113,9 +1131,11 @@ const start = async () => {
       }
       io.to(code).emit('moderation:rejected', { answerId: payload?.answerId })
 
-      // Si plus aucune réponse en attente après rejet
-      if (room.pending.size === 0) {
-        io.to(code).emit('moderation:finished')
+      // Si plus aucune réponse en attente après rejet, on peut enfin révéler
+      // la bonne réponse (voir revealQuestion).
+      const q = room.currentQuestion
+      if (room.pending.size === 0 && q && item?.historyEntry && q.historyEntry === item.historyEntry && q.ended) {
+        revealQuestion(io, code, room, q)
       }
     })
 

@@ -2979,6 +2979,14 @@ socket.on('question:recap', payload => {
 })
 
 socket.on('question:reveal', payload => {
+  // Pour une question texte libre/blindtest passée par la modération hôte,
+  // ce reveal peut arriver bien après timer:end (le temps que l'hôte
+  // tranche toutes les réponses en attente) — l'écran "en attente de
+  // l'hôte" doit alors se refermer ici plutôt qu'attendre un évènement
+  // dédié (moderation:finished a été retiré : la révélation est
+  // désormais le SEUL signal de fin de question, pour tous les types).
+  isModerationPending = false
+  hideModerationWait()
   if (revealExplanationText && payload.explanation) {
     revealExplanationText.textContent = payload.explanation
     revealExplanationText.classList.remove('d-none')
@@ -3027,17 +3035,21 @@ socket.on('question:reveal', payload => {
     const correctTitles = payload.correct?.title || []
     const correctArtists = payload.correct?.artist || []
     revealBlindTestAnswer(correctTitles[0] || '', correctArtists[0] || '')
-    // Comparaison simplifiée (pas de distance de Levenshtein côté client) :
-    // fiable ici car cette branche ne se déclenche QUE quand aucun champ,
-    // pour aucun joueur, n'a eu besoin de modération (voir server/index.js,
-    // question:reveal n'est émis que si room.pending est vide) — donc chaque
-    // champ était forcément soit une correspondance exacte, soit un raté net.
+    // Comparaison textuelle simplifiée : sert seulement à distinguer "les
+    // deux champs bons" de "un seul" pour le libellé du bandeau (Bonne
+    // réponse / Presque !). Ne peut PAS servir à décider si j'ai gagné des
+    // points ou pas : un champ peut avoir été validé par l'hôte via la
+    // modération (comparaison floue, pas une égalité stricte) et ne
+    // matchera donc pas forcément ce test — myAnsweredCorrectlyThisQuestion
+    // (dérivé des score:update reçus, seule source fiable) fait toujours foi
+    // en dernier ressort, pour ne jamais afficher "Mauvaise réponse" à
+    // quelqu'un qui a pourtant gagné des points.
     const normLite = s => (s || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim()
     const titleOk = !!myBlindTestSubmission?.title && correctTitles.some(t => normLite(t) === normLite(myBlindTestSubmission.title))
     const artistOk = !!myBlindTestSubmission?.artist && correctArtists.some(a => normLite(a) === normLite(myBlindTestSubmission.artist))
     if (titleOk && artistOk) {
       showMyResultBanner()
-    } else if ((titleOk || artistOk) && myAnsweredCorrectlyThisQuestion) {
+    } else if (myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
     } else {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
@@ -3069,24 +3081,11 @@ socket.on('leaderboard:show', () => {
   if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
 })
 
-socket.on('moderation:finished', () => {
-  isModerationPending = false
-  hideModerationWait()
-  const beforeOrder = preQuestionOrder
-  preQuestionOrder = []
-  // Overlay visible avant renderBoard() — voir le commentaire équivalent
-  // dans 'leaderboard:show' (un élément caché mesure toujours 0, ce qui
-  // empêchait l'animation FLIP de se déclencher).
-  leaderOverlay.classList.remove('d-none')
-  leaderOverlay.style.display = 'flex'
-  renderLeaderboard()
-  if (!teamModeActive) setTimeout(() => revealMyPositionChange(beforeOrder), 1300)
-  // Aucune révélation visuelle n'a eu lieu pour cette question (texte libre
-  // en attente de modération) : c'est ici qu'on apprend enfin si on avait
-  // juste ou faux, donc c'est ici que le son doit jouer.
-  if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
-  if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
-})
+// (plus de handler 'moderation:finished' : le serveur ne l'émet plus — une
+// question texte libre/blindtest passe désormais par le même 'question:reveal'
+// que les autres types dès que la modération est terminée, voir
+// server/index.js revealQuestion. L'hôte garde son bouton "Voir le
+// classement" habituel pour enchaîner, au lieu d'un saut automatique.)
 socket.on('question:show', () => {
   leaderOverlay.style.display = 'none'
   hideModerationWait()
@@ -3105,9 +3104,14 @@ socket.on('score:update', ({ playerId, total, delta }) => {
   scores.set(playerId, s)
   // Sert uniquement à choisir le son joué à la révélation (voir plus bas) —
   // pas de fuite ici puisque le son ne joue que lors de question:reveal.
+  // Cumulé (pas écrasé) : un blindtest peut recevoir DEUX score:update pour
+  // la même question (un champ validé tout de suite, l'autre approuvé par
+  // l'hôte plus tard) — myLastDelta doit refléter le total gagné sur cette
+  // question, pas juste le dernier évènement reçu. Remis à zéro à chaque
+  // nouvelle question (voir question:show).
   if (playerId === window.myId && total > prevTotal) {
     myAnsweredCorrectlyThisQuestion = true
-    myLastDelta = typeof delta === 'number' ? delta : (total - prevTotal)
+    myLastDelta += typeof delta === 'number' ? delta : (total - prevTotal)
   }
 })
 
