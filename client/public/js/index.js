@@ -542,21 +542,50 @@ const revealOrderList = (correctOrder) => {
 let imageDisabled = true
 let imageSelectedPoint = null // { x, y } normalisé 0-1
 
-// Zoom sur l'image (même mécanique que l'éditeur, voir editor.js) : utile ici
-// pour cliquer plus précisément quand la zone correcte est petite. Purement
-// une aide visuelle — le clic marche identiquement à n'importe quel niveau
-// de zoom, voir imageClickLayer.onclick plus bas (getBoundingClientRect
-// reflète toujours la vraie taille affichée).
-const IMAGE_ZOOM_BASE_WIDTH = 640 // px, correspond au max-width de .image-area (zoom = 1)
+// Zoom + déplacement sur l'image façon carte interactive (GeoGuessr) : un
+// cadre FIXE (#imageWrap a une largeur/hauteur posées en pixels UNE SEULE
+// FOIS par question, voir setupImageFrame — jamais retouchées ensuite, donc
+// le cadre ne bouge plus pendant qu'on zoome, contrairement à l'ancienne
+// version qui redimensionnait le wrap lui-même et laissait le viewport se
+// re-calculer autour). Le zoom/déplacement sont maintenant un simple
+// transform CSS (translate + scale) sur ce cadre fixe, au lieu de jouer sur
+// sa largeur + le scroll natif du viewport.
+// L'éditeur (editor.js) garde volontairement son ancien mécanisme au
+// scroll : le glisser y sert déjà à tracer les zones, impossible de le
+// réutiliser aussi pour déplacer la vue sans ambiguïté.
+const IMAGE_ZOOM_BASE_WIDTH = 640 // repli si le viewport n'a pas encore de taille (cas normalement jamais atteint)
+const IMAGE_FRAME_MAX_HEIGHT = 480
 const IMAGE_ZOOM_MIN = 1
 const IMAGE_ZOOM_MAX = 4
 const IMAGE_ZOOM_STEP = 0.25
 const IMAGE_ZOOM_WHEEL_STEP = 0.18
+const IMAGE_PAN_THRESHOLD = 6 // px avant de considérer le geste comme un glisser plutôt qu'un clic
 let imageZoom = 1
+let imagePanX = 0
+let imagePanY = 0
+let imageFrameW = 0
+let imageFrameH = 0
 
+const applyImageTransform = () => {
+  if (!imageWrap) return
+  imageWrap.style.transform = `translate(${imagePanX}px, ${imagePanY}px) scale(${imageZoom})`
+}
+// Empêche de déplacer le cadre au-delà des bords de l'image (jamais de vide
+// visible) : le cadre zoomé doit toujours recouvrir entièrement le cadre de
+// base, dans les deux axes.
+const clampImagePan = () => {
+  if (!imageFrameW || !imageFrameH) return
+  const scaledW = imageFrameW * imageZoom
+  const scaledH = imageFrameH * imageZoom
+  const minX = Math.min(0, imageFrameW - scaledW)
+  const minY = Math.min(0, imageFrameH - scaledH)
+  imagePanX = Math.min(0, Math.max(minX, imagePanX))
+  imagePanY = Math.min(0, Math.max(minY, imagePanY))
+}
 const applyImageZoom = () => {
   if (!imageWrap) return
-  imageWrap.style.width = Math.round(IMAGE_ZOOM_BASE_WIDTH * imageZoom) + 'px'
+  clampImagePan()
+  applyImageTransform()
   if (imageZoomLabel) imageZoomLabel.textContent = Math.round(imageZoom * 100) + '%'
   if (imageZoomOutBtn) imageZoomOutBtn.disabled = imageZoom <= IMAGE_ZOOM_MIN
   if (imageZoomInBtn) imageZoomInBtn.disabled = imageZoom >= IMAGE_ZOOM_MAX
@@ -565,21 +594,41 @@ const setImageZoom = (z) => {
   imageZoom = Math.min(IMAGE_ZOOM_MAX, Math.max(IMAGE_ZOOM_MIN, z))
   applyImageZoom()
 }
+// Cadre fixe calculé une seule fois par question, une fois l'image chargée
+// (naturalWidth/Height nécessaires pour connaître son vrai ratio) : largeur
+// = place dispo dans le viewport, hauteur = déduite du ratio (image entière
+// visible à 100%, jamais recadrée), plafonnée pour ne pas exploser la mise
+// en page sur une image très haute (object-fit: contain absorbe l'écart).
+const setupImageFrame = () => {
+  if (!imageWrap || !imageViewport || !imageImg) return
+  const w = imageViewport.getBoundingClientRect().width || IMAGE_ZOOM_BASE_WIDTH
+  const ratio = (imageImg.naturalWidth && imageImg.naturalHeight) ? imageImg.naturalWidth / imageImg.naturalHeight : (4 / 3)
+  const h = Math.min(IMAGE_FRAME_MAX_HEIGHT, Math.round(w / ratio))
+  imageFrameW = w
+  imageFrameH = h
+  imageWrap.style.width = w + 'px'
+  imageWrap.style.height = h + 'px'
+  imagePanX = 0
+  imagePanY = 0
+  setImageZoom(1)
+}
 // Zoom centré sur le curseur (comme Google Maps/Figma) : le point de l'image
 // sous la souris reste visuellement au même endroit à l'écran avant/après le
-// zoom, en rattrapant le scroll du viewport en conséquence.
+// zoom — recalcule le déplacement en conséquence au lieu de rattraper le
+// scroll natif du viewport (plus de scrollLeft/scrollTop, tout passe par
+// imagePanX/Y désormais).
 const zoomImageTowardPoint = (newZoom, clientX, clientY) => {
-  if (!imageWrap || !imageViewport) { setImageZoom(newZoom); return }
+  if (!imageWrap || !imageViewport || !imageFrameW) { setImageZoom(newZoom); return }
   const viewportRect = imageViewport.getBoundingClientRect()
   const mouseX = clientX - viewportRect.left
   const mouseY = clientY - viewportRect.top
-  const oldWidth = imageWrap.offsetWidth || 1
-  const oldHeight = imageWrap.offsetHeight || 1
-  const fracX = (imageViewport.scrollLeft + mouseX) / oldWidth
-  const fracY = (imageViewport.scrollTop + mouseY) / oldHeight
-  setImageZoom(newZoom)
-  imageViewport.scrollLeft = fracX * imageWrap.offsetWidth - mouseX
-  imageViewport.scrollTop = fracY * imageWrap.offsetHeight - mouseY
+  const clampedZoom = Math.min(IMAGE_ZOOM_MAX, Math.max(IMAGE_ZOOM_MIN, newZoom))
+  const localX = (mouseX - imagePanX) / imageZoom
+  const localY = (mouseY - imagePanY) / imageZoom
+  imageZoom = clampedZoom
+  imagePanX = mouseX - localX * imageZoom
+  imagePanY = mouseY - localY * imageZoom
+  applyImageZoom()
 }
 if (imageZoomInBtn) imageZoomInBtn.onclick = () => setImageZoom(imageZoom + IMAGE_ZOOM_STEP)
 if (imageZoomOutBtn) imageZoomOutBtn.onclick = () => setImageZoom(imageZoom - IMAGE_ZOOM_STEP)
@@ -598,6 +647,10 @@ const buildImageAnswerArea = (src) => {
   if (!imageImg || !imageClickLayer) return
   imageImg.classList.remove('d-none')
   if (imageErrorMsg) imageErrorMsg.classList.add('d-none')
+  // Posé AVANT d'assigner .src : une image déjà en cache peut déclencher
+  // "load" de façon quasi synchrone, le rater reviendrait à garder le cadre
+  // (et le zoom affiché) de la question précédente.
+  imageImg.onload = setupImageFrame
   imageImg.onerror = () => {
     // Ne devrait normalement jamais arriver (l'hôte upload avant d'émettre
     // question:show) — si ça arrive quand même (upload raté, salle nettoyée
@@ -614,29 +667,79 @@ const buildImageAnswerArea = (src) => {
   if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
   if (imageWrap) applyTileReveal(imageWrap, 0)
   if (imageZoomControls) imageZoomControls.classList.remove('d-none')
-  setImageZoom(1) // pas de zoom qui traîne d'une question à l'autre
+  // Repli synchrone : évite un flash de l'ancien cadre/zoom pendant que la
+  // nouvelle image charge (setupImageFrame reprendra la main dès "load"
+  // avec les vraies dimensions).
+  imageZoom = 1
+  imagePanX = 0
+  imagePanY = 0
+  applyImageZoom()
+}
+
+// Glisser pour se déplacer (comme une carte) / cliquer pour répondre : les
+// deux gestes se font sur la même couche, distingués par un seuil de
+// mouvement (même technique que le glisser-déposer du type "ordre") — un
+// pointerup sans déplacement significatif = un clic, sinon la vue vient
+// d'être déplacée et rien n'est soumis.
+let imagePanGesture = null
+
+const submitImageClick = (clientX, clientY) => {
+  if (imageDisabled) return
+  if (currentSingleAttempt && sendBtn.disabled) return
+  const rect = imageClickLayer.getBoundingClientRect()
+  imageSelectedPoint = {
+    x: Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)),
+    y: Math.min(1, Math.max(0, (clientY - rect.top) / rect.height))
+  }
+  if (imageMarker) {
+    // Retire puis remet la classe d'animation : sinon un second clic ne
+    // rejoue pas le "drop" (l'élément reste affiché, l'animation ne se
+    // déclenche qu'au passage masqué -> visible).
+    imageMarker.classList.add('d-none')
+    void imageMarker.offsetWidth
+    imageMarker.classList.remove('d-none', 'marker-correct', 'marker-incorrect')
+    imageMarker.style.left = `${imageSelectedPoint.x * 100}%`
+    imageMarker.style.top = `${imageSelectedPoint.y * 100}%`
+  }
 }
 
 if (imageClickLayer) {
-  imageClickLayer.onclick = (e) => {
-    if (imageDisabled) return
-    if (currentSingleAttempt && sendBtn.disabled) return
-    const rect = imageClickLayer.getBoundingClientRect()
-    imageSelectedPoint = {
-      x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
-      y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+  imageClickLayer.addEventListener('pointerdown', (e) => {
+    imagePanGesture = { startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false, pointerId: e.pointerId }
+    try { imageClickLayer.setPointerCapture(e.pointerId) } catch {}
+  })
+  imageClickLayer.addEventListener('pointermove', (e) => {
+    if (!imagePanGesture || e.pointerId !== imagePanGesture.pointerId) return
+    const dx = e.clientX - imagePanGesture.lastX
+    const dy = e.clientY - imagePanGesture.lastY
+    if (!imagePanGesture.moved) {
+      const dist = Math.hypot(e.clientX - imagePanGesture.startX, e.clientY - imagePanGesture.startY)
+      if (dist > IMAGE_PAN_THRESHOLD) {
+        imagePanGesture.moved = true
+        imageClickLayer.classList.add('panning')
+      }
     }
-    if (imageMarker) {
-      // Retire puis remet la classe d'animation : sinon un second clic ne
-      // rejoue pas le "drop" (l'élément reste affiché, l'animation ne se
-      // déclenche qu'au passage masqué -> visible).
-      imageMarker.classList.add('d-none')
-      void imageMarker.offsetWidth
-      imageMarker.classList.remove('d-none', 'marker-correct', 'marker-incorrect')
-      imageMarker.style.left = `${imageSelectedPoint.x * 100}%`
-      imageMarker.style.top = `${imageSelectedPoint.y * 100}%`
+    if (imagePanGesture.moved) {
+      imagePanX += dx
+      imagePanY += dy
+      clampImagePan()
+      applyImageTransform()
     }
+    imagePanGesture.lastX = e.clientX
+    imagePanGesture.lastY = e.clientY
+  })
+  const endImagePanGesture = (e) => {
+    if (!imagePanGesture || e.pointerId !== imagePanGesture.pointerId) return
+    try { imageClickLayer.releasePointerCapture(e.pointerId) } catch {}
+    imageClickLayer.classList.remove('panning')
+    if (!imagePanGesture.moved) submitImageClick(e.clientX, e.clientY)
+    imagePanGesture = null
   }
+  imageClickLayer.addEventListener('pointerup', endImagePanGesture)
+  imageClickLayer.addEventListener('pointercancel', () => {
+    imagePanGesture = null
+    imageClickLayer.classList.remove('panning')
+  })
 }
 
 // Distance (en unités normalisées 0-1) entre le point cliqué et une zone

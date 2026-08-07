@@ -1156,14 +1156,18 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   stroke: var(--tile-green);
 }
 
-/* Viewport de zoom (éditeur ET jeu, type "image") : le .image-wrap qu'il
-   contient reçoit une largeur en PIXELS posée en JS (voir editor.js
-   applyImageEditZoom / index.js applyImageZoom : IMAGE_ZOOM_BASE_WIDTH *
-   zoom), pas de largeur en % ni de max-width fixe dans son propre CSS —
-   c'est ce qui le fait vraiment grandir. Ce viewport fournit le cadre
-   défilable (scrollbars) pour se déplacer une fois l'image plus large que la
-   place disponible ; la molette dessus zoome vers le curseur plutôt que de
-   faire défiler (voir zoomTowardPoint dans les deux fichiers JS).
+/* Viewport de zoom générique — ne sert plus qu'à l'éditeur (#imageEditWrap,
+   voir editor.js applyImageEditZoom) : le .image-wrap qu'il contient reçoit
+   une largeur en PIXELS posée en JS (IMAGE_ZOOM_BASE_WIDTH * zoom), pas de
+   largeur en % ni de max-width fixe dans son propre CSS — c'est ce qui le
+   fait vraiment grandir. Ce viewport fournit le cadre défilable
+   (scrollbars) pour se déplacer une fois l'image plus large que la place
+   disponible ; la molette dessus zoome vers le curseur plutôt que de faire
+   défiler (voir zoomTowardPoint dans editor.js). Le glisser y sert déjà à
+   tracer les zones de réponse, impossible de le réutiliser aussi pour
+   déplacer la vue sans ambiguïté — reste donc au scroll natif ici,
+   contrairement au jeu (#imageViewport plus bas, cadre fixe + glisser pour
+   se déplacer).
    max-height plutôt que height fixe : pas de bande vide quand l'image est
    plus petite que le cadre. */
 .image-zoom-viewport {
@@ -1172,6 +1176,28 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   border-radius: var(--radius-lg);
 }
 .image-zoom-viewport .image-wrap { flex-shrink: 0; }
+
+/* Question "image" en JEU (#imageViewport/#imageWrap/#imageClickLayer) :
+   cadre FIXE façon carte interactive, contrairement au viewport générique
+   ci-dessus. Les dimensions de #imageWrap sont posées une seule fois par
+   question en JS (index.js setupImageFrame) et ne changent plus jamais
+   ensuite — le zoom/déplacement passent uniquement par un transform CSS
+   (translate + scale), jamais par un redimensionnement du cadre ni par le
+   scroll natif. C'est ce qui règle le "cadre qui bouge pendant qu'on
+   zoome" (retour utilisateur) : la boîte de mise en page reste identique du
+   début à la fin, seul son contenu visuel se déplace/zoome par-dessus. */
+#imageViewport {
+  overflow: hidden;
+  touch-action: none; /* le geste de glisser est entièrement géré en JS (pointer events) */
+}
+#imageWrap {
+  width: auto; /* posé en JS en pixels, voir setupImageFrame */
+  transform-origin: 0 0;
+  will-change: transform;
+}
+#imageImg { width: 100%; height: 100%; object-fit: contain; }
+#imageClickLayer { cursor: grab; }
+#imageClickLayer.panning { cursor: grabbing; }
 .image-zoom-controls {
   display: flex;
   align-items: center;
