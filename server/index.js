@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.10.0'
+const APP_VERSION = '1.10.1'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -590,6 +590,21 @@ const start = async () => {
       io.to(code).emit('team:list', { teamMode: room.teamMode, teams: buildTeamList(room) })
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
+
+      // Rattrapage : une question est déjà active au moment où ce socket
+      // (re)rejoint — reconnexion en pleine partie, le cas le plus fréquent,
+      // mais ça couvre aussi un nouveau joueur qui rejoint en retard. Sans
+      // ça, il restait bloqué sur l'écran salon d'attente jusqu'à la
+      // question SUIVANTE, sans jamais pouvoir répondre à celle en cours —
+      // alors que le serveur, lui, acceptait déjà sa réponse si on la lui
+      // envoyait directement (juste jamais présentée dans l'UI). On ne
+      // renvoie rien si la question est déjà terminée (ended, ou chrono
+      // écoulé) : elle est alors en phase de révélation/classement, un tout
+      // autre écran qu'un simple resend de question:show rendrait faux.
+      const q = room.currentQuestion
+      if (q && !q.ended && Date.now() < q.startTs + q.timerMs && q.showPayload) {
+        socket.emit('question:show', q.showPayload)
+      }
     })
 
     socket.on('player:profile', payload => {
@@ -732,7 +747,13 @@ const start = async () => {
       // Diffusé immédiatement (pas au bout de revealMs) : chaque client anime
       // lui-même la révélation de la question/des tuiles jusqu'à startTs, pour
       // que l'hôte (écran principal) et les joueurs la voient au même moment.
-      io.to(code).emit('question:show', { ...broadcastPayload, singleAttempt: question.singleAttempt, startTs: question.startTs })
+      // Gardé sur la question (voir room:join) : un socket qui (re)rejoint
+      // PENDANT que cette question est active n'a sinon plus jamais l'occasion
+      // de la voir — startTs étant un horodatage absolu, le repasser tel quel
+      // à un arrivant tardif recale automatiquement son chrono côté client
+      // (pas besoin de recalculer un temps restant à la main).
+      question.showPayload = { ...broadcastPayload, singleAttempt: question.singleAttempt, startTs: question.startTs }
+      io.to(code).emit('question:show', question.showPayload)
 
       // Termine la question : à la fin normale du chrono (setTimeout ci-
       // dessous), OU en avance dès que tout le monde a répondu (voir
