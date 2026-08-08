@@ -319,6 +319,7 @@ const setGradValue = (v, animate) => {
   gradState.value = clamped
   const pct = gradState.max === gradState.min ? 0 : (clamped - gradState.min) / (gradState.max - gradState.min) * 100
   if (gradValueReadout) gradValueReadout.textContent = clamped
+  if (gradSlider) gradSlider.setAttribute('aria-valuenow', clamped)
   // Pas de transition CSS permanente sur left/width : ça retarderait le pouce
   // derrière le doigt pendant le glisser. On l'active seulement au besoin
   // (arrivée initiale, révélation), au coup par coup.
@@ -338,6 +339,8 @@ const buildGradSlider = (min, max, value) => {
   gradState.max = max
   gradState.disabled = true
   gradSlider.classList.remove('reveal')
+  gradSlider.setAttribute('aria-valuemin', min)
+  gradSlider.setAttribute('aria-valuemax', max)
   setGradValue(value)
   if (gradMinLabel) gradMinLabel.textContent = min
   if (gradMaxLabel) gradMaxLabel.textContent = max
@@ -375,6 +378,25 @@ if (gradSlider) {
   }
   gradSlider.addEventListener('pointerup', endDrag)
   gradSlider.addEventListener('pointercancel', endDrag)
+
+  // Navigation clavier (accessibilité) : le curseur "maison" ne marchait
+  // jusque-là qu'au pointeur (souris/doigt). tabindex="0" + role="slider"
+  // posés dans index.html, le reste (± au clavier) se pilote ici.
+  gradSlider.addEventListener('keydown', e => {
+    if (gradState.disabled) return
+    const range = gradState.max - gradState.min
+    const smallStep = Math.max(1, Math.round(range / 100)) // ~1% du range
+    const bigStep = Math.max(smallStep, Math.round(range / 10)) // ~10%
+    let handled = true
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') setGradValue(gradState.value + smallStep, true)
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') setGradValue(gradState.value - smallStep, true)
+    else if (e.key === 'PageUp') setGradValue(gradState.value + bigStep, true)
+    else if (e.key === 'PageDown') setGradValue(gradState.value - bigStep, true)
+    else if (e.key === 'Home') setGradValue(gradState.min, true)
+    else if (e.key === 'End') setGradValue(gradState.max, true)
+    else handled = false
+    if (handled) e.preventDefault()
+  })
 }
 
 // --- Liste réordonnable (question "order") ---
@@ -825,6 +847,7 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   const render = () => {
     fill.style.width = pct + '%'
     thumb.style.left = pct + '%'
+    track.setAttribute('aria-valuenow', pct)
   }
   const setFromClientX = (clientX) => {
     const r = track.getBoundingClientRect()
@@ -848,6 +871,26 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   }
   track.addEventListener('pointerup', endDrag)
   track.addEventListener('pointercancel', endDrag)
+
+  // Navigation clavier (accessibilité) : même piste "maison" que le curseur
+  // de graduation (voir plus haut) — jusque-là uniquement pilotable au
+  // pointeur (souris/doigt). tabindex/role/aria posés ci-dessous plutôt que
+  // dans le HTML : cette fabrique sert deux curseurs distincts (volume hôte
+  // et volume joueur, voir plus bas).
+  track.tabIndex = 0
+  track.setAttribute('role', 'slider')
+  track.setAttribute('aria-valuemin', '0')
+  track.setAttribute('aria-valuemax', '100')
+  track.addEventListener('keydown', e => {
+    let handled = true
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { pct = Math.min(100, pct + 5); render(); onChange(pct) }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { pct = Math.max(0, pct - 5); render(); onChange(pct) }
+    else if (e.key === 'Home') { pct = 0; render(); onChange(pct) }
+    else if (e.key === 'End') { pct = 100; render(); onChange(pct) }
+    else handled = false
+    if (handled) e.preventDefault()
+  })
+
   render()
   return {
     setPct: (v) => { pct = Math.min(100, Math.max(0, Math.round(v))); render() },
@@ -1271,16 +1314,28 @@ const displayQuizzes = (quizzes) => {
   quizzes.forEach(quiz => {
     const quizItem = document.createElement('div')
     quizItem.className = 'quiz-item card d-flex justify-between align-center p-md cursor-pointer'
-    quizItem.innerHTML = `
-      <div>
-        <h4 class="font-bold">${quiz.title}</h4>
-        <p class="text-muted font-14">${quiz.count || 0} questions</p>
-      </div>
-      <input type="radio" name="quizSelection" value="${quiz.id}" class="radio-btn" />
-    `
+    // Construit via le DOM (textContent) plutôt qu'un innerHTML avec
+    // template literal : quiz.title vient de Supabase et peut avoir été saisi
+    // par n'importe quel hôte (quiz publics) — un titre contenant du HTML/JS
+    // s'exécuterait sinon chez quiconque parcourt la liste des quiz.
+    const infoDiv = document.createElement('div')
+    const titleEl = document.createElement('h4')
+    titleEl.className = 'font-bold'
+    titleEl.textContent = quiz.title
+    const countEl = document.createElement('p')
+    countEl.className = 'text-muted font-14'
+    countEl.textContent = `${quiz.count || 0} questions`
+    infoDiv.appendChild(titleEl)
+    infoDiv.appendChild(countEl)
+    const radio = document.createElement('input')
+    radio.type = 'radio'
+    radio.name = 'quizSelection'
+    radio.value = quiz.id
+    radio.className = 'radio-btn'
+    quizItem.appendChild(infoDiv)
+    quizItem.appendChild(radio)
     quizItem.onclick = () => {
       // Select the radio button when clicking the item
-      const radio = quizItem.querySelector('input[type="radio"]')
       radio.checked = true
       selectedQuizId = quiz.id
       confirmQuizSelect.disabled = false // Enable confirm button

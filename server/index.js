@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.10.1'
+const APP_VERSION = '1.11.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -26,6 +26,13 @@ const MAX_NAME_LENGTH = 20
 // coupure wifi de quelques secondes ne doit pas tuer la partie pour tout le
 // monde. Voir le handler 'disconnect' et room:join (reconnexion via hostToken).
 const HOST_GRACE_MS = 45 * 1000
+// Filet de sécurité contre les salles oubliées en mémoire indéfiniment : le
+// délai de grâce hôte ci-dessus couvre déjà le cas où le socket de l'hôte se
+// déconnecte réellement, mais une salle dont l'onglet reste ouvert (wifi
+// toujours actif, personne ne revient jamais) ne déclenche aucun événement
+// 'disconnect' — rien ne la fermerait sinon. Voir sweepAbandonedRooms.
+const ABANDONED_ROOM_MS = 3 * 60 * 60 * 1000 // 3h sans la moindre activité
+const ROOM_SWEEP_INTERVAL_MS = 10 * 60 * 1000
 const seedQuizz = {
   id: 'sample1',
   title: 'Démo Néon',
@@ -512,7 +519,8 @@ const start = async () => {
         ended: false,
         teamMode: false,
         teams: new Map(),
-        hostDisconnectedAt: null
+        hostDisconnectedAt: null,
+        lastActivityAt: Date.now() // voir sweepAbandonedRooms plus bas
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
       await socket.join(code)
@@ -539,6 +547,7 @@ const start = async () => {
       const room = rooms.get(code)
       if (!room) return socket.emit('room:error', { message: 'room not found' })
       socket.roomCode = code // Pour nettoyer proprement cette entrée au disconnect
+      room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
 
       // Si c'est l'hôte qui se reconnecte
       if (token === room.hostToken) {
@@ -717,6 +726,7 @@ const start = async () => {
       const code = payload?.roomCode
       const room = rooms.get(code)
       if (!room) return
+      room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
 
       if (!computeAllReady(room)) {
         socket.emit('quiz:notReady', { message: 'Tous les joueurs ne sont pas prêts !' })
@@ -790,6 +800,7 @@ const start = async () => {
       const code = payload?.roomCode
       const room = rooms.get(code)
       if (!room) return
+      room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
       const q = room.currentQuestion
       if (!q) return
       // Encore en phase de révélation (les tuiles apparaissent à l'écran) :
@@ -1192,6 +1203,7 @@ const start = async () => {
       const code = payload?.roomCode
       const room = rooms.get(code)
       if (!room || socket.id !== room.hostId) return
+      room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
       io.to(code).emit('leaderboard:show')
     })
 
@@ -1249,6 +1261,20 @@ const start = async () => {
       }
     })
   })
+
+  // Purge périodique des salles abandonnées (voir ABANDONED_ROOM_MS) : les
+  // autres mécanismes de nettoyage (délai de grâce hôte, quiz:end) supposent
+  // tous un ÉVÉNEMENT (déconnexion, fin de quiz) pour se déclencher — ici on
+  // couvre le cas où rien ne se passe jamais plus, sans qu'aucun socket ne
+  // se déconnecte pour autant (onglet oublié ouvert, wifi toujours actif).
+  setInterval(() => {
+    const now = Date.now()
+    for (const [code, room] of rooms) {
+      if (now - room.lastActivityAt > ABANDONED_ROOM_MS) {
+        rooms.delete(code)
+      }
+    }
+  }, ROOM_SWEEP_INTERVAL_MS)
 }
 
 start()
