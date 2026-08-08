@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.9.9'
+const APP_VERSION = '1.10.0'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -22,6 +22,10 @@ app.get('/health', async () => ({ ok: true }))
 const quizzStore = new Map()
 const uid = () => Math.random().toString(36).slice(2, 10)
 const MAX_NAME_LENGTH = 20
+// Délai de grâce avant de fermer la salle quand l'hôte se déconnecte — une
+// coupure wifi de quelques secondes ne doit pas tuer la partie pour tout le
+// monde. Voir le handler 'disconnect' et room:join (reconnexion via hostToken).
+const HOST_GRACE_MS = 45 * 1000
 const seedQuizz = {
   id: 'sample1',
   title: 'Démo Néon',
@@ -507,7 +511,8 @@ const start = async () => {
         history: [],
         ended: false,
         teamMode: false,
-        teams: new Map()
+        teams: new Map(),
+        hostDisconnectedAt: null
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
       await socket.join(code)
@@ -538,6 +543,15 @@ const start = async () => {
       // Si c'est l'hôte qui se reconnecte
       if (token === room.hostToken) {
         room.hostId = socket.id
+        // hostDisconnectedAt n'est posé que par le handler 'disconnect' lors
+        // d'une VRAIE coupure (voir plus bas) — pas lors du tout premier
+        // room:join qui suit room:create (flux normal de création de salle).
+        // Ça permet de ne prévenir les joueurs d'un retour de l'hôte que
+        // quand ils ont effectivement été avertis d'un décrochage.
+        if (room.hostDisconnectedAt) {
+          room.hostDisconnectedAt = null
+          io.to(code).emit('host:reconnected')
+        }
       }
 
       const existing = room.tokens.get(token)
@@ -1166,10 +1180,24 @@ const start = async () => {
       const room = rooms.get(code)
       if (!room) return
 
-      // Si l'hôte se déconnecte avant la fin du quiz, la salle se ferme pour tout le monde.
-      if (room.hostId === socket.id && !room.ended) {
-        io.to(code).emit('room:closed', { message: 'L\'hôte s\'est déconnecté.' })
-        rooms.delete(code)
+      // Si l'hôte se déconnecte avant la fin du quiz : on ne ferme plus la
+      // salle tout de suite (une coupure wifi de quelques secondes tuerait
+      // la partie pour tout le monde). Délai de grâce pendant lequel l'hôte
+      // peut se reconnecter comme n'importe quel joueur, via room.hostToken
+      // (voir room:join) ; la salle n'est réellement fermée que si personne
+      // n'a repris la main d'ici là (room.hostId toujours == ce socket, qui
+      // n'a donc jamais été remplacé par une reconnexion entre-temps).
+      const disconnectedHostId = socket.id
+      if (room.hostId === disconnectedHostId && !room.ended) {
+        room.hostDisconnectedAt = Date.now()
+        io.to(code).emit('host:disconnected', { graceMs: HOST_GRACE_MS })
+        setTimeout(() => {
+          const r = rooms.get(code)
+          if (r && r.hostId === disconnectedHostId) {
+            io.to(code).emit('room:closed', { message: 'L\'hôte s\'est déconnecté.' })
+            rooms.delete(code)
+          }
+        }, HOST_GRACE_MS)
         return
       }
 

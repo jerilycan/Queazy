@@ -1,5 +1,20 @@
 const socket = io()
 
+// Bandeau persistant de statut de connexion (ma propre connexion perdue, ou
+// celle de l'hôte) — contrairement à showAnnounce (toast qui s'auto-masque),
+// reste affiché tant que la situation n'est pas résolue. Un seul élément
+// réutilisé pour les deux cas, le dernier appel gagnant si les deux se
+// chevauchent (ex. moi-même déconnecté au moment où l'hôte l'est aussi).
+const connBanner = document.createElement('div')
+connBanner.className = 'conn-status-banner d-none'
+document.body.appendChild(connBanner)
+const setConnBanner = (msg, severe = false) => {
+  connBanner.textContent = msg
+  connBanner.classList.toggle('is-severe', severe)
+  connBanner.classList.remove('d-none')
+}
+const clearConnBanner = () => connBanner.classList.add('d-none')
+
 // Sons du jeu : tic-tac du timer, bonne/mauvaise réponse. Un seul objet Audio
 // réutilisé par son (avec currentTime=0) pour permettre des déclenchements
 // rapprochés (ex. tic-tac chaque seconde) sans empiler les instances.
@@ -1441,11 +1456,13 @@ const resetUI = () => {
 }
 
 socket.on('room:closed', ({ message }) => {
+  clearConnBanner()
   showAnnounce(message, 'info')
   resetUI()
 })
 
 socket.on('player:kicked', ({ message }) => {
+  clearConnBanner()
   showAnnounce(message || 'Tu as été exclu de la salle.', 'error')
   resetUI()
 })
@@ -1803,7 +1820,23 @@ cancelGuestJoin.onclick = () => {
   nameInput.focus()
 }
 
+socket.on('disconnect', () => {
+  setConnBanner('Connexion perdue — reconnexion en cours…')
+})
+
+// Émis par le serveur à TOUS les joueurs d'une salle quand l'hôte lui-même
+// décroche (voir le délai de grâce côté serveur) : sans ça, les joueurs
+// verraient juste la partie se figer sans explication pendant que le
+// serveur attend en silence un éventuel retour de l'hôte.
+socket.on('host:disconnected', () => {
+  setConnBanner('L\'hôte a été déconnecté — en attente de reconnexion…', true)
+})
+socket.on('host:reconnected', () => {
+  clearConnBanner()
+})
+
 socket.on('connect', () => {
+  clearConnBanner()
   window.myId = socket.id
   if (myJoinedRoomCode) {
     // Reconnexion (pas la toute première connexion de l'onglet) : on était
@@ -1937,6 +1970,7 @@ const renderLobbyGrid = (arr) => {
     if (p.name) s.name = p.name // rafraîchit un nom générique posé trop tôt (ex. player:joined avant le vrai pseudo)
     if (typeof p.score === 'number') s.total = p.score
     s.isHost = p.isHost
+    s.connected = p.connected !== false // pour le badge "déconnecté" du classement en jeu (voir renderBoard)
     scores.set(p.id, s)
     playerTeamById[p.id] = p.teamId || null
 
@@ -2842,12 +2876,14 @@ const renderBoard = () => {
     if (!row) {
       row = document.createElement('div')
       row.className = 'leader-row'
-      row.innerHTML = `<span class="leader-rank"></span><span class="leader-name"></span><span class="leader-score"></span>`
+      row.innerHTML = `<span class="leader-rank"></span><span class="leader-name"></span><span class="leader-gone-badge d-none">Parti</span><span class="leader-score"></span>`
       leaderRows.set(id, row)
     }
     row.classList.toggle('is-me', id === window.myId)
+    row.classList.toggle('is-gone', s.connected === false)
     row.querySelector('.leader-rank').textContent = idx + 1
     row.querySelector('.leader-name').textContent = s.name
+    row.querySelector('.leader-gone-badge').classList.toggle('d-none', s.connected !== false)
     row.querySelector('.leader-score').textContent = `${s.total} pts`
     leaderboard.appendChild(row) // déplace le nœud existant : préserve son identité pour le FLIP
   })

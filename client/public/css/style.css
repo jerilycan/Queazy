@@ -1573,6 +1573,28 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 
 .toast-container { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10000; }
 
+/* Bandeau de statut de connexion (perte réseau du joueur, ou hôte
+   déconnecté) — voir index.js / results.js. Contrairement à un toast, il
+   reste affiché tant que la situation n'est pas résolue (pas d'auto-masquage
+   au bout de X secondes). z-index au-dessus du toast-container pour rester
+   visible même si un toast est déjà affiché. */
+.conn-status-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10001;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: #3a2e00;
+  background: var(--tile-yellow);
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
+.conn-status-banner.is-severe { background: var(--tile-red); color: #fff; }
+
 .border-accent-top { border-top: 4px solid var(--color-accent); }
 .border-accent-left { border-left: 4px solid var(--color-accent); }
 .border-danger-soft { border-color: rgba(255,59,92,0.2); }
@@ -2487,6 +2509,16 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   touch-action: manipulation;
 }
 .leader-row.is-me { border: 2px solid var(--color-accent); box-shadow: 0 0 0 4px var(--color-accent-soft); }
+/* Même logique que .player-tile.is-disconnected au lobby (voir plus haut
+   dans ce fichier) — étendue au classement EN COURS de partie, où rien ne
+   signalait jusqu'ici qu'un joueur avait décroché (visible seulement dans le
+   salon d'attente avant le début du quiz). */
+.leader-row.is-gone { opacity: 0.55; }
+.leader-gone-badge {
+  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  background: rgba(255,255,255,0.12); color: var(--color-text-muted);
+  border: 1px solid rgba(255,255,255,0.18); flex-shrink: 0;
+}
 .leader-row.row-enter { opacity: 0; transform: translateY(18px) scale(0.96); }
 .leader-row.row-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .55s, transform .55s cubic-bezier(0.22,1,0.36,1); }
 /* Effet "dépassement" pendant le glissement FLIP (voir renderBoard() dans

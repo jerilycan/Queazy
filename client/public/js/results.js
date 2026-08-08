@@ -2,6 +2,22 @@ const params = new URLSearchParams(window.location.search)
 const roomCode = params.get('room') || ''
 const socket = io()
 
+// Bandeau persistant de statut de connexion — voir le même mécanisme dans
+// index.js (commentaire détaillé là-bas). Ici la salle est déjà "ended" côté
+// serveur, donc pas d'événement host:disconnected/host:reconnected à gérer :
+// seule notre propre coupure réseau est concernée.
+const connBanner = document.createElement('div')
+connBanner.className = 'conn-status-banner d-none'
+document.body.appendChild(connBanner)
+const setConnBanner = (msg, severe = false) => {
+  connBanner.textContent = msg
+  connBanner.classList.toggle('is-severe', severe)
+  connBanner.classList.remove('d-none')
+}
+const clearConnBanner = () => connBanner.classList.add('d-none')
+socket.on('disconnect', () => setConnBanner('Connexion perdue — reconnexion en cours…'))
+socket.on('connect', () => clearConnBanner())
+
 const fanfareSound = new Audio('/audio/fanfare.wav')
 
 const backBtn = document.getElementById('backHome')
