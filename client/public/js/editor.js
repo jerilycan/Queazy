@@ -946,12 +946,14 @@ const toggleTypeSections = () => {
   if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image')
   // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
   // blindtestSection ci-dessus) au lieu de la liste générique "correct".
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value === 'graduation' || qType.value === 'truefalse' || qType.value === 'order' || qType.value === 'image' || qType.value === 'blindtest')
-  if (qType.value === 'mcq') {
-    correctLabel.textContent = 'Réponses correctes'
-  } else {
-    correctLabel.textContent = 'Réponses acceptées'
-  }
+  // "mcq" a aussi sa propre façon de désigner la bonne réponse : la case à
+  // cocher sur chaque option (voir renderOptions), qui alimente déjà
+  // entièrement q.correct — la liste "correct" générique ci-dessous ferait
+  // donc double emploi (retaper le texte d'une réponse déjà cochée), d'où
+  // la confusion remontée par l'utilisateur. Seul "free" (texte libre, pas
+  // d'options à cocher) a encore besoin de cette liste.
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free')
+  correctLabel.textContent = 'Réponses acceptées'
 }
 
 if (tfTrueBtn && tfFalseBtn) {
@@ -1004,7 +1006,10 @@ const renderCorrects = () => {
   if (!q) return
   // "blindtest" a ses deux propres listes (renderCorrectTitleList/Artist) et
   // q.correct = {title, artist}, pas un tableau — voir renderOptions ci-dessus.
-  if (q.type === 'blindtest') return
+  // "mcq" pilote q.correct via les cases à cocher des options (voir
+  // renderOptions) : cette liste-ci reste cachée pour ce type (voir
+  // toggleTypeSections), pas la peine de la peupler pour autant.
+  if (q.type === 'blindtest' || q.type === 'mcq') return
   if (!q.correct) q.correct = ['']
   
   q.correct.forEach((cor, idx) => {
