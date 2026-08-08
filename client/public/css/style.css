@@ -832,6 +832,23 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 
 .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-md); margin-top: var(--space-lg); }
 
+/* Zone de réponse (#inputArea, mcq/truefalse/ordre/graduation/image...) :
+   la classe utilitaire .max-w-700 la plafonne à 700px en base — pensé pour
+   un téléphone/petite tablette, mais laissé tel quel sur un écran de PC ça
+   maintenait les tuiles bien plus petites que la place réellement
+   disponible (retour utilisateur : "certaines tuiles sont vraiment
+   petites"). Élargie ici via l'ID (jamais la classe .max-w-700 elle-même,
+   réutilisée ailleurs pour une carte de texte qui doit elle rester
+   étroite/lisible — voir result.html). Les tuiles elles-mêmes grandissent
+   avec (voir .option-btn / .option-btn.truefalse-btn plus bas), pour
+   remplir cette place en plus grand plutôt que d'être juste plus espacées. */
+@media (min-width: 900px) {
+  #inputArea.max-w-700 { max-width: 880px; }
+}
+@media (min-width: 1300px) {
+  #inputArea.max-w-700 { max-width: 1040px; }
+}
+
 /* Vrai/Faux : deux grandes tuiles (façon Kahoot) plutôt que des boutons de
    la même taille que le QCM — un losange bleu "Vrai", un triangle rouge
    "Faux", assez grands pour être identifiables au coup d'œil sans lire le
@@ -868,7 +885,23 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   .option-btn.truefalse-btn { min-height: 120px; font-size: 18px; gap: 10px; padding: 20px 16px; }
   .option-btn.truefalse-btn::before { width: 38px; height: 38px; }
 }
-.option-btn { 
+/* Écrans larges (PC) : au-delà de la taille "tablette/portrait" ci-dessus,
+   les tuiles ont maintenant de la place à revendre (#inputArea élargi plus
+   haut) — autant qu'elles en profitent plutôt que de rester à taille fixe
+   avec du vide autour. Icône, texte et tuile grandissent ensemble pour
+   garder les mêmes proportions/le même rendu, juste à plus grande échelle.
+   (Le QCM standard — .option-btn hors Vrai/Faux — est agrandi plus bas,
+   juste après sa règle de base : même spécificité qu'elle, donc DOIT venir
+   après dans la feuille pour l'emporter à taille de viewport égale.) */
+@media (min-width: 900px) {
+  .option-btn.truefalse-btn { min-height: 220px; font-size: 27px; gap: 20px; padding: 34px 26px; }
+  .option-btn.truefalse-btn::before { width: 66px; height: 66px; }
+}
+@media (min-width: 1300px) {
+  .option-btn.truefalse-btn { min-height: 260px; font-size: 31px; gap: 24px; padding: 40px 30px; }
+  .option-btn.truefalse-btn::before { width: 78px; height: 78px; }
+}
+.option-btn {
   padding: var(--space-md) var(--space-md) var(--space-md) 56px;
   background: var(--tile-red);
   color: white;
@@ -895,6 +928,19 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   width: 18px;
   height: 18px;
   background: rgba(255,255,255,0.9);
+}
+/* Écrans larges (PC) : voir le commentaire équivalent au-dessus de
+   .option-btn.truefalse-btn — même spécificité que .option-btn/::before
+   ci-dessus, doit donc rester APRÈS elles dans la feuille pour gagner à
+   taille de viewport égale (sinon la règle de base, plus bas dans le
+   fichier, l'emporterait quand même malgré la media query). */
+@media (min-width: 900px) {
+  .option-btn { min-height: 76px; font-size: 18px; padding: 22px 22px 22px 66px; }
+  .option-btn::before { width: 30px; height: 30px; left: 20px; }
+}
+@media (min-width: 1300px) {
+  .option-btn { min-height: 88px; font-size: 20px; padding: 26px 26px 26px 74px; }
+  .option-btn::before { width: 34px; height: 34px; left: 24px; }
 }
 .option-btn:nth-child(4n+1) { background: var(--tile-red); }
 .option-btn:nth-child(4n+1)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
