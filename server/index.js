@@ -2,6 +2,7 @@ const path = require('path')
 const Fastify = require('fastify')
 const fastifyStatic = require('@fastify/static')
 const { Server } = require('socket.io')
+const { createClient } = require('@supabase/supabase-js')
 
 // bodyLimit relevé (défaut Fastify 1 Mo) : /api/room-image accepte une image
 // compressée en base64, /api/room-audio un clip audio recadré (voir plus bas)
@@ -12,7 +13,47 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.11.4'
+const APP_VERSION = '1.11.5'
+
+// Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
+// réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
+// anon est déjà publique (embarquée telle quelle côté client dans
+// supabase-config.js) : aucun secret n'est introduit ici. Une variable
+// d'environnement permet de la surcharger sans toucher au code si besoin.
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://btlmhieavrvkznkrqrrm.supabase.co'
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0bG1oaWVhdnJ2a3pua3JxcnJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMTA0NjcsImV4cCI6MjA5ODU4NjQ2N30.cvcmBhLRzFobbvGc9ObQABOV43NlsOAlMW1Hxuppv0c'
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// Plancher de points minimum garanti sur une bonne réponse répondue au
+// dernier moment (voir pointsFor plus bas) — modifiable sans redéploiement
+// via la table Supabase `app_settings` (clé 'min_points_floor', voir
+// supabase/schema.sql). Rechargé périodiquement ; si la table est absente ou
+// injoignable, cette valeur par défaut reste utilisée telle quelle.
+const MIN_POINTS_FLOOR_DEFAULT = 400
+const MIN_POINTS_FLOOR_SETTING_KEY = 'min_points_floor'
+const MIN_POINTS_FLOOR_REFRESH_MS = 2 * 60 * 1000
+let minPointsFloor = MIN_POINTS_FLOOR_DEFAULT
+
+const refreshMinPointsFloor = async () => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('app_settings')
+      .select('value')
+      .eq('key', MIN_POINTS_FLOOR_SETTING_KEY)
+      .maybeSingle()
+    if (error) throw error
+    const n = Number(data?.value)
+    if (Number.isFinite(n) && n >= 0 && n !== minPointsFloor) {
+      app.log.info(`min_points_floor mis à jour depuis Supabase : ${minPointsFloor} -> ${n}`)
+      minPointsFloor = n
+    }
+  } catch (err) {
+    // Table pas encore créée, réseau indisponible, etc. : on garde la
+    // dernière valeur connue (ou le défaut) plutôt que de faire échouer quoi
+    // que ce soit côté jeu.
+    app.log.warn(`min_points_floor: lecture Supabase impossible, valeur conservée (${minPointsFloor}) — ${err.message || err}`)
+  }
+}
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -355,6 +396,9 @@ const start = async () => {
     return Buffer.from(match[2], 'base64')
   })
 
+  await refreshMinPointsFloor()
+  setInterval(refreshMinPointsFloor, MIN_POINTS_FLOOR_REFRESH_MS)
+
   await app.listen({ port: PORT, host: '0.0.0.0' })
   const io = new Server(app.server, { cors: { origin: '*' } })
 
@@ -397,7 +441,7 @@ const start = async () => {
     }
     return { ok: false }
   }
-  const pointsFor = (startTs, now, base = 1000, alpha = 0.05, floor = 100) => {
+  const pointsFor = (startTs, now, base = 1000, alpha = 0.05, floor = minPointsFloor) => {
     const elapsed = Math.max(0, now - startTs)
     const raw = Math.max(floor, Math.floor(base - alpha * elapsed))
     return raw

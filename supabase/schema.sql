@@ -194,3 +194,48 @@ create policy "Reports: creation par tous"
   with check (true);
 
 create index if not exists reports_quiz_id_idx on public.reports (quiz_id);
+
+-- ============================================================
+-- 4. TABLE app_settings — réglages globaux du jeu, modifiables sans
+--    redéploiement (lus par le serveur via la clé anon, voir
+--    server/index.js: refreshMinPointsFloor). Table volontairement
+--    en LECTURE SEULE depuis l'API : aucune policy insert/update/delete
+--    n'est créée, donc anon/authenticated ne peuvent jamais l'écrire.
+--    Pour changer une valeur : Supabase Dashboard > Table Editor >
+--    app_settings > éditer la colonne "value" de la ligne voulue (le
+--    dashboard passe par le rôle service, qui ignore la RLS).
+-- ============================================================
+create table if not exists public.app_settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.app_settings enable row level security;
+
+drop policy if exists "App settings: lecture publique" on public.app_settings;
+create policy "App settings: lecture publique"
+  on public.app_settings for select
+  using (true);
+
+create or replace function public.set_app_settings_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists app_settings_set_updated_at on public.app_settings;
+create trigger app_settings_set_updated_at
+  before update on public.app_settings
+  for each row execute procedure public.set_app_settings_updated_at();
+
+-- Plancher de points minimum garanti sur une bonne réponse (voir
+-- MIN_POINTS_FLOOR_DEFAULT côté serveur, utilisé en repli si cette ligne
+-- est absente). Pour changer la valeur : éditer "value" ci-dessous, ou
+-- directement depuis le Table Editor Supabase (pas besoin de relancer ce
+-- script).
+insert into public.app_settings (key, value)
+values ('min_points_floor', '400')
+on conflict (key) do nothing;
