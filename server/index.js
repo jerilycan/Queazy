@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.11.3'
+const APP_VERSION = '1.11.4'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -419,11 +419,6 @@ const start = async () => {
   // change rien à closeness=1 (toujours 100%), mais creuse l'écart pour
   // tout ce qui n'est pas exact (0.9 -> 81%, 0.7 -> 49%, 0.5 -> 25%).
   const CLOSENESS_EXPONENT = 2
-  // Un champ blind test "pending" (fuzzy, pas une correspondance exacte)
-  // validé manuellement par l'hôte ne doit pas rapporter autant qu'un champ
-  // qui matchait déjà exactement tout seul — sinon une réponse approximative
-  // approuvée vaut la même chose qu'une réponse parfaite.
-  const FUZZY_APPROVAL_FACTOR = 0.6
   // Réactions "fun" pendant l'attente de validation d'une réponse libre (voir
   // index.js showModerationWait) : liste blanche stricte (jamais de contenu
   // arbitraire relayé à toute la salle) + cooldown par socket pour éviter
@@ -1101,9 +1096,11 @@ const start = async () => {
       const currentId = resolvePendingId(room, item)
       if (correct) {
         // Champ toujours "fuzzy" ici (seul cas qui passe par la modération,
-        // voir evalField) : on applique le facteur de réduction plutôt que
-        // le plein halfDelta, qui est réservé aux correspondances exactes.
-        const delta = Math.round(item.halfDelta * FUZZY_APPROVAL_FACTOR)
+        // voir evalField) : plein halfDelta, pas de réduction — une fois que
+        // l'hôte tranche "c'est correct", seule la vitesse doit compter,
+        // exactement comme pour le texte libre (moderation:approve plus bas,
+        // qui donne déjà 100% des points sur une approbation manuelle).
+        const delta = item.halfDelta
         const total = (room.scores.get(currentId) || 0) + delta
         room.scores.set(currentId, total)
         const p = room.players.get(currentId)
