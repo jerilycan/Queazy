@@ -15,7 +15,18 @@ const setConnBanner = (msg, severe = false) => {
   connBanner.classList.remove('d-none')
 }
 const clearConnBanner = () => connBanner.classList.add('d-none')
-socket.on('disconnect', () => setConnBanner('Connexion perdue — reconnexion en cours…'))
+
+// Même correctif que index.js : ignorer le 'disconnect' déclenché par un
+// départ volontaire de la page (clic sur un lien), sinon le bandeau
+// flashait une fraction de seconde à chaque changement de page.
+let isNavigatingAway = false
+window.addEventListener('beforeunload', () => { isNavigatingAway = true })
+window.addEventListener('pagehide', () => { isNavigatingAway = true })
+
+socket.on('disconnect', () => {
+  if (isNavigatingAway) return
+  setConnBanner('Connexion perdue — reconnexion en cours…')
+})
 socket.on('connect', () => clearConnBanner())
 
 const fanfareSound = new Audio('/audio/fanfare.wav')

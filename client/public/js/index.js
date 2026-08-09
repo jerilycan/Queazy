@@ -22,11 +22,22 @@ const clearConnBanner = () => connBanner.classList.add('d-none')
 // avant toute navigation VOULUE (fin de quiz, salle fermée, exclusion) pour
 // ne jamais bloquer un départ légitime.
 let inActiveGame = false
+// Un clic sur un lien du site (navbar, "Mes Quiz"...) ferme la page et donc
+// le socket : ça déclenche un 'disconnect' bien réel, mais totalement
+// inoffensif puisqu'on quitte de toute façon. Sans ce drapeau, le bandeau
+// "Connexion perdue" s'affichait une fraction de seconde à chaque
+// changement de page avant que la nouvelle ne remplace l'ancienne — voir le
+// disconnect handler plus bas qui l'ignore quand ce drapeau est levé.
+let isNavigatingAway = false
 window.addEventListener('beforeunload', (e) => {
+  isNavigatingAway = true
   if (!inActiveGame) return
   e.preventDefault()
   e.returnValue = ''
 })
+// Filet de sécurité pour Safari iOS, où 'beforeunload' n'est pas toujours
+// fiable : 'pagehide' se déclenche systématiquement au départ de la page.
+window.addEventListener('pagehide', () => { isNavigatingAway = true })
 
 // Vibration mobile (retour haptique) sur bonne/mauvaise réponse — complète
 // les sons/couleurs, utile quand le son est coupé/silencieux (cas fréquent :
@@ -2158,6 +2169,7 @@ cancelGuestJoin.onclick = () => {
 }
 
 socket.on('disconnect', () => {
+  if (isNavigatingAway) return
   setConnBanner('Connexion perdue — reconnexion en cours…')
 })
 
