@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.15.0'
+const APP_VERSION = '1.16.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -572,7 +572,7 @@ const start = async () => {
   const REVEAL_TILE_ANIM_MS = 500
   const REVEAL_BUFFER_MS = 400
   const computeRevealMs = (payload) => {
-    const hasTiles = payload?.type === 'mcq' || payload?.type === 'truefalse' || payload?.type === 'order'
+    const hasTiles = payload?.type === 'mcq' || payload?.type === 'truefalse' || payload?.type === 'order' || payload?.type === 'intrus'
     const tileCount = hasTiles && Array.isArray(payload?.options) ? Math.max(1, payload.options.length) : 1
     const staggerSpan = hasTiles ? (tileCount - 1) * REVEAL_STAGGER_MS : 0
     // "free" et "blindtest" n'ont ni tuiles à faire apparaître une à une ni
@@ -1228,9 +1228,14 @@ const start = async () => {
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
       } else {
-        // Pour les QCM ('mcq') et Vrai/Faux ('truefalse'), c'est binaire : si ce
-        // n'est pas EXACT, c'est FAUX. On ne passe JAMAIS par la modération.
-        if (q.type === 'mcq' || q.type === 'truefalse') {
+        // Pour les QCM ('mcq'), Vrai/Faux ('truefalse') et Intrus ('intrus'),
+        // c'est binaire : si ce n'est pas EXACT, c'est FAUX. On ne passe
+        // JAMAIS par la modération. "intrus" réutilise entièrement ce chemin
+        // (une seule bonne réponse dans q.correct, comme truefalse) plutôt
+        // que d'ajouter un système dédié — le chemin "correct" juste au-dessus
+        // (res.ok && res.exact) est déjà 100% générique, aucun changement
+        // requis là-bas.
+        if (q.type === 'mcq' || q.type === 'truefalse' || q.type === 'intrus') {
           q.submissions?.set(socket.id, 'incorrect')
           const p = room.players.get(socket.id)
           if (p?.token && q.historyEntry) {

@@ -944,6 +944,7 @@ const selectQuestion = (index) => {
   renderCorrectArtistList()
   renderAssociationPairs()
   renderTimelineEvents()
+  renderIntrusOptions()
   toggleTypeSections()
   updateSidebar()
 
@@ -1519,6 +1520,151 @@ if (addTimelineEventBtn) {
   }
 }
 
+// --- Question "intrus" : q.options = [texte, ...] (3 à 8), q.correct = ----
+// [texteDeLIntrus] — même format qu'un tableau à une seule réponse acceptée
+// (comme "truefalse"), pour que le serveur réutilise tel quel le chemin de
+// scoring binaire mcq/truefalse (voir server/index.js). Un <input
+// type="radio"> par ligne (même groupe "name") garantit par construction
+// qu'un seul intrus peut être coché à la fois — impossible d'en avoir 0 ou
+// plusieurs une fois qu'une sélection a été faite.
+const INTRUS_RADIO_NAME = 'intrusRadio'
+const ORDER_LIST_LIKE_GAP = 8
+let intrusEditDragActive = false
+
+const wireIntrusEditDrag = (row) => {
+  row.addEventListener('pointerdown', (e) => {
+    if (readOnly || intrusEditDragActive) return
+    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
+    e.preventDefault()
+    intrusEditDragActive = true
+    const startY = e.clientY
+    row.classList.add('dragging')
+    try { row.setPointerCapture(e.pointerId) } catch {}
+
+    const others = Array.from(intrusEditList.children).filter(c => c !== row)
+    const baseRects = others.map(c => c.getBoundingClientRect())
+    const startSlot = Array.from(intrusEditList.children).indexOf(row)
+    const itemHeight = row.getBoundingClientRect().height + ORDER_LIST_LIKE_GAP
+    let currentSlot = startSlot
+
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY
+      row.style.transform = `translateY(${dy}px) scale(1.02)`
+      const rect = row.getBoundingClientRect()
+      const center = rect.top + rect.height / 2
+      let newSlot = 0
+      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      if (newSlot === currentSlot) return
+      currentSlot = newSlot
+      others.forEach((c, i) => {
+        let shift = 0
+        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
+        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
+        c.style.transition = 'transform 0.18s ease'
+        c.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+
+    const cleanup = (applyReorder) => {
+      row.removeEventListener('pointermove', onMove)
+      row.removeEventListener('pointerup', onUp)
+      row.removeEventListener('pointercancel', onCancel)
+      intrusEditDragActive = false
+      const q = questions[activeIndex]
+      if (applyReorder && currentSlot !== startSlot && q && Array.isArray(q.options)) {
+        const [moved] = q.options.splice(startSlot, 1)
+        q.options.splice(currentSlot, 0, moved)
+      }
+      renderIntrusOptions()
+    }
+    const onUp = (ev) => { try { row.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
+    const onCancel = () => cleanup(false)
+
+    row.addEventListener('pointermove', onMove)
+    row.addEventListener('pointerup', onUp)
+    row.addEventListener('pointercancel', onCancel)
+  })
+}
+
+const renderIntrusOptions = () => {
+  if (!intrusEditList) return
+  intrusEditList.innerHTML = ''
+  const q = questions[activeIndex]
+  if (!q || q.type !== 'intrus') return
+  if (!Array.isArray(q.options) || q.options.length < INTRUS_MIN_OPTIONS) q.options = ['', '', '']
+  if (!Array.isArray(q.correct)) q.correct = []
+
+  q.options.forEach((opt, idx) => {
+    const row = document.createElement('div')
+    row.className = 'option-row order-edit-row'
+    row.dataset.index = idx
+
+    if (!readOnly) {
+      const handle = document.createElement('span')
+      handle.className = 'q-drag-handle'
+      handle.textContent = '⠿'
+      row.appendChild(handle)
+      wireIntrusEditDrag(row)
+    }
+
+    const radio = document.createElement('input')
+    radio.type = 'radio'
+    radio.name = INTRUS_RADIO_NAME
+    radio.className = 'mr-8'
+    radio.checked = q.correct[0] === opt && opt.trim() !== ''
+    radio.title = 'Marquer comme intrus'
+    radio.disabled = readOnly
+    radio.onchange = () => { q.correct = [q.options[idx]] }
+    row.appendChild(radio)
+
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.value = opt
+    input.placeholder = 'Proposition ' + (idx + 1)
+    input.style.flex = '1'
+    input.disabled = readOnly
+    input.oninput = (e) => {
+      const wasIntrus = q.correct[0] === q.options[idx]
+      q.options[idx] = e.target.value
+      if (wasIntrus) q.correct = [e.target.value]
+    }
+    row.appendChild(input)
+
+    if (!readOnly) {
+      const del = document.createElement('button')
+      del.className = 'btn-icon btn-danger'
+      del.innerHTML = '&times;'
+      del.onclick = () => {
+        if (q.options.length <= INTRUS_MIN_OPTIONS) {
+          showToast(`Il faut au moins ${INTRUS_MIN_OPTIONS} propositions`, 'error')
+          return
+        }
+        const wasIntrus = q.correct[0] === q.options[idx]
+        q.options.splice(idx, 1)
+        if (wasIntrus) q.correct = []
+        renderIntrusOptions()
+      }
+      row.appendChild(del)
+    }
+
+    intrusEditList.appendChild(row)
+  })
+}
+
+if (addIntrusOptionBtn) {
+  addIntrusOptionBtn.onclick = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    if (!Array.isArray(q.options)) q.options = []
+    if (q.options.length >= INTRUS_MAX_OPTIONS) {
+      showToast(`Maximum ${INTRUS_MAX_OPTIONS} propositions`, 'error')
+      return
+    }
+    q.options.push('')
+    renderIntrusOptions()
+  }
+}
+
 const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked = false, onCheck = null) => {
   const div = document.createElement('div')
   div.className = 'option-row'
@@ -1595,6 +1741,13 @@ qType.onchange = () => {
     // [{title,description,date}, ...] attendue ici : on repart propre sauf
     // s'il a déjà cette forme (ex. retour sur ce type).
     if (!isValidTimelineEvents(q.correct)) q.correct = [{ title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }]
+  } else if (qType.value === 'intrus') {
+    // q.options venant d'un autre type n'a pas forcément 3-8 entrées ; q.correct
+    // venant d'un autre type (blindtest {title,artist}, association [{a,b}]...)
+    // ne correspond pas au format [texteIntrus] attendu ici : on repart
+    // propre dans les deux cas, sauf s'ils ont déjà la bonne forme.
+    if (!Array.isArray(q.options) || q.options.length < INTRUS_MIN_OPTIONS) q.options = ['', '', '']
+    if (!Array.isArray(q.correct) || q.correct.length !== 1) q.correct = []
   }
   toggleTypeSections()
   renderOptions()
@@ -1604,6 +1757,7 @@ qType.onchange = () => {
   renderCorrectArtistList()
   renderAssociationPairs()
   renderTimelineEvents()
+  renderIntrusOptions()
 }
 
 qPrompt.oninput = () => {
@@ -1653,6 +1807,7 @@ deleteQuestionBtn.onclick = () => {
   renderCorrectArtistList()
   renderAssociationPairs()
   renderTimelineEvents()
+  renderIntrusOptions()
   toggleTypeSections()
   updateSidebar()
 
@@ -1775,6 +1930,29 @@ saveQuizBtn.onclick = async () => {
       if (hasInvalidDate) {
         selectQuestion(i)
         showToast(`La question ${i + 1} : chaque événement doit avoir une date (année) valide`, 'error')
+        return
+      }
+    }
+
+    // Pour "intrus", entre 3 et 8 propositions toutes remplies, et
+    // exactement un intrus désigné (le radio garantit déjà "au plus un" côté
+    // UI ; ici on vérifie qu'il y en a bien "au moins un").
+    if (q.type === 'intrus') {
+      const opts = Array.isArray(q.options) ? q.options : []
+      if (opts.length < INTRUS_MIN_OPTIONS || opts.length > INTRUS_MAX_OPTIONS) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : il faut entre ${INTRUS_MIN_OPTIONS} et ${INTRUS_MAX_OPTIONS} propositions`, 'error')
+        return
+      }
+      const hasEmptyOption = opts.some(o => !o || !o.trim())
+      if (hasEmptyOption) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : chaque proposition doit être remplie`, 'error')
+        return
+      }
+      if (!Array.isArray(q.correct) || q.correct.length !== 1 || !opts.includes(q.correct[0])) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : désigne l'intrus parmi les propositions`, 'error')
         return
       }
     }

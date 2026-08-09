@@ -2771,7 +2771,7 @@ socket.on('question:show', payload => {
   }
   currentQuestionType = payload.type || 'free'
   if (optionsDiv) {
-    const isMcqLike = payload.type === 'mcq' || payload.type === 'truefalse'
+    const isMcqLike = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus'
     optionsDiv.style.display = isMcqLike ? 'grid' : 'none'
     optionsDiv.classList.toggle('d-none', !isMcqLike)
     optionsDiv.classList.toggle('truefalse-grid', payload.type === 'truefalse')
@@ -2821,7 +2821,7 @@ socket.on('question:show', payload => {
   const freeTextEl = document.getElementById('freeText')
   freeTextEl.classList.add('d-none')
   if (!isHost) {
-    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association' || payload.type === 'timeline'
+    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association' || payload.type === 'timeline'
     const isBlindtest = payload.type === 'blindtest'
     freeTextEl.classList.toggle('mcq-mode', isTileType)
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
@@ -2964,6 +2964,23 @@ socket.on('question:show', payload => {
       optionsDiv.appendChild(el)
       applyTileReveal(el, i)
     })
+  } else if (payload.type === 'intrus' && Array.isArray(payload.options)) {
+    // Réutilise entièrement le rendu QCM (mêmes tuiles .option-btn, même
+    // dégradé de 4 couleurs cyclique) mais choix EXCLUSIF comme "truefalse" —
+    // il n'y a qu'un seul intrus possible, pas de sélection multiple.
+    payload.options.forEach((opt, i) => {
+      const el = document.createElement('div')
+      el.className = 'option-btn'
+      el.textContent = opt
+      el.onclick = () => {
+        if (currentSingleAttempt && sendBtn.disabled) return
+        selectedMcqOptions = [opt]
+        Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'))
+        el.classList.add('selected')
+      }
+      optionsDiv.appendChild(el)
+      applyTileReveal(el, i)
+    })
   } else if (payload.type === 'truefalse') {
     // Choix exclusif (un seul des deux boutons peut être sélectionné à la fois),
     // contrairement au QCM où plusieurs réponses peuvent être cochées.
@@ -2997,7 +3014,7 @@ const submitCurrentAnswer = () => {
 
   let content = ''
 
-  if (currentQuestionType === 'mcq' || currentQuestionType === 'truefalse') {
+  if (currentQuestionType === 'mcq' || currentQuestionType === 'truefalse' || currentQuestionType === 'intrus') {
     if (selectedMcqOptions.length === 0) {
       showAnnounce('Veuillez sélectionner au moins une réponse')
       return
@@ -3536,7 +3553,7 @@ socket.on('question:reveal', payload => {
     revealExplanationText.textContent = payload.explanation
     revealExplanationText.classList.remove('d-none')
   }
-  if ((payload.type === 'mcq' || payload.type === 'truefalse') && optionsDiv) {
+  if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus') && optionsDiv) {
     Array.from(optionsDiv.children).forEach(el => {
       if ((payload.correct || []).includes(el.textContent)) el.classList.add('correct-reveal')
       else el.classList.add('incorrect-reveal')
