@@ -233,6 +233,9 @@ const orderList = document.getElementById('orderList')
 const orderCompare = document.getElementById('orderCompare')
 const orderCompareMine = document.getElementById('orderCompareMine')
 const orderCompareCorrect = document.getElementById('orderCompareCorrect')
+const associationArea = document.getElementById('associationArea')
+const associationColA = document.getElementById('associationColA')
+const associationColB = document.getElementById('associationColB')
 const imageArea = document.getElementById('imageArea')
 const imageViewport = document.getElementById('imageViewport')
 const imageWrap = document.getElementById('imageWrap')
@@ -601,6 +604,111 @@ const revealOrderList = (correctOrder) => {
     `
   }).join('')
   orderCompareMine.querySelectorAll('.order-compare-text').forEach((el, i) => { el.textContent = mine[i] })
+}
+
+// --- Question "association" : relier les éléments A aux éléments B -------
+// q.correct côté serveur = [{a,b}, ...] : la paire i associe TOUJOURS a[i] à
+// b[i] (voir server/index.js). payload.pairsA garde cet ordre d'origine
+// (sert de repère stable, colonne A jamais mélangée) ; payload.pairsB est
+// mélangé une fois par emitQuestion (hôte) avant l'envoi — jamais dans
+// l'ordre correct. Chaque paire que le joueur crée est coloriée (une couleur
+// par index A, palette reprise du mode équipe) plutôt que reliée par un
+// trait à tracer : plus lisible sur mobile, pas de précision au pixel requise.
+const ASSOCIATION_PAIR_COLORS = ['pair-0', 'pair-1', 'pair-2', 'pair-3', 'pair-4', 'pair-5', 'pair-6', 'pair-7']
+let associationState = null // { pairsA, pairsB, matches, selectedA } pendant la question active
+let myAssociationSubmission = null // matches[] tel qu'envoyé, gardé pour la comparaison au reveal
+let associationDisabled = true
+const setAssociationDisabled = (v) => { associationDisabled = v }
+
+const renderAssociationColumns = () => {
+  if (!associationState || !associationColA || !associationColB) return
+  const { pairsA, pairsB, matches, selectedA } = associationState
+  associationColA.innerHTML = ''
+  pairsA.forEach((text, i) => {
+    const el = document.createElement('div')
+    el.className = 'assoc-item'
+    el.textContent = text
+    if (matches[i] !== null) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length])
+    if (selectedA === i) el.classList.add('is-selected')
+    el.onclick = () => {
+      if (associationDisabled) return
+      if (currentSingleAttempt && sendBtn.disabled) return
+      // Recliquer un A déjà sélectionné le désélectionne ; en cliquer un
+      // autre (même déjà apparié) permet de choisir un nouveau B pour lui —
+      // son ancienne association reste affichée tant qu'un B n'est pas
+      // choisi pour la remplacer.
+      associationState.selectedA = (associationState.selectedA === i) ? null : i
+      renderAssociationColumns()
+    }
+    associationColA.appendChild(el)
+    applyTileReveal(el, i)
+  })
+  associationColB.innerHTML = ''
+  pairsB.forEach((text, j) => {
+    const el = document.createElement('div')
+    el.className = 'assoc-item'
+    el.textContent = text
+    const matchedAIdx = matches.findIndex(m => m === text)
+    if (matchedAIdx !== -1) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
+    el.onclick = () => {
+      if (associationDisabled) return
+      if (currentSingleAttempt && sendBtn.disabled) return
+      const sel = associationState.selectedA
+      if (sel === null || sel === undefined) return
+      // Un B déjà utilisé par un AUTRE A en est d'abord libéré : une
+      // association déjà créée peut toujours être remplacée (demande
+      // explicite), jamais un B partagé par deux A à la fois.
+      const prevIdx = associationState.matches.findIndex(m => m === text)
+      if (prevIdx !== -1) associationState.matches[prevIdx] = null
+      associationState.matches[sel] = text
+      associationState.selectedA = null
+      renderAssociationColumns()
+    }
+    associationColB.appendChild(el)
+    applyTileReveal(el, j)
+  })
+}
+
+const buildAssociationArea = (pairsA, pairsB) => {
+  if (!associationColA || !associationColB) return
+  associationState = {
+    pairsA: Array.isArray(pairsA) ? pairsA : [],
+    pairsB: Array.isArray(pairsB) ? pairsB : [],
+    matches: new Array(Array.isArray(pairsA) ? pairsA.length : 0).fill(null),
+    selectedA: null
+  }
+  associationDisabled = true
+  renderAssociationColumns()
+}
+
+// Révélation : même principe que revealOrderList (comparaison ligne à ligne
+// plutôt qu'un simple "tout devient vert") — chaque élément A prend le vert
+// si SA paire a été correctement devinée, le rouge sinon (avec la bonne
+// réponse affichée en regard) ; côté B, seul l'élément effectivement bien
+// utilisé par le joueur est colorié en vert (les autres restent neutres :
+// "non choisi" n'est pas la même chose que "faux").
+const revealAssociationPairs = (correctPairs) => {
+  if (!associationColA || !associationColB || !Array.isArray(correctPairs)) return
+  setAssociationDisabled(true)
+  const mine = Array.isArray(myAssociationSubmission) ? myAssociationSubmission : []
+  Array.from(associationColA.children).forEach((el, i) => {
+    el.classList.remove('is-selected')
+    const correct = mine[i] !== undefined && mine[i] !== null && mine[i] === correctPairs[i]?.b
+    el.classList.toggle('correct-reveal', correct)
+    el.classList.toggle('incorrect-reveal', !correct)
+    if (!correct && correctPairs[i]) {
+      const hint = document.createElement('span')
+      hint.className = 'assoc-correct-hint'
+      hint.textContent = ' → ' + correctPairs[i].b
+      el.appendChild(hint)
+    }
+  })
+  Array.from(associationColB.children).forEach((el) => {
+    const text = el.textContent
+    const pairIdx = correctPairs.findIndex(p => p.b === text)
+    const wasChosenCorrectly = pairIdx !== -1 && mine[pairIdx] === text
+    el.classList.toggle('correct-reveal', wasChosenCorrectly)
+  })
 }
 
 // --- Question "image" : où sur l'image ? ---
@@ -1139,6 +1247,16 @@ const clearRevealState = () => {
   if (gradSlider) gradSlider.classList.remove('reveal')
   if (orderCompare) orderCompare.classList.add('d-none')
   if (orderList) orderList.classList.remove('d-none')
+  if (associationColA) {
+    Array.from(associationColA.children).forEach(el => {
+      el.classList.remove('correct-reveal', 'incorrect-reveal', 'is-selected')
+      const hint = el.querySelector('.assoc-correct-hint')
+      if (hint) hint.remove()
+    })
+  }
+  if (associationColB) {
+    Array.from(associationColB.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
+  }
   if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
   if (imageMarker) imageMarker.classList.remove('marker-correct', 'marker-incorrect')
   if (questionRecapCard) questionRecapCard.classList.add('d-none')
@@ -2357,6 +2475,11 @@ const emitQuestion = (index) => {
     // le mélange est fait une fois ici, avant l'envoi ; le serveur retire
     // 'correct' de la diffusion (anti-triche), 'options' seul est visible.
     options: q.type === 'order' ? shuffleArray(correctOrder) : (Array.isArray(q.options) ? q.options : []),
+    // "association" : la colonne A garde son ordre d'origine (sert de repère
+    // stable pour le scoring serveur, voir server/index.js), seule la
+    // colonne B est mélangée avant l'envoi — jamais dans l'ordre correct.
+    pairsA: q.type === 'association' ? correctOrder.map(p => p?.a ?? '') : undefined,
+    pairsB: q.type === 'association' ? shuffleArray(correctOrder.map(p => p?.b ?? '')) : undefined,
     min: q.min,
     max: q.max,
     // Écart accepté comme "Bonne réponse !" pour ce type, configuré par
@@ -2526,6 +2649,9 @@ socket.on('question:show', payload => {
   if (orderArea) {
     orderArea.classList.toggle('d-none', payload.type !== 'order')
   }
+  if (associationArea) {
+    associationArea.classList.toggle('d-none', payload.type !== 'association')
+  }
   if (imageArea) {
     imageArea.classList.toggle('d-none', payload.type !== 'image')
   }
@@ -2558,7 +2684,7 @@ socket.on('question:show', payload => {
   const freeTextEl = document.getElementById('freeText')
   freeTextEl.classList.add('d-none')
   if (!isHost) {
-    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image'
+    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association'
     const isBlindtest = payload.type === 'blindtest'
     freeTextEl.classList.toggle('mcq-mode', isTileType)
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
@@ -2573,6 +2699,9 @@ socket.on('question:show', payload => {
   }
   if (payload.type === 'order' && Array.isArray(payload.options)) {
     buildOrderList(payload.options)
+  }
+  if (payload.type === 'association') {
+    buildAssociationArea(payload.pairsA, payload.pairsB)
   }
   if (payload.type === 'image' && payload.imageUrl) {
     buildImageAnswerArea(payload.imageUrl)
@@ -2592,6 +2721,7 @@ socket.on('question:show', payload => {
   hasAnsweredThisQuestion = false
   myGradAnswerValue = null
   myOrderSubmission = null
+  myAssociationSubmission = null
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -2610,6 +2740,7 @@ socket.on('question:show', payload => {
       sendBtn.disabled = false
       gradState.disabled = false
       setOrderDisabled(false)
+      setAssociationDisabled(false)
       // Garde-fou en plus du nettoyage normal dans applyTileReveal
       // (animationend) : au cas où cet évènement ne se déclencherait pas
       // (onglet mis en arrière-plan pendant l'entrée, navigateur capricieux...),
@@ -2751,6 +2882,12 @@ const submitCurrentAnswer = () => {
     }
     myBlindTestSubmission = { title, artist }
     content = JSON.stringify(myBlindTestSubmission)
+  } else if (currentQuestionType === 'association') {
+    // Pas d'obligation d'avoir tout apparié (le score est proportionnel,
+    // 0 association valide est un résultat possible comme les autres) — on
+    // envoie l'état actuel tel quel, null pour les A encore sans paire.
+    myAssociationSubmission = associationState ? associationState.matches.slice() : []
+    content = JSON.stringify(myAssociationSubmission)
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -2765,6 +2902,7 @@ const submitCurrentAnswer = () => {
     answerInput.disabled = true
     gradState.disabled = true
     setOrderDisabled(true)
+    setAssociationDisabled(true)
     imageDisabled = true
     if (blindtestTitleInput) blindtestTitleInput.disabled = true
     if (blindtestArtistInput) blindtestArtistInput.disabled = true
@@ -3199,6 +3337,7 @@ socket.on('timer:end', () => {
     // réponse acceptée) s'affiche dedans. On verrouille juste les interactions.
     inputArea.classList.add('answers-locked')
     setOrderDisabled(true)
+    setAssociationDisabled(true)
     imageDisabled = true
     const ft = document.getElementById('freeText')
     if (ft) ft.classList.add('d-none')
@@ -3287,6 +3426,18 @@ socket.on('question:reveal', payload => {
   } else if (payload.type === 'order') {
     revealOrderList(payload.correct || [])
     showMyResultBanner()
+  } else if (payload.type === 'association') {
+    const correctPairs = payload.correct || []
+    revealAssociationPairs(correctPairs)
+    const mine = Array.isArray(myAssociationSubmission) ? myAssociationSubmission : []
+    const correctCount = correctPairs.reduce((acc, pair, i) => acc + (mine[i] === pair.b ? 1 : 0), 0)
+    if (correctCount === correctPairs.length && correctPairs.length > 0) {
+      showMyResultBanner()
+    } else if (myAnsweredCorrectlyThisQuestion) {
+      showMyResultBanner(`Presque ! ${correctCount}/${correctPairs.length} associations correctes (+${myLastDelta} points)`, 'is-close')
+    } else {
+      showMyResultBanner('Mauvaise réponse', 'is-incorrect')
+    }
   } else if (payload.type === 'image') {
     const zones = payload.correct || []
     revealImageZones(zones)

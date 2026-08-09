@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.13.2'
+const APP_VERSION = '1.14.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -855,8 +855,11 @@ const start = async () => {
       // lisible dans la frame WebSocket (devtools) avant même de répondre.
       // 'explanation' est retiré pour TOUS les types, même raison : elle
       // spoilerait souvent la réponse si elle était visible avant le reveal.
+      // 'association'/'timeline' : q.correct porte les paires/dates réelles —
+      // jamais diffusé tel quel (les colonnes/cartes mélangées voyagent dans
+      // des champs séparés, voir emitQuestion côté client, eux non filtrés).
       const { correct, explanation, ...payloadWithoutCorrectOrExplanation } = payload || {}
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest')
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline')
         ? payloadWithoutCorrectOrExplanation
         : { ...payloadWithoutCorrectOrExplanation, correct }
 
@@ -982,6 +985,46 @@ const start = async () => {
           room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
           if (q.historyEntry) {
             q.historyEntry.results[p.token] = dist === 0 ? 'correct' : 'incorrect'
+            q.historyEntry.deltas[p.token] = delta
+          }
+        }
+        q.answered?.add(socket.id)
+        q.submissions?.set(socket.id, 'graded')
+        io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        emitProgress()
+        return
+      }
+
+      if (q.type === 'association') {
+        // q.correct = [{a,b}, ...] (voir question:show) : la paire i associe
+        // TOUJOURS a[i] à b[i] par construction — pas besoin de retrouver un
+        // index après mélange, la comparaison se fait par le TEXTE b soumis
+        // pour la position i (voir emitQuestion côté client : seule la
+        // colonne B est mélangée avant envoi, la colonne A garde son ordre
+        // d'origine, qui sert justement d'index stable ici). Score
+        // proportionnel au nombre de paires correctes (pas de tout-ou-rien,
+        // demande explicite) : pointsFor() × (correctCount / total).
+        let submitted
+        try { submitted = JSON.parse(payload?.content || '[]') } catch { submitted = null }
+        const pairs = Array.isArray(q.correct) ? q.correct : []
+        if (!Array.isArray(submitted) || pairs.length === 0) return
+        const pairTotal = pairs.length
+        // .slice(0, pairTotal) : un client qui enverrait un tableau plus long
+        // ne peut pas gagner plus que pairTotal correspondances — la boucle
+        // ne regarde jamais au-delà de la vraie liste de paires de toute façon.
+        const correctCount = pairs.reduce((acc, pair, i) => acc + (submitted[i] === pair.b ? 1 : 0), 0)
+        const fraction = Math.max(0, Math.min(1, correctCount / pairTotal))
+        const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * fraction)
+        const total = (room.scores.get(socket.id) || 0) + delta
+        room.scores.set(socket.id, total)
+        const p = room.players.get(socket.id)
+        if (p?.token) {
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
+          if (q.historyEntry) {
+            // Label binaire pour le récap/podium (comme graduation/image) :
+            // "correct" seulement si TOUTES les paires sont bonnes, même si
+            // le score, lui, reste proportionnel.
+            q.historyEntry.results[p.token] = correctCount === pairTotal ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
           }
         }

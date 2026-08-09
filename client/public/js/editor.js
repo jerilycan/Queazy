@@ -155,6 +155,24 @@ const orderSection = document.getElementById('orderSection')
 const orderEditList = document.getElementById('orderEditList')
 const addOrderItemBtn = document.getElementById('addOrderItem')
 
+const associationSection = document.getElementById('associationSection')
+const associationEditList = document.getElementById('associationEditList')
+const addAssociationPairBtn = document.getElementById('addAssociationPair')
+const ASSOCIATION_MIN_PAIRS = 2
+const ASSOCIATION_MAX_PAIRS = 8
+
+const timelineSection = document.getElementById('timelineSection')
+const timelineEditList = document.getElementById('timelineEditList')
+const addTimelineEventBtn = document.getElementById('addTimelineEvent')
+const TIMELINE_MIN_EVENTS = 3
+const TIMELINE_MAX_EVENTS = 8
+
+const intrusSection = document.getElementById('intrusSection')
+const intrusEditList = document.getElementById('intrusEditList')
+const addIntrusOptionBtn = document.getElementById('addIntrusOption')
+const INTRUS_MIN_OPTIONS = 3
+const INTRUS_MAX_OPTIONS = 8
+
 const imageSection = document.getElementById('imageSection')
 const imageUploadInput = document.getElementById('imageUpload')
 const imageEditViewport = document.getElementById('imageEditViewport')
@@ -236,6 +254,7 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
+    addAssociationPairBtn, addTimelineEventBtn, addIntrusOptionBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
@@ -923,6 +942,7 @@ const selectQuestion = (index) => {
   renderOrderItems()
   renderCorrectTitleList()
   renderCorrectArtistList()
+  renderAssociationPairs()
   toggleTypeSections()
   updateSidebar()
 
@@ -961,6 +981,9 @@ const toggleTypeSections = () => {
   if (orderSection) orderSection.classList.toggle('d-none', qType.value !== 'order')
   if (imageSection) imageSection.classList.toggle('d-none', qType.value !== 'image')
   if (blindtestSection) blindtestSection.classList.toggle('d-none', qType.value !== 'blindtest')
+  if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
+  if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
+  if (intrusSection) intrusSection.classList.toggle('d-none', qType.value !== 'intrus')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
   // déjà leur propre image (le type "image" utilise la sienne comme cible
   // cliquable, pas comme simple décoration).
@@ -972,7 +995,8 @@ const toggleTypeSections = () => {
   // entièrement q.correct — la liste "correct" générique ci-dessous ferait
   // donc double emploi (retaper le texte d'une réponse déjà cochée), d'où
   // la confusion remontée par l'utilisateur. Seul "free" (texte libre, pas
-  // d'options à cocher) a encore besoin de cette liste.
+  // d'options à cocher) a encore besoin de cette liste. "association" /
+  // "timeline" / "intrus" ont chacun leur propre section ci-dessus.
   if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free')
   correctLabel.textContent = 'Réponses acceptées'
 }
@@ -1184,6 +1208,158 @@ if (addOrderItemBtn) {
   }
 }
 
+// --- Question "association" : q.correct = [{a, b}, ...] -------------------
+// La paire i associe TOUJOURS a[i] à b[i] (voir server/index.js) : réordonner
+// les paires ici change donc aussi quel A correspond à quel B, pas seulement
+// l'ordre d'affichage — cohérent avec ce qu'attend le joueur (mélange fait
+// côté client au lancement de la question, voir index.js emitQuestion).
+const isValidAssociationPairs = (correct) =>
+  Array.isArray(correct) && correct.length >= 1 &&
+  correct.every(p => p && typeof p === 'object' && typeof p.a === 'string' && typeof p.b === 'string')
+
+// Même glisser au pointeur que renderOrderItems ci-dessus (voir son
+// commentaire pour le détail du mécanisme : rects figés au pointerdown, un
+// seul splice au relâchement).
+const ASSOCIATION_EDIT_LIST_GAP = 8
+let associationEditDragActive = false
+
+const wireAssociationEditDrag = (row) => {
+  row.addEventListener('pointerdown', (e) => {
+    if (readOnly || associationEditDragActive) return
+    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
+    e.preventDefault()
+    associationEditDragActive = true
+    const startY = e.clientY
+    row.classList.add('dragging')
+    try { row.setPointerCapture(e.pointerId) } catch {}
+
+    const others = Array.from(associationEditList.children).filter(c => c !== row)
+    const baseRects = others.map(c => c.getBoundingClientRect())
+    const startSlot = Array.from(associationEditList.children).indexOf(row)
+    const itemHeight = row.getBoundingClientRect().height + ASSOCIATION_EDIT_LIST_GAP
+    let currentSlot = startSlot
+
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY
+      row.style.transform = `translateY(${dy}px) scale(1.02)`
+      const rect = row.getBoundingClientRect()
+      const center = rect.top + rect.height / 2
+      let newSlot = 0
+      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      if (newSlot === currentSlot) return
+      currentSlot = newSlot
+      others.forEach((c, i) => {
+        let shift = 0
+        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
+        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
+        c.style.transition = 'transform 0.18s ease'
+        c.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+
+    const cleanup = (applyReorder) => {
+      row.removeEventListener('pointermove', onMove)
+      row.removeEventListener('pointerup', onUp)
+      row.removeEventListener('pointercancel', onCancel)
+      associationEditDragActive = false
+      const q = questions[activeIndex]
+      if (applyReorder && currentSlot !== startSlot && q && Array.isArray(q.correct)) {
+        const [moved] = q.correct.splice(startSlot, 1)
+        q.correct.splice(currentSlot, 0, moved)
+      }
+      renderAssociationPairs()
+    }
+    const onUp = (ev) => { try { row.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
+    const onCancel = () => cleanup(false)
+
+    row.addEventListener('pointermove', onMove)
+    row.addEventListener('pointerup', onUp)
+    row.addEventListener('pointercancel', onCancel)
+  })
+}
+
+const renderAssociationPairs = () => {
+  if (!associationEditList) return
+  associationEditList.innerHTML = ''
+  const q = questions[activeIndex]
+  if (!q || q.type !== 'association') return
+  if (!isValidAssociationPairs(q.correct)) q.correct = [{ a: '', b: '' }, { a: '', b: '' }]
+
+  q.correct.forEach((pair, idx) => {
+    const row = document.createElement('div')
+    row.className = 'option-row order-edit-row'
+    row.dataset.index = idx
+
+    if (!readOnly) {
+      const handle = document.createElement('span')
+      handle.className = 'q-drag-handle'
+      handle.textContent = '⠿'
+      row.appendChild(handle)
+      wireAssociationEditDrag(row)
+    }
+
+    const num = document.createElement('span')
+    num.className = 'order-edit-num'
+    num.textContent = idx + 1
+    row.appendChild(num)
+
+    const inputA = document.createElement('input')
+    inputA.type = 'text'
+    inputA.value = pair.a
+    inputA.placeholder = 'Élément A'
+    inputA.style.flex = '1'
+    inputA.disabled = readOnly
+    inputA.oninput = (e) => { pair.a = e.target.value }
+    row.appendChild(inputA)
+
+    const arrow = document.createElement('span')
+    arrow.textContent = '↔'
+    arrow.className = 'text-muted'
+    arrow.style.padding = '0 4px'
+    row.appendChild(arrow)
+
+    const inputB = document.createElement('input')
+    inputB.type = 'text'
+    inputB.value = pair.b
+    inputB.placeholder = 'Élément B'
+    inputB.style.flex = '1'
+    inputB.disabled = readOnly
+    inputB.oninput = (e) => { pair.b = e.target.value }
+    row.appendChild(inputB)
+
+    if (!readOnly) {
+      const del = document.createElement('button')
+      del.className = 'btn-icon btn-danger'
+      del.innerHTML = '&times;'
+      del.onclick = () => {
+        if (q.correct.length <= ASSOCIATION_MIN_PAIRS) {
+          showToast(`Il faut au moins ${ASSOCIATION_MIN_PAIRS} paires`, 'error')
+          return
+        }
+        q.correct.splice(idx, 1)
+        renderAssociationPairs()
+      }
+      row.appendChild(del)
+    }
+
+    associationEditList.appendChild(row)
+  })
+}
+
+if (addAssociationPairBtn) {
+  addAssociationPairBtn.onclick = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    if (!isValidAssociationPairs(q.correct)) q.correct = []
+    if (q.correct.length >= ASSOCIATION_MAX_PAIRS) {
+      showToast(`Maximum ${ASSOCIATION_MAX_PAIRS} paires`, 'error')
+      return
+    }
+    q.correct.push({ a: '', b: '' })
+    renderAssociationPairs()
+  }
+}
+
 const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked = false, onCheck = null) => {
   const div = document.createElement('div')
   div.className = 'option-row'
@@ -1250,6 +1426,11 @@ qType.onchange = () => {
     // forme (ex. retour sur ce type).
     if (!q.correct || Array.isArray(q.correct)) q.correct = { title: [''], artist: [''] }
     populateAudioFields(q)
+  } else if (qType.value === 'association') {
+    // q.correct venant d'un autre type n'a pas la forme [{a,b}, ...]
+    // attendue ici : on repart propre sauf s'il a déjà cette forme (ex.
+    // retour sur ce type).
+    if (!isValidAssociationPairs(q.correct)) q.correct = [{ a: '', b: '' }, { a: '', b: '' }]
   }
   toggleTypeSections()
   renderOptions()
@@ -1257,6 +1438,7 @@ qType.onchange = () => {
   renderOrderItems()
   renderCorrectTitleList()
   renderCorrectArtistList()
+  renderAssociationPairs()
 }
 
 qPrompt.oninput = () => {
@@ -1304,6 +1486,7 @@ deleteQuestionBtn.onclick = () => {
   renderOrderItems()
   renderCorrectTitleList()
   renderCorrectArtistList()
+  renderAssociationPairs()
   toggleTypeSections()
   updateSidebar()
 
@@ -1386,6 +1569,22 @@ saveQuizBtn.onclick = async () => {
       if (validItems.length < 2) {
         selectQuestion(i)
         showToast(`La question ${i + 1} : il faut au moins 2 éléments à ordonner`, 'error')
+        return
+      }
+    }
+
+    // Pour "association", entre 2 et 8 paires, chaque élément A et B rempli
+    if (q.type === 'association') {
+      const pairs = Array.isArray(q.correct) ? q.correct : []
+      if (pairs.length < ASSOCIATION_MIN_PAIRS || pairs.length > ASSOCIATION_MAX_PAIRS) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : il faut entre ${ASSOCIATION_MIN_PAIRS} et ${ASSOCIATION_MAX_PAIRS} paires`, 'error')
+        return
+      }
+      const hasEmpty = pairs.some(p => !p.a || !p.a.trim() || !p.b || !p.b.trim())
+      if (hasEmpty) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : chaque paire doit avoir ses deux éléments remplis`, 'error')
         return
       }
     }

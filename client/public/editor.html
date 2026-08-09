@@ -99,6 +99,9 @@
                 <option value="order">Ordre / classement</option>
                 <option value="image">Image (où se trouve ?)</option>
                 <option value="blindtest">Blind Test (extrait audio)</option>
+                <option value="association">🔗 Association</option>
+                <option value="timeline">⏳ Timeline</option>
+                <option value="intrus">🎯 Intrus</option>
               </select>
             </div>
             <div class="detail-section">
@@ -179,6 +182,32 @@
               <!-- Rempli par JS -->
             </div>
             <button id="addOrderItem" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter un élément</button>
+          </div>
+
+          <div id="associationSection" class="detail-section d-none">
+            <label>Paires à associer (2 à 8), glisser pour réordonner</label>
+            <div id="associationEditList" class="options-editor">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="addAssociationPair" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une paire</button>
+            <p class="text-muted font-13 mt-8">Élément A et son élément B correspondant, sur la même ligne. Les joueurs verront la colonne B mélangée.</p>
+          </div>
+
+          <div id="timelineSection" class="detail-section d-none">
+            <label>Événements (3 à 8), glisser pour réordonner</label>
+            <div id="timelineEditList" class="options-editor">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="addTimelineEvent" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter un événement</button>
+            <p class="text-muted font-13 mt-8">La date sert uniquement à calculer l'ordre correct (nombres négatifs acceptés pour avant J.-C.) — jamais montrée aux joueurs. Trie automatiquement à la sauvegarde.</p>
+          </div>
+
+          <div id="intrusSection" class="detail-section d-none">
+            <label>Propositions (3 à 8) — sélectionne l'intrus</label>
+            <div id="intrusEditList" class="options-editor">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="addIntrusOption" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une proposition</button>
           </div>
 
           <div id="imageSection" class="detail-section d-none">

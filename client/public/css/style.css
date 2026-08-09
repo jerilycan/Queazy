@@ -1015,8 +1015,61 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .answers-locked .option-btn,
 .answers-locked .grad-slider,
 .answers-locked .order-item,
+.answers-locked .assoc-item,
 .answers-locked .image-click-layer {
   pointer-events: none;
+}
+
+/* Question "association" : deux colonnes de cartes cliquables (voir
+   index.js buildAssociationArea) — pas de trait à tracer entre les deux
+   colonnes (imprécis au doigt sur mobile) : une paire créée par le joueur
+   colore les DEUX cartes concernées avec la même teinte (palette .pair-N,
+   reprise du mode équipe), qui sert de lien visuel. */
+.association-area {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  max-width: 640px;
+  margin: var(--space-lg) auto 0;
+}
+.association-col-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.assoc-item {
+  padding: 14px 16px;
+  background: var(--color-card);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  position: relative;
+}
+.assoc-item:hover { border-color: var(--color-accent); transform: translateY(-1px); }
+.assoc-item.is-selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 4px var(--color-accent-soft), var(--shadow-md);
+}
+.assoc-item.is-matched.pair-0 { background: rgba(var(--tile-red-rgb),0.18); border-color: var(--tile-red); }
+.assoc-item.is-matched.pair-1 { background: rgba(var(--tile-blue-rgb),0.18); border-color: var(--tile-blue); }
+.assoc-item.is-matched.pair-2 { background: rgba(var(--tile-yellow-rgb),0.18); border-color: var(--tile-yellow); }
+.assoc-item.is-matched.pair-3 { background: rgba(var(--tile-green-rgb),0.18); border-color: var(--tile-green); }
+.assoc-item.is-matched.pair-4 { background: rgba(var(--color-cyan-rgb),0.18); border-color: var(--color-cyan); }
+.assoc-item.is-matched.pair-5 { background: rgba(var(--color-accent-2-rgb),0.18); border-color: var(--color-accent-2); }
+.assoc-item.is-matched.pair-6 { background: rgba(var(--color-accent-rgb),0.18); border-color: var(--color-accent); }
+.assoc-item.is-matched.pair-7 { background: rgba(255,159,90,0.18); border-color: var(--tile-bronze); }
+.assoc-item.correct-reveal { border-color: var(--tile-green); box-shadow: 0 0 0 4px rgba(var(--tile-green-rgb),0.35); }
+.assoc-item.incorrect-reveal { border-color: var(--color-danger); opacity: 0.75; }
+.assoc-correct-hint { color: var(--tile-green); font-weight: 800; margin-left: 6px; }
+
+@media (max-width: 600px) {
+  .association-area { grid-template-columns: 1fr; }
 }
 
 /* Liste réordonnable (question "order") */
