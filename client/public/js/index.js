@@ -15,6 +15,30 @@ const setConnBanner = (msg, severe = false) => {
 }
 const clearConnBanner = () => connBanner.classList.add('d-none')
 
+// Avertissement avant de quitter/rafraîchir EN PLEINE QUESTION (pas pendant
+// le salon d'attente, où quitter ne coûte rien) : sans ça, un retour arrière
+// ou un rafraîchissement accidentel déclenche tout le mécanisme de
+// reconnexion pour rien — mieux vaut l'éviter en amont. Passé à false juste
+// avant toute navigation VOULUE (fin de quiz, salle fermée, exclusion) pour
+// ne jamais bloquer un départ légitime.
+let inActiveGame = false
+window.addEventListener('beforeunload', (e) => {
+  if (!inActiveGame) return
+  e.preventDefault()
+  e.returnValue = ''
+})
+
+// Vibration mobile (retour haptique) sur bonne/mauvaise réponse — complète
+// les sons/couleurs, utile quand le son est coupé/silencieux (cas fréquent :
+// hôte en mode IRL, salle de classe, téléphone en silencieux qui n'empêche
+// pas forcément l'audio web de jouer). Ignoré en silence sur les navigateurs
+// qui ne supportent pas l'API (pas de vibreur, ex. la plupart des ordinateurs).
+const VIBRATE_CORRECT = [40]
+const VIBRATE_INCORRECT = [40, 60, 40]
+const vibrate = (pattern) => {
+  try { navigator.vibrate?.(pattern) } catch {}
+}
+
 // Sons du jeu : tic-tac du timer, bonne/mauvaise réponse. Un seul objet Audio
 // réutilisé par son (avec currentTime=0) pour permettre des déclenchements
 // rapprochés (ex. tic-tac chaque seconde) sans empiler les instances.
@@ -1484,6 +1508,7 @@ navJoin.onclick = (e) => {
 }
 
 const resetUI = () => {
+  inActiveGame = false // voir beforeunload : plus rien à protéger, salle fermée/quittée
   isHost = false
   roomInput.value = ''
   
@@ -2420,6 +2445,7 @@ startQuizBtn.onclick = () => {
 }
 
 socket.on('question:show', payload => {
+  inActiveGame = true
   clearRevealState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
@@ -3104,6 +3130,7 @@ const showResults = () => {
 }
 
 socket.on('quiz:end', () => {
+  inActiveGame = false // voir beforeunload : navigation volontaire vers les résultats
   const roomCode = roomInput.value.trim()
   if (roomCode) window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}`
 })
@@ -3249,7 +3276,10 @@ socket.on('question:reveal', payload => {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }
   }
-  if (!isHost) playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
+  if (!isHost) {
+    playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
+    vibrate(myAnsweredCorrectlyThisQuestion ? VIBRATE_CORRECT : VIBRATE_INCORRECT)
+  }
   if (isHost) { hostPhase = 'revealed'; updateHostControls() }
 })
 
