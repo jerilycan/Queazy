@@ -756,6 +756,35 @@ let myAssociationSubmission = null // matches[] tel qu'envoyé, gardé pour la c
 let associationDisabled = true
 const setAssociationDisabled = (v) => { associationDisabled = v }
 
+// Ne touche qu'aux classes CSS des tuiles déjà en place (matched/selected/
+// couleur de paire) — jamais au DOM lui-même. Appelée à chaque clic
+// (sélection d'un A, choix d'un B) : reconstruire tout le DOM à ce moment-là
+// (comme le faisait renderAssociationColumns avant) rejouait aussi
+// applyTileReveal sur les nouveaux éléments, donc TOUTES les tuiles
+// disparaissaient puis se réaffichaient une par une avec les mêmes délais
+// que l'apparition initiale — un "réaffichage" complet à chaque clic.
+const updateAssociationClasses = () => {
+  if (!associationState || !associationColA || !associationColB) return
+  const { pairsB, matches, selectedA } = associationState
+  Array.from(associationColA.children).forEach((el, i) => {
+    ASSOCIATION_PAIR_COLORS.forEach(c => el.classList.remove(c))
+    el.classList.toggle('is-matched', matches[i] !== null)
+    if (matches[i] !== null) el.classList.add(ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length])
+    el.classList.toggle('is-selected', selectedA === i)
+  })
+  Array.from(associationColB.children).forEach((el, j) => {
+    const text = pairsB[j]
+    const matchedAIdx = matches.findIndex(m => m === text)
+    ASSOCIATION_PAIR_COLORS.forEach(c => el.classList.remove(c))
+    el.classList.toggle('is-matched', matchedAIdx !== -1)
+    if (matchedAIdx !== -1) el.classList.add(ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
+  })
+}
+
+// Construit le DOM des deux colonnes une seule fois (au chargement de la
+// question, avec l'animation d'apparition en cascade) — les clics ensuite
+// ne font que mettre à jour les classes via updateAssociationClasses, voir
+// plus haut.
 const renderAssociationColumns = () => {
   if (!associationState || !associationColA || !associationColB) return
   const { pairsA, pairsB, matches, selectedA } = associationState
@@ -774,7 +803,7 @@ const renderAssociationColumns = () => {
       // son ancienne association reste affichée tant qu'un B n'est pas
       // choisi pour la remplacer.
       associationState.selectedA = (associationState.selectedA === i) ? null : i
-      renderAssociationColumns()
+      updateAssociationClasses()
     }
     associationColA.appendChild(el)
     applyTileReveal(el, i)
@@ -798,7 +827,7 @@ const renderAssociationColumns = () => {
       if (prevIdx !== -1) associationState.matches[prevIdx] = null
       associationState.matches[sel] = text
       associationState.selectedA = null
-      renderAssociationColumns()
+      updateAssociationClasses()
     }
     associationColB.appendChild(el)
     applyTileReveal(el, j)
