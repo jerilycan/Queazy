@@ -665,14 +665,29 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 .icon-opt.selected { border-color: var(--color-accent); background: var(--color-accent-soft); box-shadow: var(--shadow-sm); }
 
 /* Quiz View */
+/* Sticky comme .navbar (voir plus bas, position:sticky top:12px z-index:1000)
+   — sans ça, en flux normal, la barre finissait DERRIÈRE la navbar dès qu'on
+   scrollait un peu (perte totale du suivi du temps). top:96px = juste sous
+   la navbar desktop (top 12px + hauteur 72px + marge) ; ajusté en mobile
+   ci-dessous où la navbar est plus basse. z-index sous celui de la navbar
+   (1000) mais au-dessus du reste du contenu qui défile derrière. Fond +
+   flou repris de la navbar pour ne pas laisser le texte défiler "à travers"
+   une fois la barre figée en haut de l'écran. */
 .timer-container {
   width: 100%;
   max-width: 700px;
   margin: var(--space-lg) auto;
-  position: relative;
+  position: sticky;
+  top: 96px;
+  z-index: 500;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(5,5,12,0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 16px;
+  padding: 8px;
 }
 
 .timer-bar-wrapper {
@@ -1903,6 +1918,9 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   body.game-active .navbar { margin: 6px 12px 0; height: 52px; padding: 0 16px; }
   body.game-active .menu-toggle-btn { display: none !important; }
   body.game-active .brand { pointer-events: none; cursor: default; }
+  /* Navbar plus basse en mobile (voir .timer-container plus haut) : réajuste
+     le point d'accroche pour rester juste sous elle, pas trop loin. */
+  .timer-container { top: 76px; }
 }
 
 /* Quiz Editor Rework */
