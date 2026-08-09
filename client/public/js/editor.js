@@ -140,6 +140,7 @@ const graduationSection = document.getElementById('graduationSection')
 const qGradMin = document.getElementById('qGradMin')
 const qGradMax = document.getElementById('qGradMax')
 const qGradTarget = document.getElementById('qGradTarget')
+const qGradTolerance = document.getElementById('qGradTolerance')
 
 const trueFalseSection = document.getElementById('trueFalseSection')
 const tfTrueBtn = document.getElementById('tfTrueBtn')
@@ -203,6 +204,16 @@ if (qGradMin && qGradMax && qGradTarget) {
   bindGradStepper(qGradMin, document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'), (v) => { if (questions[activeIndex]) questions[activeIndex].min = v })
   bindGradStepper(qGradMax, document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'), (v) => { if (questions[activeIndex]) questions[activeIndex].max = v })
   bindGradStepper(qGradTarget, document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus'), (v) => { if (questions[activeIndex]) questions[activeIndex].correct = [String(v)] })
+  // Écart accepté comme "Bonne réponse !" (voir server/index.js
+  // GRAD_CORRECT_ABS_TOLERANCE) — jamais négatif, un écart ne se compte pas
+  // en dessous de zéro. Re-clampe aussi la valeur AFFICHÉE (pas seulement
+  // celle stockée) : sans ça, un clic sur "-" à 0 affichait -1 dans le champ
+  // tout en gardant 0 en mémoire, désynchronisé.
+  bindGradStepper(qGradTolerance, document.getElementById('gradToleranceMinus'), document.getElementById('gradTolerancePlus'), (v) => {
+    const clamped = Math.max(0, v)
+    if (clamped !== v) qGradTolerance.value = clamped
+    if (questions[activeIndex]) questions[activeIndex].tolerance = clamped
+  })
 }
 
 // État de l'application
@@ -220,13 +231,14 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
-    qGradMin, qGradMax, qGradTarget, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
+    qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
     removeAudioClipBtn, addCorrectTitleBtn, addCorrectArtistBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
-    document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus')
+    document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus'),
+    document.getElementById('gradToleranceMinus'), document.getElementById('gradTolerancePlus')
   ]
   controls.forEach(el => { if (el) el.disabled = true })
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
@@ -404,6 +416,7 @@ const populateGradFields = (q) => {
   qGradMin.value = q.min ?? 0
   qGradMax.value = q.max ?? 100
   qGradTarget.value = q.correct?.[0] ?? 50
+  qGradTolerance.value = q.tolerance ?? 0
 }
 
 const populateTrueFalseFields = (q) => {
@@ -925,6 +938,7 @@ const saveCurrentQuestionState = () => {
     q.min = Number(qGradMin.value)
     q.max = Number(qGradMax.value)
     q.correct = [String(qGradTarget.value)]
+    q.tolerance = Math.max(0, Number(qGradTolerance.value) || 0)
   } else if (q.type === 'truefalse') {
     // Options fixes ; q.correct est déjà tenu à jour par les boutons Vrai/Faux
     // (voir plus bas), on s'assure juste qu'il reste valide.

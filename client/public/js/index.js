@@ -333,12 +333,12 @@ const applyTileReveal = (el, index) => {
 // physiques de la piste (toujours visibles), donc jamais ambiguës — remplace
 // l'ancienne règle à viseur fixe/graduation défilante. ---
 const gradState = { min: 0, max: 100, value: 50, disabled: false }
-// Doit rester cohérent avec GRAD_CORRECT_ABS_TOLERANCE dans server/index.js —
-// sert uniquement à choisir le message de reveal ("Bonne réponse" vs
-// "Presque !"), le scoring lui-même reste le calcul de proximité continu
-// côté serveur. Écart ABSOLU (pas un pourcentage de l'intervalle) : 0 = seule
-// la valeur exacte compte comme "Bonne réponse !".
-const GRAD_CORRECT_ABS_TOLERANCE = 0
+// Valeur de repli uniquement (voir question:reveal ci-dessous, qui utilise
+// payload.tolerance en priorité — configurable par question depuis
+// l'éditeur) : sert pour les vieux quiz sauvegardés avant l'ajout de ce
+// champ. Doit rester cohérent avec GRAD_CORRECT_ABS_TOLERANCE_DEFAULT dans
+// server/index.js.
+const GRAD_CORRECT_ABS_TOLERANCE_DEFAULT = 0
 
 const setGradValue = (v, animate) => {
   const clamped = Math.min(gradState.max, Math.max(gradState.min, Math.round(v)))
@@ -1572,6 +1572,7 @@ const loadQuizById = (id) => {
         options: Array.isArray(q.options) ? q.options : [],
         min: q.min,
         max: q.max,
+        tolerance: q.tolerance,
         image: q.image,
         illustration: q.illustration,
         // Même oubli que q.image en son temps : sans ce champ, l'extrait audio
@@ -2327,6 +2328,10 @@ const emitQuestion = (index) => {
     options: q.type === 'order' ? shuffleArray(correctOrder) : (Array.isArray(q.options) ? q.options : []),
     min: q.min,
     max: q.max,
+    // Écart accepté comme "Bonne réponse !" pour ce type, configuré par
+    // question dans l'éditeur (voir server/index.js GRAD_CORRECT_ABS_TOLERANCE_DEFAULT
+    // pour la valeur de repli si absente).
+    tolerance: q.type === 'graduation' ? (Math.max(0, Number(q.tolerance) || 0)) : undefined,
     audioMode: q.type === 'blindtest' ? audioMode : undefined,
     audioVolume: q.type === 'blindtest' ? hostAudioVolume : undefined,
     singleAttempt: currentSingleAttempt,
@@ -3226,18 +3231,22 @@ socket.on('question:reveal', payload => {
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
     // Score continu (proximité), comme "image" : au lieu d'un simple binaire,
-    // on distingue "Bonne réponse" (écart exact ou quasi, voir
-    // GRAD_CORRECT_ABS_TOLERANCE), "Presque !" (score partiel touché mais pas
-    // assez près) et "Mauvaise réponse" (aucun point). Le seuil doit rester
-    // cohérent avec GRAD_CORRECT_ABS_TOLERANCE côté serveur (celui qui
-    // détermine le ✓/✗ affiché sur la page résultats).
+    // on distingue "Bonne réponse" (écart dans la tolérance CONFIGURÉE POUR
+    // CETTE QUESTION, voir payload.tolerance — plus une constante globale
+    // fixe, réglable par question depuis l'éditeur), "Presque !" (score
+    // partiel touché mais pas assez près) et "Mauvaise réponse" (aucun
+    // point). Repli sur GRAD_CORRECT_ABS_TOLERANCE_DEFAULT si absente (vieux
+    // quiz sauvegardé avant l'ajout de ce champ) — doit rester cohérent avec
+    // la même valeur de repli côté serveur (celui qui détermine le ✓/✗
+    // affiché sur la page résultats).
     const target = Number(payload.target)
+    const tolerance = Number.isFinite(Number(payload.tolerance)) ? Number(payload.tolerance) : GRAD_CORRECT_ABS_TOLERANCE_DEFAULT
     const range = Math.max(1e-9, gradState.max - gradState.min)
     const absDiff = (Number.isFinite(target) && myGradAnswerValue !== null)
       ? Math.abs(myGradAnswerValue - target)
       : null
     const closeness = absDiff !== null ? Math.max(0, 1 - absDiff / range) : null
-    if (absDiff !== null && absDiff <= GRAD_CORRECT_ABS_TOLERANCE) {
+    if (absDiff !== null && absDiff <= tolerance) {
       showMyResultBanner()
     } else if (closeness !== null && myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')

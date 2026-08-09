@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.11.2'
+const APP_VERSION = '1.11.3'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -290,7 +290,8 @@ const start = async () => {
       type: question.type,
       correct: question.correct,
       explanation: question.explanation || '',
-      target: question.type === 'graduation' ? question.correct?.[0] : undefined
+      target: question.type === 'graduation' ? question.correct?.[0] : undefined,
+      tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined
     })
   }
 
@@ -406,11 +407,11 @@ const start = async () => {
   // (ancienne version : 0.8, 20% de tolérance) donnait une marge d'erreur
   // réelle qui explosait dès que le curseur était large (ex. 0-100 pour une
   // réponse factuelle à un ou deux chiffres), sans rapport avec la précision
-  // réellement attendue. 0 = seule la valeur exacte compte comme "Bonne
-  // réponse !", tout écart (même 1) devient "Presque !". Le calcul continu
-  // des points, lui, reste basé sur la proximité relative à l'intervalle
-  // (voir CLOSENESS_EXPONENT) : seul ce libellé change de logique.
-  const GRAD_CORRECT_ABS_TOLERANCE = 0
+  // réellement attendue. Configurable par question depuis l'éditeur
+  // (q.tolerance) ; cette constante ne sert plus que de valeur de repli pour
+  // les quiz sauvegardés avant l'ajout de ce champ (question.tolerance null).
+  // 0 = seule la valeur exacte compte comme "Bonne réponse !".
+  const GRAD_CORRECT_ABS_TOLERANCE_DEFAULT = 0
   // Les scores "graduation"/"image" sont continus (proximité 0-1) : sans
   // courbe, un "presque" à closeness=0.9 touchait encore 90% des points,
   // trop proche d'une réponse parfaite. On élève la proximité à une
@@ -751,7 +752,11 @@ const start = async () => {
       // que endQuestion (déclenché soit par le minuteur, soit en avance dès
       // que tout le monde a répondu — voir emitProgress dans answer:submit)
       // referme toujours la BONNE question, même s'il se déclenche tard.
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, timerMs: payload?.timerMs || 15000, startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
+      // tolerance : écart accepté comme "Bonne réponse !" pour le type
+      // graduation (voir GRAD_CORRECT_ABS_TOLERANCE_DEFAULT plus bas, valeur
+      // de repli si absente/invalide — ex. un vieux quiz sauvegardé avant
+      // l'ajout de ce champ). Jamais négative.
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, timerMs: payload?.timerMs || 15000, startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -850,7 +855,8 @@ const start = async () => {
         if (p?.token) {
           room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
           if (q.historyEntry) {
-            q.historyEntry.results[p.token] = Math.abs(clamped - target) <= GRAD_CORRECT_ABS_TOLERANCE ? 'correct' : 'incorrect'
+            const tolerance = q.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT
+            q.historyEntry.results[p.token] = Math.abs(clamped - target) <= tolerance ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
           }
         }
