@@ -76,6 +76,23 @@
           </div>
         </div>
 
+        <!-- Importance de la rapidité (score max toujours 1000, seul le
+             score minimum d'une bonne réponse tardive varie) — hôte
+             uniquement, verrouillé une fois la partie lancée comme le mode
+             équipe ci-dessus. Voir index.js et server/index.js
+             (room.speedLevel / game:setSpeedLevel / floorForSpeedLevel). -->
+        <div id="speedLevelPanel" class="team-mode-panel d-none">
+          <label for="speedLevelSelect" class="align-center d-flex gap-xs font-bold font-14" style="justify-content: space-between;">
+            <span>⚡ Importance de la rapidité</span>
+            <select id="speedLevelSelect" class="speed-level-select">
+              <option value="low">Faible (1000 → 500)</option>
+              <option value="normal" selected>Normal (1000 → 400)</option>
+              <option value="high">Forte (1000 → 100)</option>
+            </select>
+          </label>
+          <span class="font-12 text-muted d-block mt-8">Score max toujours 1000 pour une réponse quasi instantanée ; le score minimum d'une bonne réponse tardive dépend du niveau choisi.</span>
+        </div>
+
         <h3 class="mb-md opacity-80">Joueurs connectés</h3>
         <div id="lobbyGrid" class="player-grid"></div>
       </div>

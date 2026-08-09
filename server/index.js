@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.11.5'
+const APP_VERSION = '1.12.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -53,6 +53,20 @@ const refreshMinPointsFloor = async () => {
     // que ce soit côté jeu.
     app.log.warn(`min_points_floor: lecture Supabase impossible, valeur conservée (${minPointsFloor}) — ${err.message || err}`)
   }
+}
+
+// Réglage de partie "Importance de la rapidité" (voir room.speedLevel,
+// game:setSpeedLevel) : 3 niveaux fixes, choisis au lobby par l'hôte comme le
+// mode équipe (même pattern, voir team:setMode). 'normal' réutilise
+// volontairement le plancher global ci-dessus (déjà configurable en base) :
+// c'est la valeur par défaut affichée aux joueurs qui ne touchent jamais au
+// réglage. 'low'/'high' sont des constantes fixes, pas encore pilotables
+// depuis Supabase (pas demandé pour l'instant).
+const SPEED_LEVEL_FLOOR = { low: 500, high: 100 }
+const floorForSpeedLevel = (level) => {
+  if (level === 'low') return SPEED_LEVEL_FLOOR.low
+  if (level === 'high') return SPEED_LEVEL_FLOOR.high
+  return minPointsFloor // 'normal', ou toute valeur absente/invalide
 }
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
@@ -441,10 +455,23 @@ const start = async () => {
     }
     return { ok: false }
   }
-  const pointsFor = (startTs, now, base = 1000, alpha = 0.05, floor = minPointsFloor) => {
-    const elapsed = Math.max(0, now - startTs)
-    const raw = Math.max(floor, Math.floor(base - alpha * elapsed))
-    return raw
+  // Composante "vitesse" du score : décroissance LINÉAIRE et CONTINUE (pas de
+  // palier) de `base` (réponse quasi instantanée) jusqu'à `floor` (réglage de
+  // partie "Importance de la rapidité", voir floorForSpeedLevel), atteint
+  // exactement à la fin de la fenêtre de réponse RÉELLE de la question
+  // (`timerMs`) — et non plus un taux fixe indépendant de la durée
+  // configurée : avant, `floor` était touché après une durée fixe (ex.
+  // 12000ms pour floor=400), sans lien avec un timerMs de 15s, 30s ou 60s,
+  // ce qui aplatissait le score bien avant la fin du chrono dès que la
+  // question durait plus que ça. Ici, ça marche pareil quelle que soit la
+  // durée choisie par le créateur pour CETTE question.
+  // Un seul Math.round final : toujours un entier, jamais de double
+  // arrondi qui dérive.
+  const pointsFor = (startTs, now, timerMs, floor = minPointsFloor, base = 1000) => {
+    const duration = Math.max(1, Number(timerMs) || 15000)
+    const elapsed = Math.min(duration, Math.max(0, now - startTs))
+    const t = elapsed / duration
+    return Math.round(base - (base - floor) * t)
   }
   // Écart ABSOLU (pas un pourcentage de l'intervalle min/max) pour dire
   // "Bonne réponse !" au lieu de "Presque !" — un seuil en % de l'intervalle
@@ -569,7 +596,8 @@ const start = async () => {
         teamMode: false,
         teams: new Map(),
         hostDisconnectedAt: null,
-        lastActivityAt: Date.now() // voir sweepAbandonedRooms plus bas
+        lastActivityAt: Date.now(), // voir sweepAbandonedRooms plus bas
+        speedLevel: 'normal' // voir game:setSpeedLevel / floorForSpeedLevel
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
       await socket.join(code)
@@ -646,6 +674,7 @@ const start = async () => {
       }
 
       io.to(code).emit('team:list', { teamMode: room.teamMode, teams: buildTeamList(room) })
+      io.to(code).emit('game:speedLevel', { level: room.speedLevel })
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
 
@@ -732,6 +761,23 @@ const start = async () => {
       io.to(code).emit('lobby:list', buildPlayerList(room))
     })
 
+    // Réglage de partie "Importance de la rapidité" (voir floorForSpeedLevel
+    // plus haut) — même pattern que team:setMode : hôte uniquement, verrouillé
+    // dès que la partie est lancée (le niveau choisi doit rester le même pour
+    // TOUTES les questions d'une même partie, pas de changement en cours de
+    // route). Broadcasté à toute la salle (hôte + joueurs) pour affichage
+    // synchronisé, même si le calcul du score lui-même ne dépend jamais de ce
+    // que le client affiche : voir question.pointsFloor, résolu côté serveur
+    // au moment de question:show.
+    socket.on('game:setSpeedLevel', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || room.hostId !== socket.id || gameStarted(room)) return
+      const level = ['low', 'normal', 'high'].includes(payload?.level) ? payload.level : 'normal'
+      room.speedLevel = level
+      io.to(code).emit('game:speedLevel', { level })
+    })
+
     socket.on('player:ready', payload => {
       const code = payload?.roomCode
       const room = rooms.get(code)
@@ -795,7 +841,14 @@ const start = async () => {
       // graduation (voir GRAD_CORRECT_ABS_TOLERANCE_DEFAULT plus bas, valeur
       // de repli si absente/invalide — ex. un vieux quiz sauvegardé avant
       // l'ajout de ce champ). Jamais négative.
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, timerMs: payload?.timerMs || 15000, startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
+      // pointsFloor : résolu UNE FOIS ici depuis le réglage de partie
+      // room.speedLevel (voir floorForSpeedLevel) plutôt qu'à chaque
+      // answer:submit — garantit que tous les joueurs de cette question
+      // reçoivent exactement le même calcul, même si l'hôte changeait le
+      // réglage entre deux questions (ce que le client bloque déjà une fois
+      // la partie lancée, voir game:setSpeedLevel, mais on ne fait jamais
+      // confiance qu'au serveur pour ça).
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -887,7 +940,7 @@ const start = async () => {
         const clamped = Math.min(max, Math.max(min, guess))
         const range = Math.max(1e-9, max - min)
         const closeness = Math.max(0, 1 - Math.abs(clamped - target) / range)
-        const delta = Math.round(pointsFor(q.startTs, Date.now()) * (closeness ** CLOSENESS_EXPONENT))
+        const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * (closeness ** CLOSENESS_EXPONENT))
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
@@ -921,7 +974,7 @@ const start = async () => {
         if (!point || typeof point.x !== 'number' || typeof point.y !== 'number' || zones.length === 0) return
         const dist = Math.min(...zones.map(pts => distPointToPolygon(point, pts)))
         const closeness = Math.max(0, 1 - dist / IMAGE_PROXIMITY_MAX_DIST)
-        const delta = Math.round(pointsFor(q.startTs, Date.now()) * (closeness ** CLOSENESS_EXPONENT))
+        const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * (closeness ** CLOSENESS_EXPONENT))
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
@@ -961,7 +1014,7 @@ const start = async () => {
         const acceptedArtist = Array.isArray(q.correct?.artist) ? q.correct.artist : []
 
         const submitTs = Date.now()
-        const halfDelta = Math.round(pointsFor(q.startTs, submitTs) / 2)
+        const halfDelta = Math.round(pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor) / 2)
 
         const evalField = (input, accepted) => {
           if (!input.trim()) return 'incorrect'
@@ -1039,7 +1092,7 @@ const start = async () => {
           submitted.every((v, i) => v === correctOrder[i])
         const p = room.players.get(socket.id)
         if (isCorrect) {
-          const delta = pointsFor(q.startTs, Date.now())
+          const delta = pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor)
           const total = (room.scores.get(socket.id) || 0) + delta
           room.scores.set(socket.id, total)
           if (p?.token) {
@@ -1063,7 +1116,7 @@ const start = async () => {
       const res = fuzzy(payload?.content || '', q.correct)
 
       if (res.ok && res.exact) {
-        const delta = pointsFor(q.startTs, Date.now())
+        const delta = pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor)
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
@@ -1098,13 +1151,13 @@ const start = async () => {
           room.pending.delete(prevId)
         }
         const submitTs = Date.now()
-        const delta = pointsFor(q.startTs, submitTs)
+        const delta = pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor)
         const answerId = `${socket.id}:${submitTs}`
         const p = room.players.get(socket.id)
         if (p?.token && q.historyEntry) q.historyEntry.answers[p.token] = payload?.content || ''
         // token en plus de playerId : voir le commentaire équivalent sur la
         // file d'attente blindtest plus haut (resolvePendingId).
-        room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, content: payload?.content, ts: submitTs, delta, historyEntry: q.historyEntry })
+        room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, content: payload?.content, ts: submitTs, delta, timerMs: q.timerMs, pointsFloor: q.pointsFloor, historyEntry: q.historyEntry })
         q.submissions?.set(socket.id, answerId)
         io.to(code).emit('answer:queue', { answerId, playerId: socket.id, content: payload?.content })
         emitProgress()
@@ -1192,7 +1245,12 @@ const start = async () => {
       const q = room.currentQuestion
       const currentId = resolvePendingId(room, item)
       if (q?.answered?.has(currentId)) return
-      const delta = item.delta || pointsFor(q.startTs, item.ts)
+      // item.delta est normalement toujours déjà posé (voir answer:submit
+      // plus haut) ; ce repli n'existe que par prudence, et réutilise le
+      // timerMs/pointsFloor ENREGISTRÉS SUR LA SOUMISSION plutôt que ceux de
+      // room.currentQuestion, qui a pu avancer entre-temps si l'hôte a
+      // enchaîné avant que l'hôte n'ait tranché cette modération.
+      const delta = item.delta || pointsFor(q.startTs, item.ts, item.timerMs ?? q?.timerMs, item.pointsFloor ?? q?.pointsFloor)
       const total = (room.scores.get(currentId) || 0) + delta
       room.scores.set(currentId, total)
       const p = room.players.get(currentId)

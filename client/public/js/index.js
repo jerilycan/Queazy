@@ -282,6 +282,9 @@ const teamModeToggle = document.getElementById('teamModeToggle')
 const teamModeControls = document.getElementById('teamModeControls')
 const teamCountInput = document.getElementById('teamCountInput')
 const teamAutoAssignBtn = document.getElementById('teamAutoAssignBtn')
+// Importance de la rapidité (hôte uniquement, voir socket.on('game:speedLevel') plus bas).
+const speedLevelPanel = document.getElementById('speedLevelPanel')
+const speedLevelSelect = document.getElementById('speedLevelSelect')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
 const AVATAR_CHOICES = [
@@ -2001,6 +2004,28 @@ if (teamAutoAssignBtn) {
   }
 }
 
+// --- Importance de la rapidité (salon d'attente uniquement, voir
+// server/index.js room.speedLevel / game:setSpeedLevel / floorForSpeedLevel).
+// Le panneau lui-même n'est visible que côté hôte (comme #teamModePanel),
+// mais l'event est diffusé à TOUTE la salle (voir room:join côté serveur) :
+// ce qui compte pour la synchronisation demandée, c'est que la valeur reçue
+// soit la même pour tout le monde et que le calcul du score, résolu côté
+// serveur au moment de question:show (question.pointsFloor), s'appuie
+// dessus — jamais sur un état local au client.
+socket.on('game:speedLevel', ({ level }) => {
+  if (speedLevelSelect && ['low', 'normal', 'high'].includes(level)) {
+    speedLevelSelect.value = level
+  }
+})
+
+if (speedLevelSelect) {
+  speedLevelSelect.addEventListener('change', () => {
+    const roomCode = roomInput.value.trim()
+    if (!roomCode) return
+    socket.emit('game:setSpeedLevel', { roomCode, level: speedLevelSelect.value })
+  })
+}
+
 const renderLobbyGrid = (arr) => {
   lastLobbyArr = arr || []
   console.log('Lobby list received:', arr)
@@ -2062,6 +2087,7 @@ const renderLobbyGrid = (arr) => {
       hostPanel.classList.remove('d-none')
       hostPanel.style.display = 'flex'
       if (teamModePanel) teamModePanel.classList.remove('d-none')
+      if (speedLevelPanel) speedLevelPanel.classList.remove('d-none')
 
       // Reset buttons visibility when entering lobby as host
       startQuizBtn.classList.remove('d-none')
