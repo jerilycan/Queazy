@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.12.0'
+const APP_VERSION = '1.13.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -29,7 +29,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 // via la table Supabase `app_settings` (clé 'min_points_floor', voir
 // supabase/schema.sql). Rechargé périodiquement ; si la table est absente ou
 // injoignable, cette valeur par défaut reste utilisée telle quelle.
-const MIN_POINTS_FLOOR_DEFAULT = 400
+const MIN_POINTS_FLOOR_DEFAULT = 300
 const MIN_POINTS_FLOOR_SETTING_KEY = 'min_points_floor'
 const MIN_POINTS_FLOOR_REFRESH_MS = 2 * 60 * 1000
 let minPointsFloor = MIN_POINTS_FLOOR_DEFAULT
@@ -461,7 +461,7 @@ const start = async () => {
   // exactement à la fin de la fenêtre de réponse RÉELLE de la question
   // (`timerMs`) — et non plus un taux fixe indépendant de la durée
   // configurée : avant, `floor` était touché après une durée fixe (ex.
-  // 12000ms pour floor=400), sans lien avec un timerMs de 15s, 30s ou 60s,
+  // 14000ms pour floor=300), sans lien avec un timerMs de 15s, 30s ou 60s,
   // ce qui aplatissait le score bien avant la fin du chrono dès que la
   // question durait plus que ça. Ici, ça marche pareil quelle que soit la
   // durée choisie par le créateur pour CETTE question.

@@ -83,6 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginError) {
       loginError.textContent = message
       loginError.classList.remove('d-none')
+    } else if (window.QzUI) {
+      window.QzUI.toast(message, 'error')
     } else {
       alert(message)
     }
@@ -93,6 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (signupError) {
       signupError.textContent = message
       signupError.classList.remove('d-none')
+    } else if (window.QzUI) {
+      window.QzUI.toast(message, 'error')
     } else {
       alert(message)
     }
@@ -260,7 +264,8 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const email = signupEmailInput.value;
       if (!email) {
-        alert("Veuillez entrer votre email d'abord.");
+        if (window.QzUI) window.QzUI.toast("Veuillez entrer votre email d'abord.", 'error')
+        else alert("Veuillez entrer votre email d'abord.");
         return;
       }
 
@@ -275,7 +280,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (error) {
         console.error("Erreur renvoi email:", error);
-        alert("Erreur: " + error.message);
+        if (window.QzUI) window.QzUI.toast("Erreur : " + error.message, 'error')
+        else alert("Erreur: " + error.message);
         resendEmailBtn.disabled = false;
         resendEmailBtn.textContent = "Je n'ai rien reçu, renvoyer l'email";
       } else {

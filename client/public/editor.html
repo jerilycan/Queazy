@@ -44,12 +44,14 @@
         <div class="quiz-meta">
           <input id="title" placeholder="Titre du quizz" />
           <div class="align-center d-flex gap-sm">
-            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14">
-              <input id="singleAttempt" type="checkbox" checked class="checkbox-custom" />
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+              <input id="singleAttempt" type="checkbox" checked class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
               Une seule tentative
             </label>
-            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14">
-              <input id="isPublic" type="checkbox" class="checkbox-custom" />
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+              <input id="isPublic" type="checkbox" class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
               Partager ce quiz publiquement
             </label>
           </div>
@@ -285,6 +287,7 @@
       </div>
     </div>
 
+    <script src="/js/ui-widgets.js" defer></script>
     <script src="/js/editor.js" defer></script>
   </body>
 </html>

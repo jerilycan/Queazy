@@ -102,6 +102,11 @@ const toastsEl = document.getElementById('toasts')
 const qPrompt = document.getElementById('qPrompt')
 const qExplanation = document.getElementById('qExplanation')
 const qType = document.getElementById('qType')
+// Rendu "maison" (voir js/ui-widgets.js) au lieu du <select> natif — le
+// reste du code ci-dessous continue de lire/écrire qType.value, d'écouter
+// 'change'/.onchange et de basculer .disabled (applyReadOnly) sans rien
+// savoir de ce widget.
+if (window.QzUI) window.QzUI.enhanceSelect(qType)
 const qTimer = document.getElementById('qTimer')
 const timerMinus = document.getElementById('timerMinus')
 const timerPlus = document.getElementById('timerPlus')
@@ -251,7 +256,10 @@ const applyReadOnly = () => {
 
 // --- Utilitaires ---
 
+// Délègue au composant partagé (voir js/ui-widgets.js, QzUI.toast) plutôt
+// que de dupliquer le rendu ici — repli minimal si le script n'a pas chargé.
 const showToast = (msg, type = 'info') => {
+  if (window.QzUI) { window.QzUI.toast(msg, type); return }
   const t = document.createElement('div')
   t.className = 'toast'
   t.textContent = msg
@@ -262,7 +270,6 @@ const showToast = (msg, type = 'info') => {
   t.style.fontSize = '14px'
   t.style.color = 'white'
   t.style.background = type === 'error' ? '#ef4444' : 'var(--color-accent)'
-  
   toastsEl.appendChild(t)
   setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300) }, 3000)
 }
@@ -1513,10 +1520,13 @@ if (reportQuizBtn && reportPopup) {
   }
 }
 
-deleteQuizBtn.onclick = () => {
+deleteQuizBtn.onclick = async () => {
   if (readOnly) return
   if (!currentId) return
-  if (!confirm('Voulez-vous vraiment supprimer ce quiz ?')) return
+  const ok = window.QzUI
+    ? await window.QzUI.confirm({ title: 'Supprimer ce quiz ?', message: 'Cette action est définitive et ne peut pas être annulée.', confirmLabel: 'Supprimer', danger: true })
+    : confirm('Voulez-vous vraiment supprimer ce quiz ?')
+  if (!ok) return
   const sb = window.supabaseClient
   sb.from('quizzes').delete().eq('id', currentId)
     .then(({ error }) => {

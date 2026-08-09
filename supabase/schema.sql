@@ -237,5 +237,5 @@ create trigger app_settings_set_updated_at
 -- directement depuis le Table Editor Supabase (pas besoin de relancer ce
 -- script).
 insert into public.app_settings (key, value)
-values ('min_points_floor', '400')
+values ('min_points_floor', '300')
 on conflict (key) do nothing;

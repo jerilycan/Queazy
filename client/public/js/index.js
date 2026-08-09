@@ -285,6 +285,10 @@ const teamAutoAssignBtn = document.getElementById('teamAutoAssignBtn')
 // Importance de la rapidité (hôte uniquement, voir socket.on('game:speedLevel') plus bas).
 const speedLevelPanel = document.getElementById('speedLevelPanel')
 const speedLevelSelect = document.getElementById('speedLevelSelect')
+// Rendu "maison" (voir js/ui-widgets.js) au lieu du <select> natif — le
+// reste du code ci-dessous continue de lire/écrire speedLevelSelect.value
+// et d'écouter 'change' sans rien savoir de ce widget.
+if (window.QzUI) window.QzUI.enhanceSelect(speedLevelSelect)
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
 const AVATAR_CHOICES = [
@@ -2213,10 +2217,11 @@ const renderLobbyGrid = (arr) => {
       if (iAmHost && !isMe) {
         const kickBtn = tile.querySelector('.kick-tile-btn')
         if (kickBtn) {
-          kickBtn.onclick = () => {
-            if (confirm(`Exclure ${p.name} de la salle ?`)) {
-              socket.emit('player:kick', { roomCode: roomInput.value.trim(), playerId: p.id })
-            }
+          kickBtn.onclick = async () => {
+            const ok = window.QzUI
+              ? await window.QzUI.confirm({ title: 'Exclure ce joueur ?', message: `Exclure ${p.name} de la salle ?`, confirmLabel: 'Exclure', danger: true })
+              : confirm(`Exclure ${p.name} de la salle ?`)
+            if (ok) socket.emit('player:kick', { roomCode: roomInput.value.trim(), playerId: p.id })
           }
         }
       }
