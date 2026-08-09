@@ -333,10 +333,12 @@ const applyTileReveal = (el, index) => {
 // physiques de la piste (toujours visibles), donc jamais ambiguës — remplace
 // l'ancienne règle à viseur fixe/graduation défilante. ---
 const gradState = { min: 0, max: 100, value: 50, disabled: false }
-// Doit rester cohérent avec GRAD_CORRECT_THRESHOLD dans server/index.js — sert
-// uniquement à choisir le message de reveal ("Bonne réponse" vs "Presque !"),
-// le scoring lui-même reste le calcul de proximité continu côté serveur.
-const GRAD_CORRECT_THRESHOLD = 0.8
+// Doit rester cohérent avec GRAD_CORRECT_ABS_TOLERANCE dans server/index.js —
+// sert uniquement à choisir le message de reveal ("Bonne réponse" vs
+// "Presque !"), le scoring lui-même reste le calcul de proximité continu
+// côté serveur. Écart ABSOLU (pas un pourcentage de l'intervalle) : 0 = seule
+// la valeur exacte compte comme "Bonne réponse !".
+const GRAD_CORRECT_ABS_TOLERANCE = 0
 
 const setGradValue = (v, animate) => {
   const clamped = Math.min(gradState.max, Math.max(gradState.min, Math.round(v)))
@@ -3224,16 +3226,18 @@ socket.on('question:reveal', payload => {
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
     // Score continu (proximité), comme "image" : au lieu d'un simple binaire,
-    // on distingue "Bonne réponse" (dans le seuil de tolérance), "Presque !"
-    // (score partiel touché mais en dehors du seuil) et "Mauvaise réponse"
-    // (aucun point). Le seuil doit rester cohérent avec GRAD_CORRECT_THRESHOLD
-    // côté serveur (celui qui détermine le ✓/✗ affiché sur la page résultats).
+    // on distingue "Bonne réponse" (écart exact ou quasi, voir
+    // GRAD_CORRECT_ABS_TOLERANCE), "Presque !" (score partiel touché mais pas
+    // assez près) et "Mauvaise réponse" (aucun point). Le seuil doit rester
+    // cohérent avec GRAD_CORRECT_ABS_TOLERANCE côté serveur (celui qui
+    // détermine le ✓/✗ affiché sur la page résultats).
     const target = Number(payload.target)
     const range = Math.max(1e-9, gradState.max - gradState.min)
-    const closeness = (Number.isFinite(target) && myGradAnswerValue !== null)
-      ? Math.max(0, 1 - Math.abs(myGradAnswerValue - target) / range)
+    const absDiff = (Number.isFinite(target) && myGradAnswerValue !== null)
+      ? Math.abs(myGradAnswerValue - target)
       : null
-    if (closeness !== null && closeness >= GRAD_CORRECT_THRESHOLD) {
+    const closeness = absDiff !== null ? Math.max(0, 1 - absDiff / range) : null
+    if (absDiff !== null && absDiff <= GRAD_CORRECT_ABS_TOLERANCE) {
       showMyResultBanner()
     } else if (closeness !== null && myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')

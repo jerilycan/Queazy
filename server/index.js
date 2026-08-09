@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.11.1'
+const APP_VERSION = '1.11.2'
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })
@@ -401,7 +401,16 @@ const start = async () => {
     const raw = Math.max(floor, Math.floor(base - alpha * elapsed))
     return raw
   }
-  const GRAD_CORRECT_THRESHOLD = 0.8
+  // Écart ABSOLU (pas un pourcentage de l'intervalle min/max) pour dire
+  // "Bonne réponse !" au lieu de "Presque !" — un seuil en % de l'intervalle
+  // (ancienne version : 0.8, 20% de tolérance) donnait une marge d'erreur
+  // réelle qui explosait dès que le curseur était large (ex. 0-100 pour une
+  // réponse factuelle à un ou deux chiffres), sans rapport avec la précision
+  // réellement attendue. 0 = seule la valeur exacte compte comme "Bonne
+  // réponse !", tout écart (même 1) devient "Presque !". Le calcul continu
+  // des points, lui, reste basé sur la proximité relative à l'intervalle
+  // (voir CLOSENESS_EXPONENT) : seul ce libellé change de logique.
+  const GRAD_CORRECT_ABS_TOLERANCE = 0
   // Les scores "graduation"/"image" sont continus (proximité 0-1) : sans
   // courbe, un "presque" à closeness=0.9 touchait encore 90% des points,
   // trop proche d'une réponse parfaite. On élève la proximité à une
@@ -841,7 +850,7 @@ const start = async () => {
         if (p?.token) {
           room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
           if (q.historyEntry) {
-            q.historyEntry.results[p.token] = closeness >= GRAD_CORRECT_THRESHOLD ? 'correct' : 'incorrect'
+            q.historyEntry.results[p.token] = Math.abs(clamped - target) <= GRAD_CORRECT_ABS_TOLERANCE ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
           }
         }
