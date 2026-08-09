@@ -1610,7 +1610,7 @@ const renderIntrusOptions = () => {
     const radio = document.createElement('input')
     radio.type = 'radio'
     radio.name = INTRUS_RADIO_NAME
-    radio.className = 'mr-8'
+    radio.className = 'checkbox-custom mr-8'
     radio.checked = q.correct[0] === opt && opt.trim() !== ''
     radio.title = 'Marquer comme intrus'
     radio.disabled = readOnly
