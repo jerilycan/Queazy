@@ -2820,14 +2820,19 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
 
 /* Variante destructive de .btn (voir .btn/.btn-primary plus haut) — utilisée
    dans les modales de confirmation pour les actions irréversibles (supprimer
-   un quiz, exclure un joueur). */
-.btn-danger {
+   un quiz, exclure un joueur). Scopée à ".btn.btn-danger" et non juste
+   ".btn-danger" : les petites croix de suppression (options, éléments
+   d'ordre) portent la classe ".btn-icon.btn-danger" (rouge seulement au
+   survol, voir .btn-icon.btn-danger:hover plus haut) — un sélecteur
+   ".btn-danger" nu leur appliquait aussi ce fond plein + cette ombre 3D en
+   permanence, ce qui décentrait visuellement le "×" dans son bloc 40×40. */
+.btn.btn-danger {
   background: linear-gradient(135deg, var(--color-danger) 0%, #b3123a 100%);
   color: white;
   box-shadow: 0 4px 0 #7a0c28, var(--shadow-sm);
 }
-.btn-danger:hover { box-shadow: 0 6px 0 #7a0c28, var(--shadow-md); }
-.btn-danger:active { box-shadow: 0 1px 0 #7a0c28; }
+.btn.btn-danger:hover { box-shadow: 0 6px 0 #7a0c28, var(--shadow-md); }
+.btn.btn-danger:active { box-shadow: 0 1px 0 #7a0c28; }
 
 /* --- Sélecteur déroulant maison (remplace <select>, voir enhanceSelect) --- */
 .qz-select { position: relative; display: inline-block; width: 100%; }
