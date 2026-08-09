@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.14.0'
+const APP_VERSION = '1.15.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -340,10 +340,17 @@ const start = async () => {
   const revealQuestion = (io, code, room, question) => {
     const recap = buildRecap(room, question)
     if (recap) io.to(code).emit('question:recap', recap)
+    // "timeline" : q.correct n'est pas forcément trié (voir answer:submit,
+    // qui retrie systématiquement par date plutôt que de faire confiance à
+    // l'ordre de stockage) — la révélation doit montrer le VRAI ordre
+    // chronologique, pas l'ordre de saisie du créateur.
+    const revealCorrect = question.type === 'timeline' && Array.isArray(question.correct)
+      ? [...question.correct].sort((a, b) => Number(a?.date) - Number(b?.date))
+      : question.correct
     io.to(code).emit('question:reveal', {
       id: question.id,
       type: question.type,
-      correct: question.correct,
+      correct: revealCorrect,
       explanation: question.explanation || '',
       target: question.type === 'graduation' ? question.correct?.[0] : undefined,
       tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined
@@ -1152,6 +1159,51 @@ const start = async () => {
           if (p?.token && q.historyEntry) q.historyEntry.results[p.token] = 'incorrect'
           q.submissions?.set(socket.id, 'incorrect')
         }
+        emitProgress()
+        return
+      }
+
+      if (q.type === 'timeline') {
+        // q.correct = [{title, description, date}, ...] dans l'ordre de
+        // saisie du créateur (PAS forcément trié) — l'ordre chronologique
+        // correct est toujours recalculé ici à partir de "date" plutôt que
+        // supposé déjà trié, pour rester robuste même sur un vieux quiz
+        // sauvegardé avant un éventuel bug de tri côté éditeur.
+        // "key" = index ORIGINAL dans q.correct (voir emitQuestion côté
+        // client, colonne mélangée par titre+description seulement, jamais
+        // par date) : le joueur soumet la séquence de clés dans l'ordre où
+        // il a placé les cartes. Un événement est "correctement placé" si sa
+        // position dans sa soumission correspond à sa position dans l'ordre
+        // chronologique réel — pas de tout-ou-rien, score proportionnel au
+        // nombre d'événements bien placés (demande explicite).
+        let submitted
+        try { submitted = JSON.parse(payload?.content || '[]') } catch { submitted = null }
+        const events = Array.isArray(q.correct) ? q.correct : []
+        if (!Array.isArray(submitted) || events.length === 0) return
+        const n = events.length
+        const correctOrderKeys = events
+          .map((e, i) => i)
+          .sort((a, b) => Number(events[a]?.date) - Number(events[b]?.date))
+        const correctPositionOfKey = new Map(correctOrderKeys.map((key, pos) => [key, pos]))
+        let correctCount = 0
+        submitted.slice(0, n).forEach((key, pos) => {
+          if (correctPositionOfKey.get(key) === pos) correctCount++
+        })
+        const fraction = Math.max(0, Math.min(1, correctCount / n))
+        const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * fraction)
+        const total = (room.scores.get(socket.id) || 0) + delta
+        room.scores.set(socket.id, total)
+        const p = room.players.get(socket.id)
+        if (p?.token) {
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
+          if (q.historyEntry) {
+            q.historyEntry.results[p.token] = correctCount === n ? 'correct' : 'incorrect'
+            q.historyEntry.deltas[p.token] = delta
+          }
+        }
+        q.answered?.add(socket.id)
+        q.submissions?.set(socket.id, 'graded')
+        io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
         return
       }

@@ -943,6 +943,7 @@ const selectQuestion = (index) => {
   renderCorrectTitleList()
   renderCorrectArtistList()
   renderAssociationPairs()
+  renderTimelineEvents()
   toggleTypeSections()
   updateSidebar()
 
@@ -1360,6 +1361,164 @@ if (addAssociationPairBtn) {
   }
 }
 
+// --- Question "timeline" : q.correct = [{title, description, date}, ...] -
+// Stocké dans l'ordre de SAISIE du créateur, PAS forcément trié par date —
+// c'est le serveur qui retrie systématiquement par "date" au moment du
+// score et de la révélation (voir server/index.js answer:submit/
+// revealQuestion), jamais l'ordre de stockage brut. "date" n'est qu'un
+// nombre (année) : accepte les négatifs (avant J.-C.), pas de date
+// calendaire complète (jour/mois) dans cette version.
+const isValidTimelineEvents = (correct) =>
+  Array.isArray(correct) && correct.length >= 1 &&
+  correct.every(e => e && typeof e === 'object' && typeof e.title === 'string')
+
+const TIMELINE_EDIT_LIST_GAP = 8
+let timelineEditDragActive = false
+
+const wireTimelineEditDrag = (row) => {
+  row.addEventListener('pointerdown', (e) => {
+    if (readOnly || timelineEditDragActive) return
+    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
+    e.preventDefault()
+    timelineEditDragActive = true
+    const startY = e.clientY
+    row.classList.add('dragging')
+    try { row.setPointerCapture(e.pointerId) } catch {}
+
+    const others = Array.from(timelineEditList.children).filter(c => c !== row)
+    const baseRects = others.map(c => c.getBoundingClientRect())
+    const startSlot = Array.from(timelineEditList.children).indexOf(row)
+    const itemHeight = row.getBoundingClientRect().height + TIMELINE_EDIT_LIST_GAP
+    let currentSlot = startSlot
+
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY
+      row.style.transform = `translateY(${dy}px) scale(1.02)`
+      const rect = row.getBoundingClientRect()
+      const center = rect.top + rect.height / 2
+      let newSlot = 0
+      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      if (newSlot === currentSlot) return
+      currentSlot = newSlot
+      others.forEach((c, i) => {
+        let shift = 0
+        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
+        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
+        c.style.transition = 'transform 0.18s ease'
+        c.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+
+    const cleanup = (applyReorder) => {
+      row.removeEventListener('pointermove', onMove)
+      row.removeEventListener('pointerup', onUp)
+      row.removeEventListener('pointercancel', onCancel)
+      timelineEditDragActive = false
+      const q = questions[activeIndex]
+      if (applyReorder && currentSlot !== startSlot && q && Array.isArray(q.correct)) {
+        const [moved] = q.correct.splice(startSlot, 1)
+        q.correct.splice(currentSlot, 0, moved)
+      }
+      renderTimelineEvents()
+    }
+    const onUp = (ev) => { try { row.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
+    const onCancel = () => cleanup(false)
+
+    row.addEventListener('pointermove', onMove)
+    row.addEventListener('pointerup', onUp)
+    row.addEventListener('pointercancel', onCancel)
+  })
+}
+
+const renderTimelineEvents = () => {
+  if (!timelineEditList) return
+  timelineEditList.innerHTML = ''
+  const q = questions[activeIndex]
+  if (!q || q.type !== 'timeline') return
+  if (!isValidTimelineEvents(q.correct)) q.correct = [{ title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }]
+
+  q.correct.forEach((ev, idx) => {
+    const row = document.createElement('div')
+    row.className = 'option-row order-edit-row timeline-edit-row'
+    row.dataset.index = idx
+
+    if (!readOnly) {
+      const handle = document.createElement('span')
+      handle.className = 'q-drag-handle'
+      handle.textContent = '⠿'
+      row.appendChild(handle)
+      wireTimelineEditDrag(row)
+    }
+
+    const num = document.createElement('span')
+    num.className = 'order-edit-num'
+    num.textContent = idx + 1
+    row.appendChild(num)
+
+    const fields = document.createElement('div')
+    fields.className = 'timeline-edit-fields'
+
+    const titleInput = document.createElement('input')
+    titleInput.type = 'text'
+    titleInput.value = ev.title || ''
+    titleInput.placeholder = 'Titre de l\'événement'
+    titleInput.disabled = readOnly
+    titleInput.oninput = (e) => { ev.title = e.target.value }
+    fields.appendChild(titleInput)
+
+    const descInput = document.createElement('input')
+    descInput.type = 'text'
+    descInput.value = ev.description || ''
+    descInput.placeholder = 'Description courte (optionnelle)'
+    descInput.disabled = readOnly
+    descInput.oninput = (e) => { ev.description = e.target.value }
+    fields.appendChild(descInput)
+
+    const dateInput = document.createElement('input')
+    dateInput.type = 'number'
+    dateInput.className = 'timeline-date-input'
+    dateInput.value = ev.date ?? 0
+    dateInput.placeholder = 'Année (ex: 1789, -450)'
+    dateInput.title = 'Sert uniquement à calculer l\'ordre correct — jamais montré aux joueurs avant la révélation'
+    dateInput.disabled = readOnly
+    dateInput.oninput = (e) => { ev.date = e.target.value === '' ? 0 : Number(e.target.value) }
+    fields.appendChild(dateInput)
+
+    row.appendChild(fields)
+
+    if (!readOnly) {
+      const del = document.createElement('button')
+      del.className = 'btn-icon btn-danger'
+      del.innerHTML = '&times;'
+      del.onclick = () => {
+        if (q.correct.length <= TIMELINE_MIN_EVENTS) {
+          showToast(`Il faut au moins ${TIMELINE_MIN_EVENTS} événements`, 'error')
+          return
+        }
+        q.correct.splice(idx, 1)
+        renderTimelineEvents()
+      }
+      row.appendChild(del)
+    }
+
+    timelineEditList.appendChild(row)
+  })
+}
+
+if (addTimelineEventBtn) {
+  addTimelineEventBtn.onclick = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    if (!isValidTimelineEvents(q.correct)) q.correct = []
+    if (q.correct.length >= TIMELINE_MAX_EVENTS) {
+      showToast(`Maximum ${TIMELINE_MAX_EVENTS} événements`, 'error')
+      return
+    }
+    q.correct.push({ title: '', description: '', date: 0 })
+    renderTimelineEvents()
+  }
+}
+
 const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked = false, onCheck = null) => {
   const div = document.createElement('div')
   div.className = 'option-row'
@@ -1431,6 +1590,11 @@ qType.onchange = () => {
     // attendue ici : on repart propre sauf s'il a déjà cette forme (ex.
     // retour sur ce type).
     if (!isValidAssociationPairs(q.correct)) q.correct = [{ a: '', b: '' }, { a: '', b: '' }]
+  } else if (qType.value === 'timeline') {
+    // q.correct venant d'un autre type n'a pas la forme
+    // [{title,description,date}, ...] attendue ici : on repart propre sauf
+    // s'il a déjà cette forme (ex. retour sur ce type).
+    if (!isValidTimelineEvents(q.correct)) q.correct = [{ title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }]
   }
   toggleTypeSections()
   renderOptions()
@@ -1439,6 +1603,7 @@ qType.onchange = () => {
   renderCorrectTitleList()
   renderCorrectArtistList()
   renderAssociationPairs()
+  renderTimelineEvents()
 }
 
 qPrompt.oninput = () => {
@@ -1487,6 +1652,7 @@ deleteQuestionBtn.onclick = () => {
   renderCorrectTitleList()
   renderCorrectArtistList()
   renderAssociationPairs()
+  renderTimelineEvents()
   toggleTypeSections()
   updateSidebar()
 
@@ -1585,6 +1751,30 @@ saveQuizBtn.onclick = async () => {
       if (hasEmpty) {
         selectQuestion(i)
         showToast(`La question ${i + 1} : chaque paire doit avoir ses deux éléments remplis`, 'error')
+        return
+      }
+    }
+
+    // Pour "timeline", entre 3 et 8 événements, chacun avec un titre et une
+    // date numérique valide (l'ordre correct est calculé côté serveur à
+    // partir de "date", peu importe l'ordre de saisie ici).
+    if (q.type === 'timeline') {
+      const events = Array.isArray(q.correct) ? q.correct : []
+      if (events.length < TIMELINE_MIN_EVENTS || events.length > TIMELINE_MAX_EVENTS) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : il faut entre ${TIMELINE_MIN_EVENTS} et ${TIMELINE_MAX_EVENTS} événements`, 'error')
+        return
+      }
+      const hasEmptyTitle = events.some(e => !e.title || !e.title.trim())
+      if (hasEmptyTitle) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : chaque événement doit avoir un titre`, 'error')
+        return
+      }
+      const hasInvalidDate = events.some(e => !Number.isFinite(Number(e.date)))
+      if (hasInvalidDate) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : chaque événement doit avoir une date (année) valide`, 'error')
         return
       }
     }

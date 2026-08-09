@@ -233,6 +233,8 @@ const orderList = document.getElementById('orderList')
 const orderCompare = document.getElementById('orderCompare')
 const orderCompareMine = document.getElementById('orderCompareMine')
 const orderCompareCorrect = document.getElementById('orderCompareCorrect')
+const timelineArea = document.getElementById('timelineArea')
+const timelineList = document.getElementById('timelineList')
 const associationArea = document.getElementById('associationArea')
 const associationColA = document.getElementById('associationColA')
 const associationColB = document.getElementById('associationColB')
@@ -604,6 +606,129 @@ const revealOrderList = (correctOrder) => {
     `
   }).join('')
   orderCompareMine.querySelectorAll('.order-compare-text').forEach((el, i) => { el.textContent = mine[i] })
+}
+
+// --- Question "timeline" : classer des événements dans le bon ordre -------
+// Même mécanique de glisser au pointeur que la liste "order" ci-dessus
+// (wireOrderDrag), adaptée à des cartes à deux lignes (titre + description)
+// au lieu d'un simple texte. "key" = index ORIGINAL dans q.correct (voir
+// server/index.js, jamais la date elle-même, jamais montrée avant la
+// révélation) : c'est ce qui est envoyé au serveur, dans l'ordre où le
+// joueur a placé les cartes — le serveur retrie par date pour déterminer
+// l'ordre correct et compare position par position.
+let timelineDisabled = true
+const setTimelineDisabled = (v) => { timelineDisabled = v }
+const TIMELINE_LIST_GAP = 10
+
+const wireTimelineDrag = (el) => {
+  let dragActive = false
+  el.addEventListener('pointerdown', (e) => {
+    if (timelineDisabled || dragActive) return
+    if (currentSingleAttempt && sendBtn.disabled) return
+    e.preventDefault()
+    dragActive = true
+    const startY = e.clientY
+    el.classList.add('dragging')
+    el.style.zIndex = '10'
+    try { el.setPointerCapture(e.pointerId) } catch {}
+
+    const others = Array.from(timelineList.children).filter(c => c !== el)
+    const baseRects = others.map(c => c.getBoundingClientRect())
+    const startSlot = Array.from(timelineList.children).indexOf(el)
+    const itemHeight = el.getBoundingClientRect().height + TIMELINE_LIST_GAP
+    let currentSlot = startSlot
+
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY
+      el.style.transform = `translateY(${dy}px) scale(1.02)`
+      const rect = el.getBoundingClientRect()
+      const center = rect.top + rect.height / 2
+      let newSlot = 0
+      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      if (newSlot === currentSlot) return
+      currentSlot = newSlot
+      others.forEach((c, i) => {
+        let shift = 0
+        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
+        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
+        c.style.transition = 'transform 0.18s ease'
+        c.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+
+    const cleanup = (applyReorder) => {
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointercancel', onCancel)
+      if (applyReorder && currentSlot !== startSlot) {
+        timelineList.insertBefore(el, others[currentSlot] || null)
+      }
+      others.forEach(c => { c.style.transition = ''; c.style.transform = '' })
+      el.classList.remove('dragging')
+      el.style.zIndex = ''
+      el.style.transition = 'transform 0.2s ease'
+      el.style.transform = ''
+      setTimeout(() => { el.style.transition = '' }, 200)
+      dragActive = false
+    }
+
+    const onUp = (ev) => { try { el.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
+    const onCancel = () => cleanup(false)
+
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', onUp)
+    el.addEventListener('pointercancel', onCancel)
+  })
+}
+
+let myTimelineSubmission = null // [{title, description}, ...] tel qu'envoyé, dans l'ordre soumis — pour la comparaison au reveal
+
+const buildTimelineList = (items) => {
+  if (!timelineList) return
+  timelineList.innerHTML = ''
+  timelineDisabled = true
+  ;(items || []).forEach((item, uid) => {
+    const el = document.createElement('div')
+    el.className = 'timeline-item'
+    el.dataset.key = item.key
+    el.dataset.title = item.title || ''
+    el.dataset.description = item.description || ''
+    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="timeline-item-text"><span class="timeline-item-title"></span><span class="timeline-item-desc"></span></span>`
+    el.querySelector('.timeline-item-title').textContent = item.title || ''
+    el.querySelector('.timeline-item-desc').textContent = item.description || ''
+    timelineList.appendChild(el)
+    wireTimelineDrag(el)
+    applyTileReveal(el, uid)
+  })
+}
+
+const getCurrentTimelineKeys = () => Array.from(timelineList.children).map(el => Number(el.dataset.key))
+const getCurrentTimelineSubmission = () => Array.from(timelineList.children).map(el => ({ title: el.dataset.title, description: el.dataset.description }))
+
+// Révélation : même principe que revealOrderList (comparaison ligne à ligne
+// figée plutôt qu'une liste qui se réordonne sous les yeux). Comparaison par
+// TITRE (le joueur soumet des clés numériques au serveur, mais on ne les
+// reçoit pas en retour — le payload de révélation ne porte que les
+// événements triés, voir server/index.js revealQuestion) : suppose des
+// titres uniques au sein d'une même question, comme "order" suppose déjà
+// des éléments textuels uniques.
+const revealTimelineList = (correctEvents) => {
+  if (!timelineList || !Array.isArray(correctEvents) || correctEvents.length === 0) return
+  setTimelineDisabled(true)
+  timelineList.classList.add('is-revealed')
+  const mine = Array.isArray(myTimelineSubmission) && myTimelineSubmission.length === correctEvents.length
+    ? myTimelineSubmission
+    : null
+
+  Array.from(timelineList.children).forEach((el, i) => {
+    const correctEv = correctEvents[i]
+    el.querySelector('.timeline-item-title').textContent = correctEv?.title || ''
+    const dateLabel = Number.isFinite(Number(correctEv?.date)) ? ` (${correctEv.date})` : ''
+    el.querySelector('.timeline-item-desc').textContent = (correctEv?.description || '') + dateLabel
+    const isCorrect = !!mine && mine[i]?.title === correctEv?.title
+    el.classList.toggle('correct-reveal', isCorrect)
+    el.classList.toggle('incorrect-reveal', !isCorrect)
+  })
 }
 
 // --- Question "association" : relier les éléments A aux éléments B -------
@@ -1247,6 +1372,10 @@ const clearRevealState = () => {
   if (gradSlider) gradSlider.classList.remove('reveal')
   if (orderCompare) orderCompare.classList.add('d-none')
   if (orderList) orderList.classList.remove('d-none')
+  if (timelineList) {
+    timelineList.classList.remove('is-revealed')
+    Array.from(timelineList.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
+  }
   if (associationColA) {
     Array.from(associationColA.children).forEach(el => {
       el.classList.remove('correct-reveal', 'incorrect-reveal', 'is-selected')
@@ -2480,6 +2609,10 @@ const emitQuestion = (index) => {
     // colonne B est mélangée avant l'envoi — jamais dans l'ordre correct.
     pairsA: q.type === 'association' ? correctOrder.map(p => p?.a ?? '') : undefined,
     pairsB: q.type === 'association' ? shuffleArray(correctOrder.map(p => p?.b ?? '')) : undefined,
+    // "timeline" : la date reste dans q.correct (server/index.js s'en sert
+    // pour scorer/révéler) mais n'est JAMAIS incluse ici — seuls titre/
+    // description + une clé (index d'origine) partent au mélange.
+    timelineItems: q.type === 'timeline' ? shuffleArray(correctOrder.map((e, i) => ({ title: e?.title ?? '', description: e?.description ?? '', key: i }))) : undefined,
     min: q.min,
     max: q.max,
     // Écart accepté comme "Bonne réponse !" pour ce type, configuré par
@@ -2652,6 +2785,10 @@ socket.on('question:show', payload => {
   if (associationArea) {
     associationArea.classList.toggle('d-none', payload.type !== 'association')
   }
+  if (timelineArea) {
+    timelineArea.classList.toggle('d-none', payload.type !== 'timeline')
+    if (timelineList) timelineList.classList.remove('is-revealed')
+  }
   if (imageArea) {
     imageArea.classList.toggle('d-none', payload.type !== 'image')
   }
@@ -2684,7 +2821,7 @@ socket.on('question:show', payload => {
   const freeTextEl = document.getElementById('freeText')
   freeTextEl.classList.add('d-none')
   if (!isHost) {
-    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association'
+    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association' || payload.type === 'timeline'
     const isBlindtest = payload.type === 'blindtest'
     freeTextEl.classList.toggle('mcq-mode', isTileType)
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
@@ -2702,6 +2839,9 @@ socket.on('question:show', payload => {
   }
   if (payload.type === 'association') {
     buildAssociationArea(payload.pairsA, payload.pairsB)
+  }
+  if (payload.type === 'timeline') {
+    buildTimelineList(payload.timelineItems)
   }
   if (payload.type === 'image' && payload.imageUrl) {
     buildImageAnswerArea(payload.imageUrl)
@@ -2722,6 +2862,7 @@ socket.on('question:show', payload => {
   myGradAnswerValue = null
   myOrderSubmission = null
   myAssociationSubmission = null
+  myTimelineSubmission = null
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -2741,6 +2882,7 @@ socket.on('question:show', payload => {
       gradState.disabled = false
       setOrderDisabled(false)
       setAssociationDisabled(false)
+      setTimelineDisabled(false)
       // Garde-fou en plus du nettoyage normal dans applyTileReveal
       // (animationend) : au cas où cet évènement ne se déclencherait pas
       // (onglet mis en arrière-plan pendant l'entrée, navigateur capricieux...),
@@ -2888,6 +3030,9 @@ const submitCurrentAnswer = () => {
     // envoie l'état actuel tel quel, null pour les A encore sans paire.
     myAssociationSubmission = associationState ? associationState.matches.slice() : []
     content = JSON.stringify(myAssociationSubmission)
+  } else if (currentQuestionType === 'timeline') {
+    myTimelineSubmission = getCurrentTimelineSubmission() // pour la comparaison au reveal (titres)
+    content = JSON.stringify(getCurrentTimelineKeys()) // pour le serveur (clés = index d'origine)
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -2903,6 +3048,7 @@ const submitCurrentAnswer = () => {
     gradState.disabled = true
     setOrderDisabled(true)
     setAssociationDisabled(true)
+    setTimelineDisabled(true)
     imageDisabled = true
     if (blindtestTitleInput) blindtestTitleInput.disabled = true
     if (blindtestArtistInput) blindtestArtistInput.disabled = true
@@ -3338,6 +3484,7 @@ socket.on('timer:end', () => {
     inputArea.classList.add('answers-locked')
     setOrderDisabled(true)
     setAssociationDisabled(true)
+    setTimelineDisabled(true)
     imageDisabled = true
     const ft = document.getElementById('freeText')
     if (ft) ft.classList.add('d-none')
@@ -3435,6 +3582,18 @@ socket.on('question:reveal', payload => {
       showMyResultBanner()
     } else if (myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! ${correctCount}/${correctPairs.length} associations correctes (+${myLastDelta} points)`, 'is-close')
+    } else {
+      showMyResultBanner('Mauvaise réponse', 'is-incorrect')
+    }
+  } else if (payload.type === 'timeline') {
+    const correctEvents = payload.correct || []
+    revealTimelineList(correctEvents)
+    const mine = Array.isArray(myTimelineSubmission) ? myTimelineSubmission : []
+    const correctCount = correctEvents.reduce((acc, ev, i) => acc + (mine[i]?.title === ev.title ? 1 : 0), 0)
+    if (correctCount === correctEvents.length && correctEvents.length > 0) {
+      showMyResultBanner()
+    } else if (myAnsweredCorrectlyThisQuestion) {
+      showMyResultBanner(`Presque ! ${correctCount}/${correctEvents.length} bien placés (+${myLastDelta} points)`, 'is-close')
     } else {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }
