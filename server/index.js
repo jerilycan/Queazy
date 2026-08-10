@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.22.0'
+const APP_VERSION = '1.22.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -528,6 +528,15 @@ const start = async () => {
   // change rien à closeness=1 (toujours 100%), mais creuse l'écart pour
   // tout ce qui n'est pas exact (0.9 -> 81%, 0.7 -> 49%, 0.5 -> 25%).
   const CLOSENESS_EXPONENT = 2
+  // "graduation" spécifiquement jugé encore trop généreux même avec l'exposant
+  // 2 ci-dessus (retour utilisateur : "Presque ! +758 points" pour une
+  // réponse pas exacte) — exposant propre et plus élevé, SANS toucher au
+  // scoring du type "image" (jamais signalé comme trop généreux, formule
+  // différente par nature : distance à une zone dessinée, pas un écart
+  // numérique). closeness=0.9 -> 53% des points (au lieu de 81%), 0.7 -> 12%
+  // (au lieu de 49%), 0.5 -> 1.6% (au lieu de 25%) : ne récompense plus
+  // qu'une réponse VRAIMENT proche de la cible.
+  const GRAD_CLOSENESS_EXPONENT = 6
   // Réactions "fun" pendant l'attente de validation d'une réponse libre (voir
   // index.js showModerationWait) : liste blanche stricte (jamais de contenu
   // arbitraire relayé à toute la salle) + cooldown par socket pour éviter
@@ -967,7 +976,7 @@ const start = async () => {
         const clamped = Math.min(max, Math.max(min, guess))
         const range = Math.max(1e-9, max - min)
         const closeness = Math.max(0, 1 - Math.abs(clamped - target) / range)
-        const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * (closeness ** CLOSENESS_EXPONENT))
+        const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * (closeness ** GRAD_CLOSENESS_EXPONENT))
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
