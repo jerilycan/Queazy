@@ -280,7 +280,19 @@
     if (!opts.force && localStorage.getItem(storageKey) === '1') return
 
     const validSteps = (steps || [])
-      .map(s => ({ ...s, el: typeof s.target === 'string' ? document.querySelector(s.target) : s.target }))
+      .map(s => {
+        let el = typeof s.target === 'string' ? document.querySelector(s.target) : s.target
+        // Un <select> passé par enhanceSelect() est caché (display:none, voir
+        // plus haut) : son getBoundingClientRect() est alors vide (0,0,0,0),
+        // ce qui cadrait le spotlight en haut à gauche de l'écran au lieu du
+        // menu déroulant réellement visible. On cible plutôt son wrapper
+        // .qz-select, qui reprend exactement la taille/position du bouton
+        // visible.
+        if (el && el.tagName === 'SELECT' && el.dataset.qzEnhanced && el.parentElement && el.parentElement.classList.contains('qz-select')) {
+          el = el.parentElement
+        }
+        return { ...s, el }
+      })
       .filter(s => s.el)
     if (validSteps.length === 0) return
 
@@ -296,6 +308,22 @@
 
     let idx = 0
 
+    // Hauteur à garder libre en haut de l'écran pour ne pas caler la cible
+    // sous la navbar sticky (position:sticky, voir .navbar dans style.css) —
+    // mesurée en direct plutôt que codée en dur : reste juste si la navbar
+    // change de taille (mobile, futur redesign...), et vaut une petite marge
+    // fixe si la page n'a pas de navbar sticky.
+    const stickyTopClearance = () => {
+      const nav = document.querySelector('.navbar')
+      if (nav) {
+        const pos = getComputedStyle(nav).position
+        if (pos === 'sticky' || pos === 'fixed') {
+          return Math.ceil(nav.getBoundingClientRect().bottom) + 16
+        }
+      }
+      return 16
+    }
+
     const positionFor = (el) => {
       const r = el.getBoundingClientRect()
       const pad = 8
@@ -310,7 +338,7 @@
       const spaceBelow = window.innerHeight - r.bottom
       const top = spaceBelow > popupRect.height + 24
         ? r.bottom + pad + 12
-        : Math.max(12, r.top - pad - 12 - popupRect.height)
+        : Math.max(stickyTopClearance(), r.top - pad - 12 - popupRect.height)
       let left = r.left
       if (left + popupRect.width > window.innerWidth - 12) left = window.innerWidth - popupRect.width - 12
       if (left < 12) left = 12
@@ -331,7 +359,21 @@
 
     const render = () => {
       const step = validSteps[idx]
-      step.el.scrollIntoView({ block: 'nearest' })
+      // block:'nearest' ne bouge pas si la cible est déjà techniquement dans
+      // les limites du viewport — mais "dans les limites" ignore la navbar
+      // sticky qui la recouvre visuellement (cas vécu : bouton Sauvegarder
+      // juste sous la navbar, jamais scrollé, spotlight plaqué en haut de
+      // l'écran). scroll-margin-top force le navigateur à réserver cette
+      // marge lors du calcul ; block:'center' garantit un vrai mouvement de
+      // scroll à chaque étape plutôt qu'un ajustement minimal qui peut
+      // laisser la cible collée à un bord (plus sensible à un zoom élevé, où
+      // le viewport utile est plus petit). Style inline restauré juste après
+      // : scrollIntoView est synchrone (pas de behavior:'smooth' ici), donc
+      // la valeur a déjà été lue par le navigateur au moment du restore.
+      const prevScrollMargin = step.el.style.scrollMarginTop
+      step.el.style.scrollMarginTop = stickyTopClearance() + 'px'
+      step.el.scrollIntoView({ block: 'center', inline: 'nearest' })
+      step.el.style.scrollMarginTop = prevScrollMargin
       titleEl.textContent = step.title || ''
       textEl.textContent = step.text || ''
       progressEl.textContent = (idx + 1) + ' / ' + validSteps.length
