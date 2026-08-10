@@ -2393,6 +2393,13 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* flex-wrap dès la base (pas seulement sous 900px, voir media query plus
+     bas) : à fort zoom navigateur, la largeur CSS effective rétrécit sans
+     jamais franchir ce seuil, et le titre + les boutons d'action peuvent ne
+     plus tenir sur une ligne. Sans repli, les derniers boutons (Sauvegarder)
+     se retrouvaient collés au bord droit de la carte, voire débordaient par-
+     dessus son coin arrondi (signalé par l'utilisateur, capture d'écran). */
+  flex-wrap: wrap;
   margin-bottom: var(--space-lg);
   gap: var(--space-md);
   background: var(--gradient-card);
@@ -2428,6 +2435,13 @@ input:focus { outline: none; border-color: var(--color-accent); background: var(
 
 .editor-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  /* Garde le bloc d'actions collé au bord droit même quand il retombe seul
+     sur sa propre ligne (flex-wrap ci-dessus) : une marge auto absorbe tout
+     l'espace libre restant sur SA ligne, ce que justify-content seul ne
+     peut pas garantir pour un item isolé sur une ligne de wrap. */
+  margin-left: auto;
   gap: var(--space-sm);
 }
 
@@ -3220,6 +3234,6 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
   /* Éditeur : la grille à sidebar fixe déborde sur petit écran → on empile */
   .editor-layout { grid-template-columns: 1fr; height: auto; min-height: 0; }
   .question-sidebar { max-height: 260px; }
-  .editor-top-bar { flex-wrap: wrap; }
+  /* .editor-top-bar bascule déjà en flex-wrap dans sa règle de base. */
   .quiz-meta { flex-wrap: wrap; }
 }
