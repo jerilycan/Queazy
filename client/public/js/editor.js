@@ -1179,10 +1179,18 @@ const renderOptions = () => {
   optionsList.innerHTML = ''
   const q = questions[activeIndex]
   if (!q) return
-  // "blindtest" range ses réponses acceptées dans q.correct = {title, artist}
-  // (pas un tableau) : les .includes/.indexOf ci-dessous plantent sur un objet,
-  // et cette fonction ne sert de toute façon à rien pour ce type (pas d'options QCM).
-  if (q.type === 'blindtest') return
+  // Rendu spécifique au QCM : q.options y est un tableau de TEXTES. Les
+  // autres types réutilisent parfois aussi q.options mais avec une forme
+  // différente ("intrus" : objets {id, image}) — un opt.trim() y plantait
+  // (TypeError: opt.trim is not a function), ce qui interrompait
+  // selectQuestion() EN PLEIN MILIEU et empêchait d'atteindre
+  // toggleTypeSections() juste après : le panneau restait bloqué sur
+  // l'ancien type pendant qu'une partie des champs (prompt, timer...) avait
+  // déjà changé — d'où l'impression de ne "jamais accéder" à une question
+  // intrus depuis la barre latérale (bug remonté par l'utilisateur). Liste
+  // blanche plutôt que liste noire ("sauf blindtest") : plus sûr pour
+  // n'importe quel futur type qui réutiliserait q.options différemment.
+  if (q.type !== 'mcq') return
   if (!q.options) q.options = []
 
   // q.correct (sauvegardé/envoyé au serveur) reste un tableau de TEXTES, mais
