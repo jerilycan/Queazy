@@ -87,6 +87,7 @@ const singleAttemptEl = document.getElementById('singleAttempt')
 const isPublicEl = document.getElementById('isPublic')
 const saveQuizBtn = document.getElementById('saveQuiz')
 const deleteQuizBtn = document.getElementById('deleteQuiz')
+const replayTutorialBtn = document.getElementById('replayTutorialBtn')
 const duplicateQuizBtn = document.getElementById('duplicateQuiz')
 const reportQuizBtn = document.getElementById('reportQuizBtn')
 const reportPopup = document.getElementById('reportPopup')
@@ -264,7 +265,7 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
-    addAssociationPairBtn, addTimelineEventBtn, intrusPhotosUploadInput,
+    addAssociationPairBtn, addTimelineEventBtn, intrusPhotosUploadInput, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
@@ -2148,6 +2149,35 @@ deleteQuizBtn.onclick = async () => {
     .catch(err => showToast(err.message, 'error'))
 }
 
+// --- Tutoriel de prise en main (visite guidée "spotlight", voir QzUI.tour
+// dans ui-widgets.js) : cible uniquement les zones TOUJOURS visibles quel
+// que soit le type de question sélectionné (jamais une section de détail
+// spécifique à un type comme #mcqSection, qui reste d-none la plupart du
+// temps) — reste donc valable peu importe l'état de l'éditeur au moment où
+// il se déclenche. Auto-affiché une fois (voir maybeStartEditorTour), rejoué
+// à volonté via le bouton #replayTutorialBtn.
+const EDITOR_TOUR_STORAGE_KEY = 'queazy_editor_tutorial_dismissed'
+const EDITOR_TOUR_STEPS = [
+  { target: '#title', title: 'Titre du quiz', text: 'Donne un nom à ton quiz — c\'est ce que tes joueurs verront pour le choisir.' },
+  { target: '#addQuestion', title: 'Ajouter une question', text: 'Clique ici pour ajouter une nouvelle question à ton quiz.' },
+  { target: '#questionList', title: 'Liste des questions', text: 'Toutes tes questions apparaissent ici. Glisse-les pour les réordonner, clique pour éditer, la croix pour supprimer.' },
+  { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
+  { target: '#qType', title: 'Type de question', text: '10 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, blind test, association, timeline, intrus... Chacun a sa propre zone de configuration juste en dessous, qui s\'adapte automatiquement à ton choix.' },
+  { target: '#qTimer', title: 'Temps imparti', text: 'Règle en secondes le temps laissé aux joueurs pour répondre, avec les boutons - et +.' },
+  { target: '#qExplanation', title: 'Explication (optionnelle)', text: 'Un texte affiché juste après la révélation de la bonne réponse, pour donner un peu de contexte.' },
+  { target: '#illustrationUpload', title: 'Illustration (optionnelle)', text: 'Ajoute une image au-dessus de la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },
+  { target: '#saveQuiz', title: 'Sauvegarder', text: 'N\'oublie pas de sauvegarder une fois ton quiz prêt !' }
+]
+const startEditorTour = (force) => {
+  if (window.QzUI) window.QzUI.tour(EDITOR_TOUR_STEPS, { storageKey: EDITOR_TOUR_STORAGE_KEY, force: !!force })
+}
+// Jamais pour un viewer en lecture seule (quiz d'un autre créateur) : le
+// tutoriel explique comment CRÉER, ça n'a pas de sens là où on ne peut rien
+// modifier — readOnly n'est confirmé qu'après la réponse Supabase (voir
+// init ci-dessous), d'où l'appel différé plutôt qu'ici directement.
+const maybeStartEditorTour = () => { if (!readOnly) startEditorTour(false) }
+if (replayTutorialBtn) replayTutorialBtn.onclick = () => startEditorTour(true)
+
 // --- Initialisation ---
 
 const init = () => {
@@ -2176,13 +2206,16 @@ const init = () => {
         if (!session || session.user.id !== data.owner_id) {
           applyReadOnly()
         }
+        maybeStartEditorTour()
       })
       .catch(() => {
         showToast('Erreur lors du chargement du quiz', 'error')
         resetToNew()
+        maybeStartEditorTour()
       })
   } else {
     resetToNew()
+    maybeStartEditorTour()
   }
   
   // Avatar profil

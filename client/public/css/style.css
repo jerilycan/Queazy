@@ -3129,6 +3129,78 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
 .qz-toast.is-error { background: linear-gradient(135deg, var(--color-danger) 0%, #b3123a 100%); color: white; border-color: transparent; }
 .qz-toast.is-success { background: linear-gradient(135deg, var(--tile-green) 0%, var(--tile-green-deep) 100%); color: white; border-color: transparent; }
 
+/* --- Visite guidée "spotlight" (tutoriel, voir QzUI.tour) ------------------
+   .qz-tour-hole ne découpe pas réellement un trou dans .qz-tour-backdrop :
+   c'est un élément POSITIONNÉ exactement sur la cible, transparent, dont
+   l'énorme box-shadow (9999px) assombrit tout le reste de l'écran autour de
+   lui — le "trou" est juste la zone que ce halo ne couvre pas. Plus simple
+   et plus robuste qu'un clip-path/masque SVG recalculé à chaque étape. */
+.qz-tour-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+}
+.qz-tour-hole {
+  position: fixed;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(5, 5, 15, 0.82);
+  border: 2px solid var(--color-accent);
+  pointer-events: none;
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+}
+.qz-tour-popup {
+  position: fixed;
+  width: min(340px, calc(100vw - 24px));
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-lg);
+  z-index: 2101;
+}
+.qz-tour-progress {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.qz-tour-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 20px;
+  margin: 0 0 8px;
+  color: var(--color-text);
+}
+.qz-tour-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  margin: 0 0 16px;
+}
+.qz-tour-skip-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: var(--space-md);
+}
+.qz-tour-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.qz-tour-actions .btn { height: 40px; padding: 0 16px; font-size: 14px; }
+.qz-tour-actions .qz-tour-close { margin-right: auto; }
+@media (max-width: 480px) {
+  .qz-tour-actions { flex-wrap: wrap; }
+  .qz-tour-actions .qz-tour-close { margin-right: 0; order: 3; flex-basis: 100%; text-align: center; }
+}
+
 /* ============================================================
    Responsive — placé en fin de fichier pour primer sur les
    définitions de base (même spécificité, ordre du fichier).

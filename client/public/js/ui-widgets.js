@@ -228,5 +228,136 @@
     }, 3200)
   }
 
-  window.QzUI = { enhanceSelect: enhanceSelect, confirm: qzConfirm, toast: qzToast }
+  // --- Visite guidée "spotlight" (tutoriel de prise en main) -----------------
+  // Overlay plein écran assombri avec un "trou" découpé autour de l'élément
+  // ciblé à chaque étape (technique du box-shadow géant sur .qz-tour-hole :
+  // évite un masque SVG/clip-path, la zone du trou reste visuellement nette
+  // sans bloquer les clics dessus) + une bulle d'explication repositionnée à
+  // côté, avec Précédent/Suivant/Passer et une case "Ne plus afficher"
+  // persistée en localStorage (une clé par tutoriel, fournie par l'appelant —
+  // permet plusieurs tutoriels indépendants sur des pages différentes).
+  // Pas de requestAnimationFrame ni de scroll "smooth" : le positionnement se
+  // calcule tout de suite après un scrollIntoView instantané, plus simple et
+  // plus robuste qu'attendre la fin d'une animation de scroll.
+  let tourEls = null
+  function ensureTour() {
+    if (tourEls) return tourEls
+    const backdrop = document.createElement('div')
+    backdrop.className = 'qz-tour-backdrop d-none'
+    const hole = document.createElement('div')
+    hole.className = 'qz-tour-hole'
+    const popup = document.createElement('div')
+    popup.className = 'qz-tour-popup'
+    popup.innerHTML =
+      '<div class="qz-tour-progress"></div>' +
+      '<h3 class="qz-tour-title"></h3>' +
+      '<p class="qz-tour-text"></p>' +
+      '<label class="qz-tour-skip-label">' +
+        '<input type="checkbox" class="qz-toggle-input qz-tour-skip-check" />' +
+        '<span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>' +
+        'Ne plus afficher ce tutoriel' +
+      '</label>' +
+      '<div class="qz-tour-actions">' +
+        '<button type="button" class="btn qz-tour-prev">Précédent</button>' +
+        '<button type="button" class="btn text-danger qz-tour-close">Passer</button>' +
+        '<button type="button" class="btn btn-primary qz-tour-next">Suivant</button>' +
+      '</div>'
+    backdrop.appendChild(hole)
+    backdrop.appendChild(popup)
+    document.body.appendChild(backdrop)
+    tourEls = { backdrop, hole, popup }
+    return tourEls
+  }
+
+  // qzTour(steps, { storageKey, force }) — steps: [{ target: '#id'|Element, title, text }, ...]
+  // Auto-ignoré si storageKey est déjà marquée "vue" en localStorage, sauf
+  // avec force:true (bouton "revoir le tutoriel" — ignore la préférence
+  // enregistrée pour CETTE ouverture, mais la case à cocher reste active :
+  // la cocher à nouveau pendant un replay forcé redésactive bien le tutoriel).
+  function qzTour(steps, opts) {
+    opts = opts || {}
+    const storageKey = opts.storageKey || 'qz_tour_dismissed'
+    if (!opts.force && localStorage.getItem(storageKey) === '1') return
+
+    const validSteps = (steps || [])
+      .map(s => ({ ...s, el: typeof s.target === 'string' ? document.querySelector(s.target) : s.target }))
+      .filter(s => s.el)
+    if (validSteps.length === 0) return
+
+    const { backdrop, hole, popup } = ensureTour()
+    const titleEl = popup.querySelector('.qz-tour-title')
+    const textEl = popup.querySelector('.qz-tour-text')
+    const progressEl = popup.querySelector('.qz-tour-progress')
+    const prevBtn = popup.querySelector('.qz-tour-prev')
+    const nextBtn = popup.querySelector('.qz-tour-next')
+    const closeBtn = popup.querySelector('.qz-tour-close')
+    const skipCheck = popup.querySelector('.qz-tour-skip-check')
+    skipCheck.checked = false
+
+    let idx = 0
+
+    const positionFor = (el) => {
+      const r = el.getBoundingClientRect()
+      const pad = 8
+      hole.style.top = (r.top - pad) + 'px'
+      hole.style.left = (r.left - pad) + 'px'
+      hole.style.width = (r.width + pad * 2) + 'px'
+      hole.style.height = (r.height + pad * 2) + 'px'
+
+      // Sous la cible si la place le permet, sinon au-dessus ; jamais hors
+      // écran horizontalement.
+      const popupRect = popup.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - r.bottom
+      const top = spaceBelow > popupRect.height + 24
+        ? r.bottom + pad + 12
+        : Math.max(12, r.top - pad - 12 - popupRect.height)
+      let left = r.left
+      if (left + popupRect.width > window.innerWidth - 12) left = window.innerWidth - popupRect.width - 12
+      if (left < 12) left = 12
+      popup.style.top = top + 'px'
+      popup.style.left = left + 'px'
+    }
+
+    const cleanup = () => {
+      backdrop.classList.add('d-none')
+      window.removeEventListener('resize', onResize)
+      document.removeEventListener('keydown', onKey)
+    }
+    const finish = () => {
+      if (skipCheck.checked) localStorage.setItem(storageKey, '1')
+      cleanup()
+      if (typeof opts.onFinish === 'function') opts.onFinish()
+    }
+
+    const render = () => {
+      const step = validSteps[idx]
+      step.el.scrollIntoView({ block: 'nearest' })
+      titleEl.textContent = step.title || ''
+      textEl.textContent = step.text || ''
+      progressEl.textContent = (idx + 1) + ' / ' + validSteps.length
+      prevBtn.disabled = idx === 0
+      nextBtn.textContent = idx === validSteps.length - 1 ? 'Terminer' : 'Suivant'
+      positionFor(step.el)
+    }
+
+    const onResize = () => positionFor(validSteps[idx].el)
+    const onKey = (e) => {
+      if (e.key === 'Escape') finish()
+      else if (e.key === 'ArrowRight') nextBtn.click()
+      else if (e.key === 'ArrowLeft' && !prevBtn.disabled) prevBtn.click()
+    }
+
+    prevBtn.onclick = () => { if (idx > 0) { idx--; render() } }
+    nextBtn.onclick = () => { if (idx < validSteps.length - 1) { idx++; render() } else finish() }
+    closeBtn.onclick = finish
+
+    window.addEventListener('resize', onResize)
+    document.addEventListener('keydown', onKey)
+
+    backdrop.classList.remove('d-none')
+    idx = 0
+    render()
+  }
+
+  window.QzUI = { enhanceSelect: enhanceSelect, confirm: qzConfirm, toast: qzToast, tour: qzTour }
 })()
