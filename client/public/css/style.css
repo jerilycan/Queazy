@@ -70,32 +70,30 @@
   --space-xs: 8px;
 }
 
-/* Thème clair — v2, refonte complète de la palette sur spec détaillée de
-   l'utilisateur (la v1 adoucie restait perçue comme "un dégradé de lavande
-   partout", sans écarts de luminosité nets entre fond/conteneur/carte/
-   contrôle : un thème sombre décoloré plutôt qu'un vrai thème clair).
-   Logique demandée : FOND (quasi blanc, à peine teinté) → CONTENEUR (blanc
-   pur) → CARTE (blanc cassé) → CONTRÔLE (légèrement plus contrasté que son
-   parent) → BORDURE (grise-violette visible) → ACCENT (rose/violet vifs,
-   réservés aux boutons/liens/highlights, jamais étalés en fond). Seuls les
-   tokens ci-dessous sont redéfinis : les familles --tile-* et --color-cyan
-   et le thème sombre (bloc :root plus haut) restent intouchés — --tile-blue/--tile-red
-   (boutons Créer/Rejoindre) en particulier sont PARTAGÉS entre les deux
-   thèmes, donc volontairement laissés tels quels ici pour ne rien changer
-   côté sombre. */
+/* Thème clair — v3 : la v2 (fond quasi blanc + cartes blanches) a été jugée
+   trop pastel, trop plate, "appli enfant" une fois comparée au thème sombre.
+   Palette resserrée sur les teintes précises fournies par l'utilisateur (5-6
+   couleurs maîtrisées, pas de nuances supplémentaires). Hiérarchie : fond à
+   peine teinté violet/rose → grand conteneur blanc plat (le relief vient de
+   l'ombre, pas d'un dégradé interne) → cartes légèrement violettes
+   (--color-surface, réutilisé aussi par les blocs mode équipe/vitesse) →
+   contrôles quasi blancs à l'intérieur (--color-bg-alt). En plus des tokens
+   ci-dessous, 2 overrides scopés juste après (carte organisateur, boutons
+   Créer/Rejoindre) pour des valeurs précises que les tokens partagés ne
+   couvrent pas. Thème sombre et familles tile/cyan non touchés. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-bg: #f5f3fa;
-  --color-bg-deep: #eae6f3;
-  --color-bg-2: #f5f3fa;
+  --color-bg: #f4f1fa;
+  --color-bg-deep: #f5f7fc;
+  --color-bg-2: #f4f1fa;
   --color-card: #ffffff;
-  --color-card-2: #fbfafd;
-  --color-bg-alt: #f0ecf8;
-  --color-surface: #faf9fd;
-  --color-surface-2: #e8e2f3;
+  --color-card-2: #ffffff;
+  --color-bg-alt: #ffffff;
+  --color-surface: #f7f4fc;
+  --color-surface-2: #e9e0f5;
   --color-text: #211a3a;
   --color-text-muted: #625b78;
-  --color-border: #ddd8e8;
+  --color-border: #d8d2e7;
   --color-accent: #f725a8;
   --color-accent-rgb: 247,37,168;
   --color-accent-soft: rgba(247,37,168,0.14);
@@ -104,6 +102,30 @@
   --shadow-sm: 0 4px 12px rgba(35,25,65,0.08);
   --shadow-md: 0 16px 40px rgba(35,25,65,0.16);
   --shadow-lg: 0 20px 48px rgba(35,25,65,0.22);
+}
+/* Carte organisateur : seul endroit où "carte" doit visiblement trancher
+   sur le grand conteneur blanc (--color-card) qui l'entoure ailleurs dans
+   l'appli — d'où un override scopé plutôt qu'un token partagé. Ligne
+   supérieure déjà en --color-accent (pas besoin d'override, suit la
+   valeur ci-dessus automatiquement). Ombre plus présente que le
+   --shadow-md par défaut des autres cartes, sur demande explicite. */
+:root[data-theme="light"] .lobby-host-card {
+  background: #f9f7fd;
+  border-color: #d8d2e7;
+  box-shadow: 0 20px 44px rgba(35,25,65,0.2);
+}
+/* Boutons Créer/Rejoindre : --tile-blue/--tile-red pilotent aussi les
+   tuiles QCM, badges d'équipe, barres du podium... — les redéfinir aurait
+   changé bien plus que ces deux boutons, et dans le thème sombre en plus
+   (tokens partagés, jamais scopés par thème). Override direct sur les
+   sélecteurs des boutons à la place, uniquement en thème clair. */
+:root[data-theme="light"] .btn.btn-nav-main {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  box-shadow: 0 3px 0 #1d4ed8;
+}
+:root[data-theme="light"] .btn.btn-nav-main:nth-child(even) {
+  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
+  box-shadow: 0 3px 0 #be123c;
 }
 
 * { box-sizing: border-box; }
@@ -129,16 +151,16 @@ body {
   min-height: 100vh;
 }
 
-/* Mêmes 3 halos de couleur que le thème sombre (identité "gaming"), juste
-   des opacités plus faibles pour rester "à peine teinté" sur fond quasi
-   blanc. Le 3e halo (blanc à 0.08 dans la v1) était devenu invisible une
-   fois le fond lui-même presque blanc — remplacé par un halo violet
-   (--color-accent-2) pour rester un vrai 3e accent visible. */
+/* v3 : la v2 (3 halos rose/cyan/violet à 0.12-0.20 d'opacité) donnait
+   l'impression d'un fond "rose puis bleu" bien visible — retour explicite
+   de l'utilisateur : le dégradé doit être presque imperceptible. Plus que
+   2 halos (rose en haut à gauche, violet en bas à droite, coins opposés
+   pour rester discrets et équilibrés), cyan retiré (hors des 5-6 couleurs
+   de la palette cible), opacités divisées par 3 environ. */
 :root[data-theme="light"] body {
   background:
-    radial-gradient(circle at 15% 20%, rgba(var(--color-accent-rgb),0.20) 0%, transparent 45%),
-    radial-gradient(circle at 85% 15%, rgba(47,227,255,0.16) 0%, transparent 40%),
-    radial-gradient(circle at 50% 90%, rgba(var(--color-accent-2-rgb),0.12) 0%, transparent 50%),
+    radial-gradient(circle at 12% 15%, rgba(var(--color-accent-rgb),0.07) 0%, transparent 40%),
+    radial-gradient(circle at 88% 85%, rgba(var(--color-accent-2-rgb),0.06) 0%, transparent 40%),
     linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
 }
 
