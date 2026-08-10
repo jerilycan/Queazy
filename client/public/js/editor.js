@@ -235,7 +235,11 @@ const zoomGuessZoomInput = document.getElementById('zoomGuessZoomInput')
 const zoomGuessZoomMinusBtn = document.getElementById('zoomGuessZoomMinus')
 const zoomGuessZoomPlusBtn = document.getElementById('zoomGuessZoomPlus')
 const ZOOM_GUESS_MIN = 2
-const ZOOM_GUESS_MAX = 8
+// Plafond relevé de 8 à 25 (demande explicite) : à 8x, une zone assez unie
+// de l'image (peau, cheveux...) reste souvent reconnaissable — l'idée du
+// type est de pouvoir monter assez haut pour ne voir qu'une tache de
+// couleur au tout début, pas déjà un trait du visage.
+const ZOOM_GUESS_MAX = 25
 const ZOOM_GUESS_DEFAULT = 4
 
 // Question "blind test" : upload du morceau + recadrage (début/durée) en un
