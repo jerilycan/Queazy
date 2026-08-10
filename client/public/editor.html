@@ -152,6 +152,13 @@
               <!-- Rempli par JS -->
             </div>
             <button id="addOption" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une option</button>
+
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label mt-16">
+              <input id="mcqRequireAllToggle" type="checkbox" checked class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+              Toutes les bonnes réponses doivent être cochées pour valider
+            </label>
+            <p class="text-muted font-13 mt-8">Ne compte que si plusieurs réponses sont cochées comme correctes. Désactivé : cocher au moins une bonne réponse (et aucune mauvaise) suffit.</p>
           </div>
 
           <div id="graduationSection" class="d-flex gap-lg d-none">

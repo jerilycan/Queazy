@@ -2738,6 +2738,12 @@ const emitQuestion = (index) => {
     // morceau (ex. générique de dessin animé). Le champ artiste n'est alors
     // ni affiché côté joueur ni jugé côté serveur (voir answer:submit).
     titleOnly: q.type === 'blindtest' ? !!q.titleOnly : undefined,
+    // QCM à plusieurs bonnes réponses : undefined/true = il faut cocher
+    // exactement l'ensemble des bonnes réponses (comportement historique,
+    // jamais cassé pour un quiz déjà sauvegardé) ; false = au moins une
+    // bonne réponse cochée (et aucune mauvaise) suffit à valider — voir
+    // server/index.js answer:submit pour le calcul du score.
+    requireAllCorrect: q.type === 'mcq' ? (q.requireAllCorrect !== false) : undefined,
     singleAttempt: currentSingleAttempt,
     // Texte optionnel affiché SEULEMENT à la révélation (voir server/index.js,
     // jamais diffusé dans question:show — sinon lisible en devtools avant

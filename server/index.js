@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.24.3'
+const APP_VERSION = '1.25.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -881,7 +881,7 @@ const start = async () => {
       // réglage entre deux questions (ce que le client bloque déjà une fois
       // la partie lancée, voir game:setSpeedLevel, mais on ne fait jamais
       // confiance qu'au serveur pour ça).
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -1252,6 +1252,51 @@ const start = async () => {
         return
       }
 
+      if (q.type === 'mcq') {
+        // Réponse envoyée par le client : options cochées séparées par ", "
+        // (voir submitCurrentAnswer côté index.js). q.requireAllCorrect
+        // (réglage par question, voir editor.js) tranche entre deux
+        // interprétations quand PLUSIEURS options sont marquées correctes à
+        // la création : par défaut (undefined = ancien comportement, jamais
+        // cassé pour un quiz existant), il faut cocher exactement l'ensemble
+        // des bonnes réponses, ni plus ni moins ; réglage désactivé
+        // explicitement (false) : au moins une bonne réponse cochée, et
+        // aucune mauvaise, suffit à valider.
+        const submitted = String(payload?.content || '').split(',').map(s => s.trim()).filter(Boolean)
+        const correctList = Array.isArray(q.correct) ? q.correct : []
+        const correctSet = new Set(correctList)
+        const submittedSet = new Set(submitted)
+        const hasAnyWrong = submitted.some(s => !correctSet.has(s))
+        const isCorrect = q.requireAllCorrect === false
+          ? (submitted.some(s => correctSet.has(s)) && !hasAnyWrong)
+          : (correctList.every(c => submittedSet.has(c)) && !hasAnyWrong && submittedSet.size === correctSet.size)
+        const p = room.players.get(socket.id)
+        if (isCorrect) {
+          const delta = pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor)
+          const total = (room.scores.get(socket.id) || 0) + delta
+          room.scores.set(socket.id, total)
+          if (p?.token) {
+            room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
+            if (q.historyEntry) {
+              q.historyEntry.results[p.token] = 'correct'
+              q.historyEntry.deltas[p.token] = delta
+              q.historyEntry.answers[p.token] = payload?.content || ''
+            }
+          }
+          q.answered?.add(socket.id)
+          q.submissions?.set(socket.id, 'correct')
+          io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        } else {
+          q.submissions?.set(socket.id, 'incorrect')
+          if (p?.token && q.historyEntry) {
+            q.historyEntry.results[p.token] = 'incorrect'
+            q.historyEntry.answers[p.token] = payload?.content || ''
+          }
+        }
+        emitProgress()
+        return
+      }
+
       const res = fuzzy(payload?.content || '', q.correct)
 
       if (res.ok && res.exact) {
@@ -1272,14 +1317,15 @@ const start = async () => {
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
       } else {
-        // Pour les QCM ('mcq'), Vrai/Faux ('truefalse') et Intrus ('intrus'),
-        // c'est binaire : si ce n'est pas EXACT, c'est FAUX. On ne passe
-        // JAMAIS par la modération. "intrus" réutilise entièrement ce chemin
-        // (une seule bonne réponse dans q.correct, comme truefalse) plutôt
-        // que d'ajouter un système dédié — le chemin "correct" juste au-dessus
+        // Pour Vrai/Faux ('truefalse') et Intrus ('intrus'), c'est binaire :
+        // si ce n'est pas EXACT, c'est FAUX. On ne passe JAMAIS par la
+        // modération. "intrus" réutilise entièrement ce chemin (une seule
+        // bonne réponse dans q.correct, comme truefalse) plutôt que
+        // d'ajouter un système dédié — le chemin "correct" juste au-dessus
         // (res.ok && res.exact) est déjà 100% générique, aucun changement
-        // requis là-bas.
-        if (q.type === 'mcq' || q.type === 'truefalse' || q.type === 'intrus') {
+        // requis là-bas. "mcq" a désormais sa propre branche dédiée plus
+        // haut (voir q.requireAllCorrect) : n'atteint jamais ce code-ci.
+        if (q.type === 'truefalse' || q.type === 'intrus') {
           q.submissions?.set(socket.id, 'incorrect')
           const p = room.players.get(socket.id)
           if (p?.token && q.historyEntry) {

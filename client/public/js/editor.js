@@ -135,6 +135,19 @@ if (timerMinus && timerPlus && qTimer) {
 const mcqSection = document.getElementById('mcqSection')
 const optionsList = document.getElementById('optionsList')
 const addOptionBtn = document.getElementById('addOption')
+// "Toutes les bonnes réponses doivent être cochées pour valider" (QCM à
+// plusieurs bonnes réponses) : q.requireAllCorrect, undefined/true = ancien
+// comportement (ensemble exact attendu, jamais cassé pour un quiz déjà
+// sauvegardé), false = au moins une bonne cochée (et aucune mauvaise) suffit
+// — voir server/index.js answer:submit pour le calcul réel du score.
+const mcqRequireAllToggle = document.getElementById('mcqRequireAllToggle')
+if (mcqRequireAllToggle) {
+  mcqRequireAllToggle.onchange = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    q.requireAllCorrect = mcqRequireAllToggle.checked
+  }
+}
 // Bornes homogènes avec les autres types (association/timeline/intrus, voir
 // plus bas) : sans plafond, rien n'empêchait d'empiler des dizaines
 // d'options QCM (constaté : 12+ sans le moindre garde-fou) — 8 reste
@@ -321,7 +334,7 @@ const applyReadOnly = () => {
     document.getElementById('gradToleranceMinus'), document.getElementById('gradTolerancePlus'),
     document.getElementById('audioStartMinus'), document.getElementById('audioStartPlus'),
     document.getElementById('audioDurationMinus'), document.getElementById('audioDurationPlus'),
-    btTitleOnlyToggle
+    btTitleOnlyToggle, mcqRequireAllToggle
   ]
   controls.forEach(el => { if (el) el.disabled = true })
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
@@ -1100,6 +1113,7 @@ const selectQuestion = (index) => {
   populateIllustrationFields(q)
   populateZoomGuessFields(q)
   populateAudioFields(q)
+  if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
 
   renderOptions()
   renderCorrects()
@@ -1993,6 +2007,16 @@ qType.onchange = () => {
     if (q.max === undefined) q.max = 100
     if (!q.correct || !q.correct[0]) q.correct = ['50']
     populateGradFields(q)
+  } else if (qType.value === 'mcq') {
+    // q.options venant d'un autre type peut avoir une forme totalement
+    // différente ("intrus" : objets {id, image}) : on repart sur une liste
+    // de textes classique, sauf s'il en a déjà une (ex. retour sur ce
+    // type) — sans ce garde-fou, renderOptions() plante sur opt.trim()
+    // (objet au lieu d'une chaîne), même bug que celui déjà corrigé pour
+    // la navigation vers "intrus" depuis la barre latérale.
+    if (!Array.isArray(q.options) || !q.options.every(o => typeof o === 'string')) q.options = []
+    if (!Array.isArray(q.correct)) q.correct = []
+    if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
   } else if (qType.value === 'truefalse') {
     q.options = ['Vrai', 'Faux']
     if (q.correct?.[0] !== 'Vrai' && q.correct?.[0] !== 'Faux') q.correct = ['Vrai']
@@ -2091,6 +2115,7 @@ deleteQuestionBtn.onclick = () => {
   populateIllustrationFields(q)
   populateZoomGuessFields(q)
   populateAudioFields(q)
+  if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
 
   renderOptions()
   renderCorrects()
