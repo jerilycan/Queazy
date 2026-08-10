@@ -991,9 +991,27 @@ const setImageZoom = (z) => {
 // en page sur une image très haute (object-fit: contain absorbe l'écart).
 const setupImageFrame = () => {
   if (!imageWrap || !imageViewport || !imageImg) return
-  const w = imageViewport.getBoundingClientRect().width || IMAGE_ZOOM_BASE_WIDTH
+  const viewportW = imageViewport.getBoundingClientRect().width || IMAGE_ZOOM_BASE_WIDTH
   const ratio = (imageImg.naturalWidth && imageImg.naturalHeight) ? imageImg.naturalWidth / imageImg.naturalHeight : (4 / 3)
-  const h = Math.min(IMAGE_FRAME_MAX_HEIGHT, Math.round(w / ratio))
+  let w = viewportW
+  let h = Math.round(w / ratio)
+  // Sur une image PORTRAIT (plus haute que large), h dépassait souvent
+  // IMAGE_FRAME_MAX_HEIGHT et se retrouvait plafonné SEUL — le cadre
+  // n'avait alors plus le même ratio que l'image, et #imageImg (object-fit:
+  // contain) la faisait flotter en "lettrebox" à l'intérieur, avec du vide
+  // de chaque côté. Le calque de clic et le SVG de révélation, eux,
+  // recouvrent tout le CADRE (coordonnées 0-1 dessus, pas sur la zone
+  // réellement visible de l'image) : ils se retrouvaient donc décalés par
+  // rapport à l'image elle-même, parfois carrément visibles à côté d'elle
+  // (bug remonté par l'utilisateur, capture à l'appui — jamais reproduit
+  // côté éditeur, qui ne plafonne que la largeur, jamais la hauteur). Fix :
+  // si la hauteur dépasse le plafond, on réduit la LARGEUR EN PROPORTION
+  // pour garder le cadre à l'exact ratio de l'image — plus jamais de
+  // lettrebox, donc plus jamais de décalage.
+  if (h > IMAGE_FRAME_MAX_HEIGHT) {
+    h = IMAGE_FRAME_MAX_HEIGHT
+    w = Math.round(h * ratio)
+  }
   imageFrameW = w
   imageFrameH = h
   imageWrap.style.width = w + 'px'
@@ -1648,6 +1666,13 @@ const hideQuizSelectPopup = () => {
   }
 }
 
+const formatQuizUpdatedAt = (iso) => {
+  if (!iso) return ''
+  try {
+    return 'Modifié le ' + new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  } catch { return '' }
+}
+
 // Load real quizzes from API
 const loadQuizzes = async () => {
   quizList.innerHTML = '<p class="text-muted">Chargement des quiz...</p>'
@@ -1657,12 +1682,18 @@ const loadQuizzes = async () => {
       quizList.innerHTML = '<p class="text-muted">Connecte-toi pour sélectionner tes quiz.</p>'
       return
     }
+    // "questions" volontairement PAS demandé ici : colonne JSONB qui embarque
+    // toutes les images/audio en base64 de chaque question (parfois
+    // plusieurs Mo par quiz) — la charger entière pour CHAQUE quiz de la
+    // liste juste pour afficher "X questions" rendait ce popup très lent
+    // dès qu'un compte avait plusieurs quiz riches en médias (perf remontée
+    // par l'utilisateur). "Modifié le ..." (déjà quasi gratuit) à la place.
     const { data } = await window.supabaseClient
       .from('quizzes')
-      .select('id,title,questions')
+      .select('id,title,updated_at')
       .eq('owner_id', session.user.id)
       .order('updated_at', { ascending: false })
-    const mapped = (data || []).map(q => ({ id: q.id, title: q.title, count: Array.isArray(q.questions) ? q.questions.length : 0 }))
+    const mapped = (data || []).map(q => ({ id: q.id, title: q.title, updatedAt: q.updated_at }))
     displayQuizzes(mapped)
   } catch (error) {
     console.error('Erreur lors du chargement des quiz:', error)
@@ -1691,7 +1722,7 @@ const displayQuizzes = (quizzes) => {
     titleEl.textContent = quiz.title
     const countEl = document.createElement('p')
     countEl.className = 'text-muted font-14'
-    countEl.textContent = `${quiz.count || 0} questions`
+    countEl.textContent = formatQuizUpdatedAt(quiz.updatedAt)
     infoDiv.appendChild(titleEl)
     infoDiv.appendChild(countEl)
     const radio = document.createElement('input')

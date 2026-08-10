@@ -1420,6 +1420,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 #imageViewport {
   overflow: hidden;
   touch-action: none; /* le geste de glisser est entièrement géré en JS (pointer events) */
+  /* Une image portrait (voir setupImageFrame, index.js) donne un cadre plus
+     étroit que la largeur dispo, pour garder son ratio exact — sans ça, il
+     collerait au bord gauche au lieu de rester centré comme une image
+     paysage classique. */
+  display: flex;
+  justify-content: center;
 }
 #imageWrap {
   width: auto; /* posé en JS en pixels, voir setupImageFrame */

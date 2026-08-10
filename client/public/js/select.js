@@ -91,6 +91,13 @@ if (savedAvatarPreview && profileAvatarPreviewEl) {
   profileAvatarPreviewEl.style.backgroundPosition = 'center'
 }
 
+const formatUpdatedAt = (iso) => {
+  if (!iso) return ''
+  try {
+    return 'Modifié le ' + new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  } catch { return '' }
+}
+
 const render = (arr, isMineTab = true) => {
   list.innerHTML = ''
   if (!arr || arr.length === 0) {
@@ -104,7 +111,6 @@ const render = (arr, isMineTab = true) => {
     return
   }
   arr.forEach(q => {
-    const questionCount = Array.isArray(q.questions) ? q.questions.length : (q.count || 0)
     const card = document.createElement('div')
     card.className = 'card quiz-card'
     card.style.cursor = 'pointer'
@@ -126,7 +132,7 @@ const render = (arr, isMineTab = true) => {
     const meta = document.createElement('div')
     meta.style.fontSize = '14px'
     meta.style.color = 'var(--color-text-muted)'
-    meta.textContent = questionCount + ' questions'
+    meta.textContent = formatUpdatedAt(q.updated_at)
     
     card.appendChild(title)
     card.appendChild(meta)
@@ -148,7 +154,15 @@ const loadMine = async () => {
   }
   const { data, error } = await sb
     .from('quizzes')
-    .select('id,title,questions,updated_at')
+    // "questions" volontairement PAS demandé ici : c'est une colonne JSONB
+    // qui embarque toutes les images/audio en base64 de chaque question
+    // (parfois plusieurs Mo par quiz) — la charger entière pour CHAQUE quiz
+    // de la liste juste pour compter ses questions rendait cet écran très
+    // lent, surtout avec plusieurs quiz riches en médias (perf remontée par
+    // l'utilisateur). Le nombre de questions n'est donc plus affiché ici
+    // (repère "Modifié le ..." à la place, déjà disponible) ; il reste
+    // consultable en ouvrant le quiz.
+    .select('id,title,updated_at')
     .eq('owner_id', session.user.id)
     .order('updated_at', { ascending: false })
   render(data || [], true)
@@ -157,7 +171,15 @@ const loadMine = async () => {
 const loadPublic = async () => {
   const { data, error } = await sb
     .from('quizzes')
-    .select('id,title,questions,updated_at')
+    // "questions" volontairement PAS demandé ici : c'est une colonne JSONB
+    // qui embarque toutes les images/audio en base64 de chaque question
+    // (parfois plusieurs Mo par quiz) — la charger entière pour CHAQUE quiz
+    // de la liste juste pour compter ses questions rendait cet écran très
+    // lent, surtout avec plusieurs quiz riches en médias (perf remontée par
+    // l'utilisateur). Le nombre de questions n'est donc plus affiché ici
+    // (repère "Modifié le ..." à la place, déjà disponible) ; il reste
+    // consultable en ouvrant le quiz.
+    .select('id,title,updated_at')
     .eq('is_public', true)
     .order('updated_at', { ascending: false })
   render(data || [], false)
