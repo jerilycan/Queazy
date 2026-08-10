@@ -1461,9 +1461,12 @@ const stopBlindTestAudio = () => {
 const revealBlindTestAnswer = (correctTitle, correctArtist) => {
   if (!revealAnswerText) return
   const parts = []
-  parts.push(`Bonne réponse : ${correctTitle || '?'} — ${correctArtist || '?'}`)
+  // Pas d'artiste attendu pour ce morceau (voir emitQuestion, titleOnly) :
+  // on n'affiche que le titre, jamais "Titre — ?" ni "Titre — " (retour
+  // utilisateur : ça laissait croire à tort qu'un artiste était attendu).
+  parts.push(correctArtist ? `Bonne réponse : ${correctTitle || '?'} — ${correctArtist}` : `Bonne réponse : ${correctTitle || '?'}`)
   if (myBlindTestSubmission && (myBlindTestSubmission.title || myBlindTestSubmission.artist)) {
-    parts.push(`Toi : ${myBlindTestSubmission.title || '—'} / ${myBlindTestSubmission.artist || '—'}`)
+    parts.push(correctArtist ? `Toi : ${myBlindTestSubmission.title || '—'} / ${myBlindTestSubmission.artist || '—'}` : `Toi : ${myBlindTestSubmission.title || '—'}`)
   }
   revealAnswerText.innerHTML = parts.map(p => `<div>${p.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>`).join('')
   revealAnswerText.classList.remove('d-none')
@@ -2774,7 +2777,13 @@ const emitQuestion = (index) => {
     // "Titre uniquement" (voir editor.js) : pas d'artiste attendu pour ce
     // morceau (ex. générique de dessin animé). Le champ artiste n'est alors
     // ni affiché côté joueur ni jugé côté serveur (voir answer:submit).
-    titleOnly: q.type === 'blindtest' ? !!q.titleOnly : undefined,
+    // En plus du réglage explicite, on regarde aussi si un artiste a
+    // vraiment été renseigné dans le quiz : un vieux quiz sauvegardé avant
+    // l'ajout de cette case (q.titleOnly === undefined) mais dont l'artiste
+    // est resté vide affichait quand même le champ "Artiste" côté joueur —
+    // qui n'avait alors aucune chance de le remplir juste, le champ étant
+    // dupé pour rien (retour utilisateur : "ça dupe le joueur").
+    titleOnly: q.type === 'blindtest' ? (!!q.titleOnly || !(Array.isArray(q.correct?.artist) && q.correct.artist.some(a => (a || '').trim()))) : undefined,
     // QCM à plusieurs bonnes réponses : undefined/true = il faut cocher
     // exactement l'ensemble des bonnes réponses (comportement historique,
     // jamais cassé pour un quiz déjà sauvegardé) ; false = au moins une
