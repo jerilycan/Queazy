@@ -135,9 +135,16 @@ if (timerMinus && timerPlus && qTimer) {
 const mcqSection = document.getElementById('mcqSection')
 const optionsList = document.getElementById('optionsList')
 const addOptionBtn = document.getElementById('addOption')
+// Bornes homogènes avec les autres types (association/timeline/intrus, voir
+// plus bas) : sans plafond, rien n'empêchait d'empiler des dizaines
+// d'options QCM (constaté : 12+ sans le moindre garde-fou) — 8 reste
+// largement assez pour un quiz jouable, et cohérent d'un type à l'autre.
+const MCQ_MIN_OPTIONS = 2
+const MCQ_MAX_OPTIONS = 8
 const correctSection = document.getElementById('correctSection')
 const correctList = document.getElementById('correctList')
 const addCorrectBtn = document.getElementById('addCorrect')
+const FREE_MAX_ANSWERS = 8
 const deleteQuestionBtn = document.getElementById('deleteQuestion')
 const qIndexLabel = document.getElementById('qIndexLabel')
 const correctLabel = document.getElementById('correctLabel')
@@ -155,6 +162,8 @@ const tfFalseBtn = document.getElementById('tfFalseBtn')
 const orderSection = document.getElementById('orderSection')
 const orderEditList = document.getElementById('orderEditList')
 const addOrderItemBtn = document.getElementById('addOrderItem')
+const ORDER_MIN_ITEMS = 2
+const ORDER_MAX_ITEMS = 8
 
 const associationSection = document.getElementById('associationSection')
 const associationEditList = document.getElementById('associationEditList')
@@ -1040,6 +1049,10 @@ const renderOptions = () => {
         q.correct[cIdx] = val
       }
     }, () => {
+      if (q.options.length <= MCQ_MIN_OPTIONS) {
+        showToast(`Il faut au moins ${MCQ_MIN_OPTIONS} options`, 'error')
+        return
+      }
       const val = q.options[idx]
       q.options.splice(idx, 1)
       const cIdx = q.correct.indexOf(val)
@@ -1198,8 +1211,8 @@ const renderOrderItems = () => {
       del.className = 'btn-icon btn-danger'
       del.innerHTML = '&times;'
       del.onclick = () => {
-        if (q.correct.length <= 2) {
-          showToast('Il faut au moins 2 éléments à ordonner', 'error')
+        if (q.correct.length <= ORDER_MIN_ITEMS) {
+          showToast(`Il faut au moins ${ORDER_MIN_ITEMS} éléments à ordonner`, 'error')
           return
         }
         q.correct.splice(idx, 1)
@@ -1216,6 +1229,10 @@ if (addOrderItemBtn) {
   addOrderItemBtn.onclick = () => {
     if (!questions[activeIndex]) return
     if (!Array.isArray(questions[activeIndex].correct)) questions[activeIndex].correct = []
+    if (questions[activeIndex].correct.length >= ORDER_MAX_ITEMS) {
+      showToast(`Maximum ${ORDER_MAX_ITEMS} éléments`, 'error')
+      return
+    }
     questions[activeIndex].correct.push('')
     renderOrderItems()
   }
@@ -1862,11 +1879,19 @@ deleteQuestionBtn.onclick = () => {
 }
 
 addOptionBtn.onclick = () => {
+  if (questions[activeIndex].options.length >= MCQ_MAX_OPTIONS) {
+    showToast(`Maximum ${MCQ_MAX_OPTIONS} options`, 'error')
+    return
+  }
   questions[activeIndex].options.push('')
   renderOptions()
 }
 
 addCorrectBtn.onclick = () => {
+  if (questions[activeIndex].correct.length >= FREE_MAX_ANSWERS) {
+    showToast(`Maximum ${FREE_MAX_ANSWERS} réponses acceptées`, 'error')
+    return
+  }
   questions[activeIndex].correct.push('')
   renderCorrects()
 }
