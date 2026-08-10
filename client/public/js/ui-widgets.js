@@ -332,16 +332,43 @@
       hole.style.width = (r.width + pad * 2) + 'px'
       hole.style.height = (r.height + pad * 2) + 'px'
 
-      // Sous la cible si la place le permet, sinon au-dessus ; jamais hors
-      // écran horizontalement.
+      // 4 positions candidates (dessous / dessus / droite / gauche de la
+      // cible), essayées dans cet ordre : la première qui a vraiment la
+      // place NÉCESSAIRE est retenue. Indispensable pour une cible haute et
+      // étroite (ex. #questionList, une sidebar aussi haute que l'écran) où
+      // ni "dessous" ni "dessus" ne peuvent jamais suffire — sans ce repli
+      // latéral, l'encart était plaqué en haut de l'écran par défaut,
+      // par-dessus la moitié du halo qu'il est censé expliquer.
       const popupRect = popup.getBoundingClientRect()
-      const spaceBelow = window.innerHeight - r.bottom
-      const top = spaceBelow > popupRect.height + 24
-        ? r.bottom + pad + 12
-        : Math.max(stickyTopClearance(), r.top - pad - 12 - popupRect.height)
-      let left = r.left
-      if (left + popupRect.width > window.innerWidth - 12) left = window.innerWidth - popupRect.width - 12
-      if (left < 12) left = 12
+      const topClear = stickyTopClearance()
+      const GAP = 12, EDGE = 12
+      const clampH = (x) => Math.min(Math.max(x, EDGE), window.innerWidth - popupRect.width - EDGE)
+      const clampV = (y) => Math.min(Math.max(y, topClear), window.innerHeight - popupRect.height - EDGE)
+
+      const spaceBelow = window.innerHeight - r.bottom - EDGE
+      const spaceAbove = r.top - topClear - EDGE
+      const spaceRight = window.innerWidth - r.right - EDGE
+      const spaceLeft = r.left - EDGE
+
+      let top, left
+      if (spaceBelow >= popupRect.height + GAP) {
+        top = r.bottom + pad + GAP
+        left = clampH(r.left)
+      } else if (spaceAbove >= popupRect.height + GAP) {
+        top = r.top - pad - GAP - popupRect.height
+        left = clampH(r.left)
+      } else if (spaceRight >= popupRect.width + GAP) {
+        top = clampV(r.top)
+        left = r.right + pad + GAP
+      } else if (spaceLeft >= popupRect.width + GAP) {
+        top = clampV(r.top)
+        left = r.left - pad - GAP - popupRect.width
+      } else {
+        // Dernier recours (cible géante dans les deux sens) : au plus près
+        // sans sortir de l'écran, quitte à effleurer un bord du halo.
+        top = clampV(r.bottom + pad + GAP)
+        left = clampH(r.left)
+      }
       popup.style.top = top + 'px'
       popup.style.left = left + 'px'
     }
