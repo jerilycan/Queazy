@@ -70,30 +70,40 @@
   --space-xs: 8px;
 }
 
-/* Thème clair — même identité néon (accents magenta/violet/cyan, tuiles vives),
-   mais chrome clair. Fond violet vif + cartes quasi blanches à l'origine :
-   l'écart de luminosité/saturation entre les deux était trop extrême (effet
-   de contraste simultané : un blanc quasi pur a l'air encore plus agressif
-   collé à un violet saturé) — remonté au retour utilisateur "le blanc est
-   trop agressif". Les deux bouts sont resserrés : fond moins saturé/moins
-   sombre, cartes légèrement tintées (lavande, pas blanc) plutôt que quasi
-   blanches — garde l'identité colorée sans éblouir sur de grandes surfaces. */
+/* Thème clair — v2, refonte complète de la palette sur spec détaillée de
+   l'utilisateur (la v1 adoucie restait perçue comme "un dégradé de lavande
+   partout", sans écarts de luminosité nets entre fond/conteneur/carte/
+   contrôle : un thème sombre décoloré plutôt qu'un vrai thème clair).
+   Logique demandée : FOND (quasi blanc, à peine teinté) → CONTENEUR (blanc
+   pur) → CARTE (blanc cassé) → CONTRÔLE (légèrement plus contrasté que son
+   parent) → BORDURE (grise-violette visible) → ACCENT (rose/violet vifs,
+   réservés aux boutons/liens/highlights, jamais étalés en fond). Seuls les
+   tokens ci-dessous sont redéfinis : les familles --tile-* et --color-cyan
+   et le thème sombre (bloc :root plus haut) restent intouchés — --tile-blue/--tile-red
+   (boutons Créer/Rejoindre) en particulier sont PARTAGÉS entre les deux
+   thèmes, donc volontairement laissés tels quels ici pour ne rien changer
+   côté sombre. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-bg: #7a56b8;
-  --color-bg-deep: #4a3480;
-  --color-bg-2: #7a56b8;
-  --color-card: #f3eefa;
-  --color-card-2: #e8dff5;
-  --color-bg-alt: #ece2f6;
-  --color-surface: #ece3f6;
-  --color-surface-2: #ddd0ea;
-  --color-text: #1d1147;
-  --color-text-muted: #675e88;
-  --color-border: rgba(29,17,71,0.12);
-  --shadow-sm: 0 4px 12px rgba(29,17,71,0.08);
-  --shadow-md: 0 16px 40px rgba(29,17,71,0.18);
-  --shadow-lg: 0 20px 48px rgba(29,17,71,0.24);
+  --color-bg: #f5f3fa;
+  --color-bg-deep: #eae6f3;
+  --color-bg-2: #f5f3fa;
+  --color-card: #ffffff;
+  --color-card-2: #fbfafd;
+  --color-bg-alt: #f0ecf8;
+  --color-surface: #faf9fd;
+  --color-surface-2: #e8e2f3;
+  --color-text: #211a3a;
+  --color-text-muted: #625b78;
+  --color-border: #ddd8e8;
+  --color-accent: #f725a8;
+  --color-accent-rgb: 247,37,168;
+  --color-accent-soft: rgba(247,37,168,0.14);
+  --color-accent-2: #7c3aed;
+  --color-accent-2-rgb: 124,58,237;
+  --shadow-sm: 0 4px 12px rgba(35,25,65,0.08);
+  --shadow-md: 0 16px 40px rgba(35,25,65,0.16);
+  --shadow-lg: 0 20px 48px rgba(35,25,65,0.22);
 }
 
 * { box-sizing: border-box; }
@@ -119,11 +129,16 @@ body {
   min-height: 100vh;
 }
 
+/* Mêmes 3 halos de couleur que le thème sombre (identité "gaming"), juste
+   des opacités plus faibles pour rester "à peine teinté" sur fond quasi
+   blanc. Le 3e halo (blanc à 0.08 dans la v1) était devenu invisible une
+   fois le fond lui-même presque blanc — remplacé par un halo violet
+   (--color-accent-2) pour rester un vrai 3e accent visible. */
 :root[data-theme="light"] body {
   background:
-    radial-gradient(circle at 15% 20%, rgba(255,47,176,0.20) 0%, transparent 45%),
+    radial-gradient(circle at 15% 20%, rgba(var(--color-accent-rgb),0.20) 0%, transparent 45%),
     radial-gradient(circle at 85% 15%, rgba(47,227,255,0.16) 0%, transparent 40%),
-    radial-gradient(circle at 50% 90%, rgba(255,255,255,0.08) 0%, transparent 50%),
+    radial-gradient(circle at 50% 90%, rgba(var(--color-accent-2-rgb),0.12) 0%, transparent 50%),
     linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
 }
 
