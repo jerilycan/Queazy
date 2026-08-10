@@ -235,6 +235,16 @@ const correctTitleList = document.getElementById('correctTitleList')
 const correctArtistList = document.getElementById('correctArtistList')
 const addCorrectTitleBtn = document.getElementById('addCorrectTitle')
 const addCorrectArtistBtn = document.getElementById('addCorrectArtist')
+const btTitleOnlyToggle = document.getElementById('btTitleOnly')
+const btArtistColumn = document.getElementById('btArtistColumn')
+if (btTitleOnlyToggle) {
+  btTitleOnlyToggle.onchange = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    q.titleOnly = btTitleOnlyToggle.checked
+    if (btArtistColumn) btArtistColumn.classList.toggle('d-none', q.titleOnly)
+  }
+}
 
 const bindGradStepper = (input, minusBtn, plusBtn, onCommit) => {
   const commit = (val) => { input.value = val; onCommit(Number(val) || 0) }
@@ -284,7 +294,8 @@ const applyReadOnly = () => {
     document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus'),
     document.getElementById('gradToleranceMinus'), document.getElementById('gradTolerancePlus'),
     document.getElementById('audioStartMinus'), document.getElementById('audioStartPlus'),
-    document.getElementById('audioDurationMinus'), document.getElementById('audioDurationPlus')
+    document.getElementById('audioDurationMinus'), document.getElementById('audioDurationPlus'),
+    btTitleOnlyToggle
   ]
   controls.forEach(el => { if (el) el.disabled = true })
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
@@ -818,6 +829,11 @@ const populateAudioFields = (q) => {
     audioClipPlayer.removeAttribute('src')
     audioClipWrap.classList.add('d-none')
   }
+  // "Titre uniquement" — synchronise la case et la colonne "Artiste(s)
+  // accepté(s)" avec q.titleOnly à chaque affichage de cette question
+  // (sélection dans la sidebar, retour depuis un autre type...).
+  if (btTitleOnlyToggle) btTitleOnlyToggle.checked = !!q.titleOnly
+  if (btArtistColumn) btArtistColumn.classList.toggle('d-none', !!q.titleOnly)
 }
 
 if (audioUploadInput) {
@@ -1746,32 +1762,71 @@ if (intrusPhotosUploadInput) {
   intrusPhotosUploadInput.onchange = () => {
     const files = intrusPhotosUploadInput.files ? Array.from(intrusPhotosUploadInput.files) : []
     intrusPhotosUploadInput.value = ''
-    const q = questions[activeIndex]
-    if (!q || files.length === 0) return
-    if (!Array.isArray(q.options)) q.options = []
-    const room = INTRUS_MAX_OPTIONS - q.options.length
-    if (room <= 0) {
-      showToast(`Maximum ${INTRUS_MAX_OPTIONS} photos`, 'error')
-      return
-    }
-    const toAdd = files.slice(0, room)
-    if (files.length > toAdd.length) {
-      showToast(`Seules les ${toAdd.length} premières photos ont été ajoutées (maximum ${INTRUS_MAX_OPTIONS})`, 'error')
-    }
-    // Compression asynchrone par fichier (FileReader/Image/canvas, voir
-    // compressImageFile) : un re-rendu par succès plutôt qu'un compteur
-    // global en attendant TOUS les fichiers — compressImageFile n'appelle
-    // jamais le callback en cas de fichier invalide (juste un toast
-    // d'erreur), donc un compteur global resterait bloqué indéfiniment dès
-    // qu'un seul fichier de la sélection échoue.
-    toAdd.forEach(file => {
-      compressImageFile(file, (dataUrl) => {
-        q.options.push({ id: genIntrusOptionId(), image: dataUrl })
-        renderIntrusOptions()
-      })
-    })
+    addIntrusPhotos(files)
   }
 }
+
+// Extrait du onchange ci-dessus pour être réutilisable depuis le collage
+// (Ctrl+V, voir l'écouteur "paste" plus bas dans ce fichier) — même logique,
+// que les fichiers viennent du sélecteur ou du presse-papier.
+function addIntrusPhotos (files) {
+  const q = questions[activeIndex]
+  if (!q || !files || files.length === 0) return
+  if (!Array.isArray(q.options)) q.options = []
+  const room = INTRUS_MAX_OPTIONS - q.options.length
+  if (room <= 0) {
+    showToast(`Maximum ${INTRUS_MAX_OPTIONS} photos`, 'error')
+    return
+  }
+  const toAdd = files.slice(0, room)
+  if (files.length > toAdd.length) {
+    showToast(`Seules les ${toAdd.length} premières photos ont été ajoutées (maximum ${INTRUS_MAX_OPTIONS})`, 'error')
+  }
+  toAdd.forEach(file => {
+    compressImageFile(file, (dataUrl) => {
+      q.options.push({ id: genIntrusOptionId(), image: dataUrl })
+      renderIntrusOptions()
+    })
+  })
+}
+
+// Coller une image (Ctrl+V) plutôt que devoir passer par le sélecteur de
+// fichiers — demande explicite de l'utilisateur. Écouteur global (pas un par
+// champ d'upload) : redirige vers la zone d'image pertinente pour le type de
+// question actuellement affiché, déterminée par quelle section n'est pas
+// masquée (voir toggleTypeSections) plutôt que par l'élément qui a le focus
+// (aucun de ces encarts n'est un vrai champ de saisie où "coller" aurait un
+// autre sens). Ignoré si le presse-papier ne contient PAS d'image (laisse le
+// comportement natif du navigateur pour un collage de texte classique dans
+// n'importe quel champ).
+document.addEventListener('paste', (e) => {
+  if (readOnly || !questions[activeIndex]) return
+  const items = e.clipboardData && e.clipboardData.items
+  if (!items) return
+  const files = Array.from(items)
+    .filter(it => it.kind === 'file' && it.type && it.type.startsWith('image/'))
+    .map(it => it.getAsFile())
+    .filter(Boolean)
+  if (files.length === 0) return
+  e.preventDefault()
+  const q = questions[activeIndex]
+  if (q.type === 'image' && imageSection && !imageSection.classList.contains('d-none')) {
+    compressImageFile(files[0], (dataUrl) => {
+      q.image = dataUrl
+      populateImageFields(q)
+    })
+  } else if (q.type === 'intrus' && intrusSection && !intrusSection.classList.contains('d-none')) {
+    addIntrusPhotos(files)
+  } else if (illustrationSection && !illustrationSection.classList.contains('d-none')) {
+    compressImageFile(files[0], (dataUrl) => {
+      q.illustration = dataUrl
+      populateIllustrationFields(q)
+    })
+  } else {
+    return
+  }
+  showToast(files.length > 1 ? `${files.length} images collées !` : 'Image collée !')
+})
 
 const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked = false, onCheck = null) => {
   const div = document.createElement('div')

@@ -2689,6 +2689,10 @@ const emitQuestion = (index) => {
     tolerance: q.type === 'graduation' ? (Math.max(0, Number(q.tolerance) || 0)) : undefined,
     audioMode: q.type === 'blindtest' ? audioMode : undefined,
     audioVolume: q.type === 'blindtest' ? hostAudioVolume : undefined,
+    // "Titre uniquement" (voir editor.js) : pas d'artiste attendu pour ce
+    // morceau (ex. générique de dessin animé). Le champ artiste n'est alors
+    // ni affiché côté joueur ni jugé côté serveur (voir answer:submit).
+    titleOnly: q.type === 'blindtest' ? !!q.titleOnly : undefined,
     singleAttempt: currentSingleAttempt,
     // Texte optionnel affiché SEULEMENT à la révélation (voir server/index.js,
     // jamais diffusé dans question:show — sinon lisible en devtools avant
@@ -2890,6 +2894,10 @@ socket.on('question:show', payload => {
   // partie (signalé par l'utilisateur : "je ne peux pas écrire").
   if (blindtestTitleInput) blindtestTitleInput.disabled = false
   if (blindtestArtistInput) blindtestArtistInput.disabled = false
+  // "Titre uniquement" (voir editor.js) : masque le champ artiste plutôt que
+  // de le laisser visible mais inutile — rien ne l'attend côté scoring
+  // (voir server/index.js), le montrer inviterait à le remplir pour rien.
+  if (blindtestArtistInput) blindtestArtistInput.classList.toggle('d-none', payload.type === 'blindtest' && !!payload.titleOnly)
   // Tout le monde démarre verrouillé : la question puis les tuiles se
   // révèlent d'abord (ci-dessous), le chrono et les réponses ne s'activent
   // qu'à startTs. L'hôte, lui, reste verrouillé en permanence — il ne répond
@@ -3282,7 +3290,10 @@ socket.on('answer:queue', ({ answerId, playerId, content, blindtest, fields }) =
     }
 
     item.appendChild(buildFieldRow('Titre', 'title'))
-    item.appendChild(buildFieldRow('Artiste', 'artist'))
+    // "Titre uniquement" (voir editor.js/server) : pas de clé "artist" du
+    // tout dans fields pour ce cas, plutôt qu'une entrée vide qui afficherait
+    // une ligne "Artiste" sans objet à juger.
+    if (fields.artist) item.appendChild(buildFieldRow('Artiste', 'artist'))
     moderationDiv.appendChild(item)
     return
   }

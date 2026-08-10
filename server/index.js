@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.21.0'
+const APP_VERSION = '1.22.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -872,7 +872,7 @@ const start = async () => {
       // réglage entre deux questions (ce que le client bloque déjà une fois
       // la partie lancée, voir game:setSpeedLevel, mais on ne fait jamais
       // confiance qu'au serveur pour ça).
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -1076,12 +1076,17 @@ const start = async () => {
         let content
         try { content = JSON.parse(payload?.content || 'null') } catch { content = null }
         const titleInput = typeof content?.title === 'string' ? content.title : ''
-        const artistInput = typeof content?.artist === 'string' ? content.artist : ''
+        // Mode "titre seul" (q.titleOnly, voir editor.js) : l'artiste n'est ni
+        // demandé côté joueur ni jugé ici — traité comme si ce champ n'existait
+        // pas plutôt que comme un champ vide (qui vaudrait "incorrect" et
+        // plafonnerait les points à la moitié, voir plus bas).
+        const artistInput = q.titleOnly ? '' : (typeof content?.artist === 'string' ? content.artist : '')
         const acceptedTitle = Array.isArray(q.correct?.title) ? q.correct.title : []
         const acceptedArtist = Array.isArray(q.correct?.artist) ? q.correct.artist : []
 
         const submitTs = Date.now()
-        const halfDelta = Math.round(pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor) / 2)
+        const fullDelta = pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor)
+        const halfDelta = Math.round(fullDelta / 2)
 
         const evalField = (input, accepted) => {
           if (!input.trim()) return 'incorrect'
@@ -1091,13 +1096,20 @@ const start = async () => {
           return 'pending'
         }
         const titleStatus = evalField(titleInput, acceptedTitle)
-        const artistStatus = evalField(artistInput, acceptedArtist)
+        // 'na' (non applicable) plutôt que de réutiliser evalField('') qui
+        // renverrait 'incorrect' : l'artiste ne doit jamais faire échouer ni
+        // partir en modération en mode titre seul.
+        const artistStatus = q.titleOnly ? 'na' : evalField(artistInput, acceptedArtist)
 
         const p = room.players.get(socket.id)
         let deltaApplied = 0
-        for (const status of [titleStatus, artistStatus]) {
-          if (status !== 'correct') continue
-          deltaApplied += halfDelta
+        if (q.titleOnly) {
+          if (titleStatus === 'correct') deltaApplied = fullDelta
+        } else {
+          for (const status of [titleStatus, artistStatus]) {
+            if (status !== 'correct') continue
+            deltaApplied += halfDelta
+          }
         }
         let total = room.scores.get(socket.id) || 0
         if (deltaApplied > 0) {
@@ -1122,25 +1134,31 @@ const start = async () => {
 
         if (titleStatus === 'pending' || artistStatus === 'pending') {
           const answerId = `${socket.id}:${submitTs}`
-          const fields = {
-            title: { content: titleInput, status: titleStatus },
-            artist: { content: artistInput, status: artistStatus }
-          }
+          // Pas de clé "artist" du tout en mode titre seul (plutôt qu'une
+          // entrée 'na') : évite d'afficher/traiter une ligne "Artiste" côté
+          // panneau de modération hôte pour un champ qui n'existe pas pour
+          // cette question (voir index.js answer:queue).
+          const fields = q.titleOnly
+            ? { title: { content: titleInput, status: titleStatus } }
+            : { title: { content: titleInput, status: titleStatus }, artist: { content: artistInput, status: artistStatus } }
           // token en plus de playerId : si ce joueur se reconnecte (nouveau
           // socket.id) avant que l'hôte ne tranche ce champ, on doit pouvoir
           // retrouver SON entrée actuelle plutôt que créditer un socket.id
           // périmé que plus personne ne lit (voir resolvePendingId).
-          room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, ts: submitTs, historyEntry: q.historyEntry, halfDelta, fields })
+          room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, ts: submitTs, historyEntry: q.historyEntry, halfDelta, fullDelta, titleOnly: !!q.titleOnly, fields })
           io.to(code).emit('answer:queue', { answerId, playerId: socket.id, blindtest: true, fields })
           emitProgress()
           return
         }
 
-        // Les deux champs sont déjà tranchés (correct ou incorrect) : rien à
-        // envoyer en modération, le résultat final est connu tout de suite.
+        // Le(s) champ(s) pertinent(s) sont déjà tranchés (correct ou
+        // incorrect) : rien à envoyer en modération, le résultat final est
+        // connu tout de suite.
         q.answered?.add(socket.id)
         if (p?.token && q.historyEntry) {
-          q.historyEntry.results[p.token] = (titleStatus === 'correct' && artistStatus === 'correct') ? 'correct' : 'incorrect'
+          q.historyEntry.results[p.token] = q.titleOnly
+            ? (titleStatus === 'correct' ? 'correct' : 'incorrect')
+            : (titleStatus === 'correct' && artistStatus === 'correct' ? 'correct' : 'incorrect')
         }
         emitProgress()
         return
@@ -1310,11 +1328,12 @@ const start = async () => {
       const currentId = resolvePendingId(room, item)
       if (correct) {
         // Champ toujours "fuzzy" ici (seul cas qui passe par la modération,
-        // voir evalField) : plein halfDelta, pas de réduction — une fois que
-        // l'hôte tranche "c'est correct", seule la vitesse doit compter,
-        // exactement comme pour le texte libre (moderation:approve plus bas,
-        // qui donne déjà 100% des points sur une approbation manuelle).
-        const delta = item.halfDelta
+        // voir evalField) : plein halfDelta (ou fullDelta en mode titre
+        // seul, un seul champ à juger) — une fois que l'hôte tranche "c'est
+        // correct", seule la vitesse doit compter, exactement comme pour le
+        // texte libre (moderation:approve plus bas, qui donne déjà 100% des
+        // points sur une approbation manuelle).
+        const delta = item.titleOnly ? item.fullDelta : item.halfDelta
         const total = (room.scores.get(currentId) || 0) + delta
         room.scores.set(currentId, total)
         const p = room.players.get(currentId)
@@ -1331,8 +1350,10 @@ const start = async () => {
       q?.answered?.add(currentId)
       const p = room.players.get(currentId)
       if (p?.token && item.historyEntry) {
-        const bothCorrect = item.fields.title.status === 'correct' && item.fields.artist.status === 'correct'
-        item.historyEntry.results[p.token] = bothCorrect ? 'correct' : 'incorrect'
+        const allCorrect = item.titleOnly
+          ? item.fields.title.status === 'correct'
+          : item.fields.title.status === 'correct' && item.fields.artist.status === 'correct'
+        item.historyEntry.results[p.token] = allCorrect ? 'correct' : 'incorrect'
       }
       // Dès que la file de modération est vide, la question peut enfin être
       // révélée (voir revealQuestion) — mais seulement si c'est bien encore

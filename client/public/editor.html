@@ -273,13 +273,19 @@
             </div>
             <p class="text-muted font-13 mt-8">Importe le morceau (extrait déjà coupé ou piste complète), choisis le début et la durée de l'extrait à faire deviner (30s max), puis valide.</p>
 
-            <div class="d-grid grid-cols-split gap-lg mt-16">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label mt-16">
+              <input id="btTitleOnly" type="checkbox" class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+              Titre uniquement (pas d'artiste à deviner — ex. générique de dessin animé)
+            </label>
+
+            <div id="btAnswersGrid" class="d-grid grid-cols-split gap-lg mt-16">
               <div class="detail-section">
                 <label>Titre(s) accepté(s)</label>
                 <div id="correctTitleList" class="options-editor"><!-- Rempli par JS --></div>
                 <button id="addCorrectTitle" type="button" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse</button>
               </div>
-              <div class="detail-section">
+              <div id="btArtistColumn" class="detail-section">
                 <label>Artiste(s) accepté(s)</label>
                 <div id="correctArtistList" class="options-editor"><!-- Rempli par JS --></div>
                 <button id="addCorrectArtist" type="button" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse</button>
