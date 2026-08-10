@@ -2145,6 +2145,19 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    .order-item.dragging côté jeu. */
 .question-item.dragging { cursor: grabbing; box-shadow: var(--shadow-lg); }
 
+/* #graduationSection (Minimum/Maximum/Valeur correcte/Tolérance) est un
+   d-flex 4 colonnes sans flex-wrap : la colonne Tolérance embarque un texte
+   explicatif qui pousse sa largeur minimale, et sans repli les 4 colonnes
+   débordaient de .question-detail plutôt que de rétrécir en dessous de ce
+   minimum. .question-detail (overflow-y:auto, overflow-x resté au défaut
+   "visible") récupère alors un overflow-x calculé à "auto" tout seul (règle
+   CSS : un axe "visible" à côté d'un axe non-visible devient "auto" lui
+   aussi) — d'où la scrollbar horizontale rose que ça faisait apparaître,
+   avec le contenu coupé net sur le bord droit (signalé par l'utilisateur,
+   capture d'écran). */
+#graduationSection { flex-wrap: wrap; }
+#graduationSection > .detail-section { min-width: 140px; }
+
 .question-detail {
   background: var(--gradient-card);
   border-radius: var(--radius-lg);
