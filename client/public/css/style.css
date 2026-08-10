@@ -71,25 +71,29 @@
 }
 
 /* Thème clair — même identité néon (accents magenta/violet/cyan, tuiles vives),
-   mais chrome clair : fond violet vif + cartes blanches, comme l'appli d'origine. */
+   mais chrome clair. Fond violet vif + cartes quasi blanches à l'origine :
+   l'écart de luminosité/saturation entre les deux était trop extrême (effet
+   de contraste simultané : un blanc quasi pur a l'air encore plus agressif
+   collé à un violet saturé) — remonté au retour utilisateur "le blanc est
+   trop agressif". Les deux bouts sont resserrés : fond moins saturé/moins
+   sombre, cartes légèrement tintées (lavande, pas blanc) plutôt que quasi
+   blanches — garde l'identité colorée sans éblouir sur de grandes surfaces. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-bg: #4c14a8;
-  --color-bg-deep: #1f0940;
-  --color-bg-2: #4c14a8;
-  /* Légèrement teintées (lavande très pâle) plutôt que blanc pur : moins
-     agressif à l'œil sur le fond violet vif, tout en restant très clair. */
-  --color-card: #faf8fd;
-  --color-card-2: #f2ecfa;
-  --color-bg-alt: #f1edfb;
-  --color-surface: #f5f2fb;
-  --color-surface-2: #ece5f9;
+  --color-bg: #7a56b8;
+  --color-bg-deep: #4a3480;
+  --color-bg-2: #7a56b8;
+  --color-card: #f3eefa;
+  --color-card-2: #e8dff5;
+  --color-bg-alt: #ece2f6;
+  --color-surface: #ece3f6;
+  --color-surface-2: #ddd0ea;
   --color-text: #1d1147;
-  --color-text-muted: #6b6190;
-  --color-border: rgba(29,17,71,0.10);
-  --shadow-sm: 0 4px 12px rgba(29,17,71,0.06);
-  --shadow-md: 0 16px 40px rgba(29,17,71,0.16);
-  --shadow-lg: 0 20px 48px rgba(29,17,71,0.22);
+  --color-text-muted: #675e88;
+  --color-border: rgba(29,17,71,0.12);
+  --shadow-sm: 0 4px 12px rgba(29,17,71,0.08);
+  --shadow-md: 0 16px 40px rgba(29,17,71,0.18);
+  --shadow-lg: 0 20px 48px rgba(29,17,71,0.24);
 }
 
 * { box-sizing: border-box; }
@@ -359,16 +363,21 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   box-shadow: none !important;
 }
 
-input { 
-  padding: 14px 18px; 
-  border-radius: var(--radius-md); 
-  border: 2px solid var(--color-border); 
-  background: var(--color-surface); 
+/* input, textarea : même règle pour les deux (textarea n'a jamais eu la
+   sienne — fond blanc par défaut du navigateur dans les deux thèmes,
+   repéré en creusant le retour "le blanc est trop agressif" : la zone
+   "Énoncé de la question" tranchait, encore plus blanche que les cartes
+   à peine adoucies autour d'elle). */
+input, textarea {
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
   font-size: 15px;
   width: 100%;
   transition: all 0.2s;
 }
-input:focus { outline: none; border-color: var(--color-accent); background: var(--color-surface-2); box-shadow: 0 0 0 4px var(--color-accent-soft), 0 4px 12px rgba(var(--color-accent-rgb),0.15); }
+input:focus, textarea:focus { outline: none; border-color: var(--color-accent); background: var(--color-surface-2); box-shadow: 0 0 0 4px var(--color-accent-soft), 0 4px 12px rgba(var(--color-accent-rgb),0.15); }
 
 /* Lobby Specifics */
 .lobby-header { text-align: center; margin-bottom: var(--space-lg); }
