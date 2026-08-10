@@ -29,15 +29,45 @@ let inActiveGame = false
 // changement de page avant que la nouvelle ne remplace l'ancienne — voir le
 // disconnect handler plus bas qui l'ignore quand ce drapeau est levé.
 let isNavigatingAway = false
+// Drapeau levé juste avant une navigation déjà confirmée via notre propre
+// popup (voir l'écouteur de clic plus bas) : évite qu'un clic sur un lien de
+// la navbar déclenche ENSUITE la boîte de dialogue générique du navigateur
+// en plus de notre popup déjà validée.
+let allowNavigation = false
 window.addEventListener('beforeunload', (e) => {
   isNavigatingAway = true
-  if (!inActiveGame) return
+  if (allowNavigation || !inActiveGame) return
   e.preventDefault()
   e.returnValue = ''
 })
 // Filet de sécurité pour Safari iOS, où 'beforeunload' n'est pas toujours
 // fiable : 'pagehide' se déclenche systématiquement au départ de la page.
 window.addEventListener('pagehide', () => { isNavigatingAway = true })
+
+// Clic sur un lien de la page (navbar : logo, Créer, Rejoindre, Mes Quiz...)
+// EN PLEINE QUESTION : on peut l'intercepter à temps et proposer notre
+// propre popup, cohérente avec le reste de l'identité QuEazy, plutôt que la
+// boîte de dialogue générique et impersonnelle du navigateur (celle-ci reste
+// le filet de sécurité pour un rafraîchissement/fermeture d'onglet/retour
+// arrière, qu'on ne peut techniquement pas intercepter autrement).
+document.addEventListener('click', (e) => {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  const a = e.target.closest('a[href]')
+  if (!a || a.target === '_blank' || !inActiveGame) return
+  e.preventDefault()
+  QzUI.confirm({
+    title: 'Quitter la partie ?',
+    message: 'Une partie est en cours. Si tu quittes maintenant, tu risques de perdre ta place et ta progression.',
+    confirmLabel: 'Quitter la partie',
+    cancelLabel: 'Rester',
+    danger: true
+  }).then((ok) => {
+    if (!ok) return
+    inActiveGame = false
+    allowNavigation = true
+    window.location.href = a.href
+  })
+})
 
 // Vibration mobile (retour haptique) sur bonne/mauvaise réponse — complète
 // les sons/couleurs, utile quand le son est coupé/silencieux (cas fréquent :
@@ -281,6 +311,7 @@ const blindtestVolumeThumb = document.getElementById('blindtestVolumeThumb')
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
 // décorative au-dessus de l'énoncé.
 const illustrationImg = document.getElementById('illustrationImg')
+const illustrationImgWrap = document.getElementById('illustrationImgWrap')
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const leaderNextBtn = document.getElementById('leaderNextBtn')
@@ -324,6 +355,12 @@ let isHost = false
 let currentSingleAttempt = true
 let selectedIcon = AVATAR_CHOICES[0]
 let timerInt = null
+// Zoom progressif sur l'illustration (voir editor.js) : {x, y, startScale}
+// de la question en cours, ou null si désactivée. Lu par le même tick que
+// la barre de temps (voir timerInt plus bas) pour dézoomer synchronisé sur
+// TOUS les écrans (hôte + joueurs), puisque tous calculent depuis le même
+// startTs/timerMs reçus du serveur — jamais un minuteur local indépendant.
+let currentIllustrationZoom = null
 let selectedMcqOptions = []
 let currentQuestionType = 'free'
 let isGameEnded = false
@@ -2697,7 +2734,11 @@ const emitQuestion = (index) => {
     // Texte optionnel affiché SEULEMENT à la révélation (voir server/index.js,
     // jamais diffusé dans question:show — sinon lisible en devtools avant
     // même de répondre), ex. "Faux, l'entreprise a été créée en 1986".
-    explanation: q.explanation || ''
+    explanation: q.explanation || '',
+    // Zoom progressif sur l'illustration (voir editor.js) : {x, y, startScale}
+    // ou undefined. Purement cosmétique, aucun impact sur le scoring — pas
+    // besoin que le serveur en sache quoi que ce soit, transmis tel quel.
+    illustrationZoom: (q.type !== 'image' && q.illustration) ? (q.illustrationZoom || undefined) : undefined
   }
   // L'image (cliquable pour le type "image", ou simple illustration au-dessus
   // de la question pour les autres types) et l'extrait audio du type
@@ -2880,6 +2921,19 @@ socket.on('question:show', payload => {
       illustrationImg.classList.add('d-none')
       illustrationImg.removeAttribute('src')
     }
+    // Zoom initial posé tout de suite (avant même startTs) : la question
+    // révélée doit apparaître déjà zoomée, pas dézoomée puis re-zoomée une
+    // fois le chrono démarré. Le dézoom progressif lui-même est piloté par
+    // le tick de la barre de temps (voir timerInt plus bas).
+    currentIllustrationZoom = payload.illustrationZoom || null
+    if (illustrationImgWrap) illustrationImgWrap.classList.toggle('is-zoomed', !!currentIllustrationZoom)
+    if (currentIllustrationZoom) {
+      illustrationImg.style.transformOrigin = `${currentIllustrationZoom.x * 100}% ${currentIllustrationZoom.y * 100}%`
+      illustrationImg.style.transform = `scale(${currentIllustrationZoom.startScale})`
+    } else {
+      illustrationImg.style.transformOrigin = ''
+      illustrationImg.style.transform = ''
+    }
   }
   answerInput.value = ''
   answerInput.disabled = false
@@ -3009,6 +3063,17 @@ socket.on('question:show', payload => {
     }
     const remaining = Math.max(0, total - (now - start))
     const pct = (remaining / total) * 100
+
+    // Dézoom progressif de l'illustration (voir "Zoomer progressivement sur
+    // un détail", editor.js) : même tick que la barre de temps ci-dessous,
+    // donc synchronisé sur tous les écrans puisque `remaining`/`total` sont
+    // dérivés du même startTs/timerMs reçus du serveur. Atteint pile scale(1)
+    // (image complète) au même instant que le chrono affiche 0.
+    if (currentIllustrationZoom && illustrationImg) {
+      const progress = Math.min(1, 1 - remaining / total)
+      const scale = currentIllustrationZoom.startScale + (1 - currentIllustrationZoom.startScale) * progress
+      illustrationImg.style.transform = `scale(${scale})`
+    }
 
     if (timerBarFill) {
       timerBarFill.style.transform = `scaleX(${pct / 100})`
@@ -3603,6 +3668,11 @@ socket.on('timer:end', () => {
     timerBarFill.classList.remove('timer-urgent')
   }
   if (timerLabel) timerLabel.textContent = '0'
+  // Même raison que la barre de temps juste au-dessus : la question peut se
+  // clore avant que le tick d'index.js n'ait naturellement atteint scale(1)
+  // (tout le monde a répondu en avance) — on force l'image complète tout de
+  // suite pour rester cohérent avec la révélation qui s'affiche en dessous.
+  if (currentIllustrationZoom && illustrationImg) illustrationImg.style.transform = 'scale(1)'
   // Coupe l'extrait s'il n'était pas déjà terminé (le chrono peut être plus
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).

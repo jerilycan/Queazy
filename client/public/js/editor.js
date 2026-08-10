@@ -216,6 +216,21 @@ const illustrationUploadInput = document.getElementById('illustrationUpload')
 const illustrationPreviewWrap = document.getElementById('illustrationPreviewWrap')
 const illustrationPreviewImg = document.getElementById('illustrationPreviewImg')
 const removeIllustrationBtn = document.getElementById('removeIllustrationBtn')
+// "Zoomer progressivement sur un détail" (voir populateIllustrationFields et
+// le bloc de câblage juste après) : q.illustrationZoom = {x, y, startScale}
+// (x/y normalisés 0-1, centre du zoom) ou null/absent = désactivé. Le
+// dézoom lui-même (startScale -> 1 au rythme du chrono) est purement côté
+// jeu (index.js), calé sur le même tick que la barre de temps — rien à
+// faire ici hormis choisir le point de départ.
+const illustrationZoomMarker = document.getElementById('illustrationZoomMarker')
+const illustrationZoomPanel = document.getElementById('illustrationZoomPanel')
+const illustrationZoomToggle = document.getElementById('illustrationZoomToggle')
+const illustrationZoomConfig = document.getElementById('illustrationZoomConfig')
+const illustrationZoomInput = document.getElementById('illustrationZoomInput')
+const illustrationZoomMinusBtn = document.getElementById('illustrationZoomMinus')
+const illustrationZoomPlusBtn = document.getElementById('illustrationZoomPlus')
+const ILLUSTRATION_ZOOM_MIN = 2
+const ILLUSTRATION_ZOOM_MAX = 8
 
 // Question "blind test" : upload du morceau + recadrage (début/durée) en un
 // extrait court, encodé en WAV mono côté client (voir plus bas) — q.audio
@@ -295,7 +310,7 @@ const applyReadOnly = () => {
     document.getElementById('gradToleranceMinus'), document.getElementById('gradTolerancePlus'),
     document.getElementById('audioStartMinus'), document.getElementById('audioStartPlus'),
     document.getElementById('audioDurationMinus'), document.getElementById('audioDurationPlus'),
-    btTitleOnlyToggle
+    btTitleOnlyToggle, illustrationZoomToggle, illustrationZoomMinusBtn, illustrationZoomPlusBtn
   ]
   controls.forEach(el => { if (el) el.disabled = true })
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
@@ -728,6 +743,14 @@ if (imageUploadInput) {
   }
 }
 
+const positionIllustrationZoomMarker = (zoom) => {
+  if (!illustrationZoomMarker) return
+  if (!zoom) { illustrationZoomMarker.classList.add('d-none'); return }
+  illustrationZoomMarker.style.left = `${zoom.x * 100}%`
+  illustrationZoomMarker.style.top = `${zoom.y * 100}%`
+  illustrationZoomMarker.classList.remove('d-none')
+}
+
 const populateIllustrationFields = (q) => {
   if (!illustrationPreviewWrap) return
   if (q.illustration) {
@@ -736,6 +759,14 @@ const populateIllustrationFields = (q) => {
   } else {
     illustrationPreviewWrap.classList.add('d-none')
   }
+  // Panneau de zoom : n'a de sens que s'il y a une image à zoomer.
+  if (illustrationZoomPanel) illustrationZoomPanel.classList.toggle('d-none', !q.illustration)
+  const zoom = q.illustration ? q.illustrationZoom : null
+  if (illustrationZoomToggle) illustrationZoomToggle.checked = !!zoom
+  if (illustrationZoomConfig) illustrationZoomConfig.classList.toggle('d-none', !zoom)
+  if (illustrationPreviewImg) illustrationPreviewImg.classList.toggle('is-zoom-pickable', !!zoom)
+  if (illustrationZoomInput) illustrationZoomInput.value = zoom ? zoom.startScale : ILLUSTRATION_ZOOM_MIN + 1
+  positionIllustrationZoomMarker(zoom)
 }
 
 if (illustrationUploadInput) {
@@ -745,6 +776,9 @@ if (illustrationUploadInput) {
     if (!file || !questions[activeIndex]) return
     compressImageFile(file, (dataUrl) => {
       questions[activeIndex].illustration = dataUrl
+      // Nouvelle image -> un ancien point de zoom choisi sur l'image
+      // précédente n'a plus de sens (cadre différent).
+      questions[activeIndex].illustrationZoom = null
       populateIllustrationFields(questions[activeIndex])
     })
   }
@@ -754,8 +788,44 @@ if (removeIllustrationBtn) {
   removeIllustrationBtn.onclick = () => {
     if (!questions[activeIndex]) return
     questions[activeIndex].illustration = null
+    questions[activeIndex].illustrationZoom = null
     populateIllustrationFields(questions[activeIndex])
   }
+}
+
+if (illustrationZoomToggle) {
+  illustrationZoomToggle.onchange = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    q.illustrationZoom = illustrationZoomToggle.checked
+      ? { x: 0.5, y: 0.5, startScale: Number(illustrationZoomInput?.value) || ILLUSTRATION_ZOOM_MIN + 1 }
+      : null
+    populateIllustrationFields(q)
+  }
+}
+
+if (illustrationPreviewImg) {
+  illustrationPreviewImg.onclick = (e) => {
+    const q = questions[activeIndex]
+    if (readOnly || !q || !q.illustrationZoom) return
+    const rect = illustrationPreviewImg.getBoundingClientRect()
+    q.illustrationZoom.x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+    q.illustrationZoom.y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+    positionIllustrationZoomMarker(q.illustrationZoom)
+  }
+}
+
+const commitIllustrationZoomLevel = (val) => {
+  const q = questions[activeIndex]
+  const clamped = Math.min(ILLUSTRATION_ZOOM_MAX, Math.max(ILLUSTRATION_ZOOM_MIN, val))
+  if (illustrationZoomInput) illustrationZoomInput.value = clamped
+  if (q && q.illustrationZoom) q.illustrationZoom.startScale = clamped
+}
+if (illustrationZoomMinusBtn) {
+  illustrationZoomMinusBtn.onclick = () => commitIllustrationZoomLevel((Number(illustrationZoomInput?.value) || 0) - 1)
+}
+if (illustrationZoomPlusBtn) {
+  illustrationZoomPlusBtn.onclick = () => commitIllustrationZoomLevel((Number(illustrationZoomInput?.value) || 0) + 1)
 }
 
 // --- Question "blind test" : upload + recadrage audio ---
@@ -1996,6 +2066,59 @@ addCorrectBtn.onclick = () => {
   questions[activeIndex].correct.push('')
   renderCorrects()
 }
+// --- Garde-fou "modifications non sauvegardées" -----------------------------
+// Empêche de quitter l'éditeur (lien de la navbar, fermeture d'onglet,
+// rafraîchissement) sans s'en rendre compte après une modification non
+// sauvegardée. Comparaison par snapshot JSON plutôt qu'un drapeau "dirty"
+// mis à true au premier changement : ça évite d'instrumenter un par un
+// chaque point de mutation possible (glisser-déposer, upload, tracé de
+// zone, coller une image...), et redevient automatiquement "propre" si
+// l'utilisateur annule ses changements pour revenir à l'état sauvegardé.
+const snapshotQuizState = () => {
+  saveCurrentQuestionState()
+  return JSON.stringify({
+    title: titleEl.value.trim(),
+    questions,
+    singleAttempt: singleAttemptEl.checked,
+    isPublic: isPublicEl.checked
+  })
+}
+let savedSnapshot = null
+const markSaved = () => { savedSnapshot = snapshotQuizState() }
+const hasUnsavedChanges = () => !readOnly && savedSnapshot !== null && snapshotQuizState() !== savedSnapshot
+
+// Onglet fermé/rafraîchi/URL tapée directement : impossible d'afficher une
+// popup à notre image (le navigateur impose sa propre boîte de dialogue
+// générique pour des raisons de sécurité), mais on garde ce filet natif pour
+// les départs qu'on ne peut pas intercepter autrement.
+let allowNavigation = false
+window.addEventListener('beforeunload', (e) => {
+  if (allowNavigation || !hasUnsavedChanges()) return
+  e.preventDefault()
+  e.returnValue = ''
+})
+
+// Clic sur un lien de la page (navbar : logo, Créer, Rejoindre, Mes Quiz...) :
+// on peut l'intercepter à temps et proposer notre propre popup, cohérente
+// avec le reste de l'identité QuEazy, plutôt que la boîte native.
+document.addEventListener('click', (e) => {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  const a = e.target.closest('a[href]')
+  if (!a || a.target === '_blank' || !hasUnsavedChanges()) return
+  e.preventDefault()
+  QzUI.confirm({
+    title: 'Modifications non sauvegardées',
+    message: 'Tu as des modifications non sauvegardées sur ce quiz. Veux-tu vraiment quitter sans les sauvegarder ?',
+    confirmLabel: 'Quitter sans sauvegarder',
+    cancelLabel: 'Rester',
+    danger: true
+  }).then((ok) => {
+    if (!ok) return
+    allowNavigation = true
+    window.location.href = a.href
+  })
+})
+
 saveQuizBtn.onclick = async () => {
   if (readOnly) return
   saveCurrentQuestionState()
@@ -2186,6 +2309,7 @@ saveQuizBtn.onclick = async () => {
         .eq('id', currentId)
       if (error) throw error
       showToast('Quiz sauvegardé avec succès !')
+      markSaved()
     } else {
       const { data, error } = await sb.from('quizzes')
         .insert([{ title, questions, single_attempt: body.singleAttempt, is_public: body.isPublic, owner_id: session.user.id }])
@@ -2194,6 +2318,7 @@ saveQuizBtn.onclick = async () => {
       if (error) throw error
       currentId = data.id
       showToast('Quiz créé et sauvegardé !')
+      markSaved()
     }
   } catch (err) {
     showToast('Erreur: ' + (err.message || 'sauvegarde'), 'error')
@@ -2325,6 +2450,7 @@ const init = () => {
         activeIndex = 0
         selectQuestion(0)
         updateSidebar()
+        markSaved()
 
         // Seul le créateur peut modifier : sinon, lecture seule (la base le
         // refuse déjà via RLS, mais on l'empêche aussi dans l'UI).
@@ -2361,6 +2487,7 @@ const resetToNew = () => {
   isPublicEl.checked = false
   selectQuestion(0)
   updateSidebar()
+  markSaved()
 }
 
 // Logo animation

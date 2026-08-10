@@ -93,13 +93,13 @@
             <div class="detail-section">
               <label>Type de réponse</label>
               <select id="qType">
-                <option value="free">Texte libre</option>
-                <option value="mcq">Choix multiples (QCM)</option>
-                <option value="truefalse">Vrai / Faux</option>
-                <option value="graduation">Curseur numérique</option>
-                <option value="order">Ordre / classement</option>
-                <option value="image">Image (où se trouve ?)</option>
-                <option value="blindtest">Blind Test (extrait audio)</option>
+                <option value="free">📝 Texte libre</option>
+                <option value="mcq">🔘 Choix multiples (QCM)</option>
+                <option value="truefalse">✅ Vrai / Faux</option>
+                <option value="graduation">🎚️ Curseur numérique</option>
+                <option value="order">↕️ Ordre / classement</option>
+                <option value="image">📍 Image (où se trouve ?)</option>
+                <option value="blindtest">🎵 Blind Test (extrait audio)</option>
                 <option value="association">🔗 Association</option>
                 <option value="timeline">⏳ Timeline</option>
                 <option value="intrus">🎯 Intrus</option>
@@ -120,9 +120,30 @@
             <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
             <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
               <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
+              <div id="illustrationZoomMarker" class="illustration-zoom-marker d-none"></div>
               <button type="button" id="removeIllustrationBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
             </div>
             <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
+
+            <div id="illustrationZoomPanel" class="d-none mt-16">
+              <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+                <input id="illustrationZoomToggle" type="checkbox" class="qz-toggle-input" />
+                <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+                Zoomer progressivement sur un détail (ex. "Qui est ce personnage ?")
+              </label>
+              <div id="illustrationZoomConfig" class="d-none mt-8">
+                <p class="text-muted font-13 m-0">Clique sur l'image ci-dessus pour choisir le point de zoom.</p>
+                <div class="detail-section mt-8">
+                  <label>Niveau de zoom initial</label>
+                  <div class="timer-controls">
+                    <button id="illustrationZoomMinus" class="btn-timer" type="button">-</button>
+                    <input type="number" id="illustrationZoomInput" class="stepper-input" value="3" min="2" max="8" readonly />
+                    <button id="illustrationZoomPlus" class="btn-timer" type="button">+</button>
+                  </div>
+                </div>
+                <p class="text-muted font-13 mt-8">L'image démarre zoomée à ce niveau et se dézoome progressivement jusqu'à l'image complète, au rythme du chronomètre de la question.</p>
+              </div>
+            </div>
           </div>
 
           <div id="mcqSection" class="detail-section d-none">

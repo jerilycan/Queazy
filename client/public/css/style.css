@@ -1468,6 +1468,26 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   width: 100%;
   height: auto;
 }
+/* Point de zoom (voir "Zoomer progressivement sur un détail", editor.js) :
+   simple pastille centrée sur les coordonnées choisies (%, relatives à
+   .illustration-preview-wrap qui porte déjà position:relative+overflow:
+   hidden) — contrairement à .image-marker (type "image", forme de pin), pas
+   besoin d'indiquer une pointe précise ici, juste "le centre est ici". */
+.illustration-zoom-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 3px solid white;
+  box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb),0.35), var(--shadow-sm);
+  pointer-events: none;
+}
+.illustration-preview-img.is-zoom-pickable { cursor: crosshair; }
+
 .illustration-remove-btn {
   position: absolute;
   top: 8px;
@@ -1494,6 +1514,37 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   margin: 0 auto var(--space-md);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
+}
+/* Zoom progressif sur l'illustration (voir editor.js "Zoomer progressivement
+   sur un détail" + index.js) : sans conteneur de taille FIXE avec
+   overflow:hidden, un transform:scale() posé directement sur l'<img>
+   déborderait largement de son emplacement normal au lieu de rester "recadré"
+   comme un vrai zoom. Le wrapper ne porte aucune règle par défaut (la
+   question sans zoom garde exactement le rendu ci-dessus, tailles/marges de
+   .illustration-img inchangées) — seule la classe .is-zoomed (posée par JS
+   quand la question a un point de zoom configuré) bascule vers une boîte de
+   taille fixe. */
+.illustration-img-wrap.is-zoomed {
+  width: min(360px, 100%);
+  height: 260px;
+  margin: 0 auto var(--space-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.illustration-img-wrap.is-zoomed .illustration-img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  object-fit: cover;
+  /* Le dézoom lui-même est recalculé ~10x/seconde par le même tick que la
+     barre de temps (voir index.js) : une petite transition adoucit les pas
+     entre deux mises à jour plutôt qu'un changement de valeur brutal. */
+  transition: transform 0.12s linear;
 }
 
 /* Question "blind test" : orbe néon qui pulse en direct avec le volume de
@@ -2108,7 +2159,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   box-shadow: 0 4px 12px rgba(var(--color-accent-rgb),0.35);
 }
 
-.question-item.active::before { background: linear-gradient(90deg, var(--tile-yellow) 0, var(--tile-yellow) 3px, rgba(255,210,63,0.35) 30%, transparent 65%); }
+/* Avant : cette règle écrasait TOUJOURS la barre de couleur par un jaune
+   générique dès qu'une question était sélectionnée (même spécificité que les
+   règles .type-*::before ci-dessus, mais définie après donc prioritaire en
+   cascade) — la question active perdait alors l'identité de couleur de son
+   type. On ne garde plus qu'un léger renfort d'opacité/largeur au clic, la
+   couleur elle-même reste celle du type (voir .type-*::before plus haut). */
+.question-item.active::before { opacity: 0.9; }
 
 .question-item .q-num {
   font-weight: 800;
