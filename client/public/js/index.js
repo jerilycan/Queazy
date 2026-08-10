@@ -2735,23 +2735,24 @@ const emitQuestion = (index) => {
     // jamais diffusé dans question:show — sinon lisible en devtools avant
     // même de répondre), ex. "Faux, l'entreprise a été créée en 1986".
     explanation: q.explanation || '',
-    // Zoom progressif sur l'illustration (voir editor.js) : {x, y, startScale}
-    // ou undefined. Purement cosmétique, aucun impact sur le scoring — pas
-    // besoin que le serveur en sache quoi que ce soit, transmis tel quel.
-    illustrationZoom: (q.type !== 'image' && q.illustration) ? (q.illustrationZoom || undefined) : undefined
+    // "zoomguess" : zoom obligatoire sur SA propre image (voir editor.js),
+    // {x, y, startScale}. Purement cosmétique côté client, aucun impact sur
+    // le scoring (qui reste le texte libre générique) — pas besoin que le
+    // serveur en sache quoi que ce soit, transmis tel quel.
+    zoom: q.type === 'zoomguess' ? (q.zoom || { x: 0.5, y: 0.5, startScale: 4 }) : undefined
   }
-  // L'image (cliquable pour le type "image", ou simple illustration au-dessus
-  // de la question pour les autres types) et l'extrait audio du type
-  // "blindtest" ne transitent plus par le socket (voir server/index.js) : on
-  // les dépose d'abord via une requête HTTP classique, puis on démarre la
+  // L'image ("image" cliquable, "zoomguess" à deviner, ou simple illustration
+  // au-dessus de la question pour les autres types) et l'extrait audio du
+  // type "blindtest" ne transitent plus par le socket (voir server/index.js) :
+  // on les dépose d'abord via une requête HTTP classique, puis on démarre la
   // question avec juste leur URL. Si un upload échoue, on ne démarre pas la
   // question plutôt que de l'afficher sans média à personne.
-  const imageToUpload = q.type === 'image' ? q.image : q.illustration
+  const imageToUpload = (q.type === 'image' || q.type === 'zoomguess') ? q.image : q.illustration
   const audioToUpload = q.type === 'blindtest' ? q.audio : null
   const uploads = []
   if (imageToUpload) {
     uploads.push(uploadRoomImage(roomCode, imageToUpload).then(url => {
-      if (q.type === 'image') payload.imageUrl = url
+      if (q.type === 'image' || q.type === 'zoomguess') payload.imageUrl = url
       else payload.illustrationUrl = url
     }))
   }
@@ -2912,11 +2913,26 @@ socket.on('question:show', payload => {
     blindtestArea.classList.toggle('d-none', payload.type !== 'blindtest')
   }
   if (illustrationImg) {
-    if (payload.illustrationUrl) {
+    // "zoomguess" utilise sa PROPRE image (payload.imageUrl, obligatoire),
+    // avec zoom toujours actif ; les autres types réutilisent le même
+    // élément pour leur illustration décorative optionnelle (payload.
+    // illustrationUrl), jamais zoomée.
+    const isZoomGuess = payload.type === 'zoomguess'
+    const mediaUrl = isZoomGuess ? payload.imageUrl : payload.illustrationUrl
+    if (mediaUrl) {
       illustrationImg.onerror = () => { illustrationImg.classList.add('d-none') }
-      illustrationImg.src = payload.illustrationUrl
+      illustrationImg.src = mediaUrl
       illustrationImg.classList.remove('d-none')
-      applyTileReveal(illustrationImg, 0)
+      // L'animation d'entrée (tileRevealIn) anime elle-même "transform" —
+      // posée directement sur <img>, elle écraserait en continu (tant
+      // qu'elle reste attachée, ~0.5s) tout scale() posé juste en dessous
+      // pour le zoom initial de "zoomguess" : une animation CSS l'emporte
+      // toujours sur un style inline pour la même propriété, quel que soit
+      // l'ordre d'exécution JS. D'où le bug remonté par l'utilisateur
+      // ("aucun zoom") — corrigé en animant le WRAPPER (qui n'a besoin
+      // d'aucun transform) plutôt que l'image elle-même, qui reste ainsi
+      // libre pour le scale() du zoom.
+      applyTileReveal(illustrationImgWrap || illustrationImg, 0)
     } else {
       illustrationImg.classList.add('d-none')
       illustrationImg.removeAttribute('src')
@@ -2925,7 +2941,7 @@ socket.on('question:show', payload => {
     // révélée doit apparaître déjà zoomée, pas dézoomée puis re-zoomée une
     // fois le chrono démarré. Le dézoom progressif lui-même est piloté par
     // le tick de la barre de temps (voir timerInt plus bas).
-    currentIllustrationZoom = payload.illustrationZoom || null
+    currentIllustrationZoom = isZoomGuess ? (payload.zoom || null) : null
     if (illustrationImgWrap) illustrationImgWrap.classList.toggle('is-zoomed', !!currentIllustrationZoom)
     if (currentIllustrationZoom) {
       illustrationImg.style.transformOrigin = `${currentIllustrationZoom.x * 100}% ${currentIllustrationZoom.y * 100}%`
@@ -3745,7 +3761,7 @@ socket.on('question:reveal', payload => {
       else el.classList.add('incorrect-reveal')
     })
     showMyResultBanner()
-  } else if (payload.type === 'free') {
+  } else if (payload.type === 'free' || payload.type === 'zoomguess') {
     revealFreeAnswer((payload.correct || [])[0] || '')
     showMyResultBanner()
   } else if (payload.type === 'graduation') {

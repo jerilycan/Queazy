@@ -216,21 +216,27 @@ const illustrationUploadInput = document.getElementById('illustrationUpload')
 const illustrationPreviewWrap = document.getElementById('illustrationPreviewWrap')
 const illustrationPreviewImg = document.getElementById('illustrationPreviewImg')
 const removeIllustrationBtn = document.getElementById('removeIllustrationBtn')
-// "Zoomer progressivement sur un détail" (voir populateIllustrationFields et
-// le bloc de câblage juste après) : q.illustrationZoom = {x, y, startScale}
-// (x/y normalisés 0-1, centre du zoom) ou null/absent = désactivé. Le
-// dézoom lui-même (startScale -> 1 au rythme du chrono) est purement côté
-// jeu (index.js), calé sur le même tick que la barre de temps — rien à
-// faire ici hormis choisir le point de départ.
-const illustrationZoomMarker = document.getElementById('illustrationZoomMarker')
-const illustrationZoomPanel = document.getElementById('illustrationZoomPanel')
-const illustrationZoomToggle = document.getElementById('illustrationZoomToggle')
-const illustrationZoomConfig = document.getElementById('illustrationZoomConfig')
-const illustrationZoomInput = document.getElementById('illustrationZoomInput')
-const illustrationZoomMinusBtn = document.getElementById('illustrationZoomMinus')
-const illustrationZoomPlusBtn = document.getElementById('illustrationZoomPlus')
-const ILLUSTRATION_ZOOM_MIN = 2
-const ILLUSTRATION_ZOOM_MAX = 8
+
+// Type dédié "ZoomOut Devinette" : extrait de l'illustration générique
+// ci-dessus (qui portait initialement cette fonctionnalité en option) pour
+// en faire un type de question à part entière — plus simple à trouver, et
+// l'image + le zoom y sont désormais OBLIGATOIRES plutôt qu'une case à
+// cocher optionnelle facile à manquer. q.image = la photo, q.zoom =
+// {x, y, startScale} (x/y normalisés 0-1, centre du zoom). Le dézoom
+// lui-même (startScale -> 1 au rythme du chrono) est purement côté jeu
+// (index.js), calé sur le même tick que la barre de temps.
+const zoomGuessSection = document.getElementById('zoomGuessSection')
+const zoomGuessUploadInput = document.getElementById('zoomGuessUpload')
+const zoomGuessPreviewWrap = document.getElementById('zoomGuessPreviewWrap')
+const zoomGuessPreviewImg = document.getElementById('zoomGuessPreviewImg')
+const zoomGuessMarker = document.getElementById('zoomGuessMarker')
+const removeZoomGuessBtn = document.getElementById('removeZoomGuessBtn')
+const zoomGuessZoomInput = document.getElementById('zoomGuessZoomInput')
+const zoomGuessZoomMinusBtn = document.getElementById('zoomGuessZoomMinus')
+const zoomGuessZoomPlusBtn = document.getElementById('zoomGuessZoomPlus')
+const ZOOM_GUESS_MIN = 2
+const ZOOM_GUESS_MAX = 8
+const ZOOM_GUESS_DEFAULT = 4
 
 // Question "blind test" : upload du morceau + recadrage (début/durée) en un
 // extrait court, encodé en WAV mono côté client (voir plus bas) — q.audio
@@ -302,6 +308,7 @@ const applyReadOnly = () => {
     addAssociationPairBtn, addTimelineEventBtn, intrusPhotosUploadInput, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
+    zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
     removeAudioClipBtn, addCorrectTitleBtn, addCorrectArtistBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
@@ -310,7 +317,7 @@ const applyReadOnly = () => {
     document.getElementById('gradToleranceMinus'), document.getElementById('gradTolerancePlus'),
     document.getElementById('audioStartMinus'), document.getElementById('audioStartPlus'),
     document.getElementById('audioDurationMinus'), document.getElementById('audioDurationPlus'),
-    btTitleOnlyToggle, illustrationZoomToggle, illustrationZoomMinusBtn, illustrationZoomPlusBtn
+    btTitleOnlyToggle
   ]
   controls.forEach(el => { if (el) el.disabled = true })
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
@@ -743,14 +750,6 @@ if (imageUploadInput) {
   }
 }
 
-const positionIllustrationZoomMarker = (zoom) => {
-  if (!illustrationZoomMarker) return
-  if (!zoom) { illustrationZoomMarker.classList.add('d-none'); return }
-  illustrationZoomMarker.style.left = `${zoom.x * 100}%`
-  illustrationZoomMarker.style.top = `${zoom.y * 100}%`
-  illustrationZoomMarker.classList.remove('d-none')
-}
-
 const populateIllustrationFields = (q) => {
   if (!illustrationPreviewWrap) return
   if (q.illustration) {
@@ -759,14 +758,6 @@ const populateIllustrationFields = (q) => {
   } else {
     illustrationPreviewWrap.classList.add('d-none')
   }
-  // Panneau de zoom : n'a de sens que s'il y a une image à zoomer.
-  if (illustrationZoomPanel) illustrationZoomPanel.classList.toggle('d-none', !q.illustration)
-  const zoom = q.illustration ? q.illustrationZoom : null
-  if (illustrationZoomToggle) illustrationZoomToggle.checked = !!zoom
-  if (illustrationZoomConfig) illustrationZoomConfig.classList.toggle('d-none', !zoom)
-  if (illustrationPreviewImg) illustrationPreviewImg.classList.toggle('is-zoom-pickable', !!zoom)
-  if (illustrationZoomInput) illustrationZoomInput.value = zoom ? zoom.startScale : ILLUSTRATION_ZOOM_MIN + 1
-  positionIllustrationZoomMarker(zoom)
 }
 
 if (illustrationUploadInput) {
@@ -776,9 +767,6 @@ if (illustrationUploadInput) {
     if (!file || !questions[activeIndex]) return
     compressImageFile(file, (dataUrl) => {
       questions[activeIndex].illustration = dataUrl
-      // Nouvelle image -> un ancien point de zoom choisi sur l'image
-      // précédente n'a plus de sens (cadre différent).
-      questions[activeIndex].illustrationZoom = null
       populateIllustrationFields(questions[activeIndex])
     })
   }
@@ -788,44 +776,84 @@ if (removeIllustrationBtn) {
   removeIllustrationBtn.onclick = () => {
     if (!questions[activeIndex]) return
     questions[activeIndex].illustration = null
-    questions[activeIndex].illustrationZoom = null
     populateIllustrationFields(questions[activeIndex])
   }
 }
 
-if (illustrationZoomToggle) {
-  illustrationZoomToggle.onchange = () => {
-    const q = questions[activeIndex]
-    if (!q) return
-    q.illustrationZoom = illustrationZoomToggle.checked
-      ? { x: 0.5, y: 0.5, startScale: Number(illustrationZoomInput?.value) || ILLUSTRATION_ZOOM_MIN + 1 }
-      : null
-    populateIllustrationFields(q)
+// --- Question "ZoomOut Devinette" : image + point/niveau de zoom ---------
+const positionZoomGuessMarker = (zoom) => {
+  if (!zoomGuessMarker) return
+  if (!zoom) { zoomGuessMarker.classList.add('d-none'); return }
+  zoomGuessMarker.style.left = `${zoom.x * 100}%`
+  zoomGuessMarker.style.top = `${zoom.y * 100}%`
+  zoomGuessMarker.classList.remove('d-none')
+}
+
+const populateZoomGuessFields = (q) => {
+  if (!zoomGuessPreviewWrap) return
+  if (q.type !== 'zoomguess') return
+  if (q.image) {
+    zoomGuessPreviewImg.src = q.image
+    zoomGuessPreviewWrap.classList.remove('d-none')
+  } else {
+    zoomGuessPreviewWrap.classList.add('d-none')
+  }
+  if (!q.zoom) q.zoom = { x: 0.5, y: 0.5, startScale: ZOOM_GUESS_DEFAULT }
+  if (zoomGuessZoomInput) zoomGuessZoomInput.value = q.zoom.startScale
+  positionZoomGuessMarker(q.image ? q.zoom : null)
+}
+
+if (zoomGuessUploadInput) {
+  zoomGuessUploadInput.onchange = () => {
+    const file = zoomGuessUploadInput.files && zoomGuessUploadInput.files[0]
+    zoomGuessUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    compressImageFile(file, (dataUrl) => {
+      const q = questions[activeIndex]
+      q.image = dataUrl
+      // Nouvelle image -> un ancien point de zoom choisi sur l'image
+      // précédente n'a plus de sens (cadre différent), mais on garde le
+      // niveau de zoom déjà réglé.
+      q.zoom = { x: 0.5, y: 0.5, startScale: q.zoom?.startScale || ZOOM_GUESS_DEFAULT }
+      populateZoomGuessFields(q)
+    })
   }
 }
 
-if (illustrationPreviewImg) {
-  illustrationPreviewImg.onclick = (e) => {
-    const q = questions[activeIndex]
-    if (readOnly || !q || !q.illustrationZoom) return
-    const rect = illustrationPreviewImg.getBoundingClientRect()
-    q.illustrationZoom.x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
-    q.illustrationZoom.y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
-    positionIllustrationZoomMarker(q.illustrationZoom)
+if (removeZoomGuessBtn) {
+  removeZoomGuessBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    questions[activeIndex].image = null
+    populateZoomGuessFields(questions[activeIndex])
   }
 }
 
-const commitIllustrationZoomLevel = (val) => {
+if (zoomGuessPreviewImg) {
+  zoomGuessPreviewImg.onclick = (e) => {
+    const q = questions[activeIndex]
+    if (readOnly || !q || !q.image) return
+    if (!q.zoom) q.zoom = { x: 0.5, y: 0.5, startScale: ZOOM_GUESS_DEFAULT }
+    const rect = zoomGuessPreviewImg.getBoundingClientRect()
+    q.zoom.x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+    q.zoom.y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+    positionZoomGuessMarker(q.zoom)
+  }
+}
+
+const commitZoomGuessLevel = (val) => {
   const q = questions[activeIndex]
-  const clamped = Math.min(ILLUSTRATION_ZOOM_MAX, Math.max(ILLUSTRATION_ZOOM_MIN, val))
-  if (illustrationZoomInput) illustrationZoomInput.value = clamped
-  if (q && q.illustrationZoom) q.illustrationZoom.startScale = clamped
+  const clamped = Math.min(ZOOM_GUESS_MAX, Math.max(ZOOM_GUESS_MIN, val))
+  if (zoomGuessZoomInput) zoomGuessZoomInput.value = clamped
+  if (q) {
+    if (!q.zoom) q.zoom = { x: 0.5, y: 0.5, startScale: clamped }
+    else q.zoom.startScale = clamped
+  }
 }
-if (illustrationZoomMinusBtn) {
-  illustrationZoomMinusBtn.onclick = () => commitIllustrationZoomLevel((Number(illustrationZoomInput?.value) || 0) - 1)
+if (zoomGuessZoomMinusBtn) {
+  zoomGuessZoomMinusBtn.onclick = () => commitZoomGuessLevel((Number(zoomGuessZoomInput?.value) || ZOOM_GUESS_DEFAULT) - 1)
 }
-if (illustrationZoomPlusBtn) {
-  illustrationZoomPlusBtn.onclick = () => commitIllustrationZoomLevel((Number(illustrationZoomInput?.value) || 0) + 1)
+if (zoomGuessZoomPlusBtn) {
+  zoomGuessZoomPlusBtn.onclick = () => commitZoomGuessLevel((Number(zoomGuessZoomInput?.value) || ZOOM_GUESS_DEFAULT) + 1)
 }
 
 // --- Question "blind test" : upload + recadrage audio ---
@@ -1066,6 +1094,7 @@ const selectQuestion = (index) => {
   populateTrueFalseFields(q)
   populateImageFields(q)
   populateIllustrationFields(q)
+  populateZoomGuessFields(q)
   populateAudioFields(q)
 
   renderOptions()
@@ -1113,24 +1142,27 @@ const toggleTypeSections = () => {
   if (trueFalseSection) trueFalseSection.classList.toggle('d-none', qType.value !== 'truefalse')
   if (orderSection) orderSection.classList.toggle('d-none', qType.value !== 'order')
   if (imageSection) imageSection.classList.toggle('d-none', qType.value !== 'image')
+  if (zoomGuessSection) zoomGuessSection.classList.toggle('d-none', qType.value !== 'zoomguess')
   if (blindtestSection) blindtestSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
   if (intrusSection) intrusSection.classList.toggle('d-none', qType.value !== 'intrus')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
   // déjà leur propre image (le type "image" utilise la sienne comme cible
-  // cliquable, pas comme simple décoration).
-  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image')
+  // cliquable, "zoomguess" la sienne comme photo à deviner — pas comme
+  // simple décoration).
+  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess')
   // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
   // blindtestSection ci-dessus) au lieu de la liste générique "correct".
   // "mcq" a aussi sa propre façon de désigner la bonne réponse : la case à
   // cocher sur chaque option (voir renderOptions), qui alimente déjà
   // entièrement q.correct — la liste "correct" générique ci-dessous ferait
   // donc double emploi (retaper le texte d'une réponse déjà cochée), d'où
-  // la confusion remontée par l'utilisateur. Seul "free" (texte libre, pas
-  // d'options à cocher) a encore besoin de cette liste. "association" /
-  // "timeline" / "intrus" ont chacun leur propre section ci-dessus.
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free')
+  // la confusion remontée par l'utilisateur. "free" (texte libre) ET
+  // "zoomguess" (deviner à partir de l'image) ont besoin de cette liste.
+  // "association" / "timeline" / "intrus" ont chacun leur propre section
+  // ci-dessus.
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess')
   correctLabel.textContent = 'Réponses acceptées'
 }
 
@@ -1887,6 +1919,12 @@ document.addEventListener('paste', (e) => {
     })
   } else if (q.type === 'intrus' && intrusSection && !intrusSection.classList.contains('d-none')) {
     addIntrusPhotos(files)
+  } else if (q.type === 'zoomguess' && zoomGuessSection && !zoomGuessSection.classList.contains('d-none')) {
+    compressImageFile(files[0], (dataUrl) => {
+      q.image = dataUrl
+      q.zoom = { x: 0.5, y: 0.5, startScale: q.zoom?.startScale || ZOOM_GUESS_DEFAULT }
+      populateZoomGuessFields(q)
+    })
   } else if (illustrationSection && !illustrationSection.classList.contains('d-none')) {
     compressImageFile(files[0], (dataUrl) => {
       q.illustration = dataUrl
@@ -1958,6 +1996,13 @@ qType.onchange = () => {
     // repart propre sauf s'il a déjà la bonne forme (ex. retour sur ce type).
     if (!Array.isArray(q.correct) || !q.correct.some(zone => zoneToPolygonPoints(zone).length >= 3)) q.correct = []
     populateImageFields(q)
+  } else if (qType.value === 'zoomguess') {
+    // q.correct venant d'un autre type peut être un objet (blindtest) ou des
+    // formes spécifiques (association/timeline/image) : on repart sur une
+    // liste de réponses acceptées classique, sauf s'il en a déjà une (ex.
+    // retour sur ce type, ou venant de "free" qui a la même forme).
+    if (!Array.isArray(q.correct)) q.correct = ['']
+    populateZoomGuessFields(q)
   } else if (qType.value === 'blindtest') {
     // q.correct venant d'un autre type est un tableau, pas l'objet
     // {title, artist} attendu ici : on repart propre sauf s'il a déjà la bonne
@@ -2032,6 +2077,7 @@ deleteQuestionBtn.onclick = () => {
   populateTrueFalseFields(q)
   populateImageFields(q)
   populateIllustrationFields(q)
+  populateZoomGuessFields(q)
   populateAudioFields(q)
 
   renderOptions()
@@ -2151,6 +2197,21 @@ saveQuizBtn.onclick = async () => {
       }
     } else if (q.type === 'free') {
       // Au moins une réponse acceptée renseignée
+      const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
+      if (!hasAnswer) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
+        return
+      }
+    } else if (q.type === 'zoomguess') {
+      // Une image à deviner ET au moins une réponse acceptée sont obligatoires
+      // (contrairement à l'illustration générique des autres types, purement
+      // décorative et optionnelle).
+      if (!q.image) {
+        selectQuestion(i)
+        showToast(`La question ${i + 1} : importe une image à deviner`, 'error')
+        return
+      }
       const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
       if (!hasAnswer) {
         selectQuestion(i)

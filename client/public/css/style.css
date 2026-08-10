@@ -29,6 +29,8 @@
      (le 3e, orange, réutilise --tile-bronze défini plus bas). */
   --color-teal: #14e0b8;
   --color-violet: #b34bf5;
+  /* "ZoomOut Devinette" (11e type) : indigo, encore libre dans la palette. */
+  --color-indigo: #5865f2;
   --color-accent-soft: rgba(255,47,176,0.14);
   --color-accent-rgb: 255,47,176;
   --color-border: rgba(255,255,255,0.10);
@@ -1515,18 +1517,20 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
 }
-/* Zoom progressif sur l'illustration (voir editor.js "Zoomer progressivement
-   sur un détail" + index.js) : sans conteneur de taille FIXE avec
-   overflow:hidden, un transform:scale() posé directement sur l'<img>
-   déborderait largement de son emplacement normal au lieu de rester "recadré"
-   comme un vrai zoom. Le wrapper ne porte aucune règle par défaut (la
-   question sans zoom garde exactement le rendu ci-dessus, tailles/marges de
-   .illustration-img inchangées) — seule la classe .is-zoomed (posée par JS
-   quand la question a un point de zoom configuré) bascule vers une boîte de
-   taille fixe. */
+/* Type "ZoomOut Devinette" (voir editor.js + index.js) : sans conteneur de
+   taille FIXE avec overflow:hidden, un transform:scale() posé directement
+   sur l'<img> déborderait largement de son emplacement normal au lieu de
+   rester "recadré" comme un vrai zoom. Le wrapper ne porte aucune règle par
+   défaut (une illustration décorative classique, sans zoom, garde
+   exactement le rendu ci-dessus, tailles/marges de .illustration-img
+   inchangées) — seule la classe .is-zoomed (posée par JS pour ce type)
+   bascule vers une boîte de taille fixe. Nettement plus grande que
+   l'ancienne illustration décorative : ici l'image EST la question, pas une
+   simple photo au-dessus (même largeur repère que le type "image", voir
+   .image-area). */
 .illustration-img-wrap.is-zoomed {
-  width: min(360px, 100%);
-  height: 260px;
+  width: min(640px, 100%);
+  height: min(70vh, 420px);
   margin: 0 auto var(--space-md);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -2146,6 +2150,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-item.type-association::before { background: linear-gradient(90deg, var(--tile-bronze) 0, var(--tile-bronze) 3px, transparent 60%); }
 .question-item.type-timeline::before { background: linear-gradient(90deg, var(--color-teal) 0, var(--color-teal) 3px, transparent 60%); }
 .question-item.type-intrus::before { background: linear-gradient(90deg, var(--color-violet) 0, var(--color-violet) 3px, transparent 60%); }
+.question-item.type-zoomguess::before { background: linear-gradient(90deg, var(--color-indigo) 0, var(--color-indigo) 3px, transparent 60%); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
