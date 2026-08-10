@@ -203,11 +203,12 @@
           </div>
 
           <div id="intrusSection" class="detail-section d-none">
-            <label>Propositions (3 à 8) — sélectionne l'intrus</label>
-            <div id="intrusEditList" class="options-editor">
+            <label>Photos (3 à 8) — sélectionne l'intrus parmi les images</label>
+            <div id="intrusEditList" class="options-editor intrus-photo-list">
               <!-- Rempli par JS -->
             </div>
-            <button id="addIntrusOption" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une proposition</button>
+            <input type="file" id="intrusPhotosUpload" accept="image/*" multiple class="cursor-pointer" />
+            <p class="text-muted font-13 mt-8">Sélectionne plusieurs photos d'un coup dans le sélecteur de fichier (jusqu'à 8) — pas besoin de les ajouter une par une.</p>
           </div>
 
           <div id="imageSection" class="detail-section d-none">

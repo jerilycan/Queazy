@@ -5,15 +5,16 @@ const { Server } = require('socket.io')
 const { createClient } = require('@supabase/supabase-js')
 
 // bodyLimit relevé (défaut Fastify 1 Mo) : /api/room-image accepte une image
-// compressée en base64, /api/room-audio un clip audio recadré (voir plus bas)
-// — plus lourd, d'où les 8 Mo (contre 5 initialement).
-const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 8 * 1024 * 1024 })
+// compressée en base64, /api/room-audio un clip audio recadré, /api/room-
+// intrus-images jusqu'à 8 photos compressées d'un coup (voir plus bas) — le
+// plus lourd des trois, d'où les 20 Mo.
+const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 20 * 1024 * 1024 })
 const PORT = process.env.PORT || 3000
 
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.16.4'
+const APP_VERSION = '1.17.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -388,6 +389,36 @@ const start = async () => {
     reply.header('Cache-Control', 'no-store')
     reply.type(match[1])
     return Buffer.from(match[2], 'base64')
+  })
+
+  // Question "intrus" (photos) : même principe que /api/room-image, mais pour
+  // PLUSIEURS images à la fois (3 à 8, une grille entière à afficher d'un
+  // coup) — impossible de réutiliser le slot pendingImage unique ci-dessus.
+  // Une réponse JSON (pas un binaire direct comme /api/room-image) : le
+  // client a besoin des `id` en plus des octets pour associer chaque tuile à
+  // son option, et ça évite 8 allers-retours HTTP séparés pour une seule
+  // question. Chaque image individuelle reste plafonnée comme une image
+  // "room-image" classique (2 Mo) ; bodyLimit global couvre le total.
+  app.post('/api/room-intrus-images/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    if (!room) return reply.code(404).send({ error: 'room_not_found' })
+    const images = req.body?.images
+    const valid = Array.isArray(images) && images.length >= 3 && images.length <= 8 &&
+      images.every(item =>
+        item && typeof item.id === 'string' && /^[a-z0-9]{1,16}$/.test(item.id) &&
+        typeof item.image === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(item.image) && item.image.length <= 2_000_000
+      )
+    if (!valid) return reply.code(400).send({ error: 'invalid_images' })
+    room.pendingIntrusImages = images
+    return { ok: true }
+  })
+
+  app.get('/api/room-intrus-images/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    const images = room?.pendingIntrusImages
+    if (!Array.isArray(images)) return reply.code(404).send()
+    reply.header('Cache-Control', 'no-store')
+    return { images }
   })
 
   // Question "blind test" : même principe que /api/room-image ci-dessus (pas

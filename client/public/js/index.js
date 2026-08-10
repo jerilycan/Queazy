@@ -2617,6 +2617,22 @@ const uploadRoomAudio = (roomCode, base64Audio) => {
   })
 }
 
+// Même principe encore, pour les PLUSIEURS photos du type "intrus" (voir
+// server/index.js /api/room-intrus-images/:code) — un seul upload pour
+// toute la grille plutôt qu'un par photo. `images` = [{id, image}, ...]
+// (voir editor.js). Retourne l'URL à interroger une fois pour récupérer le
+// tableau complet {images:[...]}, pas une URL par photo.
+const uploadRoomIntrusImages = (roomCode, images) => {
+  return fetch(`/api/room-intrus-images/${encodeURIComponent(roomCode)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ images })
+  }).then(res => {
+    if (!res.ok) throw new Error('upload failed')
+    return `/api/room-intrus-images/${encodeURIComponent(roomCode)}?v=${Date.now()}`
+  })
+}
+
 const emitQuestion = (index) => {
   const roomCode = roomInput.value.trim()
   if (!roomCode || !loadedQuiz) return
@@ -2644,7 +2660,16 @@ const emitQuestion = (index) => {
     // l'ordre correct saisi dans l'éditeur, ni toujours le même mélange) —
     // le mélange est fait une fois ici, avant l'envoi ; le serveur retire
     // 'correct' de la diffusion (anti-triche), 'options' seul est visible.
-    options: q.type === 'order' ? shuffleArray(correctOrder) : (Array.isArray(q.options) ? q.options : []),
+    // "intrus" (photos) : jamais les data-URI ici (voir uploads plus bas,
+    // même relais HTTP que "image"/"illustration") — seulement les petits id
+    // de chaque photo, dans l'ordre. Sert aussi de tileCount côté serveur
+    // (computeRevealMs) : la longueur doit rester correcte même avant que
+    // l'upload des images elles-mêmes ait résolu.
+    options: q.type === 'order'
+      ? shuffleArray(correctOrder)
+      : q.type === 'intrus'
+        ? (Array.isArray(q.options) ? q.options.map(o => o?.id ?? '') : [])
+        : (Array.isArray(q.options) ? q.options : []),
     // "association" : la colonne A garde son ordre d'origine (sert de repère
     // stable pour le scoring serveur, voir server/index.js), seule la
     // colonne B est mélangée avant l'envoi — jamais dans l'ordre correct.
@@ -2685,6 +2710,9 @@ const emitQuestion = (index) => {
   }
   if (audioToUpload) {
     uploads.push(uploadRoomAudio(roomCode, audioToUpload).then(url => { payload.audioUrl = url }))
+  }
+  if (q.type === 'intrus' && Array.isArray(q.options) && q.options.length > 0) {
+    uploads.push(uploadRoomIntrusImages(roomCode, q.options).then(url => { payload.intrusImagesUrl = url }))
   }
   if (uploads.length > 0) {
     Promise.all(uploads).then(() => {
@@ -3006,22 +3034,42 @@ socket.on('question:show', payload => {
       applyTileReveal(el, i)
     })
   } else if (payload.type === 'intrus' && Array.isArray(payload.options)) {
-    // Réutilise entièrement le rendu QCM (mêmes tuiles .option-btn, même
-    // dégradé de 4 couleurs cyclique) mais choix EXCLUSIF comme "truefalse" —
-    // il n'y a qu'un seul intrus possible, pas de sélection multiple.
-    payload.options.forEach((opt, i) => {
+    // Réutilise le rendu QCM (mêmes tuiles .option-btn) mais choix EXCLUSIF
+    // comme "truefalse" — il n'y a qu'un seul intrus possible. Chaque tuile
+    // affiche une PHOTO plutôt qu'un texte : payload.options ne contient que
+    // les petits id des photos (jamais les data-URI elles-mêmes, voir
+    // emitQuestion — même relais HTTP que "image"/"illustration", trop
+    // lourd pour transiter de façon fiable par socket.io une fois déployé).
+    // Les tuiles existent tout de suite (nécessaire pour applyTileReveal,
+    // l'animation d'entrée), les photos arrivent un instant après via une
+    // requête HTTP à part.
+    const intrusTileImgById = {}
+    payload.options.forEach((id, i) => {
       const el = document.createElement('div')
-      el.className = 'option-btn'
-      el.textContent = opt
+      el.className = 'option-btn intrus-tile'
+      el.dataset.optionId = id
+      const img = document.createElement('img')
+      img.className = 'intrus-tile-img'
+      img.alt = ''
+      el.appendChild(img)
       el.onclick = () => {
         if (currentSingleAttempt && sendBtn.disabled) return
-        selectedMcqOptions = [opt]
+        selectedMcqOptions = [id]
         Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'))
         el.classList.add('selected')
       }
       optionsDiv.appendChild(el)
       applyTileReveal(el, i)
+      intrusTileImgById[id] = img
     })
+    if (payload.intrusImagesUrl) {
+      fetch(payload.intrusImagesUrl).then(res => res.json()).then(({ images }) => {
+        (images || []).forEach(item => {
+          const img = intrusTileImgById[item.id]
+          if (img) img.src = item.image
+        })
+      }).catch(() => {})
+    }
   } else if (payload.type === 'truefalse') {
     // Choix exclusif (un seul des deux boutons peut être sélectionné à la fois),
     // contrairement au QCM où plusieurs réponses peuvent être cochées.
@@ -3596,7 +3644,11 @@ socket.on('question:reveal', payload => {
   }
   if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus') && optionsDiv) {
     Array.from(optionsDiv.children).forEach(el => {
-      if ((payload.correct || []).includes(el.textContent)) el.classList.add('correct-reveal')
+      // "intrus" (photos) : la tuile n'a plus de texte à comparer, l'id de
+      // la photo est dans son dataset (voir question:show) plutôt que dans
+      // el.textContent comme pour mcq/truefalse.
+      const value = payload.type === 'intrus' ? el.dataset.optionId : el.textContent
+      if ((payload.correct || []).includes(value)) el.classList.add('correct-reveal')
       else el.classList.add('incorrect-reveal')
     })
     showMyResultBanner()

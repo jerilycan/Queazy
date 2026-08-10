@@ -169,9 +169,19 @@ const TIMELINE_MAX_EVENTS = 8
 
 const intrusSection = document.getElementById('intrusSection')
 const intrusEditList = document.getElementById('intrusEditList')
-const addIntrusOptionBtn = document.getElementById('addIntrusOption')
+const intrusPhotosUploadInput = document.getElementById('intrusPhotosUpload')
 const INTRUS_MIN_OPTIONS = 3
 const INTRUS_MAX_OPTIONS = 8
+
+// Chaque photo reçoit un petit id stable (alphanumérique minuscule, sûr pour
+// la comparaison serveur — voir fuzzy()/norm() qui met tout en minuscules :
+// jamais le contenu de l'image elle-même comme "valeur" comparée). q.correct
+// référence cet id, pas la position dans le tableau : survit sans effort à
+// un réordonnancement par glisser (wireIntrusEditDrag ne fait que déplacer
+// les objets {id, image} dans le tableau, l'id voyage avec).
+const genIntrusOptionId = () => Math.random().toString(36).slice(2, 8)
+const isValidIntrusOptions = (options) =>
+  Array.isArray(options) && options.every(o => o && typeof o.id === 'string' && typeof o.image === 'string')
 
 const imageSection = document.getElementById('imageSection')
 const imageUploadInput = document.getElementById('imageUpload')
@@ -254,7 +264,7 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
-    addAssociationPairBtn, addTimelineEventBtn, addIntrusOptionBtn,
+    addAssociationPairBtn, addTimelineEventBtn, intrusPhotosUploadInput,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
@@ -1591,12 +1601,12 @@ const renderIntrusOptions = () => {
   intrusEditList.innerHTML = ''
   const q = questions[activeIndex]
   if (!q || q.type !== 'intrus') return
-  if (!Array.isArray(q.options) || q.options.length < INTRUS_MIN_OPTIONS) q.options = ['', '', '']
+  if (!isValidIntrusOptions(q.options)) q.options = []
   if (!Array.isArray(q.correct)) q.correct = []
 
   q.options.forEach((opt, idx) => {
     const row = document.createElement('div')
-    row.className = 'option-row order-edit-row'
+    row.className = 'option-row order-edit-row intrus-photo-row'
     row.dataset.index = idx
 
     if (!readOnly) {
@@ -1607,28 +1617,41 @@ const renderIntrusOptions = () => {
       wireIntrusEditDrag(row)
     }
 
+    const thumb = document.createElement('img')
+    thumb.className = 'intrus-photo-thumb'
+    thumb.src = opt.image
+    thumb.alt = ''
+    // Cliquer la vignette permet de remplacer CETTE photo précise, sans
+    // perdre sa place dans la liste ni son statut d'intrus éventuel.
+    if (!readOnly) {
+      thumb.title = 'Cliquer pour remplacer cette photo'
+      thumb.classList.add('cursor-pointer')
+      thumb.onclick = () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.onchange = () => {
+          const file = input.files && input.files[0]
+          if (!file) return
+          compressImageFile(file, (dataUrl) => {
+            q.options[idx].image = dataUrl
+            renderIntrusOptions()
+          })
+        }
+        input.click()
+      }
+    }
+    row.appendChild(thumb)
+
     const radio = document.createElement('input')
     radio.type = 'radio'
     radio.name = INTRUS_RADIO_NAME
     radio.className = 'checkbox-custom mr-8'
-    radio.checked = q.correct[0] === opt && opt.trim() !== ''
+    radio.checked = q.correct[0] === opt.id
     radio.title = 'Marquer comme intrus'
     radio.disabled = readOnly
-    radio.onchange = () => { q.correct = [q.options[idx]] }
+    radio.onchange = () => { q.correct = [q.options[idx].id] }
     row.appendChild(radio)
-
-    const input = document.createElement('input')
-    input.type = 'text'
-    input.value = opt
-    input.placeholder = 'Proposition ' + (idx + 1)
-    input.style.flex = '1'
-    input.disabled = readOnly
-    input.oninput = (e) => {
-      const wasIntrus = q.correct[0] === q.options[idx]
-      q.options[idx] = e.target.value
-      if (wasIntrus) q.correct = [e.target.value]
-    }
-    row.appendChild(input)
 
     if (!readOnly) {
       const del = document.createElement('button')
@@ -1636,10 +1659,10 @@ const renderIntrusOptions = () => {
       del.innerHTML = '&times;'
       del.onclick = () => {
         if (q.options.length <= INTRUS_MIN_OPTIONS) {
-          showToast(`Il faut au moins ${INTRUS_MIN_OPTIONS} propositions`, 'error')
+          showToast(`Il faut au moins ${INTRUS_MIN_OPTIONS} photos`, 'error')
           return
         }
-        const wasIntrus = q.correct[0] === q.options[idx]
+        const wasIntrus = q.correct[0] === q.options[idx].id
         q.options.splice(idx, 1)
         if (wasIntrus) q.correct = []
         renderIntrusOptions()
@@ -1651,17 +1674,38 @@ const renderIntrusOptions = () => {
   })
 }
 
-if (addIntrusOptionBtn) {
-  addIntrusOptionBtn.onclick = () => {
+// Sélection MULTIPLE de fichiers en une fois (attribut "multiple" sur
+// l'input, voir editor.html) : on compresse chaque fichier retenu et on
+// ajoute une photo par fichier, jusqu'à INTRUS_MAX_OPTIONS — pas besoin de
+// rouvrir le sélecteur 8 fois pour 8 photos.
+if (intrusPhotosUploadInput) {
+  intrusPhotosUploadInput.onchange = () => {
+    const files = intrusPhotosUploadInput.files ? Array.from(intrusPhotosUploadInput.files) : []
+    intrusPhotosUploadInput.value = ''
     const q = questions[activeIndex]
-    if (!q) return
+    if (!q || files.length === 0) return
     if (!Array.isArray(q.options)) q.options = []
-    if (q.options.length >= INTRUS_MAX_OPTIONS) {
-      showToast(`Maximum ${INTRUS_MAX_OPTIONS} propositions`, 'error')
+    const room = INTRUS_MAX_OPTIONS - q.options.length
+    if (room <= 0) {
+      showToast(`Maximum ${INTRUS_MAX_OPTIONS} photos`, 'error')
       return
     }
-    q.options.push('')
-    renderIntrusOptions()
+    const toAdd = files.slice(0, room)
+    if (files.length > toAdd.length) {
+      showToast(`Seules les ${toAdd.length} premières photos ont été ajoutées (maximum ${INTRUS_MAX_OPTIONS})`, 'error')
+    }
+    // Compression asynchrone par fichier (FileReader/Image/canvas, voir
+    // compressImageFile) : un re-rendu par succès plutôt qu'un compteur
+    // global en attendant TOUS les fichiers — compressImageFile n'appelle
+    // jamais le callback en cas de fichier invalide (juste un toast
+    // d'erreur), donc un compteur global resterait bloqué indéfiniment dès
+    // qu'un seul fichier de la sélection échoue.
+    toAdd.forEach(file => {
+      compressImageFile(file, (dataUrl) => {
+        q.options.push({ id: genIntrusOptionId(), image: dataUrl })
+        renderIntrusOptions()
+      })
+    })
   }
 }
 
@@ -1742,11 +1786,12 @@ qType.onchange = () => {
     // s'il a déjà cette forme (ex. retour sur ce type).
     if (!isValidTimelineEvents(q.correct)) q.correct = [{ title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }]
   } else if (qType.value === 'intrus') {
-    // q.options venant d'un autre type n'a pas forcément 3-8 entrées ; q.correct
-    // venant d'un autre type (blindtest {title,artist}, association [{a,b}]...)
-    // ne correspond pas au format [texteIntrus] attendu ici : on repart
-    // propre dans les deux cas, sauf s'ils ont déjà la bonne forme.
-    if (!Array.isArray(q.options) || q.options.length < INTRUS_MIN_OPTIONS) q.options = ['', '', '']
+    // q.options venant d'un autre type n'a pas la forme [{id,image}, ...]
+    // attendue ici (ni q.correct=[id]) : on repart propre dans les deux cas,
+    // sauf s'ils ont déjà la bonne forme (ex. retour sur ce type). Vide plutôt
+    // qu'un tableau de 3 entrées comme les autres types : pas de placeholder
+    // sensé pour une photo pas encore importée, l'utilisateur doit uploader.
+    if (!isValidIntrusOptions(q.options)) q.options = []
     if (!Array.isArray(q.correct) || q.correct.length !== 1) q.correct = []
   }
   toggleTypeSections()
@@ -1934,25 +1979,25 @@ saveQuizBtn.onclick = async () => {
       }
     }
 
-    // Pour "intrus", entre 3 et 8 propositions toutes remplies, et
-    // exactement un intrus désigné (le radio garantit déjà "au plus un" côté
-    // UI ; ici on vérifie qu'il y en a bien "au moins un").
+    // Pour "intrus", entre 3 et 8 photos toutes importées, et exactement un
+    // intrus désigné (le radio garantit déjà "au plus un" côté UI ; ici on
+    // vérifie qu'il y en a bien "au moins un").
     if (q.type === 'intrus') {
       const opts = Array.isArray(q.options) ? q.options : []
       if (opts.length < INTRUS_MIN_OPTIONS || opts.length > INTRUS_MAX_OPTIONS) {
         selectQuestion(i)
-        showToast(`La question ${i + 1} : il faut entre ${INTRUS_MIN_OPTIONS} et ${INTRUS_MAX_OPTIONS} propositions`, 'error')
+        showToast(`La question ${i + 1} : il faut entre ${INTRUS_MIN_OPTIONS} et ${INTRUS_MAX_OPTIONS} photos`, 'error')
         return
       }
-      const hasEmptyOption = opts.some(o => !o || !o.trim())
-      if (hasEmptyOption) {
+      const hasMissingImage = opts.some(o => !o || !o.image)
+      if (hasMissingImage) {
         selectQuestion(i)
-        showToast(`La question ${i + 1} : chaque proposition doit être remplie`, 'error')
+        showToast(`La question ${i + 1} : chaque emplacement doit avoir une photo`, 'error')
         return
       }
-      if (!Array.isArray(q.correct) || q.correct.length !== 1 || !opts.includes(q.correct[0])) {
+      if (!Array.isArray(q.correct) || q.correct.length !== 1 || !opts.some(o => o.id === q.correct[0])) {
         selectQuestion(i)
-        showToast(`La question ${i + 1} : désigne l'intrus parmi les propositions`, 'error')
+        showToast(`La question ${i + 1} : désigne l'intrus parmi les photos`, 'error')
         return
       }
     }
