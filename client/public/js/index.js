@@ -2882,6 +2882,14 @@ socket.on('question:show', payload => {
   sendBtn.disabled = true
   gradState.disabled = true
   selectedMcqOptions = []
+  // Symétrique du answerInput.disabled = false juste au-dessus : ces deux
+  // champs sont verrouillés après soumission en mode "une seule tentative"
+  // (voir submitCurrentAnswer) mais n'étaient jamais redéverrouillés ici au
+  // démarrage de la question SUIVANTE — oubli qui laissait les champs
+  // titre/artiste bloqués en écriture dès la 2e question blind test de la
+  // partie (signalé par l'utilisateur : "je ne peux pas écrire").
+  if (blindtestTitleInput) blindtestTitleInput.disabled = false
+  if (blindtestArtistInput) blindtestArtistInput.disabled = false
   // Tout le monde démarre verrouillé : la question puis les tuiles se
   // révèlent d'abord (ci-dessous), le chrono et les réponses ne s'activent
   // qu'à startTs. L'hôte, lui, reste verrouillé en permanence — il ne répond

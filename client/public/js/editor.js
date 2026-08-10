@@ -282,7 +282,9 @@ const applyReadOnly = () => {
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
     document.getElementById('gradTargetMinus'), document.getElementById('gradTargetPlus'),
-    document.getElementById('gradToleranceMinus'), document.getElementById('gradTolerancePlus')
+    document.getElementById('gradToleranceMinus'), document.getElementById('gradTolerancePlus'),
+    document.getElementById('audioStartMinus'), document.getElementById('audioStartPlus'),
+    document.getElementById('audioDurationMinus'), document.getElementById('audioDurationPlus')
   ]
   controls.forEach(el => { if (el) el.disabled = true })
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
@@ -853,6 +855,29 @@ if (audioUploadInput) {
 if (audioStartInput) audioStartInput.oninput = clampAudioTrimInputs
 if (audioDurationInput) audioDurationInput.oninput = clampAudioTrimInputs
 
+// Boutons +/- des champs Début/Durée : présents dans le HTML depuis le
+// départ mais jamais câblés (contrairement à bindGradStepper pour les
+// champs curseur numérique) — ne faisaient donc rien au clic (signalé par
+// l'utilisateur). clampAudioTrimInputs() rejoue le même clampage que la
+// saisie manuelle (oninput ci-dessus), donc +/- ne peuvent pas sortir des
+// bornes valides (0 <= début, durée <= AUDIO_CLIP_MAX_DURATION et piste).
+const audioStartMinusBtn = document.getElementById('audioStartMinus')
+const audioStartPlusBtn = document.getElementById('audioStartPlus')
+const audioDurationMinusBtn = document.getElementById('audioDurationMinus')
+const audioDurationPlusBtn = document.getElementById('audioDurationPlus')
+if (audioStartMinusBtn && audioStartInput) {
+  audioStartMinusBtn.onclick = () => { audioStartInput.value = (Number(audioStartInput.value) || 0) - 1; clampAudioTrimInputs() }
+}
+if (audioStartPlusBtn && audioStartInput) {
+  audioStartPlusBtn.onclick = () => { audioStartInput.value = (Number(audioStartInput.value) || 0) + 1; clampAudioTrimInputs() }
+}
+if (audioDurationMinusBtn && audioDurationInput) {
+  audioDurationMinusBtn.onclick = () => { audioDurationInput.value = (Number(audioDurationInput.value) || 0) - 1; clampAudioTrimInputs() }
+}
+if (audioDurationPlusBtn && audioDurationInput) {
+  audioDurationPlusBtn.onclick = () => { audioDurationInput.value = (Number(audioDurationInput.value) || 0) + 1; clampAudioTrimInputs() }
+}
+
 if (audioPreviewBtn) {
   audioPreviewBtn.onclick = () => {
     if (!pendingAudioBuffer) return
@@ -1037,35 +1062,56 @@ const renderOptions = () => {
   // et cette fonction ne sert de toute façon à rien pour ce type (pas d'options QCM).
   if (q.type === 'blindtest') return
   if (!q.options) q.options = []
-  
+
+  // q.correct (sauvegardé/envoyé au serveur) reste un tableau de TEXTES, mais
+  // le suivi PENDANT L'ÉDITION se fait par INDEX (correctIndices), pas par
+  // recherche de valeur (l'ancien code faisait q.correct.indexOf(oldVal)) :
+  // avec plusieurs options encore vides (ou un texte dupliqué) en même temps,
+  // cocher l'une puis taper dans une autre pouvait faire correspondre la
+  // MAUVAISE option et voler silencieusement la bonne réponse à une autre
+  // (bug remonté par l'utilisateur — coché correct à la création, compté
+  // faux en jeu). Un index reste sans ambiguïté pour toute la durée de CE
+  // rendu, indépendamment du texte tapé. Correspondance texte->index encore
+  // best-effort ICI (une seule fois, au chargement), chaque entrée de
+  // q.correct n'étant consommée qu'une fois pour éviter de cocher plusieurs
+  // options partageant un texte identique.
+  const remainingCorrectTexts = q.correct.slice()
+  const correctIndices = new Set()
+  q.options.forEach((opt, i) => {
+    if (opt.trim() === '') return
+    const pos = remainingCorrectTexts.indexOf(opt)
+    if (pos !== -1) {
+      correctIndices.add(i)
+      remainingCorrectTexts.splice(pos, 1)
+    }
+  })
+  const syncCorrectFromIndices = () => {
+    q.correct = q.options.filter((_, i) => correctIndices.has(i))
+  }
+
   q.options.forEach((opt, idx) => {
-    const isCorrect = q.correct.includes(opt) && opt.trim() !== ''
     const row = createInputRow(opt, (val) => {
-      // Si on change le texte d'une option qui était correcte, on met à jour le tableau correct
-      const oldVal = q.options[idx]
       q.options[idx] = val
-      const cIdx = q.correct.indexOf(oldVal)
-      if (cIdx !== -1) {
-        q.correct[cIdx] = val
-      }
+      // Cette option est (ou reste) marquée correcte : on reconstruit q.correct
+      // en entier plutôt que de "renommer" une entrée retrouvée par texte.
+      if (correctIndices.has(idx)) syncCorrectFromIndices()
     }, () => {
       if (q.options.length <= MCQ_MIN_OPTIONS) {
         showToast(`Il faut au moins ${MCQ_MIN_OPTIONS} options`, 'error')
         return
       }
-      const val = q.options[idx]
-      q.options.splice(idx, 1)
-      const cIdx = q.correct.indexOf(val)
-      if (cIdx !== -1) q.correct.splice(cIdx, 1)
-      renderOptions()
-    }, true, isCorrect, (checked) => {
-      const val = q.options[idx]
-      if (checked) {
-        if (!q.correct.includes(val)) q.correct.push(val)
-      } else {
-        const cIdx = q.correct.indexOf(val)
-        if (cIdx !== -1) q.correct.splice(cIdx, 1)
+      // Retire cette option de q.correct AVANT de la spliced (les index de
+      // correctIndices ne sont valables que pour CE rendu, pas après).
+      if (correctIndices.has(idx)) {
+        correctIndices.delete(idx)
+        syncCorrectFromIndices()
       }
+      q.options.splice(idx, 1)
+      renderOptions()
+    }, true, correctIndices.has(idx), (checked) => {
+      if (checked) correctIndices.add(idx)
+      else correctIndices.delete(idx)
+      syncCorrectFromIndices()
     })
     optionsList.appendChild(row)
   })
