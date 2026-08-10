@@ -2247,6 +2247,10 @@ joinBtn.onclick = () => {
   socket.emit('room:join', { roomCode, playerName, token, avatar })
 }
 
+roomInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click() })
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click() })
+guestNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') confirmGuestJoin.click() })
+
 confirmGuestJoin.onclick = () => {
   const roomCode = roomInput.value.trim()
   const guestName = guestNameInput.value.trim()
@@ -2630,6 +2634,8 @@ if (closePersoBtn) {
 
 const saveBtn = document.getElementById('lobbySave')
 if (saveBtn) {
+  const lobbyNameBox = document.getElementById('lobbyName')
+  if (lobbyNameBox) lobbyNameBox.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click() })
   saveBtn.onclick = () => {
     const roomCode = roomInput.value.trim()
     const nameBox = document.getElementById('lobbyName')
@@ -3073,12 +3079,13 @@ socket.on('question:show', payload => {
     timerBarFill.style.transform = 'scaleX(1)'
   }
 
-  // Déverrouillage à startTs (juste un petit tampon réseau après l'affichage
-  // de la question, voir server/index.js ANSWER_WINDOW_BUFFER_MS — plus la
-  // durée de l'animation d'entrée comme avant) : tuiles/curseur/liste et
-  // bouton d'envoi redeviennent interactifs dès que le chrono démarre pour
-  // de vrai. revealToken évite qu'un déverrouillage tardif ne s'applique après
-  // le passage à une autre question (hôte qui enchaîne très vite).
+  // Déverrouillage à startTs (aligné sur REVEAL_QUESTION_BEAT_MS — voir
+  // server/index.js ANSWER_WINDOW_BUFFER_MS — pas la durée complète de
+  // l'animation d'entrée comme avant) : tuiles/curseur/liste et bouton
+  // d'envoi redeviennent interactifs dès que le chrono démarre pour de vrai,
+  // au moment où la première réponse commence tout juste à apparaître.
+  // revealToken évite qu'un déverrouillage tardif ne s'applique après le
+  // passage à une autre question (hôte qui enchaîne très vite).
   const myRevealToken = ++revealToken
   if (!isHost) {
     setTimeout(() => {
@@ -3155,6 +3162,24 @@ socket.on('question:show', payload => {
     if (remaining > 0 && remaining <= 5000 && secondsLeft !== lastTickSecond && !hasAnsweredThisQuestion) {
       lastTickSecond = secondsLeft
       playSound('tick')
+    }
+
+    // Auto-envoi juste avant la fin du chrono pour les questions à réponse
+    // écrite (libre / blind test) : si le joueur n'a jamais cliqué "Envoyer"
+    // mais a bel et bien tapé quelque chose, ça part quand même au lieu
+    // d'être perdu (retour utilisateur : sinon la réponse tapée n'était
+    // jamais transmise). Rien n'est envoyé si le champ est resté vide — pas
+    // de fausse tentative comptée. Un peu AVANT remaining=0 (marge réseau)
+    // pour arriver au serveur avant la fermeture de la fenêtre de réponse
+    // (voir server/index.js answer:submit, `Date.now() - q.startTs > q.timerMs`).
+    // submitCurrentAnswer() lui-même pose hasAnsweredThisQuestion = true,
+    // donc ce bloc ne se déclenche qu'une seule fois.
+    if (!isHost && !hasAnsweredThisQuestion && remaining > 0 && remaining <= 500) {
+      if (currentQuestionType === 'free' && answerInput.value.trim()) {
+        submitCurrentAnswer()
+      } else if (currentQuestionType === 'blindtest' && ((blindtestTitleInput?.value || '').trim() || (blindtestArtistInput?.value || '').trim())) {
+        submitCurrentAnswer()
+      }
     }
 
     if (remaining <= 0) {
@@ -3318,6 +3343,8 @@ const submitCurrentAnswer = () => {
 sendBtn.onclick = submitCurrentAnswer
 
 answerInput.addEventListener('keydown', e => { if (e.key === 'Enter') { sendBtn.click() } })
+if (blindtestTitleInput) blindtestTitleInput.addEventListener('keydown', e => { if (e.key === 'Enter') { sendBtn.click() } })
+if (blindtestArtistInput) blindtestArtistInput.addEventListener('keydown', e => { if (e.key === 'Enter') { sendBtn.click() } })
 
 socket.on('answer:ack', () => { showAnswerStatus() })
 

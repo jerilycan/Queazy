@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.26.0'
+const APP_VERSION = '1.27.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -602,15 +602,20 @@ const start = async () => {
   }
 
   // Marge avant que le chrono ne démarre vraiment (et que les réponses
-  // s'ouvrent) : plus un temps de lecture/d'attente de l'animation comme
-  // avant (jusqu'à ~4s pour 8 tuiles — c'était le principal reproche : trop
-  // de temps perdu à chaque question), juste un petit tampon réseau pour que
-  // startTs corresponde au même instant absolu pour tout le monde même avec
-  // un peu de latence de diffusion. L'animation de révélation des tuiles
-  // (voir index.js applyTileReveal, REVEAL_QUESTION_BEAT_MS/REVEAL_STAGGER_MS)
-  // continue de jouer normalement, mais purement en cosmétique désormais :
-  // elle ne bloque plus le clic/la validation, qui s'ouvrent dès ce tampon-ci.
-  const ANSWER_WINDOW_BUFFER_MS = 300
+  // s'ouvrent) : plus un temps de lecture/d'attente de l'ANIMATION COMPLÈTE
+  // comme avant (jusqu'à ~4s pour 8 tuiles — c'était le principal reproche :
+  // trop de temps perdu à chaque question). Mais un simple tampon réseau de
+  // 300ms s'est révélé trop court dans l'autre sens (retour utilisateur : "le
+  // chrono commence trop tôt") : côté client, applyTileReveal (voir index.js,
+  // REVEAL_QUESTION_BEAT_MS/REVEAL_STAGGER_MS) garde les tuiles/le champ de
+  // réponse invisibles (opacity:0, fill-mode "both") pendant DELAY=900ms
+  // minimum avant même de commencer à apparaître — donc avec un tampon de
+  // 300ms, le chrono démarrait et le clic s'ouvrait ~600ms avant que quoi que
+  // ce soit ne soit visible à l'écran. Alignée ici sur REVEAL_QUESTION_BEAT_MS
+  // (le délai de la toute première tuile) : le chrono ne démarre plus avant
+  // que la première réponse ait commencé à apparaître, sans réintroduire
+  // l'attente complète de toutes les tuiles.
+  const ANSWER_WINDOW_BUFFER_MS = 900
 
   io.on('connection', socket => {
     socket.on('room:create', async payload => {
