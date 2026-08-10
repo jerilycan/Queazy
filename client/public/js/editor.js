@@ -2332,7 +2332,11 @@ saveQuizBtn.onclick = async () => {
     }
 
     // Pour "blindtest", il faut un extrait audio validé et au moins une
-    // réponse acceptée pour CHAQUE champ (titre ET artiste)
+    // réponse acceptée pour le titre — et pour l'artiste aussi, SAUF en mode
+    // "titre uniquement" (voir btTitleOnlyToggle), où ce champ est caché
+    // côté joueur et jamais jugé côté serveur (voir answer:submit) : rien à
+    // exiger ici non plus, sans quoi on bloque la sauvegarde pour un champ
+    // que personne ne remplira jamais (bug remonté par l'utilisateur).
     if (q.type === 'blindtest') {
       if (!q.audio) {
         selectQuestion(i)
@@ -2345,11 +2349,13 @@ saveQuizBtn.onclick = async () => {
         showToast(`La question ${i + 1} : renseigne au moins un titre accepté`, 'error')
         return
       }
-      const hasArtist = (q.correct?.artist || []).some(c => c && c.trim() !== '')
-      if (!hasArtist) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : renseigne au moins un artiste accepté`, 'error')
-        return
+      if (!q.titleOnly) {
+        const hasArtist = (q.correct?.artist || []).some(c => c && c.trim() !== '')
+        if (!hasArtist) {
+          selectQuestion(i)
+          showToast(`La question ${i + 1} : renseigne au moins un artiste accepté`, 'error')
+          return
+        }
       }
     }
   }

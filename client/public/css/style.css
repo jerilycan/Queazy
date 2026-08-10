@@ -1545,10 +1545,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   border-radius: 0;
   box-shadow: none;
   object-fit: cover;
-  /* Le dézoom lui-même est recalculé ~10x/seconde par le même tick que la
-     barre de temps (voir index.js) : une petite transition adoucit les pas
-     entre deux mises à jour plutôt qu'un changement de valeur brutal. */
-  transition: transform 0.12s linear;
+  /* Le dézoom (et le flou, voir plus bas) sont recalculés ~10x/seconde par
+     le même tick que la barre de temps (voir index.js) : une petite
+     transition adoucit les pas entre deux mises à jour plutôt qu'un
+     changement de valeur brutal. */
+  transition: transform 0.12s linear, filter 0.12s linear;
 }
 
 /* Question "blind test" : orbe néon qui pulse en direct avec le volume de

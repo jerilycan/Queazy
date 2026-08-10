@@ -361,6 +361,14 @@ let timerInt = null
 // TOUS les écrans (hôte + joueurs), puisque tous calculent depuis le même
 // startTs/timerMs reçus du serveur — jamais un minuteur local indépendant.
 let currentIllustrationZoom = null
+// Un fort scale() seul ne garantit pas un rendu "juste une tache de
+// couleur" : sur une image aux formes simples et très contrastées (dessin
+// stylisé, rendu 3D à plat...), même un tout petit recadrage agrandi peut
+// rester lisible (retour utilisateur : un oeil encore net à zoom x25). Le
+// flou, lui, brouille l'image quel que soit son contenu — ajouté en plus du
+// zoom, proportionnel au niveau choisi, et retombe à 0 en même temps que le
+// dézoom atteint scale(1).
+const zoomGuessBlurPx = (startScale) => Math.min(24, Math.max(0, (startScale - 1) * 1.1))
 let selectedMcqOptions = []
 let currentQuestionType = 'free'
 let isGameEnded = false
@@ -2946,9 +2954,11 @@ socket.on('question:show', payload => {
     if (currentIllustrationZoom) {
       illustrationImg.style.transformOrigin = `${currentIllustrationZoom.x * 100}% ${currentIllustrationZoom.y * 100}%`
       illustrationImg.style.transform = `scale(${currentIllustrationZoom.startScale})`
+      illustrationImg.style.filter = `blur(${zoomGuessBlurPx(currentIllustrationZoom.startScale)}px)`
     } else {
       illustrationImg.style.transformOrigin = ''
       illustrationImg.style.transform = ''
+      illustrationImg.style.filter = ''
     }
   }
   answerInput.value = ''
@@ -3089,6 +3099,7 @@ socket.on('question:show', payload => {
       const progress = Math.min(1, 1 - remaining / total)
       const scale = currentIllustrationZoom.startScale + (1 - currentIllustrationZoom.startScale) * progress
       illustrationImg.style.transform = `scale(${scale})`
+      illustrationImg.style.filter = `blur(${zoomGuessBlurPx(currentIllustrationZoom.startScale) * (1 - progress)}px)`
     }
 
     if (timerBarFill) {
@@ -3688,7 +3699,7 @@ socket.on('timer:end', () => {
   // clore avant que le tick d'index.js n'ait naturellement atteint scale(1)
   // (tout le monde a répondu en avance) — on force l'image complète tout de
   // suite pour rester cohérent avec la révélation qui s'affiche en dessous.
-  if (currentIllustrationZoom && illustrationImg) illustrationImg.style.transform = 'scale(1)'
+  if (currentIllustrationZoom && illustrationImg) { illustrationImg.style.transform = 'scale(1)'; illustrationImg.style.filter = '' }
   // Coupe l'extrait s'il n'était pas déjà terminé (le chrono peut être plus
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).
