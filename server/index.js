@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.17.0'
+const APP_VERSION = '1.17.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -592,29 +592,16 @@ const start = async () => {
     return min
   }
 
-  // Délai de révélation avant que le chrono ne démarre vraiment : le temps
-  // que la question s'affiche puis que les réponses apparaissent une à une
-  // (animation partagée hôte/joueurs), tout le monde lit en même temps avant
-  // que ça ne devienne une course. Les constantes (pause, décalage par tuile,
-  // durée d'anim) sont dupliquées côté client (index.js) pour que le timing
-  // visuel colle exactement à ce délai serveur.
-  const REVEAL_QUESTION_BEAT_MS = 900
-  const REVEAL_STAGGER_MS = 350
-  const REVEAL_TILE_ANIM_MS = 500
-  const REVEAL_BUFFER_MS = 400
-  const computeRevealMs = (payload) => {
-    const hasTiles = payload?.type === 'mcq' || payload?.type === 'truefalse' || payload?.type === 'order' || payload?.type === 'intrus'
-    const tileCount = hasTiles && Array.isArray(payload?.options) ? Math.max(1, payload.options.length) : 1
-    const staggerSpan = hasTiles ? (tileCount - 1) * REVEAL_STAGGER_MS : 0
-    // "free" et "blindtest" n'ont ni tuiles à faire apparaître une à une ni
-    // animation à attendre (un ou deux champs texte) : le tampon de fin
-    // d'animation ne sert donc à rien pour ces types, contrairement aux
-    // autres — on ne garde que le temps de lecture de la question.
-    const isFree = payload?.type === 'free' || payload?.type === 'blindtest'
-    const tileAnim = isFree ? 0 : REVEAL_TILE_ANIM_MS
-    const buffer = isFree ? 0 : REVEAL_BUFFER_MS
-    return REVEAL_QUESTION_BEAT_MS + staggerSpan + tileAnim + buffer
-  }
+  // Marge avant que le chrono ne démarre vraiment (et que les réponses
+  // s'ouvrent) : plus un temps de lecture/d'attente de l'animation comme
+  // avant (jusqu'à ~4s pour 8 tuiles — c'était le principal reproche : trop
+  // de temps perdu à chaque question), juste un petit tampon réseau pour que
+  // startTs corresponde au même instant absolu pour tout le monde même avec
+  // un peu de latence de diffusion. L'animation de révélation des tuiles
+  // (voir index.js applyTileReveal, REVEAL_QUESTION_BEAT_MS/REVEAL_STAGGER_MS)
+  // continue de jouer normalement, mais purement en cosmétique désormais :
+  // elle ne bloque plus le clic/la validation, qui s'ouvrent dès ce tampon-ci.
+  const ANSWER_WINDOW_BUFFER_MS = 300
 
   io.on('connection', socket => {
     socket.on('room:create', async payload => {
@@ -869,7 +856,6 @@ const start = async () => {
       const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {}, deltas: {}, answers: {} }
       room.history.push(historyEntry)
 
-      const revealMs = computeRevealMs(payload)
       // Référence stable (pas juste room.currentQuestion, qui sera écrasé par
       // la question SUIVANTE dès que l'hôte enchaîne) : indispensable pour
       // que endQuestion (déclenché soit par le minuteur, soit en avance dès
@@ -886,7 +872,7 @@ const start = async () => {
       // réglage entre deux questions (ce que le client bloque déjà une fois
       // la partie lancée, voir game:setSpeedLevel, mais on ne fait jamais
       // confiance qu'au serveur pour ça).
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + revealMs, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -901,9 +887,9 @@ const start = async () => {
         ? payloadWithoutCorrectOrExplanation
         : { ...payloadWithoutCorrectOrExplanation, correct }
 
-      // Diffusé immédiatement (pas au bout de revealMs) : chaque client anime
-      // lui-même la révélation de la question/des tuiles jusqu'à startTs, pour
-      // que l'hôte (écran principal) et les joueurs la voient au même moment.
+      // Diffusé immédiatement (pas au bout d'ANSWER_WINDOW_BUFFER_MS) : chaque
+      // client anime lui-même la révélation cosmétique de la question/des
+      // tuiles, indépendamment de startTs (qui n'ouvre plus que les réponses).
       // Gardé sur la question (voir room:join) : un socket qui (re)rejoint
       // PENDANT que cette question est active n'a sinon plus jamais l'occasion
       // de la voir — startTs étant un horodatage absolu, le repasser tel quel
@@ -940,7 +926,7 @@ const start = async () => {
         // plus bas) — jamais sautée pour de bon comme c'était le cas avant.
         if (room.pending.size === 0) revealQuestion(io, code, room, question)
       }
-      question.timeoutId = setTimeout(question.endQuestion, revealMs + question.timerMs)
+      question.timeoutId = setTimeout(question.endQuestion, ANSWER_WINDOW_BUFFER_MS + question.timerMs)
     })
 
     socket.on('answer:submit', payload => {

@@ -329,11 +329,13 @@ let currentQuestionType = 'free'
 let isGameEnded = false
 
 // --- Révélation « écran principal » : la question apparaît en grand, puis
-// les réponses une à une avec une animation, avant que le chrono ne démarre
-// vraiment pour les joueurs. L'hôte voit exactement la même chose (tuiles en
-// lecture seule) — c'est son écran à partager avec la salle. Les constantes
-// de timing sont dupliquées côté serveur (server/index.js) pour que le délai
-// avant déverrouillage corresponde pile à la durée de l'animation ici.
+// les réponses une à une avec une animation — purement cosmétique désormais,
+// indépendante du chrono/du déverrouillage (voir startTs, ouvert par le
+// serveur après un simple tampon réseau fixe, plus après cette animation :
+// on peut cliquer/valider dès l'affichage, sans attendre qu'elle finisse de
+// jouer, voir server/index.js ANSWER_WINDOW_BUFFER_MS). L'hôte voit
+// exactement la même chose (tuiles en lecture seule) — c'est son écran à
+// partager avec la salle.
 const REVEAL_QUESTION_BEAT_MS = 900
 const REVEAL_STAGGER_MS = 350
 let revealToken = 0
@@ -2938,8 +2940,10 @@ socket.on('question:show', payload => {
     timerBarFill.style.transform = 'scaleX(1)'
   }
 
-  // Déverrouillage à startTs (fin de la révélation) : tuiles/curseur/liste et
-  // bouton d'envoi redeviennent interactifs pile quand le chrono démarre pour
+  // Déverrouillage à startTs (juste un petit tampon réseau après l'affichage
+  // de la question, voir server/index.js ANSWER_WINDOW_BUFFER_MS — plus la
+  // durée de l'animation d'entrée comme avant) : tuiles/curseur/liste et
+  // bouton d'envoi redeviennent interactifs dès que le chrono démarre pour
   // de vrai. revealToken évite qu'un déverrouillage tardif ne s'applique après
   // le passage à une autre question (hôte qui enchaîne très vite).
   const myRevealToken = ++revealToken
