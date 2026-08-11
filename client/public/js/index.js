@@ -338,6 +338,18 @@ const setRecapSidebarOpen = (open) => {
   if (recapSidebarToggle) recapSidebarToggle.classList.toggle('is-open', open)
   localStorage.setItem(RECAP_SIDEBAR_PREF_KEY, open ? '1' : '0')
 }
+// resetUI() cache ces deux éléments en ajoutant .d-none ET un style.display
+// inline ("none") — un simple classList.remove('d-none') ne suffit donc pas
+// pour les faire réapparaître, l'inline style gagne toujours sur la classe.
+// Sans ça le bouton restait invisible pour de vrai après un "Créer une salle"
+// (qui passe systématiquement par resetUI()), pas seulement en cas de reload.
+const showRecapSidebarUi = () => {
+  ;[recapSidebar, recapSidebarToggle].forEach(el => {
+    if (!el) return
+    el.classList.remove('d-none')
+    el.style.display = ''
+  })
+}
 if (recapSidebarToggle) {
   recapSidebarToggle.onclick = () => setRecapSidebarOpen(!recapSidebar.classList.contains('is-open'))
 }
@@ -2955,7 +2967,7 @@ startQuizBtn.onclick = () => {
   // Panneau récap (hôte) : le bouton pour l'afficher/cacher n'a de sens
   // qu'une fois la partie lancée (rien à récapituler avant) — état
   // ouvert/fermé restauré depuis la dernière fois (voir RECAP_SIDEBAR_PREF_KEY).
-  if (recapSidebarToggle) recapSidebarToggle.classList.remove('d-none')
+  showRecapSidebarUi()
   setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
   nextQuestionBtn.click()
 }
@@ -2968,8 +2980,8 @@ socket.on('question:show', payload => {
   // sur plusieurs questions) ne le revoyait plus jamais, question:show étant
   // le seul évènement qui resynchronise alors son écran (retour utilisateur :
   // "je vois pas de panneau récap" en pleine partie, version pourtant à jour).
-  if (isHost && recapSidebarToggle) {
-    recapSidebarToggle.classList.remove('d-none')
+  if (isHost) {
+    showRecapSidebarUi()
     setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
   }
   clearRevealState()
