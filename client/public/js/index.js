@@ -2962,6 +2962,16 @@ startQuizBtn.onclick = () => {
 
 socket.on('question:show', payload => {
   inActiveGame = true
+  // Bouton du panneau récap (hôte) : re-synchronisé à CHAQUE question, pas
+  // seulement au clic sur "LANCER" (voir startQuizBtn.onclick) — sinon un
+  // hôte qui rechargeait la page ou se reconnectait en pleine partie (courant
+  // sur plusieurs questions) ne le revoyait plus jamais, question:show étant
+  // le seul évènement qui resynchronise alors son écran (retour utilisateur :
+  // "je vois pas de panneau récap" en pleine partie, version pourtant à jour).
+  if (isHost && recapSidebarToggle) {
+    recapSidebarToggle.classList.remove('d-none')
+    setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
+  }
   clearRevealState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
