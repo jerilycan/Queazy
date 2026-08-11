@@ -54,7 +54,18 @@
         </div>
 
         <div id="detailTab" class="results-tab-panel d-none text-left">
-          <p class="text-muted font-13 mb-md">Clique sur un joueur pour voir sa réponse à chaque question.</p>
+          <!-- PC : tableau matriciel joueurs × questions (survoler une case
+               pour voir la réponse donnée). Mobile : cartes dépliables juste
+               en dessous (voir CSS, les deux ne sont jamais visibles à la
+               fois) — une grille aussi large deviendrait illisible sur un
+               petit écran, même avec un défilement horizontal. -->
+          <div id="detailTableWrap" class="detail-table-wrap">
+            <table class="detail-table">
+              <thead id="detailTableHead"></thead>
+              <tbody id="detailTableBody"></tbody>
+            </table>
+          </div>
+          <p class="text-muted font-13 mb-md detail-cards-hint">Clique sur un joueur pour voir sa réponse à chaque question.</p>
           <div id="detailList"></div>
         </div>
 

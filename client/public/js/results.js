@@ -410,6 +410,7 @@ const render = (players) => {
   resyncRaceLaneIds(players)
   renderFullTable(ordered)
   renderDetailTab(ordered)
+  renderDetailTable(ordered)
 }
 
 // Réutilise les mêmes lignes DOM d'un rendu à l'autre (au lieu de tout
@@ -556,6 +557,44 @@ const renderDetailTab = (ordered) => {
   })
 }
 
+// Version tableau (PC — voir CSS, masquée sur mobile où les cartes
+// ci-dessus prennent le relais) : une ligne par joueur, une colonne par
+// question. Le texte de la réponse ne tient pas dans la case (retour
+// utilisateur : préfère un vrai tableau), donc reste en infobulle native
+// (title) plutôt que d'élargir chaque case — cohérent avec le reste du
+// projet (ex. la poignée de glisser "Glisser pour réordonner").
+const renderDetailTable = (ordered) => {
+  const head = document.getElementById('detailTableHead')
+  const body = document.getElementById('detailTableBody')
+  if (!head || !body) return
+
+  head.innerHTML = `<tr>
+    <th class="detail-table-name-col">Joueur</th>
+    ${history.map((h, i) => `<th title="${escDetail(h.prompt || '')}">Q${i + 1}</th>`).join('')}
+    <th class="detail-table-total-col">Total</th>
+  </tr>`
+
+  body.innerHTML = ordered.map((p, i) => {
+    const cells = history.map(h => {
+      const status = h.results ? h.results[p.id] : undefined
+      const isCorrect = status === 'correct'
+      const mark = isCorrect ? '✓' : status === 'incorrect' ? '✗' : '–'
+      const cls = isCorrect ? 'is-correct' : status === 'incorrect' ? 'is-incorrect' : 'is-absent'
+      const answer = h.answers ? h.answers[p.id] : undefined
+      const points = Number(h.deltas?.[p.id]) || 0
+      const tip = `${h.prompt || ''} — ${answer ? answer.replace(/\n/g, ' / ') : 'pas de réponse'}`
+      return `<td class="detail-table-cell ${cls}" title="${escDetail(tip)}">
+        <span class="detail-table-mark">${mark}</span>${points > 0 ? `<span class="detail-table-pts">+${points}</span>` : ''}
+      </td>`
+    }).join('')
+    return `<tr>
+      <td class="detail-table-name">${i + 1}. ${escDetail(p.name)}</td>
+      ${cells}
+      <td class="detail-table-total">${p.score} pts</td>
+    </tr>`
+  }).join('')
+}
+
 // --- Bascule Podium / Détail --------------------------------------------
 const resultsTabBtns = document.querySelectorAll('.results-tab-btn')
 resultsTabBtns.forEach(btn => {
@@ -625,10 +664,15 @@ socket.on('history:sync', (payload) => {
   history = payload?.history || []
   historyReceived = true
   tryStartRace()
-  // Peut arriver APRÈS le premier lobby:list (ordre non garanti) : sans ce
-  // second appel, l'onglet Détail resterait bâti sur un historique vide
-  // (aucune question listée) jusqu'à la prochaine reconnexion d'un joueur.
-  if (latestPlayers) renderDetailTab(computeOrder(latestPlayers.slice()))
+  // Peut arriver APRÈS le premier lobby:list (ordre non garanti) : sans ces
+  // deux appels, l'onglet Détail (tableau ET cartes) resterait bâti sur un
+  // historique vide (aucune question listée) jusqu'à la prochaine
+  // reconnexion d'un joueur.
+  if (latestPlayers) {
+    const ordered = computeOrder(latestPlayers.slice())
+    renderDetailTab(ordered)
+    renderDetailTable(ordered)
+  }
 })
 
 // Diffusé par le serveur juste avant lobby:list à chaque room:join (voir

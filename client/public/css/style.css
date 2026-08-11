@@ -3373,6 +3373,56 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .detail-q-points { flex-shrink: 0; font-weight: 800; font-size: 13px; color: var(--color-text-muted); white-space: nowrap; }
 .detail-q-points.is-positive { color: var(--tile-green); }
 
+/* Tableau matriciel joueurs×questions (PC — retour utilisateur, préfère un
+   vrai tableau à des cartes) / cartes dépliables (mobile, voir juste
+   au-dessus) : jamais les deux affichés à la fois, voir le point de bascule
+   ci-dessous. overflow-x:auto sur son propre conteneur : le tableau peut
+   dépasser en largeur avec beaucoup de questions sans jamais faire
+   scroller la PAGE elle-même horizontalement. */
+.detail-table-wrap { overflow-x: auto; margin-bottom: 20px; }
+.detail-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.detail-table th, .detail-table td {
+  padding: 8px 10px;
+  text-align: center;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+.detail-table thead th {
+  color: var(--color-text-muted);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: default;
+}
+.detail-table-name-col, .detail-table-name {
+  text-align: left;
+  font-weight: 700;
+  color: var(--color-text);
+  position: sticky;
+  left: 0;
+  background: var(--color-card);
+}
+.detail-table-total-col, .detail-table-total {
+  font-weight: 800;
+  color: var(--color-accent);
+}
+.detail-table-cell { cursor: default; }
+.detail-table-cell.is-correct .detail-table-mark { color: var(--tile-green); }
+.detail-table-cell.is-incorrect .detail-table-mark { color: var(--color-danger); }
+.detail-table-cell.is-absent .detail-table-mark { color: var(--color-text-muted); }
+.detail-table-mark { font-weight: 800; }
+.detail-table-pts { display: block; font-size: 11px; color: var(--tile-green); font-weight: 700; }
+
+/* Point de bascule table/cartes : le tableau a besoin d'assez de largeur
+   pour rester lisible colonne par colonne (une par question) — en dessous,
+   les cartes dépliables (une par joueur, tout en pleine largeur) passent
+   mieux sur un petit écran. */
+@media (max-width: 640px) {
+  .detail-table-wrap { display: none; }
+}
+@media (min-width: 641px) {
+  .detail-cards-hint, #detailList { display: none; }
+}
+
 /* ============================================================
    Composants UI "maison" (voir js/ui-widgets.js) — remplacent les
    widgets natifs du navigateur (select, confirm, alert) qui ne peuvent pas
