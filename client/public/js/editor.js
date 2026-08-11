@@ -2303,22 +2303,41 @@ document.addEventListener('click', (e) => {
 // visuel de QzUI.confirm (.modal-overlay/.modal-content) pour rester
 // cohérent, mais sans aucun bouton — rien à cliquer, juste à attendre.
 let saveLoadingOverlay = null
-const showSaveLoading = () => {
+const ensureSaveOverlay = () => {
   if (!saveLoadingOverlay) {
     saveLoadingOverlay = document.createElement('div')
     saveLoadingOverlay.className = 'modal-overlay'
-    saveLoadingOverlay.innerHTML = `
-      <div class="modal-content" style="text-align:center;">
-        <div class="qz-spinner" aria-hidden="true"></div>
-        <p class="font-bold mt-16" style="margin:16px 0 0;">Sauvegarde en cours…</p>
-        <p class="text-muted font-14" style="margin:6px 0 0;">Merci de patienter, ne quitte pas cette page.</p>
-      </div>`
     document.body.appendChild(saveLoadingOverlay)
   }
-  saveLoadingOverlay.classList.remove('d-none')
+  return saveLoadingOverlay
+}
+const showSaveLoading = () => {
+  const overlay = ensureSaveOverlay()
+  overlay.innerHTML = `
+    <div class="modal-content" style="text-align:center;">
+      <div class="qz-spinner" aria-hidden="true"></div>
+      <p class="font-bold mt-16" style="margin:16px 0 0;">Sauvegarde en cours…</p>
+      <p class="text-muted font-14" style="margin:6px 0 0;">Merci de patienter, ne quitte pas cette page.</p>
+    </div>`
+  overlay.classList.remove('d-none')
 }
 const hideSaveLoading = () => {
   if (saveLoadingOverlay) saveLoadingOverlay.classList.add('d-none')
+}
+// Bascule LA MÊME popup vers un état "succès" au lieu de la fermer aussitôt
+// pour rouvrir un toast séparé en bas d'écran — retour utilisateur : "Sauvegarde
+// effectuée" doit être vu directement là où le regard est déjà posé (la popup
+// de chargement), pas ailleurs sur l'écran. Se referme seule après un court
+// délai, pas besoin d'un bouton "OK" pour un message purement informatif.
+const showSaveSuccess = (message) => {
+  const overlay = ensureSaveOverlay()
+  overlay.innerHTML = `
+    <div class="modal-content" style="text-align:center;">
+      <div class="qz-save-success-check" aria-hidden="true">✓</div>
+      <p class="font-bold mt-16" style="margin:16px 0 0;">${message}</p>
+    </div>`
+  overlay.classList.remove('d-none')
+  setTimeout(hideSaveLoading, 1400)
 }
 
 saveQuizBtn.onclick = async () => {
@@ -2527,6 +2546,7 @@ saveQuizBtn.onclick = async () => {
   try {
     const { data: { session } } = await sb.auth.getSession()
     if (!session) {
+      hideSaveLoading()
       showToast('Connecte-toi pour sauvegarder', 'error')
       return
     }
@@ -2535,7 +2555,7 @@ saveQuizBtn.onclick = async () => {
         .update({ title, questions, single_attempt: body.singleAttempt, is_public: body.isPublic })
         .eq('id', currentId)
       if (error) throw error
-      showToast('Quiz sauvegardé avec succès !')
+      showSaveSuccess('Sauvegarde effectuée !')
       markSaved()
     } else {
       const { data, error } = await sb.from('quizzes')
@@ -2544,14 +2564,14 @@ saveQuizBtn.onclick = async () => {
         .single()
       if (error) throw error
       currentId = data.id
-      showToast('Quiz créé et sauvegardé !')
+      showSaveSuccess('Quiz créé et sauvegardé !')
       markSaved()
     }
   } catch (err) {
+    hideSaveLoading()
     showToast('Erreur: ' + (err.message || 'sauvegarde'), 'error')
   } finally {
     isSaving = false
-    hideSaveLoading()
     saveQuizBtn.disabled = false
   }
 }
