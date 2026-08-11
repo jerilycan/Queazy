@@ -1708,6 +1708,56 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   font-size: 14px; color: var(--color-text);
 }
 .question-recap-top strong { color: var(--color-accent); }
+
+/* Panneau latéral (hôte, toujours sur PC — voir index.html) : recouvre le
+   bord droit de l'écran plutôt que de pousser le contenu principal (pas de
+   reflow du reste de la mise en page hôte à chaque ouverture/fermeture). */
+.recap-sidebar-toggle {
+  position: fixed; top: 100px; right: 0; z-index: 60;
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 14px; border: none; border-radius: 10px 0 0 10px;
+  background: var(--color-card); color: var(--color-text);
+  border: 1px solid var(--color-border); border-right: none;
+  box-shadow: var(--shadow-md); cursor: pointer;
+  font-weight: 700; font-size: 13px;
+  transition: right 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.recap-sidebar-toggle:hover { background: var(--color-surface); }
+.recap-sidebar-toggle.is-open { right: 320px; }
+.recap-sidebar {
+  position: fixed; top: 0; right: 0; height: 100vh; width: 320px;
+  background: var(--color-card); border-left: 1px solid var(--color-border);
+  box-shadow: -8px 0 24px rgba(0,0,0,0.25);
+  z-index: 59; display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.recap-sidebar.is-open { transform: translateX(0); }
+.recap-sidebar-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; font-weight: 800; font-size: 14px;
+  border-bottom: 1px solid var(--color-border); flex-shrink: 0;
+}
+.recap-sidebar-close {
+  background: none; border: none; color: var(--color-text-muted);
+  font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px;
+}
+.recap-sidebar-close:hover { color: var(--color-text); }
+.recap-sidebar-body { padding: 20px; overflow-y: auto; flex: 1; }
+.recap-player-list { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 8px; }
+.recap-player-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.03);
+}
+.recap-player-row.is-correct { box-shadow: inset 3px 0 0 var(--tile-green); }
+.recap-player-row.is-incorrect { box-shadow: inset 3px 0 0 var(--tile-red); }
+.recap-player-mark { flex-shrink: 0; font-size: 14px; }
+.recap-player-name { font-weight: 700; font-size: 13px; flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recap-player-answer { font-size: 13px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; flex: 1; }
+@media (max-width: 900px) {
+  .recap-sidebar { width: 88vw; }
+  .recap-sidebar-toggle.is-open { right: 88vw; }
+}
 .volume-fill {
   position: absolute;
   top: 0;

@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.28.1'
+const APP_VERSION = '1.29.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -327,7 +327,19 @@ const start = async () => {
     // au hasard parmi des réponses toutes différentes", pas une vraie tendance.
     if (best && best.count >= 2) topAnswer = { text: best.text, count: best.count }
 
-    return { id: question.id, type: question.type, correct, total, correctPct, topAnswer }
+    // Détail par joueur (panneau latéral hôte, voir index.js renderRecapSidebar) :
+    // demande explicite de pouvoir voir ce que chacun a répondu, pas
+    // seulement la tendance générale. Trié par nom pour rester stable d'un
+    // rendu à l'autre (pas par ordre de réponse, qui varierait sans arrêt).
+    const perPlayer = entries
+      .map(([tok, result]) => ({
+        name: room.tokens.get(tok)?.name || 'Joueur',
+        answer: (he.answers || {})[tok] || '',
+        correct: result === 'correct'
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    return { id: question.id, type: question.type, correct, total, correctPct, topAnswer, perPlayer }
   }
 
   // Diffuse la bonne réponse (+ le récap juste avant) à toute la salle.
@@ -1018,6 +1030,7 @@ const start = async () => {
             const tolerance = q.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT
             q.historyEntry.results[p.token] = Math.abs(clamped - target) <= tolerance ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
+            q.historyEntry.answers[p.token] = String(clamped)
           }
         }
         q.answered?.add(socket.id)
@@ -1051,6 +1064,10 @@ const start = async () => {
           if (q.historyEntry) {
             q.historyEntry.results[p.token] = dist === 0 ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
+            // Un point cliqué {x,y} ne veut rien dire sans l'image sous les
+            // yeux (voir récap hôte, index.js) : on garde plutôt à quel point
+            // c'était proche de la zone attendue.
+            q.historyEntry.answers[p.token] = `${Math.round(closeness * 100)}% proche`
           }
         }
         q.answered?.add(socket.id)
@@ -1091,6 +1108,7 @@ const start = async () => {
             // le score, lui, reste proportionnel.
             q.historyEntry.results[p.token] = correctCount === pairTotal ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
+            q.historyEntry.answers[p.token] = pairs.map((pair, i) => `${pair.a} → ${submitted[i] ?? '—'}`).join(' · ')
           }
         }
         q.answered?.add(socket.id)
@@ -1226,13 +1244,17 @@ const start = async () => {
             if (q.historyEntry) {
               q.historyEntry.results[p.token] = 'correct'
               q.historyEntry.deltas[p.token] = delta
+              if (Array.isArray(submitted)) q.historyEntry.answers[p.token] = submitted.join(' → ')
             }
           }
           q.answered?.add(socket.id)
           q.submissions?.set(socket.id, 'correct')
           io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         } else {
-          if (p?.token && q.historyEntry) q.historyEntry.results[p.token] = 'incorrect'
+          if (p?.token && q.historyEntry) {
+            q.historyEntry.results[p.token] = 'incorrect'
+            if (Array.isArray(submitted)) q.historyEntry.answers[p.token] = submitted.join(' → ')
+          }
           q.submissions?.set(socket.id, 'incorrect')
         }
         emitProgress()
@@ -1275,6 +1297,7 @@ const start = async () => {
           if (q.historyEntry) {
             q.historyEntry.results[p.token] = correctCount === n ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
+            q.historyEntry.answers[p.token] = submitted.slice(0, n).map(k => events[k]?.title || '?').join(' → ')
           }
         }
         q.answered?.add(socket.id)

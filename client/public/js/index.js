@@ -323,6 +323,27 @@ const recapPctText = document.getElementById('recapPctText')
 const recapTopAnswerRow = document.getElementById('recapTopAnswerRow')
 const recapTopAnswerText = document.getElementById('recapTopAnswerText')
 const recapTopAnswerCount = document.getElementById('recapTopAnswerCount')
+const recapPlayerList = document.getElementById('recapPlayerList')
+const recapSidebar = document.getElementById('recapSidebar')
+const recapSidebarToggle = document.getElementById('recapSidebarToggle')
+const recapSidebarClose = document.getElementById('recapSidebarClose')
+
+// Panneau latéral récap (hôte) : ouvert/fermé retenu d'une question — et
+// d'une partie — à l'autre (localStorage), pour ne pas avoir à rouvrir à
+// chaque fois en session IRL si l'hôte l'a volontairement caché (écran
+// projeté aux joueurs, réponses individuelles pas destinées à tous les yeux).
+const RECAP_SIDEBAR_PREF_KEY = 'queazy_recap_sidebar_open'
+const setRecapSidebarOpen = (open) => {
+  if (recapSidebar) recapSidebar.classList.toggle('is-open', open)
+  if (recapSidebarToggle) recapSidebarToggle.classList.toggle('is-open', open)
+  localStorage.setItem(RECAP_SIDEBAR_PREF_KEY, open ? '1' : '0')
+}
+if (recapSidebarToggle) {
+  recapSidebarToggle.onclick = () => setRecapSidebarOpen(!recapSidebar.classList.contains('is-open'))
+}
+if (recapSidebarClose) {
+  recapSidebarClose.onclick = () => setRecapSidebarOpen(false)
+}
 // Mode équipe (hôte uniquement), voir socket.on('team:list') plus bas.
 const teamModePanel = document.getElementById('teamModePanel')
 const teamModeToggle = document.getElementById('teamModeToggle')
@@ -1913,7 +1934,7 @@ const resetUI = () => {
   roomInput.value = ''
   
   // Hide all dynamic panels
-  const panels = ['lobby', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode']
+  const panels = ['lobby', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle']
   panels.forEach(id => {
     const el = document.getElementById(id)
     if (el) {
@@ -2931,6 +2952,11 @@ startQuizBtn.onclick = () => {
     roomInfo.classList.add('d-none')
     roomInfo.style.display = 'none'
   }
+  // Panneau récap (hôte) : le bouton pour l'afficher/cacher n'a de sens
+  // qu'une fois la partie lancée (rien à récapituler avant) — état
+  // ouvert/fermé restauré depuis la dernière fois (voir RECAP_SIDEBAR_PREF_KEY).
+  if (recapSidebarToggle) recapSidebarToggle.classList.remove('d-none')
+  setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
   nextQuestionBtn.click()
 }
 
@@ -3838,7 +3864,22 @@ socket.on('question:recap', payload => {
   } else if (recapTopAnswerRow) {
     recapTopAnswerRow.classList.add('d-none')
   }
-  questionRecapCard.classList.remove('d-none')
+  // Détail par joueur (voir server/index.js buildRecap) : qui a répondu quoi,
+  // demande explicite pour pouvoir rebondir nommément à l'oral en session IRL.
+  if (recapPlayerList) {
+    recapPlayerList.innerHTML = ''
+    const perPlayer = Array.isArray(payload?.perPlayer) ? payload.perPlayer : []
+    perPlayer.forEach(p => {
+      const row = document.createElement('div')
+      row.className = `recap-player-row ${p.correct ? 'is-correct' : 'is-incorrect'}`
+      row.innerHTML = `
+        <span class="recap-player-mark">${p.correct ? '✅' : '❌'}</span>
+        <span class="recap-player-name">${(p.name || 'Joueur').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
+        <span class="recap-player-answer">${(p.answer || '—').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
+      `
+      recapPlayerList.appendChild(row)
+    })
+  }
 })
 
 socket.on('question:reveal', payload => {
