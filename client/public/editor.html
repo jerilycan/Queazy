@@ -80,6 +80,15 @@
         <!-- Detail: Éditeur de la question sélectionnée -->
         <div id="questionDetail" class="question-detail">
           <div class="detail-section">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+              <input id="qDraftToggle" type="checkbox" class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+              🚧 Brouillon (work in progress)
+            </label>
+            <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
+          </div>
+
+          <div class="detail-section">
             <label>Énoncé de la question</label>
             <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..."></textarea>
           </div>

@@ -2031,7 +2031,16 @@ const loadQuizById = (id) => {
     .single()
     .then(({ data, error }) => {
       if (error) throw error
-      const norm = Array.isArray(data.questions) ? data.questions.map((q, i) => ({
+      // Questions marquées "brouillon" dans l'éditeur (voir editor.js
+      // qDraftToggle) : exclues d'office de la partie — c'est tout le sens
+      // de ce réglage (retour utilisateur : pouvoir sauvegarder une question
+      // inachevée sans risquer qu'elle tombe sur les joueurs). Filtrées ICI,
+      // avant même la normalisation, pour que le reste du flux de jeu
+      // (numérotation, "Question X/Y", isLastQuestion...) n'ait jamais à
+      // savoir qu'elles existent.
+      const draftCount = Array.isArray(data.questions) ? data.questions.filter(q => q.draft).length : 0
+      const playable = Array.isArray(data.questions) ? data.questions.filter(q => !q.draft) : []
+      const norm = playable.map((q, i) => ({
         id: q.id || ('q' + (i + 1)),
         type: q.type || 'free',
         prompt: q.prompt || 'Question',
@@ -2054,7 +2063,7 @@ const loadQuizById = (id) => {
         // (question démarrée sans le moindre son, aucune erreur visible).
         audio: q.audio,
         explanation: q.explanation || ''
-      })) : []
+      }))
       loadedQuiz = {
         id: data.id,
         title: data.title || '',
@@ -2063,8 +2072,9 @@ const loadQuizById = (id) => {
       }
       quizIndex = 0
       currentSingleAttempt = loadedQuiz.singleAttempt !== false
-      loadedInfo.textContent = 'Quizz chargé: ' + (loadedQuiz.title || id)
-      log('Quizz chargé: ' + (loadedQuiz.title || id))
+      const draftNote = draftCount > 0 ? ` (${draftCount} brouillon${draftCount > 1 ? 's' : ''} ignoré${draftCount > 1 ? 's' : ''})` : ''
+      loadedInfo.textContent = 'Quizz chargé: ' + (loadedQuiz.title || id) + draftNote
+      log('Quizz chargé: ' + (loadedQuiz.title || id) + draftNote)
     })
     .catch(() => {})
 }

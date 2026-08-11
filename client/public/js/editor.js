@@ -100,6 +100,7 @@ const questionDetailEl = document.getElementById('questionDetail')
 const toastsEl = document.getElementById('toasts')
 
 // Champs de détail de question
+const qDraftToggle = document.getElementById('qDraftToggle')
 const qPrompt = document.getElementById('qPrompt')
 const qExplanation = document.getElementById('qExplanation')
 const qType = document.getElementById('qType')
@@ -505,8 +506,9 @@ const updateSidebar = () => {
   questionListEl.innerHTML = ''
   questions.forEach((q, idx) => {
     const item = document.createElement('div')
-    item.className = `question-item type-${q.type || 'free'} ${idx === activeIndex ? 'active' : ''}`.trim()
+    item.className = `question-item type-${q.type || 'free'} ${idx === activeIndex ? 'active' : ''} ${q.draft ? 'is-draft' : ''}`.trim()
     item.dataset.index = idx
+    if (q.draft) item.title = 'Brouillon — ignorée en jeu'
     wireQuestionDrag(item, idx)
 
     const handle = document.createElement('span')
@@ -520,7 +522,9 @@ const updateSidebar = () => {
 
     const text = document.createElement('span')
     text.className = 'q-text'
-    text.textContent = q.prompt || '(Nouvelle question)'
+    // 🚧 en préfixe plutôt qu'un badge à part : reste lisible même dans
+    // l'espace étroit de la sidebar, pas besoin de deviner via une couleur.
+    text.textContent = (q.draft ? '🚧 ' : '') + (q.prompt || '(Nouvelle question)')
 
     if (!readOnly) item.appendChild(handle)
     item.appendChild(num)
@@ -1138,6 +1142,7 @@ const selectQuestion = (index) => {
   if (!q) return
 
   // Mettre à jour les champs
+  if (qDraftToggle) qDraftToggle.checked = !!q.draft
   qPrompt.value = q.prompt || ''
   if (qExplanation) qExplanation.value = q.explanation || ''
   qType.value = q.type || 'free'
@@ -1172,6 +1177,7 @@ const saveCurrentQuestionState = () => {
   if (activeIndex < 0 || activeIndex >= questions.length) return
 
   const q = questions[activeIndex]
+  if (qDraftToggle) q.draft = qDraftToggle.checked
   q.prompt = qPrompt.value.trim()
   if (qExplanation) q.explanation = qExplanation.value.trim()
   q.type = qType.value
@@ -2152,6 +2158,7 @@ const deleteQuestionAt = (index) => {
     activeIndex = Math.min(index, questions.length - 1)
     const q = questions[activeIndex]
 
+    if (qDraftToggle) qDraftToggle.checked = !!q.draft
     qPrompt.value = q.prompt || ''
     if (qExplanation) qExplanation.value = q.explanation || ''
     qType.value = q.type || 'free'
@@ -2347,6 +2354,13 @@ saveQuizBtn.onclick = async () => {
   // Validation avant sauvegarde
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i]
+
+    // "Brouillon" : le but explicite est de pouvoir sauvegarder une question
+    // inachevée (retour utilisateur) — aucune des règles ci-dessous ne doit
+    // bloquer la sauvegarde tant que ce réglage reste coché. Elle est de
+    // toute façon exclue de la partie (voir index.js, filtrée au chargement
+    // du quiz pour l'hôte).
+    if (q.draft) continue
 
     // Vérifier l'énoncé (commun à tous les types)
     if (!q.prompt || q.prompt.trim() === '') {

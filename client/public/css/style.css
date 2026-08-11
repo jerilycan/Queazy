@@ -2325,6 +2325,18 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    .order-item.dragging côté jeu. */
 .question-item.dragging { cursor: grabbing; box-shadow: var(--shadow-lg); }
 
+/* Question "brouillon" (voir editor.js qDraftToggle) : contour pointillé +
+   légère transparence — signale "pas prête, ignorée en jeu" sans cacher son
+   contenu (le préfixe 🚧 dans .q-text fait le reste, voir updateSidebar).
+   Pas de changement sur .active : rester lisible même sélectionnée. */
+.question-item.is-draft {
+  border-style: dashed;
+  border-color: var(--color-border);
+  opacity: 0.7;
+}
+.question-item.is-draft:hover,
+.question-item.is-draft.active { opacity: 1; }
+
 /* Croix de suppression directe depuis la sidebar (voir editor.js
    updateSidebar/confirmDeleteQuestionAt) — même logique de visibilité au
    survol que .q-drag-handle juste au-dessus : invisible au repos pour ne
