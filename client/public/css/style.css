@@ -1468,6 +1468,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   color: var(--color-text-muted, #888);
   font-weight: 600;
 }
+.image-error-msg #imageReloadBtn { display: block; margin: 14px auto 0; }
 
 /* Illustration optionnelle (tous les types sauf "image") : juste une image
    au-dessus de la question, pas cliquable, contrairement à .image-wrap. */
@@ -1751,9 +1752,23 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 .recap-player-row.is-correct { box-shadow: inset 3px 0 0 var(--tile-green); }
 .recap-player-row.is-incorrect { box-shadow: inset 3px 0 0 var(--tile-red); }
+/* "Presque" (points marqués sans être compté correct, ex. graduation/image
+   proche) : orange (réutilise --tile-bronze, déjà la teinte "presque bon"
+   du podium) plutôt que le vert/rouge binaire, pour le distinguer d'un
+   coup d'œil — voir index.js socket.on('question:recap'). */
+.recap-player-row.is-almost { box-shadow: inset 3px 0 0 var(--tile-bronze); }
 .recap-player-mark { flex-shrink: 0; font-size: 14px; }
 .recap-player-name { font-weight: 700; font-size: 13px; flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recap-player-answer { font-size: 13px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; flex: 1; }
+/* "Relier" : réponse sur plusieurs lignes (une par paire) — passe en
+   colonne et laisse le texte respirer plutôt que de le tronquer sur une
+   seule ligne illisible (retour hôte, voir index.js question:recap). */
+.recap-player-row.is-multiline { align-items: flex-start; flex-direction: column; gap: 4px; }
+.recap-player-row.is-multiline .recap-player-answer {
+  white-space: normal; text-align: left; overflow: visible; text-overflow: clip;
+  padding-left: 24px; line-height: 1.5;
+}
+.recap-player-row.is-multiline .recap-player-name { max-width: 100%; }
 @media (max-width: 900px) {
   .recap-sidebar { width: 88vw; }
   .recap-sidebar-toggle.is-open { right: 88vw; }

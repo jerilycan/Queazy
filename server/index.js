@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.29.3'
+const APP_VERSION = '1.30.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -331,12 +331,28 @@ const start = async () => {
     // demande explicite de pouvoir voir ce que chacun a répondu, pas
     // seulement la tendance générale. Trié par nom pour rester stable d'un
     // rendu à l'autre (pas par ordre de réponse, qui varierait sans arrêt).
+    // answerDetails (quand présent) prime sur answers pour CE détail précis :
+    // association (une ligne par paire, plus lisible qu'un seul gros texte)
+    // et blindtest (titre + artiste, alors que answers ne garde que le titre
+    // — lui sert à la stat "réponse la plus donnée" ci-dessus, qui elle ne
+    // doit pas mélanger les deux champs, voir answer:submit).
+    // "presque" (état à part de correct/incorrect, voir index.js) : la
+    // question a rapporté des points (deltas) sans être comptée "correct" —
+    // ne concerne que les types à score proportionnel (graduation, image,
+    // association, ordre, timeline, blindtest un seul champ) ; pour les
+    // types binaires (qcm/vrai-faux/intrus) delta reste toujours à 0 côté
+    // incorrect, donc jamais "presque" à tort.
     const perPlayer = entries
-      .map(([tok, result]) => ({
-        name: room.tokens.get(tok)?.name || 'Joueur',
-        answer: (he.answers || {})[tok] || '',
-        correct: result === 'correct'
-      }))
+      .map(([tok, result]) => {
+        const correct = result === 'correct'
+        const delta = he.deltas?.[tok] || 0
+        return {
+          name: room.tokens.get(tok)?.name || 'Joueur',
+          answer: (he.answerDetails || {})[tok] ?? (he.answers || {})[tok] ?? '',
+          correct,
+          state: correct ? 'correct' : (delta > 0 ? 'almost' : 'incorrect')
+        }
+      })
       .sort((a, b) => a.name.localeCompare(b.name))
 
     return { id: question.id, type: question.type, correct, total, correctPct, topAnswer, perPlayer }
@@ -1109,6 +1125,12 @@ const start = async () => {
             q.historyEntry.results[p.token] = correctCount === pairTotal ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
             q.historyEntry.answers[p.token] = pairs.map((pair, i) => `${pair.a} → ${submitted[i] ?? '—'}`).join(' · ')
+            // Une ligne par paire (séparateur \n) pour le détail par joueur
+            // du panneau récap : le format condensé ci-dessus (answers,
+            // séparé par ' · ') devient illisible dès 3-4 paires sur une
+            // seule ligne tronquée (retour hôte : "doit être lisible").
+            q.historyEntry.answerDetails = q.historyEntry.answerDetails || {}
+            q.historyEntry.answerDetails[p.token] = pairs.map((pair, i) => `${pair.a} → ${submitted[i] ?? '—'}`).join('\n')
           }
         }
         q.answered?.add(socket.id)
@@ -1187,6 +1209,16 @@ const start = async () => {
           // l'artiste n'y participe pas, deux champs combinés dans une seule
           // statistique n'auraient pas de sens.
           if (titleInput.trim()) q.historyEntry.answers[p.token] = titleInput
+          // answerDetails, lui, sert au détail par joueur (voir buildRecap) :
+          // titre ET artiste, pour que l'hôte voie vraiment ce qui a été
+          // écrit (retour : "le récap n'affiche que le titre").
+          const detailParts = []
+          if (titleInput.trim()) detailParts.push(titleInput.trim())
+          if (!q.titleOnly && artistInput.trim()) detailParts.push(artistInput.trim())
+          if (detailParts.length) {
+            q.historyEntry.answerDetails = q.historyEntry.answerDetails || {}
+            q.historyEntry.answerDetails[p.token] = detailParts.join(' — ')
+          }
         }
 
         q.submissions?.set(socket.id, `${socket.id}:${submitTs}`)

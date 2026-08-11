@@ -287,6 +287,7 @@ const imageClickLayer = document.getElementById('imageClickLayer')
 const imageMarker = document.getElementById('imageMarker')
 const imageZonesRevealPath = document.getElementById('imageZonesRevealPath')
 const imageErrorMsg = document.getElementById('imageErrorMsg')
+const imageReloadBtn = document.getElementById('imageReloadBtn')
 const imageZoomControls = document.getElementById('imageZoomControls')
 const imageZoomInBtn = document.getElementById('imageZoomInBtn')
 const imageZoomOutBtn = document.getElementById('imageZoomOutBtn')
@@ -1107,8 +1108,13 @@ if (imageViewport) {
   }, { passive: false })
 }
 
-const buildImageAnswerArea = (src) => {
+// URL d'origine de la question "image" en cours (SANS cache-buster) —
+// posée une seule fois par question, lue par imageReloadBtn ci-dessous pour
+// retenter le chargement sans empiler de paramètres à chaque tentative.
+let currentImageAnswerSrc = null
+const buildImageAnswerArea = (src, { baseSrc } = {}) => {
   if (!imageImg || !imageClickLayer) return
+  currentImageAnswerSrc = baseSrc || src
   imageImg.classList.remove('d-none')
   if (imageErrorMsg) imageErrorMsg.classList.add('d-none')
   // Posé AVANT d'assigner .src : une image déjà en cache peut déclencher
@@ -1116,10 +1122,10 @@ const buildImageAnswerArea = (src) => {
   // (et le zoom affiché) de la question précédente.
   imageImg.onload = setupImageFrame
   imageImg.onerror = () => {
-    // Ne devrait normalement jamais arriver (l'hôte upload avant d'émettre
-    // question:show) — si ça arrive quand même (upload raté, salle nettoyée
-    // entre-temps...), au moins le signaler clairement plutôt qu'une zone de
-    // clic flottant sur une image cassée invisible.
+    // Peut arriver pour un joueur (upload correctement fait côté hôte) suite
+    // à une coupure réseau/serveur momentanée — pas seulement un vrai upload
+    // raté : d'où le bouton "Recharger" plutôt qu'un simple message figé
+    // (retour joueur : "image indisponible" sur une carte, sans recours).
     console.error('[image] échec de chargement de l\'image:', src)
     imageImg.classList.add('d-none')
     if (imageErrorMsg) imageErrorMsg.classList.remove('d-none')
@@ -1138,6 +1144,16 @@ const buildImageAnswerArea = (src) => {
   imagePanX = 0
   imagePanY = 0
   applyImageZoom()
+}
+if (imageReloadBtn) {
+  imageReloadBtn.onclick = () => {
+    if (!currentImageAnswerSrc) return
+    // Cache-buster : sans ça, un navigateur qui a mis l'échec en cache pour
+    // cette URL exacte peut re-échouer instantanément sans même retenter la
+    // requête réseau.
+    const sep = currentImageAnswerSrc.includes('?') ? '&' : '?'
+    buildImageAnswerArea(`${currentImageAnswerSrc}${sep}retry=${Date.now()}`, { baseSrc: currentImageAnswerSrc })
+  }
 }
 
 // Glisser pour se déplacer (comme une carte) / cliquer pour répondre : les
@@ -2909,10 +2925,19 @@ const updateHostControls = () => {
   nextQuestionBtn.classList.toggle('d-none', !revealed)
   nextQuestionBtn.style.display = revealed ? 'inline-flex' : 'none'
   if (revealed) {
-    nextQuestionBtn.textContent = 'Suivant'
-    nextQuestionBtn.onclick = () => {
-      const roomCode = roomInput.value.trim()
-      if (roomCode) socket.emit('leaderboard:show', { roomCode })
+    // Après la toute dernière question, sauter la page "classement" (qui
+    // n'aurait plus rien à annoncer avant les résultats finaux, lesquels
+    // sont EUX-MÊMES un classement) et aller directement aux résultats,
+    // plutôt que d'imposer un clic supplémentaire dessus (retour hôte).
+    if (isLastQuestion()) {
+      nextQuestionBtn.textContent = 'Résultat'
+      nextQuestionBtn.onclick = showResults
+    } else {
+      nextQuestionBtn.textContent = 'Suivant'
+      nextQuestionBtn.onclick = () => {
+        const roomCode = roomInput.value.trim()
+        if (roomCode) socket.emit('leaderboard:show', { roomCode })
+      }
     }
   }
   if (leaderNextBtn) {
@@ -3895,13 +3920,28 @@ socket.on('question:recap', payload => {
   if (recapPlayerList) {
     recapPlayerList.innerHTML = ''
     const perPlayer = Array.isArray(payload?.perPlayer) ? payload.perPlayer : []
+    const escRecap = s => (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
+    // "presque" (state === 'almost', voir server/index.js buildRecap) : des
+    // points ont été marqués sans que la réponse soit jugée entièrement
+    // correcte (graduation proche, image proche, une partie des paires/de
+    // l'ordre juste...) — état à part de correct/incorrect, avec sa propre
+    // couleur (orange) et icône (vague), pour le distinguer d'un coup d'œil.
+    const STATE_MARK = { correct: '✅', almost: '🌊', incorrect: '❌' }
+    // "relier" : plusieurs paires sur plusieurs lignes (answerDetails, voir
+    // buildRecap) — illisible tronqué sur une seule ligne (retour hôte :
+    // "doit être lisible, tu peux sauter les lignes si besoin").
+    const isMultiline = payload?.type === 'association'
     perPlayer.forEach(p => {
+      const state = p.state || (p.correct ? 'correct' : 'incorrect')
       const row = document.createElement('div')
-      row.className = `recap-player-row ${p.correct ? 'is-correct' : 'is-incorrect'}`
+      row.className = `recap-player-row is-${state}${isMultiline ? ' is-multiline' : ''}`
+      const answerHtml = isMultiline
+        ? escRecap(p.answer || '—').replace(/\n/g, '<br>')
+        : escRecap(p.answer || '—')
       row.innerHTML = `
-        <span class="recap-player-mark">${p.correct ? '✅' : '❌'}</span>
-        <span class="recap-player-name">${(p.name || 'Joueur').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
-        <span class="recap-player-answer">${(p.answer || '—').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
+        <span class="recap-player-mark">${STATE_MARK[state] || '❌'}</span>
+        <span class="recap-player-name">${escRecap(p.name || 'Joueur')}</span>
+        <span class="recap-player-answer">${answerHtml}</span>
       `
       recapPlayerList.appendChild(row)
     })
