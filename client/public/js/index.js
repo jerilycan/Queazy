@@ -3872,6 +3872,10 @@ socket.on('timer:end', () => {
 // deux questions sans avoir à deviner combien de monde a trouvé.
 socket.on('question:recap', payload => {
   if (!isHost || !questionRecapCard) return
+  // clearRevealState() (appelée à chaque question:show) cache ce bloc via
+  // .d-none — sans le retirer ici, tout son contenu reste display:none en
+  // permanence : le panneau latéral s'affiche mais paraît vide en boucle.
+  questionRecapCard.classList.remove('d-none')
   const pct = Math.max(0, Math.min(100, Math.round(payload?.correctPct ?? 0)))
   if (recapPctText) recapPctText.textContent = pct + '%'
   if (recapBarFill) {
