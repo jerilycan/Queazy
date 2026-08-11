@@ -1417,12 +1417,14 @@ const resumeBlindTestAudioCtx = () => {
   return Promise.resolve()
 }
 
-// "Débloque" l'audio dès le tout premier geste (tap/clic) de CE visiteur sur
-// la page — bien avant qu'une question blind test ne démarre. Sans ça, le
-// premier play() programmatique (déclenché par le minuteur, pas un geste)
-// peut être refusé par le navigateur, ou le contexte Web Audio rester
-// suspendu. {once:true} : un seul geste suffit, pas besoin de répéter.
-document.addEventListener('pointerdown', () => { resumeBlindTestAudioCtx() }, { once: true, passive: true })
+// "Débloque" l'audio à CHAQUE geste (tap/clic) de ce visiteur sur la page —
+// pas seulement le tout premier ({once:true} retiré) : iOS Safari peut
+// re-suspendre le contexte Web Audio en cours de partie (écran verrouillé,
+// appel, passage à une autre appli...), silencieusement, longtemps après le
+// déblocage initial. resume() est un no-op bon marché quand le contexte
+// tourne déjà, donc pas de coût à réessayer à chaque tap (bouton "Valider",
+// tuile de réponse, etc.) plutôt qu'une seule fois en tout début de session.
+document.addEventListener('pointerdown', () => { resumeBlindTestAudioCtx() }, { passive: true })
 
 const hideBlindTestUnlockPrompt = () => {
   if (blindtestUnlockBtn) blindtestUnlockBtn.classList.add('d-none')
@@ -1528,7 +1530,18 @@ const playBlindTestAudio = () => {
   resumeBlindTestAudioCtx().then(() => {
     blindtestAudio.play().then(() => {
       startBlindTestPulse()
-      hideBlindTestUnlockPrompt()
+      // <audio>.play() peut réussir (aucune erreur, lecture "en cours") tout
+      // en restant totalement silencieux si le contexte Web Audio dans
+      // lequel il est routé (voir ensureBlindTestAnalyser) est resté ou
+      // repassé "suspended" — notamment sur iOS Safari, qui peut re-suspendre
+      // le contexte en cours de partie sans prévenir (écran verrouillé,
+      // appel, changement d'appli). Se fier au seul succès de play() cachait
+      // ce cas : aucun son, mais pas de bouton de déblocage proposé non plus.
+      if (blindtestAudioCtx && blindtestAudioCtx.state !== 'running') {
+        showBlindTestUnlockPrompt()
+      } else {
+        hideBlindTestUnlockPrompt()
+      }
     }).catch(() => {
       // Le navigateur a refusé la lecture programmatique (pas de geste
       // récent) : au lieu d'échouer en silence, on propose un bouton qui,
