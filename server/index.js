@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.27.2'
+const APP_VERSION = '1.28.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -691,6 +691,13 @@ const start = async () => {
         player = { id: socket.id, name, score: 0, token, avatar: payload?.avatar || '', ready: false, connected: true, teamId: null }
         room.players.set(socket.id, player)
         room.scores.set(socket.id, 0)
+        // Vraiment nouveau joueur (pas une reconnexion) arrivant pendant une
+        // question active : compte dans expectedPlayers (voir question:show)
+        // dès maintenant, sinon emitProgress pourrait clore la question sans
+        // jamais lui avoir laissé la moindre chance de répondre.
+        if (!isHostJoining && room.currentQuestion && !room.currentQuestion.ended) {
+          room.currentQuestion.expectedPlayers = (room.currentQuestion.expectedPlayers || 0) + 1
+        }
       }
       // Un joueur (hors hôte) qui rejoint pendant que le mode équipe est déjà
       // actif — nouveau joueur ou reconnexion d'un joueur dont l'équipe
@@ -886,7 +893,22 @@ const start = async () => {
       // réglage entre deux questions (ce que le client bloque déjà une fois
       // la partie lancée, voir game:setSpeedLevel, mais on ne fait jamais
       // confiance qu'au serveur pour ça).
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false }
+      // expectedPlayers : nombre de joueurs actifs au moment où CETTE question
+      // démarre — sert de référence FIGÉE pour emitProgress (voir plus bas),
+      // plutôt que de recalculer activePlayers(room) à chaque réponse. Une
+      // simple coupure wifi passagère touchant plusieurs joueurs en même
+      // temps (fréquent avec un salon nombreux sur le même réseau) fait
+      // momentanément chuter activePlayers(room) ; recalculé à la volée, la
+      // toute première réponse reçue pendant ce creux suffisait à satisfaire
+      // "tout le monde a répondu" et clôturait la question pour de vrai,
+      // bien avant la fin réelle du chrono (retour utilisateur : "coupé à
+      // 10s, sûrement à la validation du premier joueur", salon de 7). Figée
+      // ici, elle ne peut plus que MONTER (voir room:join, un nouveau joueur
+      // qui rejoint en cours de question l'incrémente) — jamais descendre à
+      // cause d'une déconnexion, temporaire ou non : au pire, l'optimisation
+      // "clore dès que tout le monde a répondu" ne se déclenche pas et on
+      // attend la fin normale du chrono, jamais de fin prématurée.
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -967,7 +989,12 @@ const start = async () => {
       // révélation dès que tout le monde a répondu, sans attendre la fin du
       // chrono.
       const emitProgress = () => {
-        const total = activePlayers(room).length
+        // total = q.expectedPlayers (figé à l'ouverture de la question, voir
+        // question:show), PAS activePlayers(room) recalculé à la volée —
+        // sinon une coupure réseau passagère pouvait faire chuter le total
+        // en cours de route et clore la question dès la première réponse
+        // reçue pendant ce creux. Voir le commentaire sur expectedPlayers.
+        const total = q.expectedPlayers || 0
         const answered = q.submissions?.size || 0
         io.to(code).emit('answer:progress', { answered, total })
         if (total > 0 && answered >= total) q.endQuestion?.()
