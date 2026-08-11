@@ -559,10 +559,11 @@ const renderDetailTab = (ordered) => {
 
 // Version tableau (PC — voir CSS, masquée sur mobile où les cartes
 // ci-dessus prennent le relais) : une ligne par joueur, une colonne par
-// question. Le texte de la réponse ne tient pas dans la case (retour
-// utilisateur : préfère un vrai tableau), donc reste en infobulle native
-// (title) plutôt que d'élargir chaque case — cohérent avec le reste du
-// projet (ex. la poignée de glisser "Glisser pour réordonner").
+// question. Retour utilisateur : la réponse doit être VISIBLE dans la
+// case, pas seulement accessible en infobulle au survol (facile à manquer,
+// invisible au toucher) — tronquée avec ellipsis si trop longue, le texte
+// complet reste quand même en infobulle native (title) pour les réponses
+// longues (ex. "relier").
 const renderDetailTable = (ordered) => {
   const head = document.getElementById('detailTableHead')
   const body = document.getElementById('detailTableBody')
@@ -581,10 +582,12 @@ const renderDetailTable = (ordered) => {
       const mark = isCorrect ? '✓' : status === 'incorrect' ? '✗' : '–'
       const cls = isCorrect ? 'is-correct' : status === 'incorrect' ? 'is-incorrect' : 'is-absent'
       const answer = h.answers ? h.answers[p.id] : undefined
+      const answerFlat = answer ? answer.replace(/\n/g, ' / ') : ''
       const points = Number(h.deltas?.[p.id]) || 0
-      const tip = `${h.prompt || ''} — ${answer ? answer.replace(/\n/g, ' / ') : 'pas de réponse'}`
+      const tip = `${h.prompt || ''} — ${answerFlat || 'pas de réponse'}`
       return `<td class="detail-table-cell ${cls}" title="${escDetail(tip)}">
         <span class="detail-table-mark">${mark}</span>${points > 0 ? `<span class="detail-table-pts">+${points}</span>` : ''}
+        <span class="detail-table-answer">${answerFlat ? escDetail(answerFlat) : '—'}</span>
       </td>`
     }).join('')
     return `<tr>

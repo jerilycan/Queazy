@@ -245,18 +245,20 @@
 
       <!-- Zone de jeu -->
       <div id="main" class="mt-40">
-        <!-- Ordre volontaire (retour utilisateur) : question -> image ->
-             ... , à l'identique de l'éditeur (voir editor.html). -->
-        <div id="question" class="question-text"></div>
-        <div id="illustrationImgWrap" class="illustration-img-wrap">
-          <img id="illustrationImg" class="illustration-img d-none" alt="" />
-        </div>
-
+        <!-- Ordre volontaire (retour utilisateur) : le timer reste une barre
+             AU-DESSUS de la question quoi qu'il arrive, puis question ->
+             image, à l'identique de l'éditeur (voir editor.html) pour le
+             reste. -->
         <div class="timer-container d-none" id="timerContainer">
           <div class="timer-bar-wrapper">
             <div id="timerBar" class="timer-bar-fill"></div>
             <div id="timerLabel" class="timer-label">15</div>
           </div>
+        </div>
+
+        <div id="question" class="question-text"></div>
+        <div id="illustrationImgWrap" class="illustration-img-wrap">
+          <img id="illustrationImg" class="illustration-img d-none" alt="" />
         </div>
 
         <div id="inputArea" class="d-none max-w-700 m-auto">

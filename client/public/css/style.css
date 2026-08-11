@@ -1763,6 +1763,36 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 .recap-sidebar-toggle:hover { background: var(--color-surface); }
 .recap-sidebar-toggle.is-open { right: 320px; }
+
+/* Panneau hôte en barre latérale GAUCHE sur grand écran (retour utilisateur :
+   au centre, il gênait une présentation IRL projetée — même top:100px que le
+   bouton du récap à droite, ci-dessus, pour rester cohérent). Le contenu
+   principal (#main, question/image/timer) n'a pas besoin d'être recentré :
+   sur un écran assez large pour activer cette mise en page, la marge vide de
+   chaque côté de .container (max-width 1100px, centré) suffit déjà largement
+   à loger ce panneau sans jamais chevaucher la zone projetée. En dessous du
+   seuil, le panneau reste dans le flux normal (comportement inchangé) plutôt
+   que de risquer un chevauchement sur un écran plus modeste. */
+@media (min-width: 1600px) {
+  body.is-host #hostPanel {
+    position: fixed;
+    left: 24px;
+    top: 100px;
+    width: 260px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+    z-index: 60;
+  }
+  body.is-host #hostPanel .d-flex.gap-sm {
+    flex-direction: column;
+    width: 100%;
+  }
+  body.is-host #hostPanel .d-flex.gap-sm .btn { width: 100%; }
+}
+
 .recap-sidebar {
   position: fixed; top: 0; right: 0; height: 100vh; width: 320px;
   background: var(--color-card); border-left: 1px solid var(--color-border);
@@ -3405,12 +3435,31 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   font-weight: 800;
   color: var(--color-accent);
 }
-.detail-table-cell { cursor: default; }
+.detail-table-cell {
+  cursor: default;
+  min-width: 96px;
+  max-width: 140px;
+  white-space: normal;
+  vertical-align: top;
+}
 .detail-table-cell.is-correct .detail-table-mark { color: var(--tile-green); }
 .detail-table-cell.is-incorrect .detail-table-mark { color: var(--color-danger); }
 .detail-table-cell.is-absent .detail-table-mark { color: var(--color-text-muted); }
 .detail-table-mark { font-weight: 800; }
-.detail-table-pts { display: block; font-size: 11px; color: var(--tile-green); font-weight: 700; }
+.detail-table-pts { display: inline-block; margin-left: 4px; font-size: 11px; color: var(--tile-green); font-weight: 700; }
+/* Réponse VISIBLE dans la case (retour utilisateur : la seule infobulle au
+   survol se ratait trop facilement) — tronquée sur une ligne avec ellipsis,
+   le texte complet reste accessible via l'infobulle native (title, posée
+   sur la case entière) pour les réponses trop longues pour tenir. */
+.detail-table-answer {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Point de bascule table/cartes : le tableau a besoin d'assez de largeur
    pour rester lisible colonne par colonne (une par question) — en dessous,

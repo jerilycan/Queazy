@@ -2636,6 +2636,11 @@ const renderLobbyGrid = (arr) => {
     // contraire (retour utilisateur : "un de mes joueurs avait les
     // contrôles du maître du jeu").
     if (isMe) isHost = !!p.isHost
+    // Bascule le panneau hôte en barre latérale gauche sur grand écran (voir
+    // CSS body.is-host #hostPanel) — retour utilisateur : au centre, ce
+    // panneau gênait une présentation IRL projetée, la place centrale doit
+    // rester pour la question/l'image, pas les boutons de contrôle.
+    document.body.classList.toggle('is-host', isHost)
 
     if (isMe && p.isHost) {
       hostPanel.classList.remove('d-none')
