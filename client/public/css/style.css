@@ -1202,7 +1202,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .assoc-correct-hint { color: var(--tile-green); font-weight: 800; margin-left: 6px; }
 
 @media (max-width: 600px) {
-  .association-area { grid-template-columns: 1fr; }
+  /* Même retour que pour "intrus" (voir .options-grid.intrus-grid) : la
+     colonne A empilée entièrement au-dessus de la colonne B obligeait à
+     scroller pour voir toutes les cartes. Reste en 2 colonnes côte à côte,
+     juste des cartes plus compactes pour que tout tienne à l'écran. */
+  .association-area { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .assoc-item { padding: 10px 8px; font-size: 13px; }
 }
 
 /* Liste réordonnable (question "order") */

@@ -2640,16 +2640,27 @@ const renderLobbyGrid = (arr) => {
     if (isMe && p.isHost) {
       hostPanel.classList.remove('d-none')
       hostPanel.style.display = 'flex'
-      if (teamModePanel) teamModePanel.classList.remove('d-none')
-      if (speedLevelPanel) speedLevelPanel.classList.remove('d-none')
 
-      // Reset buttons visibility when entering lobby as host
-      startQuizBtn.classList.remove('d-none')
-      startQuizBtn.style.display = 'inline-flex'
-      selectQuizBtn.classList.remove('d-none')
-      selectQuizBtn.style.display = 'inline-flex'
-      nextQuestionBtn.classList.add('d-none')
-      nextQuestionBtn.style.display = 'none'
+      // Même cause que le panneau lien+QR juste en dessous (voir commentaire
+      // !inActiveGame) : lobby:list se redéclenche pour tout le monde à
+      // chaque (re)connexion d'un joueur, y compris en PLEINE QUESTION —
+      // sans cette garde, ce bloc remettait Lancer/Choisir un quiz visibles
+      // et cachait Suivant à chaque fois qu'un joueur se reconnectait après
+      // une coupure, rendant l'hôte incapable d'avancer dans le quiz sans
+      // recharger la page (retour utilisateur, un seul joueur reconnecté a
+      // suffi à déclencher le bug).
+      if (!inActiveGame) {
+        if (teamModePanel) teamModePanel.classList.remove('d-none')
+        if (speedLevelPanel) speedLevelPanel.classList.remove('d-none')
+
+        // Reset buttons visibility when entering lobby as host
+        startQuizBtn.classList.remove('d-none')
+        startQuizBtn.style.display = 'inline-flex'
+        selectQuizBtn.classList.remove('d-none')
+        selectQuizBtn.style.display = 'inline-flex'
+        nextQuestionBtn.classList.add('d-none')
+        nextQuestionBtn.style.display = 'none'
+      }
 
       hideBuilder()
       const jc = document.getElementById('joinCard')
