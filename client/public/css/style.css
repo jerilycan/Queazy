@@ -1796,8 +1796,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 /* "Relier" : réponse sur plusieurs lignes (une par paire) — passe en
    colonne et laisse le texte respirer plutôt que de le tronquer sur une
    seule ligne illisible (retour hôte, voir index.js question:recap). */
-.recap-player-row.is-multiline { align-items: flex-start; flex-direction: column; gap: 4px; }
+/* Coche/mark + nom restent sur la même ligne (flex-wrap, pas de colonne
+   forcée dès le début) : seule la réponse, elle, force son propre retour à
+   la ligne (flex-basis:100%) — inutile de sauter une ligne entre la coche et
+   le nom, seulement avant la réponse (retour utilisateur). */
+.recap-player-row.is-multiline { align-items: center; flex-wrap: wrap; gap: 4px 10px; }
 .recap-player-row.is-multiline .recap-player-answer {
+  flex-basis: 100%;
   white-space: normal; text-align: left; overflow: visible; text-overflow: clip;
   padding-left: 24px; line-height: 1.5;
 }
@@ -3438,8 +3443,42 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
   text-align: center;
 }
 .qz-toast.is-visible { opacity: 1; transform: translateY(0); }
-.qz-toast.is-error { background: linear-gradient(135deg, var(--color-danger) 0%, #b3123a 100%); color: white; border-color: transparent; }
+.qz-toast.is-error {
+  background: linear-gradient(135deg, var(--color-danger) 0%, #b3123a 100%);
+  color: white;
+  border-color: transparent;
+  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(239, 68, 68, 0.35);
+  font-size: 15px;
+}
 .qz-toast.is-success { background: linear-gradient(135deg, var(--tile-green) 0%, var(--tile-green-deep) 100%); color: white; border-color: transparent; }
+
+/* Petite secousse à l'apparition (erreur seulement) : rien de tel pour une
+   info/succès, mais une erreur doit "accrocher l'œil" même en vision
+   périphérique — retour utilisateur : un message d'erreur passé inaperçu a
+   fait croire à un testeur qu'il avait perdu ses questions. */
+.qz-toast.is-error.is-visible { animation: qz-toast-shake 0.4s ease; }
+@keyframes qz-toast-shake {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  20% { transform: translateY(0) translateX(-6px); }
+  40% { transform: translateY(0) translateX(5px); }
+  60% { transform: translateY(0) translateX(-3px); }
+  80% { transform: translateY(0) translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qz-toast.is-error.is-visible { animation: none; }
+}
+
+/* Renfort visuel directement sur un champ invalide (voir editor.js
+   flagFieldError) — contour rouge qui persiste (contrairement au toast, qui
+   disparaît tout seul) jusqu'à ce que l'utilisateur touche au champ. */
+.field-error {
+  outline: 2px solid var(--color-danger) !important;
+  outline-offset: 2px;
+  animation: qz-toast-shake 0.4s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-error { animation: none; }
+}
 
 /* --- Visite guidée "spotlight" (tutoriel, voir QzUI.tour) ------------------
    .qz-tour-hole ne découpe pas réellement un trou dans .qz-tour-backdrop :

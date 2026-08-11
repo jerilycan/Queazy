@@ -365,6 +365,25 @@ const showToast = (msg, type = 'info') => {
   setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300) }, 3000)
 }
 
+// Renfort visuel SUR LE CHAMP fautif lui-même, en plus du toast — un
+// testeur n'a pas vu le message "La question X n'a pas d'énoncé" (toast
+// transitoire, en bas d'écran) et a cru avoir perdu ses questions en
+// quittant la page sans jamais réussir à sauvegarder. selectQuestion(i)
+// amène déjà à la bonne question, mais si le champ vide lui-même ne saute
+// pas aux yeux, la cause reste invisible. Contour rouge + petite secousse,
+// retirés dès que l'utilisateur touche au champ (pas besoin de bouton pour
+// l'effacer).
+const flagFieldError = (el) => {
+  if (!el) return
+  el.classList.remove('field-error')
+  void el.offsetWidth // relance l'animation même si déjà marqué juste avant
+  el.classList.add('field-error')
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  const clear = () => el.classList.remove('field-error')
+  el.addEventListener('input', clear, { once: true })
+  el.addEventListener('focus', clear, { once: true })
+}
+
 // --- Logique de l'Éditeur ---
 
 const createDefaultQuestion = () => ({
@@ -2313,6 +2332,7 @@ saveQuizBtn.onclick = async () => {
     // Vérifier l'énoncé (commun à tous les types)
     if (!q.prompt || q.prompt.trim() === '') {
       selectQuestion(i)
+      flagFieldError(qPrompt)
       showToast(`La question ${i + 1} n'a pas d'énoncé`, 'error')
       return
     }

@@ -215,17 +215,24 @@
   function qzToast(message, type) {
     const host = ensureToastHost()
     const t = document.createElement('div')
-    t.className = 'qz-toast' + (type === 'error' ? ' is-error' : type === 'success' ? ' is-success' : '')
-    t.textContent = message
+    const isError = type === 'error'
+    t.className = 'qz-toast' + (isError ? ' is-error' : type === 'success' ? ' is-success' : '')
+    // Retour utilisateur : un testeur n'a pas vu un message d'erreur
+    // (validation bloquée à la sauvegarde) et a cru avoir "perdu" ses
+    // questions — le toast disparaissait après 3.2s, sans rien pour attirer
+    // l'œil. Une erreur reste donc affichée bien plus longtemps, avec une
+    // icône et une petite secousse d'entrée qu'une info/succès n'a pas.
+    t.textContent = isError ? `⚠️ ${message}` : message
     host.appendChild(t)
     // Force le reflow avant d'ajouter la classe d'entrée, sinon la transition
     // CSS ne joue pas (l'élément est déjà dans son état final au 1er paint).
     void t.offsetWidth
     t.classList.add('is-visible')
+    const displayMs = isError ? 7000 : 3200
     setTimeout(() => {
       t.classList.remove('is-visible')
       setTimeout(() => t.remove(), 300)
-    }, 3200)
+    }, displayMs)
   }
 
   // --- Visite guidée "spotlight" (tutoriel de prise en main) -----------------
