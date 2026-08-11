@@ -1973,8 +1973,22 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .persistent-code {
   position: fixed; bottom: 20px; right: 20px; background: var(--color-card); padding: 8px 16px;
-  border-radius: var(--radius-sm); box-shadow: var(--shadow-md); border: 1px solid var(--color-border); 
-  z-index: 100; font-size: 14px; color: var(--color-text-muted); 
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-md); border: 1px solid var(--color-border);
+  z-index: 100; font-size: 14px; color: var(--color-text-muted);
+}
+/* Sur mobile, ce badge fixe en bas-droite empiétait sur les contrôles de
+   réponse (bouton Valider, options...) — eux aussi groupés en bas de l'écran
+   sur un petit viewport (retour utilisateur, test iPhone). Remonté en haut,
+   hors du chemin des interactions, et réduit puisqu'il n'a besoin que d'être
+   consultable au besoin, pas bien visible en permanence. */
+@media (max-width: 640px) {
+  .persistent-code {
+    bottom: auto;
+    top: 12px;
+    right: 12px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
 }
 
 .question-text { 
@@ -2152,6 +2166,19 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   .nav-group:last-child { justify-content: center; }
   .player-grid { grid-template-columns: repeat(2, 1fr); }
   .options-grid { grid-template-columns: 1fr; }
+  /* "Intrus" (tuiles photo) reste volontairement en 2 colonnes même ici,
+     contrairement au reste (texte MCQ, illisible sur une seule longue
+     colonne serait pire à 2) : en 1 seule colonne, les tuiles s'empilaient
+     en pleine largeur et obligeaient à scroller pour voir toutes les photos
+     avant de répondre — désavantage chronométré signalé par un joueur sur
+     téléphone. 2 colonnes + tuiles réduites tient sur un écran sans scroll. */
+  .options-grid.intrus-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .options-grid.intrus-grid .option-btn.intrus-tile {
+    min-height: 0;
+  }
   .icon-grid { grid-template-columns: repeat(4, 1fr); }
   .question-text { font-size: 26px; margin-bottom: 24px; }
   /* Barre hôte : contrôles empilés et pleine largeur */

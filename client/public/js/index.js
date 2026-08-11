@@ -1197,12 +1197,60 @@ const submitImageClick = (clientX, clientY) => {
   }
 }
 
+// Pincement à deux doigts pour zoomer (retour utilisateur, test iPhone : la
+// molette n'existe pas au toucher, seuls restaient les boutons +/-, qui
+// zooment toujours depuis le coin haut-gauche — impossible en pratique de
+// viser une zone ailleurs sur l'image sans un vrai geste de pincement).
+// Coexiste avec le glisser à un doigt (déplacer la vue) déjà en place :
+// activeImagePointers suit tous les doigts posés sur le calque, un 2e doigt
+// bascule en mode pincement et annule un glisser à un doigt en cours.
+const activeImagePointers = new Map() // pointerId -> {x, y}
+let imagePinch = null
+const imagePointerDist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y)
+
 if (imageClickLayer) {
   imageClickLayer.addEventListener('pointerdown', (e) => {
-    imagePanGesture = { startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false, pointerId: e.pointerId }
+    activeImagePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     try { imageClickLayer.setPointerCapture(e.pointerId) } catch {}
+    if (activeImagePointers.size >= 2) {
+      // Un 2e (ou 3e) doigt arrive : plus question d'un simple tap/glisser,
+      // on repart sur un pincement propre à partir des deux premiers doigts.
+      imagePanGesture = null
+      const [p1, p2] = Array.from(activeImagePointers.values())
+      const rect = imageViewport.getBoundingClientRect()
+      const anchorX = (p1.x + p2.x) / 2 - rect.left
+      const anchorY = (p1.y + p2.y) / 2 - rect.top
+      imagePinch = {
+        startDist: imagePointerDist(p1, p2),
+        startZoom: imageZoom,
+        anchorX,
+        anchorY,
+        // Point de l'IMAGE (pas de l'écran) sous le milieu des deux doigts —
+        // reste sous ce milieu pendant tout le pincement, comme le zoom
+        // molette vers le curseur (zoomImageTowardPoint) côté desktop.
+        anchorLocalX: (anchorX - imagePanX) / imageZoom,
+        anchorLocalY: (anchorY - imagePanY) / imageZoom
+      }
+    } else {
+      imagePanGesture = { startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false, pointerId: e.pointerId }
+    }
   })
   imageClickLayer.addEventListener('pointermove', (e) => {
+    if (!activeImagePointers.has(e.pointerId)) return
+    activeImagePointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (imagePinch && activeImagePointers.size >= 2) {
+      const [p1, p2] = Array.from(activeImagePointers.values())
+      const dist = imagePointerDist(p1, p2)
+      if (dist > 0 && imagePinch.startDist > 0) {
+        imageZoom = Math.min(IMAGE_ZOOM_MAX, Math.max(IMAGE_ZOOM_MIN, imagePinch.startZoom * (dist / imagePinch.startDist)))
+        imagePanX = imagePinch.anchorX - imagePinch.anchorLocalX * imageZoom
+        imagePanY = imagePinch.anchorY - imagePinch.anchorLocalY * imageZoom
+        applyImageZoom()
+      }
+      return
+    }
+
     if (!imagePanGesture || e.pointerId !== imagePanGesture.pointerId) return
     const dx = e.clientX - imagePanGesture.lastX
     const dy = e.clientY - imagePanGesture.lastY
@@ -1223,14 +1271,25 @@ if (imageClickLayer) {
     imagePanGesture.lastY = e.clientY
   })
   const endImagePanGesture = (e) => {
-    if (!imagePanGesture || e.pointerId !== imagePanGesture.pointerId) return
+    activeImagePointers.delete(e.pointerId)
     try { imageClickLayer.releasePointerCapture(e.pointerId) } catch {}
+    if (imagePinch) {
+      // Un pincement a eu lieu : jamais un "tap" valide, quel que soit le
+      // doigt relâché en premier — pas de submitImageClick ici.
+      if (activeImagePointers.size < 2) imagePinch = null
+      imagePanGesture = null
+      imageClickLayer.classList.remove('panning')
+      return
+    }
+    if (!imagePanGesture || e.pointerId !== imagePanGesture.pointerId) return
     imageClickLayer.classList.remove('panning')
     if (!imagePanGesture.moved) submitImageClick(e.clientX, e.clientY)
     imagePanGesture = null
   }
   imageClickLayer.addEventListener('pointerup', endImagePanGesture)
   imageClickLayer.addEventListener('pointercancel', () => {
+    activeImagePointers.clear()
+    imagePinch = null
     imagePanGesture = null
     imageClickLayer.classList.remove('panning')
   })
@@ -3081,6 +3140,7 @@ socket.on('question:show', payload => {
     optionsDiv.style.display = isMcqLike ? 'grid' : 'none'
     optionsDiv.classList.toggle('d-none', !isMcqLike)
     optionsDiv.classList.toggle('truefalse-grid', payload.type === 'truefalse')
+    optionsDiv.classList.toggle('intrus-grid', payload.type === 'intrus')
   }
   if (graduationArea) {
     graduationArea.classList.toggle('d-none', payload.type !== 'graduation')
