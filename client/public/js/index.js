@@ -266,6 +266,8 @@ const gradSliderThumb = document.getElementById('gradSliderThumb')
 const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
+const gradDecBtn = document.getElementById('gradDecBtn')
+const gradIncBtn = document.getElementById('gradIncBtn')
 const revealAnswerText = document.getElementById('revealAnswerText')
 const myResultBanner = document.getElementById('myResultBanner')
 const revealExplanationText = document.getElementById('revealExplanationText')
@@ -528,6 +530,18 @@ if (gradSlider) {
     if (handled) e.preventDefault()
   })
 }
+
+// Boutons -/+ à côté du chiffre : incrément de 1 en 1, pour les joueurs qui
+// trouvent le glisser trop imprécis (retour utilisateur). Même garde
+// gradState.disabled que le clavier/pointeur ci-dessus.
+if (gradDecBtn) gradDecBtn.addEventListener('click', () => {
+  if (gradState.disabled) return
+  setGradValue(gradState.value - 1, true)
+})
+if (gradIncBtn) gradIncBtn.addEventListener('click', () => {
+  if (gradState.disabled) return
+  setGradValue(gradState.value + 1, true)
+})
 
 // --- Liste réordonnable (question "order") ---
 // Glisser au pointeur fait maison (remplace SortableJS, testé sur prototype

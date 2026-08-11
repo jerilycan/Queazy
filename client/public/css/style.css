@@ -809,8 +809,40 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 
 .grad-readout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
   text-align: center;
   margin-bottom: 6px;
+}
+
+.grad-step-btn {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.grad-step-btn:hover {
+  background: rgba(var(--color-accent-rgb), 0.3);
+  border-color: var(--color-accent);
+}
+
+.grad-step-btn:active {
+  transform: scale(0.92);
 }
 
 .grad-value {
@@ -1106,6 +1138,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 /* Interactions verrouillées après la fin du timer (la révélation reste visible) */
 .answers-locked .option-btn,
 .answers-locked .grad-slider,
+.answers-locked .grad-step-btn,
 .answers-locked .order-item,
 .answers-locked .assoc-item,
 .answers-locked .timeline-item,

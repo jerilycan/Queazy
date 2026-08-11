@@ -261,7 +261,11 @@
           <div id="answerStatus" class="answer-status d-none">✓ Réponse envoyée !</div>
           <div id="options" class="options-grid d-none"></div>
           <div id="graduationArea" class="graduation-area d-none">
-            <div class="grad-readout"><span id="gradValueReadout" class="grad-value">50</span></div>
+            <div class="grad-readout">
+              <button type="button" id="gradDecBtn" class="grad-step-btn" aria-label="Diminuer de 1">−</button>
+              <span id="gradValueReadout" class="grad-value">50</span>
+              <button type="button" id="gradIncBtn" class="grad-step-btn" aria-label="Augmenter de 1">+</button>
+            </div>
             <div id="gradSlider" class="grad-slider" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-label="Réponse">
               <div class="grad-slider-track">
                 <div id="gradSliderFill" class="grad-slider-fill"></div>
