@@ -1373,6 +1373,11 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   }
   let dragging = false
   track.addEventListener('pointerdown', e => {
+    // Verrou posé une fois la partie lancée (voir game-active plus bas) :
+    // pas de piste native <input disabled>, donc ce garde-fou maison en
+    // début de chaque poignée d'interaction plutôt qu'une désactivation CSS
+    // seule (qui n'empêche rien tant que le JS n'est pas prévenu).
+    if (track.classList.contains('is-disabled')) return
     dragging = true
     try { track.setPointerCapture(e.pointerId) } catch {}
     track.classList.add('grabbing')
@@ -1398,6 +1403,7 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   track.setAttribute('aria-valuemin', '0')
   track.setAttribute('aria-valuemax', '100')
   track.addEventListener('keydown', e => {
+    if (track.classList.contains('is-disabled')) return
     let handled = true
     if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { pct = Math.min(100, pct + 5); render(); onChange(pct) }
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { pct = Math.max(0, pct - 5); render(); onChange(pct) }
@@ -2248,6 +2254,11 @@ const hideJoinPanel = () => {
 
 const showLobby = () => {
   document.body.classList.remove('game-active')
+  // Symétrique du verrou posé au lancement (voir plus haut) : redevient
+  // modifiable si on revient au salon (ex. reconnexion hôte avant que la
+  // partie n'ait vraiment démarré).
+  if (audioModeRemoteInput) audioModeRemoteInput.disabled = false
+  if (audioVolumeTrack) audioVolumeTrack.classList.remove('is-disabled')
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.remove('d-none')
@@ -3134,6 +3145,12 @@ socket.on('question:show', payload => {
   // pendant la partie : on la réduit au seul nom, non cliquable, pour éviter
   // qu'un joueur ne quitte la partie par erreur (voir règle CSS associée).
   document.body.classList.add('game-active')
+  // Une fois la partie lancée, plus question de changer le mode audio du
+  // blind test (IRL/à distance) ou le volume par défaut en cours de route
+  // (retour utilisateur) — verrouillés dès la première question, pas
+  // seulement "plus affichés au centre" comme le reste du panneau hôte.
+  if (audioModeRemoteInput) audioModeRemoteInput.disabled = true
+  if (audioVolumeTrack) audioVolumeTrack.classList.add('is-disabled')
   const timerContainer = document.getElementById('timerContainer')
   if (timerContainer) {
     timerContainer.classList.remove('d-none')

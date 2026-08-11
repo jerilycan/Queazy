@@ -1717,6 +1717,10 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    générique (4px) était pensé pour du texte, trop serré une fois qu'il y a
    une vraie piste de curseur au milieu. */
 .host-volume-row { gap: 10px; }
+/* Verrouillé une fois la partie lancée (voir index.js, wireVolumeSlider +
+   game-active) — même traitement visuel que .qz-toggle-input:disabled juste
+   à côté dans le panneau hôte, pour rester cohérent. */
+.volume-track.is-disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Récap rapide de la question (hôte uniquement), voir index.html
    #questionRecapCard + index.js socket.on('question:recap', ...). */
@@ -1764,21 +1768,24 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .recap-sidebar-toggle:hover { background: var(--color-surface); }
 .recap-sidebar-toggle.is-open { right: 320px; }
 
-/* Panneau hôte en barre latérale GAUCHE sur grand écran (retour utilisateur :
-   au centre, il gênait une présentation IRL projetée — même top:100px que le
-   bouton du récap à droite, ci-dessus, pour rester cohérent). Le contenu
-   principal (#main, question/image/timer) n'a pas besoin d'être recentré :
-   sur un écran assez large pour activer cette mise en page, la marge vide de
-   chaque côté de .container (max-width 1100px, centré) suffit déjà largement
-   à loger ce panneau sans jamais chevaucher la zone projetée. En dessous du
-   seuil, le panneau reste dans le flux normal (comportement inchangé) plutôt
-   que de risquer un chevauchement sur un écran plus modeste. */
-@media (min-width: 1600px) {
-  body.is-host #hostPanel {
+/* Panneau hôte en barre latérale GAUCHE UNIQUEMENT UNE FOIS LA PARTIE
+   LANCÉE (.game-active, voir index.js question:show) — retour utilisateur :
+   dans le salon d'attente, il n'y a rien à "présenter" au centre, le
+   panneau y reste donc dans le flux normal comme avant ; c'est seulement
+   une fois la question affichée que la place centrale doit rester libre
+   pour la présentation IRL projetée (même top:100px que le bouton du récap
+   à droite, ci-dessus, pour rester cohérent). .container est explicitement
+   décalé de la largeur du panneau (+marge) au lieu de compter sur une marge
+   de centrage déjà présente : marche donc dès un écran de laptop courant
+   (1024px), pas seulement sur un très grand écran où la marge naturelle
+   autour de .container (max-width 1100px, centré) suffirait par hasard à
+   loger le panneau sans y toucher. */
+@media (min-width: 1024px) {
+  body.is-host.game-active #hostPanel {
     position: fixed;
-    left: 24px;
+    left: 20px;
     top: 100px;
-    width: 260px;
+    width: 240px;
     max-height: calc(100vh - 120px);
     overflow-y: auto;
     flex-direction: column;
@@ -1786,11 +1793,38 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     gap: var(--space-md);
     z-index: 60;
   }
-  body.is-host #hostPanel .d-flex.gap-sm {
+  body.is-host.game-active #hostPanel .d-flex.gap-sm {
     flex-direction: column;
     width: 100%;
   }
-  body.is-host #hostPanel .d-flex.gap-sm .btn { width: 100%; }
+  /* Les boutons/réglages gardent leurs classes utilitaires pensées pour une
+     barre HORIZONTALE (h-48 px-32 : hauteur fixe + gros padding latéral) —
+     dans les 240px de large de cette colonne, ça les faisait déborder en
+     hauteur et rendait tout le panneau "cassé" visuellement (retour
+     utilisateur). Repli vertical adapté à cette largeur. */
+  body.is-host.game-active #hostPanel .d-flex.gap-sm .btn {
+    width: 100%;
+    height: auto;
+    min-height: 44px;
+    padding: 10px 12px;
+    white-space: normal;
+    line-height: 1.25;
+  }
+  body.is-host.game-active #hostPanel .qz-toggle-label {
+    align-items: flex-start;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  body.is-host.game-active #hostPanel .host-volume-row {
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+  body.is-host.game-active #hostPanel .volume-track { flex-shrink: 0; }
+  body.is-host.game-active .container {
+    max-width: none;
+    margin-left: 280px;
+    margin-right: 20px;
+  }
 }
 
 .recap-sidebar {
