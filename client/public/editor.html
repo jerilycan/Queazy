@@ -93,6 +93,21 @@
             <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..."></textarea>
           </div>
 
+          <!-- Ordre volontaire (retour utilisateur) : question -> image ->
+               explication -> type+minuteur -> configuration de la réponse.
+               Reproduit à l'identique côté joueur (voir index.html/index.js,
+               question:show) pour que l'ordre de saisie ici corresponde à
+               l'ordre de lecture pendant la partie. -->
+          <div id="illustrationSection" class="detail-section">
+            <label>Image d'illustration (optionnelle)</label>
+            <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
+            <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
+              <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
+              <button type="button" id="removeIllustrationBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+            </div>
+            <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
+          </div>
+
           <div class="detail-section">
             <label>Explication (optionnelle, affichée après la révélation)</label>
             <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986."></textarea>
@@ -123,16 +138,6 @@
                 <button id="timerPlus" class="btn-timer">+</button>
               </div>
             </div>
-          </div>
-
-          <div id="illustrationSection" class="detail-section">
-            <label>Image d'illustration (optionnelle)</label>
-            <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
-            <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
-              <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
-              <button type="button" id="removeIllustrationBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
-            </div>
-            <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
           </div>
 
           <div id="zoomGuessSection" class="detail-section d-none">
