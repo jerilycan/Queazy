@@ -3397,7 +3397,12 @@ const submitCurrentAnswer = () => {
       showAnnounce('Veuillez sélectionner au moins une réponse')
       return
     }
-    content = selectedMcqOptions.join(', ')
+    // JSON plutôt que join(', ') : une option dont le texte contient
+    // elle-même une virgule (ex. "Paris, France") cassait la reconstruction
+    // côté serveur (split(',')), qui ne retombait plus jamais sur l'exacte
+    // liste des bonnes réponses -> "mauvaise réponse" alors que tout était
+    // coché correctement (retour utilisateur).
+    content = JSON.stringify(selectedMcqOptions)
   } else if (currentQuestionType === 'graduation') {
     myGradAnswerValue = gradState.value
     content = String(gradState.value)
@@ -3476,7 +3481,7 @@ moderationDiv.style.marginTop = '16px'
 moderationDiv.style.display = 'none' // Caché par défaut
 document.querySelector('.container').appendChild(moderationDiv)
 let isModerationPending = false
-socket.on('answer:queue', ({ answerId, playerId, content, blindtest, fields }) => {
+socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest, fields }) => {
   if (!isHost) {
     const isMcq = !optionsDiv.classList.contains('d-none')
     if (!isMcq) {
@@ -3490,6 +3495,14 @@ socket.on('answer:queue', ({ answerId, playerId, content, blindtest, fields }) =
   const item = document.createElement('div')
   item.style.padding = '12px'
   item.style.borderBottom = '1px solid var(--color-border)'
+
+  const nameTag = document.createElement('div')
+  nameTag.style.fontWeight = '700'
+  nameTag.style.fontSize = '13px'
+  nameTag.style.opacity = '0.75'
+  nameTag.style.marginBottom = '4px'
+  nameTag.textContent = playerName || 'Joueur'
+  item.appendChild(nameTag)
 
   if (blindtest && fields) {
     // Deux champs (titre/artiste), chacun peut avoir besoin d'un jugement
@@ -3569,10 +3582,11 @@ socket.on('answer:queue', ({ answerId, playerId, content, blindtest, fields }) =
     return
   }
 
-  item.style.display = 'flex'
-  item.style.alignItems = 'center'
-  item.style.justifyContent = 'space-between'
-  item.style.gap = '12px'
+  const row = document.createElement('div')
+  row.style.display = 'flex'
+  row.style.alignItems = 'center'
+  row.style.justifyContent = 'space-between'
+  row.style.gap = '12px'
 
   const label = document.createElement('div')
   label.style.fontWeight = '600'
@@ -3606,8 +3620,9 @@ socket.on('answer:queue', ({ answerId, playerId, content, blindtest, fields }) =
 
   btns.appendChild(approve)
   btns.appendChild(reject)
-  item.appendChild(label)
-  item.appendChild(btns)
+  row.appendChild(label)
+  row.appendChild(btns)
+  item.appendChild(row)
   moderationDiv.appendChild(item)
 })
 

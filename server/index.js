@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.30.2'
+const APP_VERSION = '1.31.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1237,7 +1237,7 @@ const start = async () => {
           // retrouver SON entrée actuelle plutôt que créditer un socket.id
           // périmé que plus personne ne lit (voir resolvePendingId).
           room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, ts: submitTs, historyEntry: q.historyEntry, halfDelta, fullDelta, titleOnly: !!q.titleOnly, fields })
-          io.to(code).emit('answer:queue', { answerId, playerId: socket.id, blindtest: true, fields })
+          io.to(code).emit('answer:queue', { answerId, playerId: socket.id, playerName: p?.name || 'Joueur', blindtest: true, fields })
           emitProgress()
           return
         }
@@ -1358,7 +1358,21 @@ const start = async () => {
         // des bonnes réponses, ni plus ni moins ; réglage désactivé
         // explicitement (false) : au moins une bonne réponse cochée, et
         // aucune mauvaise, suffit à valider.
-        const submitted = String(payload?.content || '').split(',').map(s => s.trim()).filter(Boolean)
+        // Le client envoie désormais un JSON.stringify(array) (voir
+        // submitCurrentAnswer côté index.js) — l'ancien split(',') cassait
+        // le matching dès qu'une option contenait elle-même une virgule
+        // dans son texte (ex. "Paris, France") : toutes les bonnes réponses
+        // cochées, mais la reconstruction ne correspondait plus jamais
+        // exactement à q.correct -> "mauvaise réponse" à tort. Fallback sur
+        // l'ancien format pour ne rien casser si jamais du contenu legacy
+        // traîne encore quelque part.
+        let submitted
+        try {
+          const parsed = JSON.parse(payload?.content || '[]')
+          submitted = Array.isArray(parsed) ? parsed.map(s => String(s).trim()).filter(Boolean) : []
+        } catch {
+          submitted = String(payload?.content || '').split(',').map(s => s.trim()).filter(Boolean)
+        }
         const correctList = Array.isArray(q.correct) ? q.correct : []
         const correctSet = new Set(correctList)
         const submittedSet = new Set(submitted)
@@ -1376,7 +1390,7 @@ const start = async () => {
             if (q.historyEntry) {
               q.historyEntry.results[p.token] = 'correct'
               q.historyEntry.deltas[p.token] = delta
-              q.historyEntry.answers[p.token] = payload?.content || ''
+              q.historyEntry.answers[p.token] = submitted.join(', ')
             }
           }
           q.answered?.add(socket.id)
@@ -1386,7 +1400,7 @@ const start = async () => {
           q.submissions?.set(socket.id, 'incorrect')
           if (p?.token && q.historyEntry) {
             q.historyEntry.results[p.token] = 'incorrect'
-            q.historyEntry.answers[p.token] = payload?.content || ''
+            q.historyEntry.answers[p.token] = submitted.join(', ')
           }
         }
         emitProgress()
@@ -1445,7 +1459,7 @@ const start = async () => {
         // file d'attente blindtest plus haut (resolvePendingId).
         room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, content: payload?.content, ts: submitTs, delta, timerMs: q.timerMs, pointsFloor: q.pointsFloor, historyEntry: q.historyEntry })
         q.submissions?.set(socket.id, answerId)
-        io.to(code).emit('answer:queue', { answerId, playerId: socket.id, content: payload?.content })
+        io.to(code).emit('answer:queue', { answerId, playerId: socket.id, playerName: p?.name || 'Joueur', content: payload?.content })
         emitProgress()
       }
     })
