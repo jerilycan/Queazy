@@ -3927,10 +3927,11 @@ socket.on('question:recap', payload => {
     // l'ordre juste...) — état à part de correct/incorrect, avec sa propre
     // couleur (orange) et icône (vague), pour le distinguer d'un coup d'œil.
     const STATE_MARK = { correct: '✅', almost: '🌊', incorrect: '❌' }
-    // "relier" : plusieurs paires sur plusieurs lignes (answerDetails, voir
-    // buildRecap) — illisible tronqué sur une seule ligne (retour hôte :
-    // "doit être lisible, tu peux sauter les lignes si besoin").
-    const isMultiline = payload?.type === 'association'
+    // "relier"/"frise chronologique" : plusieurs éléments sur plusieurs
+    // lignes (answerDetails, voir buildRecap) — illisible tronqué sur une
+    // seule ligne (retour hôte : "doit être lisible"/"une ligne = un
+    // événement").
+    const isMultiline = payload?.type === 'association' || payload?.type === 'timeline'
     perPlayer.forEach(p => {
       const state = p.state || (p.correct ? 'correct' : 'incorrect')
       const row = document.createElement('div')

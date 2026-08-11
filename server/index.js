@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.30.0'
+const APP_VERSION = '1.30.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1330,6 +1330,15 @@ const start = async () => {
             q.historyEntry.results[p.token] = correctCount === n ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
             q.historyEntry.answers[p.token] = submitted.slice(0, n).map(k => events[k]?.title || '?').join(' → ')
+            // Une ligne par événement pour le détail par joueur du panneau
+            // récap (voir buildRecap) : la séquence condensée ci-dessus
+            // (answers, séparée par ' → ') devient illisible dès que la
+            // frise a plus de 3-4 événements sur une seule ligne tronquée
+            // (retour hôte : "pas lisible, une ligne = un événement").
+            q.historyEntry.answerDetails = q.historyEntry.answerDetails || {}
+            q.historyEntry.answerDetails[p.token] = submitted.slice(0, n)
+              .map((k, i) => `${i + 1}. ${events[k]?.title || '?'}`)
+              .join('\n')
           }
         }
         q.answered?.add(socket.id)
