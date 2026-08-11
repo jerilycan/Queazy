@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.34.1'
+const APP_VERSION = '1.35.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -280,7 +280,18 @@ const start = async () => {
       const t = room.tokens.get(tok)
       if (t) idDeltas[t.id] = val
     }
-    return { id: h.id, prompt: h.prompt, type: h.type, results: idResults, deltas: idDeltas }
+    // Réponse donnée par CE joueur pour cette question — même préférence que
+    // buildRecap côté hôte juste au-dessus (answerDetails si présent, sinon
+    // answers) : sert à l'onglet "Détail" de la page résultats (retour
+    // utilisateur, voir results.js), qui montre question par question ce que
+    // chacun a répondu, pas seulement juste/faux.
+    const idAnswers = {}
+    const answersSrc = h.answerDetails || h.answers || {}
+    for (const [tok, val] of Object.entries(answersSrc)) {
+      const t = room.tokens.get(tok)
+      if (t) idAnswers[t.id] = val
+    }
+    return { id: h.id, prompt: h.prompt, type: h.type, results: idResults, deltas: idDeltas, answers: idAnswers }
   })
 
   // Petit récap affiché côté hôte juste après la révélation (voir

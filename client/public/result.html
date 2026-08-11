@@ -34,16 +34,30 @@
     <div class="container mt-20">
       <div class="card max-w-700 m-auto text-center">
         <h1 class="font-32 mb-md">🏆 Résultats finaux 🏆</h1>
-        <div id="resultsPodium" class="m-auto mb-lg" style="max-width:560px">
-          <div class="race-qstrip" id="raceQstrip"></div>
-          <div class="race-stage" id="raceStage">
-            <div class="race-status-pill" id="raceStatusPill">Podium…</div>
-            <div class="race-finish-flash" id="raceFinishFlash"></div>
-            <div class="race-bigflash" id="raceBigflash"></div>
-            <div class="race-lanes" id="raceLanes"></div>
-          </div>
+
+        <div id="resultsTabs" class="results-tabs">
+          <button type="button" id="tabBtnPodium" class="results-tab-btn active" data-tab="podium">🏆 Podium</button>
+          <button type="button" id="tabBtnDetail" class="results-tab-btn" data-tab="detail">📋 Détail</button>
         </div>
-        <div id="fullTable" class="mt-lg"></div>
+
+        <div id="podiumTab" class="results-tab-panel">
+          <div id="resultsPodium" class="m-auto mb-lg" style="max-width:560px">
+            <div class="race-qstrip" id="raceQstrip"></div>
+            <div class="race-stage" id="raceStage">
+              <div class="race-status-pill" id="raceStatusPill">Podium…</div>
+              <div class="race-finish-flash" id="raceFinishFlash"></div>
+              <div class="race-bigflash" id="raceBigflash"></div>
+              <div class="race-lanes" id="raceLanes"></div>
+            </div>
+          </div>
+          <div id="fullTable" class="mt-lg"></div>
+        </div>
+
+        <div id="detailTab" class="results-tab-panel d-none text-left">
+          <p class="text-muted font-13 mb-md">Clique sur un joueur pour voir sa réponse à chaque question.</p>
+          <div id="detailList"></div>
+        </div>
+
         <div style="margin-top:48px">
           <button id="backHome" class="btn btn-primary px-32 py-12 font-18">Retour à l'accueil</button>
         </div>

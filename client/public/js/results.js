@@ -409,6 +409,7 @@ const render = (players) => {
   tryStartRace()
   resyncRaceLaneIds(players)
   renderFullTable(ordered)
+  renderDetailTab(ordered)
 }
 
 // Réutilise les mêmes lignes DOM d'un rendu à l'autre (au lieu de tout
@@ -484,6 +485,90 @@ const renderFullTable = (ordered) => {
   })
 }
 
+// --- Onglet "Détail" : ce que chaque joueur a répondu à chaque question ---
+// Retour utilisateur : la seule vue disponible jusqu'ici (survol d'une piste
+// du podium / d'une ligne du classement) ne montrait qu'un ✓/✗ par question,
+// dans un tooltip fugace au survol — impossible de voir CE QUI a été
+// répondu, ni combien de points ça a rapporté. Une carte par joueur
+// (repliée par défaut, dépliable au clic) plutôt qu'un tableau matriciel
+// joueurs×questions : reste lisible sur mobile sans le moindre scroll
+// horizontal, contrairement à une grille qui grandirait avec le nombre de
+// questions ET de joueurs à la fois.
+const escDetail = (s) => String(s ?? '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
+
+const detailPlayerCards = new Map() // playerId -> élément carte (réutilisé pour garder l'état ouvert/fermé entre deux rendus)
+
+const renderDetailTab = (ordered) => {
+  const list = document.getElementById('detailList')
+  if (!list) return
+
+  const currentIds = new Set(ordered.map(p => p.id))
+  detailPlayerCards.forEach((card, id) => {
+    if (!currentIds.has(id)) { card.remove(); detailPlayerCards.delete(id) }
+  })
+
+  ordered.forEach((p, i) => {
+    let card = detailPlayerCards.get(p.id)
+    if (!card) {
+      card = document.createElement('div')
+      card.className = 'detail-player'
+      const header = document.createElement('div')
+      header.className = 'detail-player-header'
+      header.onclick = () => card.classList.toggle('is-open')
+      header.innerHTML = `
+        <span class="detail-player-rank"></span>
+        <span class="detail-player-score"></span>
+        <span class="detail-player-toggle">▾</span>
+      `
+      const body = document.createElement('div')
+      body.className = 'detail-player-body'
+      card.appendChild(header)
+      card.appendChild(body)
+      detailPlayerCards.set(p.id, card)
+    }
+    card.querySelector('.detail-player-rank').textContent = `${i + 1}. ${p.name}`
+    card.querySelector('.detail-player-score').textContent = `${p.score} pts`
+
+    // Le corps (liste des questions) est reconstruit à chaque rendu — pas de
+    // FLIP ici, contrairement à renderFullTable : l'ordre des QUESTIONS ne
+    // change jamais en cours de partie, rien à animer.
+    const body = card.querySelector('.detail-player-body')
+    body.innerHTML = history.map(h => {
+      const status = h.results ? h.results[p.id] : undefined
+      const isCorrect = status === 'correct'
+      const mark = isCorrect ? '✓' : status === 'incorrect' ? '✗' : '–'
+      const markCls = isCorrect ? 'is-correct' : status === 'incorrect' ? 'is-incorrect' : 'is-absent'
+      const answer = h.answers ? h.answers[p.id] : undefined
+      const points = Number(h.deltas?.[p.id]) || 0
+      return `
+        <div class="detail-q-row">
+          <span class="detail-q-mark ${markCls}">${mark}</span>
+          <span class="detail-q-body">
+            <span class="detail-q-prompt">${escDetail(h.prompt || '(question)')}</span>
+            <span class="detail-q-answer">${answer ? escDetail(answer).replace(/\n/g, '<br>') : 'Pas de réponse'}</span>
+          </span>
+          <span class="detail-q-points ${points > 0 ? 'is-positive' : ''}">${points > 0 ? '+' : ''}${points} pts</span>
+        </div>
+      `
+    }).join('')
+
+    list.appendChild(card) // déplace le nœud existant : préserve l'état ouvert/fermé et l'ordre de classement
+  })
+}
+
+// --- Bascule Podium / Détail --------------------------------------------
+const resultsTabBtns = document.querySelectorAll('.results-tab-btn')
+resultsTabBtns.forEach(btn => {
+  btn.onclick = () => {
+    resultsTabBtns.forEach(b => b.classList.toggle('active', b === btn))
+    const podiumTab = document.getElementById('podiumTab')
+    const detailTab = document.getElementById('detailTab')
+    const showDetail = btn.dataset.tab === 'detail'
+    if (podiumTab) podiumTab.classList.toggle('d-none', showDetail)
+    if (detailTab) detailTab.classList.toggle('d-none', !showDetail)
+  }
+})
+
 const historyTooltip = document.createElement('div')
 historyTooltip.id = 'historyTooltip'
 historyTooltip.className = 'history-tooltip d-none'
@@ -540,6 +625,10 @@ socket.on('history:sync', (payload) => {
   history = payload?.history || []
   historyReceived = true
   tryStartRace()
+  // Peut arriver APRÈS le premier lobby:list (ordre non garanti) : sans ce
+  // second appel, l'onglet Détail resterait bâti sur un historique vide
+  // (aucune question listée) jusqu'à la prochaine reconnexion d'un joueur.
+  if (latestPlayers) renderDetailTab(computeOrder(latestPlayers.slice()))
 })
 
 // Diffusé par le serveur juste avant lobby:list à chaque room:join (voir
