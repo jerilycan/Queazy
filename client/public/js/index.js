@@ -798,26 +798,26 @@ const revealTimelineList = (correctEvents) => {
 // par index A, palette reprise du mode équipe) plutôt que reliée par un
 // trait à tracer : plus lisible sur mobile, pas de précision au pixel requise.
 const ASSOCIATION_PAIR_COLORS = ['pair-0', 'pair-1', 'pair-2', 'pair-3', 'pair-4', 'pair-5', 'pair-6', 'pair-7']
-let associationState = null // { pairsA, pairsB, matches, selectedA } pendant la question active
+let associationState = null // { pairsA, pairsB, matches, selected } pendant la question active
 let myAssociationSubmission = null // matches[] tel qu'envoyé, gardé pour la comparaison au reveal
 let associationDisabled = true
 const setAssociationDisabled = (v) => { associationDisabled = v }
 
 // Ne touche qu'aux classes CSS des tuiles déjà en place (matched/selected/
 // couleur de paire) — jamais au DOM lui-même. Appelée à chaque clic
-// (sélection d'un A, choix d'un B) : reconstruire tout le DOM à ce moment-là
-// (comme le faisait renderAssociationColumns avant) rejouait aussi
-// applyTileReveal sur les nouveaux éléments, donc TOUTES les tuiles
-// disparaissaient puis se réaffichaient une par une avec les mêmes délais
-// que l'apparition initiale — un "réaffichage" complet à chaque clic.
+// (sélection d'un A ou d'un B, complétion d'une paire) : reconstruire tout
+// le DOM à ce moment-là (comme le faisait renderAssociationColumns avant)
+// rejouait aussi applyTileReveal sur les nouveaux éléments, donc TOUTES les
+// tuiles disparaissaient puis se réaffichaient une par une avec les mêmes
+// délais que l'apparition initiale — un "réaffichage" complet à chaque clic.
 const updateAssociationClasses = () => {
   if (!associationState || !associationColA || !associationColB) return
-  const { pairsB, matches, selectedA } = associationState
+  const { pairsB, matches, selected } = associationState
   Array.from(associationColA.children).forEach((el, i) => {
     ASSOCIATION_PAIR_COLORS.forEach(c => el.classList.remove(c))
     el.classList.toggle('is-matched', matches[i] !== null)
     if (matches[i] !== null) el.classList.add(ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length])
-    el.classList.toggle('is-selected', selectedA === i)
+    el.classList.toggle('is-selected', selected?.side === 'a' && selected.index === i)
   })
   Array.from(associationColB.children).forEach((el, j) => {
     const text = pairsB[j]
@@ -825,31 +825,54 @@ const updateAssociationClasses = () => {
     ASSOCIATION_PAIR_COLORS.forEach(c => el.classList.remove(c))
     el.classList.toggle('is-matched', matchedAIdx !== -1)
     if (matchedAIdx !== -1) el.classList.add(ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
+    el.classList.toggle('is-selected', selected?.side === 'b' && selected.index === j)
   })
+}
+
+// Complète (ou remplace) la paire A[aIdx] <-> B[bIdx] : un B déjà utilisé
+// par un AUTRE A en est d'abord libéré — une association déjà créée peut
+// toujours être remplacée (demande explicite), jamais un B partagé par deux
+// A à la fois.
+const completeAssociationPair = (aIdx, bIdx) => {
+  const text = associationState.pairsB[bIdx]
+  const prevIdx = associationState.matches.findIndex(m => m === text)
+  if (prevIdx !== -1) associationState.matches[prevIdx] = null
+  associationState.matches[aIdx] = text
+  associationState.selected = null
 }
 
 // Construit le DOM des deux colonnes une seule fois (au chargement de la
 // question, avec l'animation d'apparition en cascade) — les clics ensuite
 // ne font que mettre à jour les classes via updateAssociationClasses, voir
-// plus haut.
+// plus haut. La sélection fonctionne dans les deux sens (cliquer un A puis
+// un B, OU un B puis un A) : avant, cliquer un B en premier ne faisait
+// SILENCIEUSEMENT rien (retour utilisateur : "bug sur le 5e sélection" — un
+// joueur qui change d'ordre d'habitude sur sa dernière paire tombait sur ce
+// clic mort sans aucun message).
 const renderAssociationColumns = () => {
   if (!associationState || !associationColA || !associationColB) return
-  const { pairsA, pairsB, matches, selectedA } = associationState
+  const { pairsA, pairsB, matches, selected } = associationState
   associationColA.innerHTML = ''
   pairsA.forEach((text, i) => {
     const el = document.createElement('div')
     el.className = 'assoc-item'
     el.textContent = text
     if (matches[i] !== null) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length])
-    if (selectedA === i) el.classList.add('is-selected')
+    if (selected?.side === 'a' && selected.index === i) el.classList.add('is-selected')
     el.onclick = () => {
       if (associationDisabled) return
       if (currentSingleAttempt && sendBtn.disabled) return
-      // Recliquer un A déjà sélectionné le désélectionne ; en cliquer un
-      // autre (même déjà apparié) permet de choisir un nouveau B pour lui —
-      // son ancienne association reste affichée tant qu'un B n'est pas
-      // choisi pour la remplacer.
-      associationState.selectedA = (associationState.selectedA === i) ? null : i
+      const sel = associationState.selected
+      if (sel && sel.side === 'b') {
+        // Un B était déjà sélectionné : ce clic sur A complète la paire.
+        completeAssociationPair(i, sel.index)
+      } else {
+        // Recliquer un A déjà sélectionné le désélectionne ; en cliquer un
+        // autre (même déjà apparié) permet de choisir un nouveau B pour lui —
+        // son ancienne association reste affichée tant qu'un B n'est pas
+        // choisi pour la remplacer.
+        associationState.selected = (sel && sel.side === 'a' && sel.index === i) ? null : { side: 'a', index: i }
+      }
       updateAssociationClasses()
     }
     associationColA.appendChild(el)
@@ -862,18 +885,18 @@ const renderAssociationColumns = () => {
     el.textContent = text
     const matchedAIdx = matches.findIndex(m => m === text)
     if (matchedAIdx !== -1) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
+    if (selected?.side === 'b' && selected.index === j) el.classList.add('is-selected')
     el.onclick = () => {
       if (associationDisabled) return
       if (currentSingleAttempt && sendBtn.disabled) return
-      const sel = associationState.selectedA
-      if (sel === null || sel === undefined) return
-      // Un B déjà utilisé par un AUTRE A en est d'abord libéré : une
-      // association déjà créée peut toujours être remplacée (demande
-      // explicite), jamais un B partagé par deux A à la fois.
-      const prevIdx = associationState.matches.findIndex(m => m === text)
-      if (prevIdx !== -1) associationState.matches[prevIdx] = null
-      associationState.matches[sel] = text
-      associationState.selectedA = null
+      const sel = associationState.selected
+      if (sel && sel.side === 'a') {
+        // Un A était déjà sélectionné : ce clic sur B complète la paire.
+        completeAssociationPair(sel.index, j)
+      } else {
+        // Même bascule sélection/désélection que côté A, voir plus haut.
+        associationState.selected = (sel && sel.side === 'b' && sel.index === j) ? null : { side: 'b', index: j }
+      }
       updateAssociationClasses()
     }
     associationColB.appendChild(el)
@@ -887,7 +910,7 @@ const buildAssociationArea = (pairsA, pairsB) => {
     pairsA: Array.isArray(pairsA) ? pairsA : [],
     pairsB: Array.isArray(pairsB) ? pairsB : [],
     matches: new Array(Array.isArray(pairsA) ? pairsA.length : 0).fill(null),
-    selectedA: null
+    selected: null
   }
   associationDisabled = true
   renderAssociationColumns()
