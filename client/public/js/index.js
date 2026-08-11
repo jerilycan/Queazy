@@ -2482,8 +2482,17 @@ const renderLobbyGrid = (arr) => {
     scores.set(p.id, s)
     playerTeamById[p.id] = p.teamId || null
 
+    // Le serveur (p.isHost, voir buildPlayerList) fait TOUJOURS foi : jamais
+    // un simple repli local. Sans ça, un joueur ayant par erreur créé sa
+    // propre salle plus tôt dans le même onglet (isHost=true posé par
+    // room:created) puis rejoint la VRAIE salle comme simple joueur gardait
+    // pour de bon les commandes hôte à l'écran — rien ne remettait jamais
+    // isHost à false quand le serveur disait pourtant clairement le
+    // contraire (retour utilisateur : "un de mes joueurs avait les
+    // contrôles du maître du jeu").
+    if (isMe) isHost = !!p.isHost
+
     if (isMe && p.isHost) {
-      isHost = true
       hostPanel.classList.remove('d-none')
       hostPanel.style.display = 'flex'
       if (teamModePanel) teamModePanel.classList.remove('d-none')
@@ -2503,35 +2512,22 @@ const renderLobbyGrid = (arr) => {
         jc.classList.add('d-none')
         jc.style.display = 'none'
       }
+      // Panneau lien+QR : uniquement au salon d'attente, jamais réaffiché
+      // une fois la partie lancée. lobby:list (et donc ce rendu) se
+      // redéclenche pour TOUT le monde à chaque (re)connexion d'un joueur —
+      // y compris en pleine question, ex. un joueur qui vient de se
+      // reconnecter après une coupure. Sans la garde !inActiveGame, ce
+      // panneau resurgissait alors par-dessus l'écran de jeu de l'hôte,
+      // comme une tuile "Lien pour rejoindre + QR code" en trop (retour
+      // utilisateur).
       const roomInfo = document.getElementById('roomInfo')
-      if (roomInfo) {
+      if (roomInfo && !inActiveGame) {
         roomInfo.classList.remove('d-none')
         roomInfo.style.display = 'block'
       }
     } else if (isMe && !p.isHost) {
-      // Don't force set isHost = false here if we think we are host locally
-      // This allows the local fallback to work if server hasn't updated yet
-      // But usually server is source of truth.
-      // If we are definitely not host according to server, we should respect it.
-      // However, for the display issue, let's keep it sync.
-      if (isHost && p.isHost === false) {
-         console.warn('Server says I am not host, but local says I am.')
-         // isHost = false // commented out to be safe? No, we should trust server
-      }
-      // isHost = false // Only disable if we are sure? No, if server says so.
-      // But let's disable it only if we didn't just create the room.
-      // Actually, if p.isHost is false, we are not the host.
-      // But let's verify if p corresponds to US.
-      // isMe is true.
-      
-      // Let's assume server is right, BUT if we just created the room, maybe there's a sync issue.
-      // Let's NOT set isHost = false here to allow the fallback to work if the server list is "weird".
-      // But this might give privileges to non-hosts if they hack client.
-      // That's fine for now, server validates actions anyway.
-      
-      // isHost = false
-      // hostPanel.classList.add('d-none')
-      // hostPanel.style.display = 'none'
+      hostPanel.classList.add('d-none')
+      hostPanel.style.display = 'none'
     }
 
     if (p.isHost) {
