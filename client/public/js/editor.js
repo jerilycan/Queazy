@@ -416,6 +416,7 @@ const wireQuestionDrag = (item, idx) => {
 
   item.addEventListener('pointerdown', (e) => {
     if (questionDragActive || e.button) return
+    if (e.target.closest('.q-delete-btn')) return
     questionDragActive = true
     dragMoved = false
     const startY = e.clientY
@@ -505,6 +506,21 @@ const updateSidebar = () => {
     if (!readOnly) item.appendChild(handle)
     item.appendChild(num)
     item.appendChild(text)
+
+    if (!readOnly) {
+      const del = document.createElement('button')
+      del.type = 'button'
+      del.className = 'q-delete-btn'
+      del.title = 'Supprimer cette question'
+      del.setAttribute('aria-label', 'Supprimer cette question')
+      del.textContent = '✕'
+      // stopPropagation : sans ça, le clic remonte au listener 'click' de
+      // l'item (voir wireQuestionDrag) et sélectionne la question juste
+      // avant/après sa suppression — inutile et source de flash visuel.
+      del.onclick = (e) => { e.stopPropagation(); confirmDeleteQuestionAt(idx) }
+      item.appendChild(del)
+    }
+
     questionListEl.appendChild(item)
   })
 }
@@ -2092,44 +2108,87 @@ addQuestionBtn.onclick = () => {
   selectQuestion(questions.length - 1)
 }
 
-deleteQuestionBtn.onclick = () => {
+// Extrait de l'ancien deleteQuestionBtn.onclick pour être appelable aussi
+// depuis la croix de suppression de la sidebar (voir updateSidebar) — la
+// question supprimée n'y est pas forcément la question active en cours
+// d'édition, il faut donc décaler activeIndex correctement dans les deux
+// cas plutôt que de toujours retomber sur "activeIndex - 1".
+const deleteQuestionAt = (index) => {
   if (questions.length <= 1) {
     showToast('Un quiz doit avoir au moins une question', 'error')
     return
   }
-  
-  questions.splice(activeIndex, 1)
-  const nextIndex = Math.max(0, activeIndex - 1)
-  
-  // On force le passage à une autre question sans essayer de sauver la question supprimée
-  activeIndex = nextIndex
-  const q = questions[activeIndex]
-  
-  qPrompt.value = q.prompt || ''
-  if (qExplanation) qExplanation.value = q.explanation || ''
-  qType.value = q.type || 'free'
-  qTimer.value = (q.timerMs || 15000) / 1000
-  populateGradFields(q)
-  populateTrueFalseFields(q)
-  populateImageFields(q)
-  populateIllustrationFields(q)
-  populateZoomGuessFields(q)
-  populateAudioFields(q)
-  if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
+  if (index < 0 || index >= questions.length) return
 
-  renderOptions()
-  renderCorrects()
-  renderOrderItems()
-  renderCorrectTitleList()
-  renderCorrectArtistList()
-  renderAssociationPairs()
-  renderTimelineEvents()
-  renderIntrusOptions()
-  toggleTypeSections()
+  const deletingActive = index === activeIndex
+  // Si on supprime une AUTRE question que celle en cours d'édition, on
+  // sauve d'abord son état (elle reste affichée/éditée après coup) — mais
+  // surtout pas si c'est ELLE qu'on supprime (voir commentaire d'origine :
+  // on ne veut pas "sauver" une question qui n'existe plus).
+  if (!deletingActive && hasSelectedOnce) saveCurrentQuestionState()
+
+  questions.splice(index, 1)
+
+  if (deletingActive) {
+    activeIndex = Math.min(index, questions.length - 1)
+    const q = questions[activeIndex]
+
+    qPrompt.value = q.prompt || ''
+    if (qExplanation) qExplanation.value = q.explanation || ''
+    qType.value = q.type || 'free'
+    qTimer.value = (q.timerMs || 15000) / 1000
+    populateGradFields(q)
+    populateTrueFalseFields(q)
+    populateImageFields(q)
+    populateIllustrationFields(q)
+    populateZoomGuessFields(q)
+    populateAudioFields(q)
+    if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
+
+    renderOptions()
+    renderCorrects()
+    renderOrderItems()
+    renderCorrectTitleList()
+    renderCorrectArtistList()
+    renderAssociationPairs()
+    renderTimelineEvents()
+    renderIntrusOptions()
+    toggleTypeSections()
+  } else if (index < activeIndex) {
+    // Une question AVANT celle en cours d'édition disparaît : tout le monde
+    // après elle glisse d'un cran, activeIndex doit suivre pour continuer à
+    // pointer sur la même question (déjà affichée, pas besoin de recharger
+    // les champs).
+    activeIndex -= 1
+  }
+
   updateSidebar()
-
   qIndexLabel.textContent = `Question ${activeIndex + 1} / ${questions.length}`
-  qPrompt.focus()
+  if (deletingActive) qPrompt.focus()
+}
+
+deleteQuestionBtn.onclick = () => deleteQuestionAt(activeIndex)
+
+// Confirmation avant suppression depuis la sidebar : contrairement au
+// bouton "Supprimer" du panneau de détail (qu'il faut déjà avoir ouvert
+// cette question pour atteindre), la croix de la liste est un clic rapide
+// au milieu d'une zone de glisser-déposer — plus exposée au clic accidentel,
+// d'où ce garde-fou supplémentaire ici uniquement.
+const confirmDeleteQuestionAt = (index) => {
+  if (questions.length <= 1) {
+    showToast('Un quiz doit avoir au moins une question', 'error')
+    return
+  }
+  const q = questions[index]
+  const label = q?.prompt?.trim() ? `« ${q.prompt.trim()} »` : `la question ${index + 1}`
+  QzUI.confirm({
+    title: 'Supprimer cette question ?',
+    message: `Tu es sur le point de supprimer ${label}. Cette action est définitive.`,
+    confirmLabel: 'Supprimer',
+    danger: true
+  }).then((ok) => {
+    if (ok) deleteQuestionAt(index)
+  })
 }
 
 addOptionBtn.onclick = () => {
@@ -2175,8 +2234,16 @@ const hasUnsavedChanges = () => !readOnly && savedSnapshot !== null && snapshotQ
 // générique pour des raisons de sécurité), mais on garde ce filet natif pour
 // les départs qu'on ne peut pas intercepter autrement.
 let allowNavigation = false
+// Vrai le temps de la requête réseau de sauvegarde (voir saveQuizBtn.onclick
+// plus bas) : un départ pile à ce moment-là (onglet fermé, page rafraîchie)
+// interromprait la requête en plein vol, avec un résultat imprévisible côté
+// serveur (sauvegarde partielle ?). Le popup de chargement bloque déjà les
+// clics DANS la page, mais pas fermeture d'onglet/rafraîchissement/URL tapée
+// — d'où ce drapeau en plus de hasUnsavedChanges() sur les deux gardes-fous
+// ci-dessous.
+let isSaving = false
 window.addEventListener('beforeunload', (e) => {
-  if (allowNavigation || !hasUnsavedChanges()) return
+  if (allowNavigation || (!isSaving && !hasUnsavedChanges())) return
   e.preventDefault()
   e.returnValue = ''
 })
@@ -2187,7 +2254,16 @@ window.addEventListener('beforeunload', (e) => {
 document.addEventListener('click', (e) => {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
   const a = e.target.closest('a[href]')
-  if (!a || a.target === '_blank' || !hasUnsavedChanges()) return
+  if (!a || a.target === '_blank') return
+  if (isSaving) {
+    // Pendant la sauvegarde elle-même : pas de choix à proposer, on bloque
+    // net (contrairement à "modifications non sauvegardées" ci-dessous, où
+    // quitter quand même reste une option valable).
+    e.preventDefault()
+    showToast('Sauvegarde en cours, merci de patienter...', 'error')
+    return
+  }
+  if (!hasUnsavedChanges()) return
   e.preventDefault()
   QzUI.confirm({
     title: 'Modifications non sauvegardées',
@@ -2201,6 +2277,30 @@ document.addEventListener('click', (e) => {
     window.location.href = a.href
   })
 })
+
+// Popup plein écran bloquant pendant la sauvegarde (retour utilisateur :
+// pouvoir sortir de la page en pleine sauvegarde, alors qu'il n'a pas fini
+// de modifier ses questions, prêtait à confusion). Réutilise l'habillage
+// visuel de QzUI.confirm (.modal-overlay/.modal-content) pour rester
+// cohérent, mais sans aucun bouton — rien à cliquer, juste à attendre.
+let saveLoadingOverlay = null
+const showSaveLoading = () => {
+  if (!saveLoadingOverlay) {
+    saveLoadingOverlay = document.createElement('div')
+    saveLoadingOverlay.className = 'modal-overlay'
+    saveLoadingOverlay.innerHTML = `
+      <div class="modal-content" style="text-align:center;">
+        <div class="qz-spinner" aria-hidden="true"></div>
+        <p class="font-bold mt-16" style="margin:16px 0 0;">Sauvegarde en cours…</p>
+        <p class="text-muted font-14" style="margin:6px 0 0;">Merci de patienter, ne quitte pas cette page.</p>
+      </div>`
+    document.body.appendChild(saveLoadingOverlay)
+  }
+  saveLoadingOverlay.classList.remove('d-none')
+}
+const hideSaveLoading = () => {
+  if (saveLoadingOverlay) saveLoadingOverlay.classList.add('d-none')
+}
 
 saveQuizBtn.onclick = async () => {
   if (readOnly) return
@@ -2401,6 +2501,9 @@ saveQuizBtn.onclick = async () => {
     isPublic: isPublicEl.checked
   }
   const sb = window.supabaseClient
+  isSaving = true
+  showSaveLoading()
+  saveQuizBtn.disabled = true
   try {
     const { data: { session } } = await sb.auth.getSession()
     if (!session) {
@@ -2426,6 +2529,10 @@ saveQuizBtn.onclick = async () => {
     }
   } catch (err) {
     showToast('Erreur: ' + (err.message || 'sauvegarde'), 'error')
+  } finally {
+    isSaving = false
+    hideSaveLoading()
+    saveQuizBtn.disabled = false
   }
 }
 
