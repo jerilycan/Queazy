@@ -1373,11 +1373,6 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   }
   let dragging = false
   track.addEventListener('pointerdown', e => {
-    // Verrou posé une fois la partie lancée (voir game-active plus bas) :
-    // pas de piste native <input disabled>, donc ce garde-fou maison en
-    // début de chaque poignée d'interaction plutôt qu'une désactivation CSS
-    // seule (qui n'empêche rien tant que le JS n'est pas prévenu).
-    if (track.classList.contains('is-disabled')) return
     dragging = true
     try { track.setPointerCapture(e.pointerId) } catch {}
     track.classList.add('grabbing')
@@ -1403,7 +1398,6 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   track.setAttribute('aria-valuemin', '0')
   track.setAttribute('aria-valuemax', '100')
   track.addEventListener('keydown', e => {
-    if (track.classList.contains('is-disabled')) return
     let handled = true
     if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { pct = Math.min(100, pct + 5); render(); onChange(pct) }
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { pct = Math.max(0, pct - 5); render(); onChange(pct) }
@@ -2254,11 +2248,6 @@ const hideJoinPanel = () => {
 
 const showLobby = () => {
   document.body.classList.remove('game-active')
-  // Symétrique du verrou posé au lancement (voir plus haut) : redevient
-  // modifiable si on revient au salon (ex. reconnexion hôte avant que la
-  // partie n'ait vraiment démarré).
-  if (audioModeRemoteInput) audioModeRemoteInput.disabled = false
-  if (audioVolumeTrack) audioVolumeTrack.classList.remove('is-disabled')
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.remove('d-none')
@@ -3041,12 +3030,17 @@ const isLastQuestion = () => !!loadedQuiz && quizIndex >= loadedQuiz.questions.l
 
 const updateHostControls = () => {
   if (!isHost) return
-  // Barre de l'hôte (en haut de page) : visible seulement à la révélation.
-  // En phase classement, le classement plein écran la recouvrirait — l'avancement
-  // se fait donc via un bouton placé DANS l'overlay du classement.
+  // Barre de l'hôte (en haut de page) : reste affichée pendant TOUTE la
+  // question, pas seulement à la révélation (retour utilisateur — un bouton
+  // qui apparaît/disparaît est moins lisible qu'un repère visuel constant) —
+  // simplement grisée tant que tout le monde n'a pas répondu. En phase
+  // classement, le classement plein écran la recouvrirait de toute façon —
+  // l'avancement se fait alors via un bouton placé DANS l'overlay du
+  // classement (leaderNextBtn, voir plus bas).
   const revealed = hostPhase === 'revealed'
-  nextQuestionBtn.classList.toggle('d-none', !revealed)
-  nextQuestionBtn.style.display = revealed ? 'inline-flex' : 'none'
+  nextQuestionBtn.classList.remove('d-none')
+  nextQuestionBtn.style.display = 'inline-flex'
+  nextQuestionBtn.classList.toggle('is-disabled', !revealed)
   if (revealed) {
     // Après la toute dernière question, sauter la page "classement" (qui
     // n'aurait plus rien à annoncer avant les résultats finaux, lesquels
@@ -3062,6 +3056,12 @@ const updateHostControls = () => {
         if (roomCode) socket.emit('leaderboard:show', { roomCode })
       }
     }
+  } else {
+    // Grisé : aucune action tant que la question n'est pas révélée (voir
+    // .btn.is-disabled, qui ne bloque pas les clics tout seul — pas de
+    // handler du tout ici, plutôt qu'un handler qu'il faudrait re-garder).
+    nextQuestionBtn.textContent = 'Suivant'
+    nextQuestionBtn.onclick = null
   }
   if (leaderNextBtn) {
     const onLeaderboard = hostPhase === 'leaderboard'
@@ -3099,11 +3099,15 @@ startQuizBtn.onclick = () => {
   selectQuizBtn.classList.add('d-none')
   selectQuizBtn.style.display = 'none'
   
-  // Show navigation buttons
+  // Show navigation buttons — grisé au départ (voir updateHostControls) :
+  // la toute première question arrive dans l'instant via question:show, qui
+  // remettra l'état correct, mais autant ne jamais laisser flasher un
+  // bouton cliquable avant que ce ne soit vraiment le cas.
   nextQuestionBtn.classList.remove('d-none')
+  nextQuestionBtn.classList.add('is-disabled')
   nextQuestionBtn.style.display = 'inline-flex'
   nextQuestionBtn.textContent = 'Suivant'
-  nextQuestionBtn.onclick = goNext
+  nextQuestionBtn.onclick = null
 
   quizIndex = 0
   qrDiv.style.display = 'none'
@@ -3145,12 +3149,6 @@ socket.on('question:show', payload => {
   // pendant la partie : on la réduit au seul nom, non cliquable, pour éviter
   // qu'un joueur ne quitte la partie par erreur (voir règle CSS associée).
   document.body.classList.add('game-active')
-  // Une fois la partie lancée, plus question de changer le mode audio du
-  // blind test (IRL/à distance) ou le volume par défaut en cours de route
-  // (retour utilisateur) — verrouillés dès la première question, pas
-  // seulement "plus affichés au centre" comme le reste du panneau hôte.
-  if (audioModeRemoteInput) audioModeRemoteInput.disabled = true
-  if (audioVolumeTrack) audioVolumeTrack.classList.add('is-disabled')
   const timerContainer = document.getElementById('timerContainer')
   if (timerContainer) {
     timerContainer.classList.remove('d-none')

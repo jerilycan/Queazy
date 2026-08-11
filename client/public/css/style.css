@@ -1717,10 +1717,6 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    générique (4px) était pensé pour du texte, trop serré une fois qu'il y a
    une vraie piste de curseur au milieu. */
 .host-volume-row { gap: 10px; }
-/* Verrouillé une fois la partie lancée (voir index.js, wireVolumeSlider +
-   game-active) — même traitement visuel que .qz-toggle-input:disabled juste
-   à côté dans le panneau hôte, pour rester cohérent. */
-.volume-track.is-disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Récap rapide de la question (hôte uniquement), voir index.html
    #questionRecapCard + index.js socket.on('question:recap', ...). */
