@@ -2836,13 +2836,21 @@ if (saveBtn) {
   }
 }
 socket.on('lobby:readyStatus', ({ allReady }) => {
-  if (isHost) {
+  // Ne concerne que le salon d'attente (griser "Lancer" tant que les
+  // joueurs ne sont pas prêts) — comme lobby:list, cet évènement se
+  // redéclenche pour toute la salle à chaque (re)connexion d'un joueur, y
+  // compris en PLEINE QUESTION (voir room:join côté serveur). Sans la garde
+  // !inActiveGame, une reconnexion en pleine révélation regrisait "Suivant"
+  // (qui reste désormais affiché pendant toute la partie, pas seulement au
+  // salon d'attente) et l'hôte ne pouvait plus avancer (retour utilisateur :
+  // "le bouton question suivante ne fonctionne pas").
+  if (isHost && !inActiveGame) {
     const players = document.querySelectorAll('.player-tile')
     const hasPlayers = players.length > 0
-    
+
     nextQuestionBtn.classList.toggle('is-disabled', !allReady || !hasPlayers)
     startQuizBtn.classList.toggle('is-disabled', !allReady || !hasPlayers)
-    
+
     if (!hasPlayers) {
       startQuizBtn.title = "Il faut au moins un joueur pour lancer le quizz !"
     } else if (!allReady) {

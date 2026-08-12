@@ -1787,7 +1787,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     flex-direction: column;
     align-items: stretch;
     gap: var(--space-md);
-    z-index: 60;
+    /* Doit passer devant tout le contenu de la question (retour
+       utilisateur) — notamment .timer-container qui est en z-index:500 et
+       sticky, donc peut se retrouver au-dessus au fil du scroll. Reste
+       sous les vrais overlays plein écran (classement 1000, popups de
+       sauvegarde/tutoriel, toasts) qui doivent eux continuer à le
+       recouvrir entièrement. */
+    z-index: 700;
   }
   body.is-host.game-active #hostPanel .d-flex.gap-sm {
     flex-direction: column;
