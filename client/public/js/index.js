@@ -897,14 +897,30 @@ const completeAssociationPair = (aIdx, bIdx) => {
 // SILENCIEUSEMENT rien (retour utilisateur : "bug sur le 5e sélection" — un
 // joueur qui change d'ordre d'habitude sur sa dernière paire tombait sur ce
 // clic mort sans aucun message).
+// Vignette optionnelle insérée AVANT le texte d'une tuile association (voir
+// editor.js buildAssocPhotoSlot pour l'origine de l'image). Créée vide/
+// cachée à chaque tuile — même si aucune image n'existe pour elle, voir
+// fillAssociationImages ci-dessous qui la remplit une fois le fetch résolu.
+// display:none tant que src est vide : ne participe jamais à el.textContent
+// (identifiant de correspondance utilisé tel quel par completeAssociationPair
+// / revealAssociationPairs), qu'une image finisse par être chargée ou non.
+const buildAssocItemImg = () => {
+  const img = document.createElement('img')
+  img.className = 'assoc-item-img d-none'
+  img.alt = ''
+  return img
+}
+
 const renderAssociationColumns = () => {
   if (!associationState || !associationColA || !associationColB) return
-  const { pairsA, pairsB, matches, selected } = associationState
+  const { pairsA, pairsB, pairsBKeys, matches, selected } = associationState
   associationColA.innerHTML = ''
   pairsA.forEach((text, i) => {
     const el = document.createElement('div')
     el.className = 'assoc-item'
-    el.textContent = text
+    el.dataset.assocId = `${i}a`
+    el.appendChild(buildAssocItemImg())
+    el.appendChild(document.createTextNode(text))
     if (matches[i] !== null) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length])
     if (selected?.side === 'a' && selected.index === i) el.classList.add('is-selected')
     el.onclick = () => {
@@ -930,7 +946,9 @@ const renderAssociationColumns = () => {
   pairsB.forEach((text, j) => {
     const el = document.createElement('div')
     el.className = 'assoc-item'
-    el.textContent = text
+    el.dataset.assocId = `${pairsBKeys[j] ?? j}b`
+    el.appendChild(buildAssocItemImg())
+    el.appendChild(document.createTextNode(text))
     const matchedAIdx = matches.findIndex(m => m === text)
     if (matchedAIdx !== -1) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
     if (selected?.side === 'b' && selected.index === j) el.classList.add('is-selected')
@@ -952,16 +970,36 @@ const renderAssociationColumns = () => {
   })
 }
 
-const buildAssociationArea = (pairsA, pairsB) => {
+// Remplit les vignettes après-coup, une fois le relais HTTP dédié résolu
+// (voir server/index.js /api/room-association-images, même principe que pour
+// "intrus") — jamais de data-URI dans la frame socket.io elle-même, trop
+// lourd une fois déployé (voir emitQuestion côté index.js).
+const fillAssociationImages = (imagesUrl) => {
+  if (!imagesUrl) return
+  fetch(imagesUrl).then(res => res.json()).then(({ images }) => {
+    (images || []).forEach(item => {
+      const tile = associationArea?.querySelector(`[data-assoc-id="${item.id}"]`)
+      const img = tile?.querySelector('.assoc-item-img')
+      if (img) {
+        img.src = item.image
+        img.classList.remove('d-none')
+      }
+    })
+  }).catch(() => {})
+}
+
+const buildAssociationArea = (pairsA, pairsB, pairsBKeys, imagesUrl) => {
   if (!associationColA || !associationColB) return
   associationState = {
     pairsA: Array.isArray(pairsA) ? pairsA : [],
     pairsB: Array.isArray(pairsB) ? pairsB : [],
+    pairsBKeys: Array.isArray(pairsBKeys) ? pairsBKeys : [],
     matches: new Array(Array.isArray(pairsA) ? pairsA.length : 0).fill(null),
     selected: null
   }
   associationDisabled = true
   renderAssociationColumns()
+  fillAssociationImages(imagesUrl)
 }
 
 // Révélation : même principe que revealOrderList (comparaison ligne à ligne
@@ -2908,6 +2946,20 @@ const uploadRoomIntrusImages = (roomCode, images) => {
   })
 }
 
+// Même principe encore, pour les images OPTIONNELLES d'éléments association
+// (voir editor.js buildAssocPhotoSlot) — un seul upload group{a,b} par paire
+// ayant au moins une image, plutôt qu'un relais par élément.
+const uploadRoomAssociationImages = (roomCode, images) => {
+  return fetch(`/api/room-association-images/${encodeURIComponent(roomCode)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ images })
+  }).then(res => {
+    if (!res.ok) throw new Error('upload failed')
+    return `/api/room-association-images/${encodeURIComponent(roomCode)}?v=${Date.now()}`
+  })
+}
+
 const emitQuestion = (index) => {
   const roomCode = roomInput.value.trim()
   if (!roomCode || !loadedQuiz) return
@@ -2921,6 +2973,11 @@ const emitQuestion = (index) => {
   hostQuestionLabel = `Question ${index + 1}/${loadedQuiz.questions.length}`
   if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · en attente des réponses…`
   const correctOrder = Array.isArray(q.correct) ? q.correct : []
+  // "association" : un seul mélange d'index, réutilisé pour dériver à la
+  // fois pairsB (textes mélangés) et pairsBKeys (index d'origine de chaque
+  // position mélangée) — les deux doivent rester synchronisés position par
+  // position, voir le commentaire sur pairsB plus bas.
+  const bShuffleOrder = q.type === 'association' ? shuffleArray(correctOrder.map((_, i) => i)) : []
   const payload = {
     roomCode,
     id: q.id || ('q' + (index + 1)),
@@ -2948,8 +3005,15 @@ const emitQuestion = (index) => {
     // "association" : la colonne A garde son ordre d'origine (sert de repère
     // stable pour le scoring serveur, voir server/index.js), seule la
     // colonne B est mélangée avant l'envoi — jamais dans l'ordre correct.
+    // pairsBKeys mélangé EXACTEMENT dans le même ordre que pairsB (on mélange
+    // une seule fois une liste d'index, puis on en dérive les deux tableaux) :
+    // sert à retrouver l'image associée à chaque élément B affiché après
+    // mélange (voir images/associationImagesUrl plus bas + buildAssociationArea
+    // côté client), le texte seul ne suffisant plus d'identifiant stable une
+    // fois qu'il peut être vide (élément identifié par une image seule).
     pairsA: q.type === 'association' ? correctOrder.map(p => p?.a ?? '') : undefined,
-    pairsB: q.type === 'association' ? shuffleArray(correctOrder.map(p => p?.b ?? '')) : undefined,
+    pairsB: q.type === 'association' ? bShuffleOrder.map(i => correctOrder[i]?.b ?? '') : undefined,
+    pairsBKeys: q.type === 'association' ? bShuffleOrder : undefined,
     // "timeline" : la date reste dans q.correct (server/index.js s'en sert
     // pour scorer/révéler) mais n'est JAMAIS incluse ici — seuls titre/
     // description + une clé (index d'origine) partent au mélange.
@@ -3009,6 +3073,19 @@ const emitQuestion = (index) => {
   }
   if (q.type === 'intrus' && Array.isArray(q.options) && q.options.length > 0) {
     uploads.push(uploadRoomIntrusImages(roomCode, q.options).then(url => { payload.intrusImagesUrl = url }))
+  }
+  if (q.type === 'association') {
+    // id "<indexPaire><a|b>" (ex. "3b") : indexPaire toujours l'index
+    // D'ORIGINE dans correctOrder (stable pour A, retrouvable pour B via
+    // pairsBKeys ci-dessus, voir server/index.js pour le pattern attendu).
+    const assocImages = []
+    correctOrder.forEach((pair, i) => {
+      if (pair?.aImage) assocImages.push({ id: `${i}a`, image: pair.aImage })
+      if (pair?.bImage) assocImages.push({ id: `${i}b`, image: pair.bImage })
+    })
+    if (assocImages.length > 0) {
+      uploads.push(uploadRoomAssociationImages(roomCode, assocImages).then(url => { payload.associationImagesUrl = url }))
+    }
   }
   if (uploads.length > 0) {
     Promise.all(uploads).then(() => {
@@ -3295,7 +3372,7 @@ socket.on('question:show', payload => {
     buildOrderList(payload.options)
   }
   if (payload.type === 'association') {
-    buildAssociationArea(payload.pairsA, payload.pairsB)
+    buildAssociationArea(payload.pairsA, payload.pairsB, payload.pairsBKeys, payload.associationImagesUrl)
   }
   if (payload.type === 'timeline') {
     buildTimelineList(payload.timelineItems)

@@ -1539,6 +1539,67 @@ const wireAssociationEditDrag = (row) => {
   })
 }
 
+// Vignette optionnelle pour un côté (A ou B) d'une paire association — même
+// principe que la vignette "intrus" (cliquer une image existante la
+// remplace), plus un petit bouton "×" séparé pour la retirer complètement et
+// retomber sur le texte seul (l'image reste facultative, contrairement à
+// "intrus" où elle est le contenu même de la tuile). imgField vaut 'aImage'
+// ou 'bImage' — stocké directement sur l'objet pair, comme pair.a/pair.b.
+const buildAssocPhotoSlot = (pair, imgField, rerender) => {
+  const wrap = document.createElement('div')
+  wrap.className = 'assoc-photo-slot'
+
+  const openPicker = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = () => {
+      const file = input.files && input.files[0]
+      if (!file) return
+      compressImageFile(file, (dataUrl) => {
+        pair[imgField] = dataUrl
+        rerender()
+      })
+    }
+    input.click()
+  }
+
+  if (pair[imgField]) {
+    const thumb = document.createElement('img')
+    thumb.className = 'assoc-photo-thumb'
+    thumb.src = pair[imgField]
+    thumb.alt = ''
+    if (!readOnly) {
+      thumb.title = 'Cliquer pour remplacer cette image'
+      thumb.classList.add('cursor-pointer')
+      thumb.onclick = openPicker
+    }
+    wrap.appendChild(thumb)
+    if (!readOnly) {
+      const clear = document.createElement('button')
+      clear.className = 'assoc-photo-clear'
+      clear.innerHTML = '&times;'
+      clear.title = 'Retirer cette image'
+      clear.onclick = (e) => {
+        e.stopPropagation()
+        delete pair[imgField]
+        rerender()
+      }
+      wrap.appendChild(clear)
+    }
+  } else if (!readOnly) {
+    const add = document.createElement('button')
+    add.className = 'assoc-photo-add'
+    add.type = 'button'
+    add.title = 'Ajouter une image (optionnel)'
+    add.textContent = '📷'
+    add.onclick = openPicker
+    wrap.appendChild(add)
+  }
+
+  return wrap
+}
+
 const renderAssociationPairs = () => {
   if (!associationEditList) return
   associationEditList.innerHTML = ''
@@ -1564,6 +1625,8 @@ const renderAssociationPairs = () => {
     num.textContent = idx + 1
     row.appendChild(num)
 
+    row.appendChild(buildAssocPhotoSlot(pair, 'aImage', renderAssociationPairs))
+
     const inputA = document.createElement('input')
     inputA.type = 'text'
     inputA.value = pair.a
@@ -1578,6 +1641,8 @@ const renderAssociationPairs = () => {
     arrow.className = 'text-muted'
     arrow.style.padding = '0 4px'
     row.appendChild(arrow)
+
+    row.appendChild(buildAssocPhotoSlot(pair, 'bImage', renderAssociationPairs))
 
     const inputB = document.createElement('input')
     inputB.type = 'text'

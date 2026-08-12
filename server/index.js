@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.36.8'
+const APP_VERSION = '1.37.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -455,6 +455,33 @@ const start = async () => {
   app.get('/api/room-intrus-images/:code', async (req, reply) => {
     const room = rooms.get(req.params.code)
     const images = room?.pendingIntrusImages
+    if (!Array.isArray(images)) return reply.code(404).send()
+    reply.header('Cache-Control', 'no-store')
+    return { images }
+  })
+
+  // Question "association" : même principe que /api/room-intrus-images
+  // ci-dessus, pour les images OPTIONNELLES attachées à un élément A ou B
+  // (voir editor.js buildAssocPhotoSlot) — jusqu'à 2 par paire (a et b), 8
+  // paires max, donc jusqu'à 16 images. id = "<indexPaire><a|b>" (ex. "3b"),
+  // voir emitQuestion côté index.js pour la construction.
+  app.post('/api/room-association-images/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    if (!room) return reply.code(404).send({ error: 'room_not_found' })
+    const images = req.body?.images
+    const valid = Array.isArray(images) && images.length >= 1 && images.length <= 16 &&
+      images.every(item =>
+        item && typeof item.id === 'string' && /^[0-9]{1,2}[ab]$/.test(item.id) &&
+        typeof item.image === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(item.image) && item.image.length <= 2_000_000
+      )
+    if (!valid) return reply.code(400).send({ error: 'invalid_images' })
+    room.pendingAssociationImages = images
+    return { ok: true }
+  })
+
+  app.get('/api/room-association-images/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    const images = room?.pendingAssociationImages
     if (!Array.isArray(images)) return reply.code(404).send()
     reply.header('Cache-Control', 'no-store')
     return { images }
