@@ -3022,7 +3022,15 @@ const emitQuestion = (index) => {
 }
 
 const goNext = () => {
-  if (nextQuestionBtn.classList.contains('is-disabled')) return
+  // Pas de garde sur nextQuestionBtn.classList('is-disabled') ici : goNext
+  // est aussi le handler de leaderNextBtn ("Question suivante" dans
+  // l'overlay classement, voir updateHostControls), qui est un bouton
+  // DIFFÉRENT — et nextQuestionBtn reste justement grisé pendant toute la
+  // phase classement (hostPhase !== 'revealed'), donc ce test bloquait à
+  // tort tout clic sur "Question suivante" (retour utilisateur : "ce bouton
+  // ne fonctionne pas"). Les deux boutons ne branchent goNext que dans les
+  // phases où c'est déjà légitime (voir updateHostControls) : plus besoin
+  // de re-vérifier ici.
   if (!loadedQuiz || quizIndex >= loadedQuiz.questions.length) return
   emitQuestion(quizIndex)
   quizIndex += 1
