@@ -3099,15 +3099,10 @@ startQuizBtn.onclick = () => {
   selectQuizBtn.classList.add('d-none')
   selectQuizBtn.style.display = 'none'
   
-  // Show navigation buttons — grisé au départ (voir updateHostControls) :
-  // la toute première question arrive dans l'instant via question:show, qui
-  // remettra l'état correct, mais autant ne jamais laisser flasher un
-  // bouton cliquable avant que ce ne soit vraiment le cas.
+  // Show navigation buttons
   nextQuestionBtn.classList.remove('d-none')
-  nextQuestionBtn.classList.add('is-disabled')
   nextQuestionBtn.style.display = 'inline-flex'
   nextQuestionBtn.textContent = 'Suivant'
-  nextQuestionBtn.onclick = null
 
   quizIndex = 0
   qrDiv.style.display = 'none'
@@ -3121,7 +3116,14 @@ startQuizBtn.onclick = () => {
   // ouvert/fermé restauré depuis la dernière fois (voir RECAP_SIDEBAR_PREF_KEY).
   showRecapSidebarUi()
   setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
-  nextQuestionBtn.click()
+  // On émet directement la première question (au lieu de simuler un clic sur
+  // nextQuestionBtn) : le bouton reste grisé/onclick=null tant que la question
+  // n'est pas révélée (voir updateHostControls), donc un .click() ici ne
+  // déclencherait plus rien depuis qu'il reste affiché-mais-grisé par défaut.
+  emitQuestion(quizIndex)
+  quizIndex += 1
+  nextQuestionBtn.classList.add('is-disabled')
+  nextQuestionBtn.onclick = null
 }
 
 socket.on('question:show', payload => {
