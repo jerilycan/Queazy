@@ -3524,7 +3524,7 @@ const submitCurrentAnswer = () => {
 
   let content = ''
 
-  if (currentQuestionType === 'mcq' || currentQuestionType === 'truefalse' || currentQuestionType === 'intrus') {
+  if (currentQuestionType === 'mcq') {
     if (selectedMcqOptions.length === 0) {
       showAnnounce('Veuillez sélectionner au moins une réponse')
       return
@@ -3535,6 +3535,20 @@ const submitCurrentAnswer = () => {
     // liste des bonnes réponses -> "mauvaise réponse" alors que tout était
     // coché correctement (retour utilisateur).
     content = JSON.stringify(selectedMcqOptions)
+  } else if (currentQuestionType === 'truefalse' || currentQuestionType === 'intrus') {
+    if (selectedMcqOptions.length === 0) {
+      showAnnounce('Veuillez sélectionner au moins une réponse')
+      return
+    }
+    // PAS de JSON.stringify ici (contrairement au QCM juste au-dessus) : un
+    // seul choix exclusif possible, jamais de virgule à protéger — et
+    // surtout, côté serveur, ces deux types passent par le comparateur
+    // "fuzzy" générique (texte brut vs q.correct), qui ne sait pas décoder
+    // du JSON. Envoyer '["dph5eu"]' au lieu de 'dph5eu' faisait échouer la
+    // comparaison à tous les coups -> "mauvaise réponse" alors que le bon
+    // intrus était pourtant coché (retour utilisateur, régression du fix
+    // QCM ci-dessus appliqué à tort à ces deux types aussi).
+    content = selectedMcqOptions[0]
   } else if (currentQuestionType === 'graduation') {
     myGradAnswerValue = gradState.value
     content = String(gradState.value)
