@@ -161,6 +161,7 @@ const addCorrectBtn = document.getElementById('addCorrect')
 const FREE_MAX_ANSWERS = 8
 const deleteQuestionBtn = document.getElementById('deleteQuestion')
 const qIndexLabel = document.getElementById('qIndexLabel')
+const questionSaveBar = document.getElementById('questionSaveBar')
 const correctLabel = document.getElementById('correctLabel')
 
 const graduationSection = document.getElementById('graduationSection')
@@ -339,8 +340,10 @@ const applyReadOnly = () => {
   ]
   controls.forEach(el => { if (el) el.disabled = true })
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
-  const saveQuestionBtnEl = document.getElementById('saveQuestion')
-  if (saveQuestionBtnEl) saveQuestionBtnEl.style.display = 'none'
+  // Rien à sauvegarder en lecture seule : la barre fixe entière disparaît
+  // (pas seulement son bouton), sans quoi elle resterait affichée vide de
+  // sens en bas de l'écran.
+  if (questionSaveBar) questionSaveBar.classList.add('d-none')
   if (deleteQuizBtn) deleteQuizBtn.style.display = 'none'
   if (duplicateQuizBtn) duplicateQuizBtn.classList.remove('d-none')
   if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
@@ -1169,6 +1172,10 @@ const selectQuestion = (index) => {
   updateSidebar()
 
   qIndexLabel.textContent = `Question ${activeIndex + 1} / ${questions.length}`
+  // N'a de sens qu'une fois une question réellement sélectionnée (jamais
+  // avant le tout premier appel) — masquée à nouveau en lecture seule, voir
+  // applyReadOnly.
+  if (questionSaveBar) questionSaveBar.classList.remove('d-none')
 
   // Mettre le focus sur l'énoncé pour une saisie rapide
   qPrompt.focus()
