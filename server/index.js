@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.38.6'
+const APP_VERSION = '1.39.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -603,6 +603,26 @@ const start = async () => {
   // (au lieu de 49%), 0.5 -> 1.6% (au lieu de 25%) : ne récompense plus
   // qu'une réponse VRAIMENT proche de la cible.
   const GRAD_CLOSENESS_EXPONENT = 6
+  // "Petit Bac" (q.type === 'pbac') : catégorie ouverte ("Citez un pays
+  // d'Europe"), aucune liste de bonnes réponses possible à l'avance — l'hôte
+  // valide/rejette chaque réponse à la main (voir moderation:approve/reject
+  // plus bas, item.pbac), PUIS les points dépendent du nombre de joueurs
+  // tombés sur EXACTEMENT la même réponse acceptée (demande explicite) :
+  // seul sur sa réponse -> tous les points ; à deux -> moitié chacun ; à
+  // trois ou plus -> zéro (personne n'est récompensé pour avoir recopié une
+  // réponse trop évidente). Impossible de scorer une réponse individuellement
+  // à l'approbation, contrairement aux autres types : il faut D'ABORD
+  // connaître l'ensemble des réponses acceptées de la question pour savoir si
+  // chacune est unique — voir finalizePbacScoring plus bas, appelée une seule
+  // fois juste avant revealQuestion. Pas de bonus de vitesse : il faut de
+  // toute façon attendre la fin du temps pour connaître les doublons, un
+  // montant fixe reste donc plus honnête qu'un faux calcul de rapidité.
+  const PBAC_BASE_POINTS = 1000
+  // Normalisation avant comparaison de doublons : insensible à la casse, aux
+  // accents et aux espaces superflus ("France" / "france " / "FRANCE"
+  // doivent compter comme la même réponse) — même esprit que le normLite
+  // côté client (blind test).
+  const normalizePbacAnswer = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
   // Réactions "fun" pendant l'attente de validation d'une réponse libre (voir
   // index.js showModerationWait) : liste blanche stricte (jamais de contenu
   // arbitraire relayé à toute la salle) + cooldown par socket pour éviter
@@ -1026,7 +1046,10 @@ const start = async () => {
         // sera appelée dès que la modération de CETTE question sera terminée
         // (voir resolveBlindTestField / moderation:approve / moderation:reject
         // plus bas) — jamais sautée pour de bon comme c'était le cas avant.
-        if (room.pending.size === 0) revealQuestion(io, code, room, question)
+        if (room.pending.size === 0) {
+          finalizePbacScoring(io, code, room, question)
+          revealQuestion(io, code, room, question)
+        }
       }
       question.timeoutId = setTimeout(question.endQuestion, ANSWER_WINDOW_BUFFER_MS + question.timerMs)
     })
@@ -1455,6 +1478,41 @@ const start = async () => {
         return
       }
 
+      if (q.type === 'pbac') {
+        // Pas de comparaison possible à une liste de bonnes réponses (voir
+        // PBAC_BASE_POINTS plus haut) : un texte non vide part TOUJOURS en
+        // modération, à l'hôte de juger si la réponse est valide pour la
+        // catégorie — contrairement à "free"/"blindtest", jamais de
+        // correspondance automatique. Vide = raté direct, rien à soumettre
+        // au jugement de l'hôte.
+        const text = String(payload?.content || '').trim()
+        const p = room.players.get(socket.id)
+        if (!text) {
+          q.submissions?.set(socket.id, 'incorrect')
+          if (p?.token && q.historyEntry) {
+            q.historyEntry.results[p.token] = 'incorrect'
+            q.historyEntry.answers[p.token] = ''
+          }
+          emitProgress()
+          return
+        }
+        // Une réponse encore en attente peut être corrigée avant la fin du
+        // temps (mode multi-tentatives) — même principe que "free" juste
+        // au-dessus : on retire l'ancienne entrée de la file plutôt que d'en
+        // garder deux pour le même joueur.
+        const prevId = q.submissions?.get(socket.id)
+        if (!q.singleAttempt && typeof prevId === 'string' && room.pending.has(prevId)) {
+          room.pending.delete(prevId)
+        }
+        const submitTs = Date.now()
+        const answerId = `${socket.id}:${submitTs}`
+        room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, content: text, ts: submitTs, historyEntry: q.historyEntry, pbac: true })
+        q.submissions?.set(socket.id, answerId)
+        io.to(code).emit('answer:queue', { answerId, playerId: socket.id, playerName: p?.name || 'Joueur', content: text })
+        emitProgress()
+        return
+      }
+
       const res = fuzzy(payload?.content || '', q.correct)
 
       if (res.ok && res.exact) {
@@ -1529,6 +1587,49 @@ const start = async () => {
       return item.playerId
     }
 
+    // Calcule et applique les points d'une question "pbac" une fois TOUTES
+    // les réponses en attente tranchées par l'hôte (voir moderation:approve/
+    // reject plus bas, qui alimentent historyEntry.pbacAccepted au lieu de
+    // scorer directement) — impossible de scorer une réponse individuellement
+    // à l'approbation : il faut connaître l'ensemble des réponses acceptées
+    // pour savoir si chacune est unique, en double, ou triple et plus (voir
+    // PBAC_BASE_POINTS). Prend historyEntry (pas la question elle-même) :
+    // c'est la référence STABLE portée par chaque item en attente
+    // (item.historyEntry), contrairement à room.currentQuestion qui a pu
+    // avancer entre-temps si l'hôte a enchaîné avant la fin de la
+    // modération — mêmes garanties que les autres types (voir resolvePendingId,
+    // qui protège déjà la reconnexion d'un JOUEUR de la même façon).
+    // Appelée juste avant CHAQUE appel à revealQuestion (elle ne fait rien si
+    // la question n'est pas de type "pbac", ou si déjà calculée —
+    // historyEntry.pbacScored — donc sans danger à appeler partout).
+    const finalizePbacScoring = (io, code, room, historyEntry) => {
+      if (!historyEntry || historyEntry.type !== 'pbac' || historyEntry.pbacScored) return
+      historyEntry.pbacScored = true
+      const groups = new Map()
+      for (const entry of (historyEntry.pbacAccepted || [])) {
+        const key = normalizePbacAnswer(entry.content)
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(entry)
+      }
+      for (const group of groups.values()) {
+        const n = group.length
+        const delta = n === 1 ? PBAC_BASE_POINTS : n === 2 ? Math.round(PBAC_BASE_POINTS / 2) : 0
+        for (const entry of group) {
+          const currentId = resolvePendingId(room, entry)
+          const total = (room.scores.get(currentId) || 0) + delta
+          room.scores.set(currentId, total)
+          const p = room.players.get(currentId)
+          if (p?.token) {
+            room.tokens.set(p.token, { id: currentId, name: p.name, score: total, teamId: p.teamId || null })
+            historyEntry.results[p.token] = n === 1 ? 'correct' : 'incorrect'
+            historyEntry.deltas[p.token] = delta
+            historyEntry.answers[p.token] = entry.content
+          }
+          if (delta > 0) io.to(code).emit('score:update', { playerId: currentId, delta, total })
+        }
+      }
+    }
+
     // Résout un champ (titre OU artiste) d'un item de modération "blindtest" —
     // contrairement aux autres types, un même item peut avoir besoin de DEUX
     // passages en modération (un par champ) avant d'être retiré de la file :
@@ -1575,7 +1676,10 @@ const start = async () => {
       // est bien terminée (chrono écoulé / tout le monde a répondu).
       if (room.pending.size === 0) {
         const q = room.currentQuestion
-        if (q && q.historyEntry === item.historyEntry && q.ended) revealQuestion(io, code, room, q)
+        if (q && q.historyEntry === item.historyEntry && q.ended) {
+          finalizePbacScoring(io, code, room, item.historyEntry)
+          revealQuestion(io, code, room, q)
+        }
       }
     }
 
@@ -1589,6 +1693,33 @@ const start = async () => {
       if (item.fields) {
         const field = payload?.field === 'artist' ? 'artist' : 'title'
         resolveBlindTestField(io, code, room, payload.answerId, item, field, true)
+        return
+      }
+
+      // "pbac" : contrairement à toutes les autres approbations ci-dessous,
+      // impossible de créditer des points MAINTENANT — il faut d'abord
+      // connaître l'ensemble des réponses acceptées de la question pour
+      // savoir si celle-ci est unique/en double/triple et plus (voir
+      // finalizePbacScoring). On se contente donc d'accepter la réponse dans
+      // historyEntry.pbacAccepted, puis on retente une révélation comme
+      // d'habitude — le VRAI calcul de points n'aura lieu que juste avant,
+      // dans finalizePbacScoring elle-même.
+      if (item.pbac) {
+        room.pending.delete(payload?.answerId)
+        if (item.historyEntry) {
+          item.historyEntry.pbacAccepted = item.historyEntry.pbacAccepted || []
+          item.historyEntry.pbacAccepted.push(item)
+        }
+        const q = room.currentQuestion
+        // Empêche une correction tardive (mode multi-tentatives) de créer
+        // une SECONDE entrée pour le même joueur dans pbacAccepted une fois
+        // sa première réponse déjà approuvée — même garde-fou que les autres
+        // types (voir le answered?.add plus bas dans la branche générique).
+        if (q && q.historyEntry === item.historyEntry) q.answered?.add(resolvePendingId(room, item))
+        if (room.pending.size === 0 && q && q.historyEntry === item.historyEntry && q.ended) {
+          finalizePbacScoring(io, code, room, item.historyEntry)
+          revealQuestion(io, code, room, q)
+        }
         return
       }
 
@@ -1632,6 +1763,27 @@ const start = async () => {
       if (item.fields) {
         const field = payload?.field === 'artist' ? 'artist' : 'title'
         resolveBlindTestField(io, code, room, payload.answerId, item, field, false)
+        return
+      }
+
+      // "pbac" : une réponse refusée (hors-catégorie) ne participe jamais au
+      // calcul de duplication — simplement écartée de historyEntry.pbacAccepted
+      // (jamais ajoutée), voir finalizePbacScoring.
+      if (item.pbac) {
+        room.pending.delete(payload?.answerId)
+        if (item.historyEntry) {
+          const p = room.players.get(resolvePendingId(room, item))
+          if (p?.token) {
+            item.historyEntry.results[p.token] = 'incorrect'
+            item.historyEntry.answers[p.token] = item.content || ''
+          }
+        }
+        io.to(code).emit('moderation:rejected', { answerId: payload?.answerId })
+        const q = room.currentQuestion
+        if (room.pending.size === 0 && q && q.historyEntry === item.historyEntry && q.ended) {
+          finalizePbacScoring(io, code, room, item.historyEntry)
+          revealQuestion(io, code, room, q)
+        }
         return
       }
 

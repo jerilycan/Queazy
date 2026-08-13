@@ -203,6 +203,7 @@ const TIMELINE_MIN_EVENTS = 3
 const TIMELINE_MAX_EVENTS = 8
 
 const intrusSection = document.getElementById('intrusSection')
+const pbacSection = document.getElementById('pbacSection')
 const intrusEditList = document.getElementById('intrusEditList')
 const intrusPhotosUploadInput = document.getElementById('intrusPhotosUpload')
 const INTRUS_MIN_OPTIONS = 3
@@ -1225,6 +1226,7 @@ const toggleTypeSections = () => {
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
   if (intrusSection) intrusSection.classList.toggle('d-none', qType.value !== 'intrus')
+  if (pbacSection) pbacSection.classList.toggle('d-none', qType.value !== 'pbac')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
   // déjà leur propre image (le type "image" utilise la sienne comme cible
   // cliquable, "zoomguess" la sienne comme photo à deviner — pas comme

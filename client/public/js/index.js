@@ -1823,6 +1823,13 @@ let myAnsweredCorrectlyThisQuestion = false
 // label "Presque !", sinon c'est une "Mauvaise réponse" même si quelques
 // points résiduels ont été marqués.
 const GRAD_PRESQUE_MIN_CLOSENESS = 0.8
+// "Petit Bac" (q.type === 'pbac') : DOIT rester strictement identique à
+// PBAC_BASE_POINTS côté serveur (server/index.js) — sert uniquement ici à
+// déduire le libellé du bandeau perso (Bonne réponse / Presque / Mauvaise)
+// à partir de myLastDelta, le serveur ne renvoyant jamais "pourquoi" un
+// delta a été réduit (unique, en double, ou refusé/en triple+, tout se
+// traduit juste par un montant de points différent, voir answer:submit).
+const PBAC_BASE_POINTS = 1000
 // Delta de points du dernier score:update me concernant — sert au bandeau
 // "Bonne réponse ! +X points" affiché au reveal (voir showMyResultBanner).
 let myLastDelta = 0
@@ -3475,7 +3482,7 @@ socket.on('question:show', payload => {
     // answerInput). Uniquement sur pointeur fin (souris/trackpad) — sur
     // mobile, focus() ferait surgir le clavier virtuel par-dessus l'écran
     // avant même que le joueur ait vu la question.
-    if ((payload.type === 'free' || payload.type === 'zoomguess') && window.matchMedia('(pointer: fine)').matches) {
+    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac') && window.matchMedia('(pointer: fine)').matches) {
       answerInput.focus()
     }
   }
@@ -3616,7 +3623,7 @@ socket.on('question:show', payload => {
     // submitCurrentAnswer() lui-même pose hasAnsweredThisQuestion = true,
     // donc ce bloc ne se déclenche qu'une seule fois.
     if (!isHost && !hasAnsweredThisQuestion && remaining > 0 && remaining <= 500) {
-      if (currentQuestionType === 'free' && answerInput.value.trim()) {
+      if ((currentQuestionType === 'free' || currentQuestionType === 'pbac') && answerInput.value.trim()) {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'blindtest' && ((blindtestTitleInput?.value || '').trim() || (blindtestArtistInput?.value || '').trim())) {
         submitCurrentAnswer()
@@ -4356,6 +4363,20 @@ socket.on('question:reveal', payload => {
   } else if (payload.type === 'free' || payload.type === 'zoomguess') {
     revealFreeAnswer((payload.correct || [])[0] || '')
     showMyResultBanner()
+  } else if (payload.type === 'pbac') {
+    // Aucune "bonne réponse" à révéler (catégorie ouverte) : seul mon propre
+    // résultat compte. myLastDelta == PBAC_BASE_POINTS -> réponse unique,
+    // 0 < myLastDelta < PBAC_BASE_POINTS -> réponse en double (voir server/
+    // index.js finalizePbacScoring), 0 -> refusée par l'hôte OU donnée par
+    // 3 joueurs ou plus (indiscernables ici, mais le message reste correct
+    // dans les deux cas : "Mauvaise réponse").
+    if (myLastDelta >= PBAC_BASE_POINTS) {
+      showMyResultBanner()
+    } else if (myAnsweredCorrectlyThisQuestion) {
+      showMyResultBanner(`Presque ! Quelqu'un d'autre a donné la même réponse (+${myLastDelta} points)`, 'is-close')
+    } else {
+      showMyResultBanner('Mauvaise réponse', 'is-incorrect')
+    }
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
     // Score continu (proximité), comme "image" : au lieu d'un simple binaire,

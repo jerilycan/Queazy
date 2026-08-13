@@ -32,6 +32,9 @@
   /* "ZoomOut Devinette" (11e type) : indigo, encore libre dans la palette. */
   --color-indigo: #5865f2;
   --color-indigo-rgb: 88,101,242;
+  /* "Petit Bac" (12e type) : citron/lime, encore libre dans la palette. */
+  --color-lime: #c8f542;
+  --color-lime-rgb: 200,245,66;
   --color-accent-soft: rgba(255,47,176,0.14);
   --color-accent-rgb: 255,47,176;
   --color-border: rgba(255,255,255,0.10);
@@ -2390,6 +2393,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-item.type-timeline::before { background: linear-gradient(90deg, var(--color-teal) 0, var(--color-teal) 3px, transparent 60%); }
 .question-item.type-intrus::before { background: linear-gradient(90deg, var(--color-violet) 0, var(--color-violet) 3px, transparent 60%); }
 .question-item.type-zoomguess::before { background: linear-gradient(90deg, var(--color-indigo) 0, var(--color-indigo) 3px, transparent 60%); }
+.question-item.type-pbac::before { background: linear-gradient(90deg, var(--color-lime) 0, var(--color-lime) 3px, transparent 60%); }
 
 .question-item:hover {
   background: var(--color-accent-soft);

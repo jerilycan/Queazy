@@ -114,6 +114,7 @@
                 <option value="association">🔗 Association</option>
                 <option value="timeline">⏳ Timeline</option>
                 <option value="intrus">🎯 Intrus</option>
+                <option value="pbac">🎩 Petit Bac (catégorie ouverte)</option>
               </select>
             </div>
             <div class="detail-section">
@@ -354,6 +355,21 @@
               <!-- Rempli par JS -->
             </div>
             <button id="addCorrect" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse correcte</button>
+          </div>
+
+          <!-- "Petit Bac" : pas de liste de bonnes réponses possible pour une
+               catégorie ouverte (retour utilisateur) — c'est l'hôte qui juge
+               chaque réponse en direct pendant la partie (voir index.js
+               moderation, même écran que le texte libre). Juste un rappel de
+               la règle de points ici, rien à configurer. -->
+          <div id="pbacSection" class="detail-section d-none">
+            <label>🎩 Petit Bac — catégorie ouverte</label>
+            <p class="text-muted font-13">
+              Les joueurs tapent une réponse libre pour ta catégorie (ex : « Citez un pays d'Europe »).
+              Aucune liste de bonnes réponses à préparer : c'est toi qui juges chaque réponse pendant la partie
+              (comme pour le Blind Test). Les points dépendent ensuite des doublons entre joueurs :
+              seul·e sur sa réponse → tous les points, à deux → la moitié chacun, à trois ou plus → zéro.
+            </p>
           </div>
 
         </div>
