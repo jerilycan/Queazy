@@ -2516,40 +2516,47 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   /* Marge de secours sous le dernier champ : #questionSaveBar (voir plus bas)
      est fixe par rapport à la FENÊTRE, donc reste au-dessus de ce panneau
      quel que soit son propre défilement interne — sans cette marge, son
-     dernier champ (ou le bouton Supprimer) se retrouverait masqué une fois
-     scrollé tout en bas (retour utilisateur). */
-  padding-bottom: 110px;
+     dernier champ se retrouverait masqué une fois scrollé tout en bas
+     (retour utilisateur). Un peu moins que l'ancienne barre pleine largeur
+     (le bouton flottant est bien plus petit), garde tout de même de la marge
+     puisqu'il reste au-dessus du coin bas-droit du contenu. */
+  padding-bottom: 90px;
 }
 
-/* Barre "Sauvegarder cette question" — fixe par rapport à la fenêtre (pas au
-   panneau), reste donc visible pendant TOUT défilement, y compris celui,
-   interne, de .question-detail (retour utilisateur : un pied de panneau
-   scrollable pouvait disparaître avec un formulaire de question long).
-   Réutilise .modal-content? Non : ce n'est pas une modale (pas d'overlay, le
-   reste de la page reste utilisable dessous) — habillage propre, cohérent
-   avec .question-detail juste au-dessus (même dégradé/bordure). */
-.question-save-bar {
+/* Bouton flottant "Sauvegarder" — remplace l'ancienne barre pleine largeur
+   (retour utilisateur : trop envahissante pour une simple action de
+   sauvegarde). Fixe par rapport à la FENÊTRE (pas au panneau), reste donc
+   visible pendant TOUT défilement, y compris celui, interne, de
+   .question-detail. Juste un point d'ancrage sans habillage propre : le
+   style vient entièrement de .btn-primary à l'intérieur (retour utilisateur :
+   garder l'identité rose/violet actuelle de QuEazy), on ajoute seulement un
+   glow renforcé + un léger scale au survol pour bien le lire comme l'action
+   principale flottante plutôt qu'un bouton de formulaire ordinaire. */
+.question-save-fab {
   position: fixed;
-  left: 0; right: 0; bottom: 0;
+  right: 28px;
+  bottom: 28px;
   z-index: 500;
-  background: var(--gradient-card);
-  border-top: 1px solid var(--color-border);
-  box-shadow: 0 -6px 20px rgba(0,0,0,0.25);
-  padding: 14px 24px;
 }
-.question-save-bar-inner {
-  max-width: 1100px; /* aligné sur .container, voir plus haut */
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  /* Un seul bouton désormais (Question X/X a migré sous la sidebar, voir
-     .sidebar-footer) — aligné à droite, comme le "Sauvegarder" du bandeau
-     du haut qu'il duplique. */
-  justify-content: flex-end;
+.question-save-fab #saveQuestion {
+  border-radius: 999px;
+  padding: 14px 26px;
+  box-shadow: 0 4px 0 var(--color-accent-deep), var(--shadow-lg), 0 0 24px rgba(var(--color-accent-rgb), 0.45);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.question-save-fab #saveQuestion:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 6px 0 var(--color-accent-deep), var(--shadow-lg), 0 0 30px rgba(var(--color-accent-rgb), 0.55);
+}
+.question-save-fab #saveQuestion:active {
+  transform: translateY(1px) scale(1);
+  box-shadow: 0 1px 0 var(--color-accent-deep), 0 0 18px rgba(var(--color-accent-rgb), 0.4);
 }
 @media (max-width: 640px) {
-  .question-save-bar { padding: 10px 16px; }
-  #saveQuestion { padding: 10px 16px; }
+  /* Marge réduite (retour utilisateur : adapter au mobile) — un coin
+     bas-droit à 28px empièterait trop sur un petit écran. */
+  .question-save-fab { right: 16px; bottom: 16px; }
+  .question-save-fab #saveQuestion { padding: 12px 20px; font-size: 13px; }
 }
 
 .detail-section {

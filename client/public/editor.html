@@ -360,18 +360,17 @@
       </div>
     </div>
 
-    <!-- Barre fixe "Sauvegarder cette question" — reste visible en bas de la
-         fenêtre pendant le scroll (retour utilisateur), plutôt qu'un pied de
-         panneau qui pouvait disparaître avec un formulaire de question long.
-         Simple doublon du bouton "Sauvegarder" du bandeau du haut (retour
-         utilisateur) : mêmes validation + écriture pour tout le quiz, voir
-         editor.js saveQuestionBtn. Masquée par défaut (voir editor.js
+    <!-- Bouton flottant "Sauvegarder" — remplace l'ancienne barre pleine
+         largeur (retour utilisateur : trop envahissante) par une action
+         ronde en bas à droite, position:fixed donc reste visible pendant
+         TOUT défilement. Simple doublon du bouton "Sauvegarder" du bandeau
+         du haut (retour utilisateur) : mêmes validation + écriture pour tout
+         le quiz, voir editor.js saveQuestionBtn — comportement inchangé,
+         seul l'habillage change. Masqué par défaut (voir editor.js
          selectQuestion/applyReadOnly) : n'a de sens qu'une fois une question
          sélectionnée, jamais en lecture seule. -->
-    <div id="questionSaveBar" class="question-save-bar d-none">
-      <div class="question-save-bar-inner">
-        <button id="saveQuestion" class="btn btn-primary font-14">💾 Sauvegarder</button>
-      </div>
+    <div id="questionSaveBar" class="question-save-fab d-none">
+      <button id="saveQuestion" class="btn btn-primary font-14">💾 Sauvegarder</button>
     </div>
 
     <div id="toasts" class="toast-container"></div>
