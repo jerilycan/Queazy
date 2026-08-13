@@ -2513,10 +2513,14 @@ saveQuizBtn.onclick = async () => {
         showToast(`La question ${i + 1} : il faut entre ${ASSOCIATION_MIN_PAIRS} et ${ASSOCIATION_MAX_PAIRS} paires`, 'error')
         return
       }
-      const hasEmpty = pairs.some(p => !p.a || !p.a.trim() || !p.b || !p.b.trim())
+      // Chaque élément (A et B) doit avoir AU MOINS un texte OU une image —
+      // les deux ensemble restent possibles, mais une image seule suffit
+      // désormais (retour utilisateur : bloqué à la sauvegarde avec des
+      // éléments image-seule, le texte était jusque-là obligatoire à tort).
+      const hasEmpty = pairs.some(p => (!p.a || !p.a.trim()) && !p.aImage) || pairs.some(p => (!p.b || !p.b.trim()) && !p.bImage)
       if (hasEmpty) {
         selectQuestion(i)
-        showToast(`La question ${i + 1} : chaque paire doit avoir ses deux éléments remplis`, 'error')
+        showToast(`La question ${i + 1} : chaque élément doit avoir un texte ou une image`, 'error')
         return
       }
     }

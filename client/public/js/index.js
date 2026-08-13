@@ -860,7 +860,7 @@ const setAssociationDisabled = (v) => { associationDisabled = v }
 // délais que l'apparition initiale — un "réaffichage" complet à chaque clic.
 const updateAssociationClasses = () => {
   if (!associationState || !associationColA || !associationColB) return
-  const { pairsB, matches, selected } = associationState
+  const { pairsBKeys, matches, selected } = associationState
   Array.from(associationColA.children).forEach((el, i) => {
     ASSOCIATION_PAIR_COLORS.forEach(c => el.classList.remove(c))
     el.classList.toggle('is-matched', matches[i] !== null)
@@ -868,8 +868,12 @@ const updateAssociationClasses = () => {
     el.classList.toggle('is-selected', selected?.side === 'a' && selected.index === i)
   })
   Array.from(associationColB.children).forEach((el, j) => {
-    const text = pairsB[j]
-    const matchedAIdx = matches.findIndex(m => m === text)
+    // Identité par CLÉ (index d'origine de la paire, voir pairsBKeys) plutôt
+    // que par texte : un élément peut désormais n'avoir qu'une image et pas
+    // de texte (voir editor.js), et deux éléments B sans texte seraient
+    // sinon indiscernables l'un de l'autre (toujours "" === "").
+    const key = pairsBKeys[j] ?? j
+    const matchedAIdx = matches.findIndex(m => m === key)
     ASSOCIATION_PAIR_COLORS.forEach(c => el.classList.remove(c))
     el.classList.toggle('is-matched', matchedAIdx !== -1)
     if (matchedAIdx !== -1) el.classList.add(ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
@@ -882,10 +886,10 @@ const updateAssociationClasses = () => {
 // toujours être remplacée (demande explicite), jamais un B partagé par deux
 // A à la fois.
 const completeAssociationPair = (aIdx, bIdx) => {
-  const text = associationState.pairsB[bIdx]
-  const prevIdx = associationState.matches.findIndex(m => m === text)
+  const key = associationState.pairsBKeys[bIdx] ?? bIdx
+  const prevIdx = associationState.matches.findIndex(m => m === key)
   if (prevIdx !== -1) associationState.matches[prevIdx] = null
-  associationState.matches[aIdx] = text
+  associationState.matches[aIdx] = key
   associationState.selected = null
 }
 
@@ -946,10 +950,12 @@ const renderAssociationColumns = () => {
   pairsB.forEach((text, j) => {
     const el = document.createElement('div')
     el.className = 'assoc-item'
-    el.dataset.assocId = `${pairsBKeys[j] ?? j}b`
+    const key = pairsBKeys[j] ?? j
+    el.dataset.assocId = `${key}b`
+    el.dataset.assocKey = key
     el.appendChild(buildAssocItemImg())
     el.appendChild(document.createTextNode(text))
-    const matchedAIdx = matches.findIndex(m => m === text)
+    const matchedAIdx = matches.findIndex(m => m === key)
     if (matchedAIdx !== -1) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
     if (selected?.side === 'b' && selected.index === j) el.classList.add('is-selected')
     el.onclick = () => {
@@ -1011,13 +1017,18 @@ const buildAssociationArea = (pairsA, pairsB, pairsBKeys, imagesUrl) => {
 const revealAssociationPairs = (correctPairs) => {
   if (!associationColA || !associationColB || !Array.isArray(correctPairs)) return
   setAssociationDisabled(true)
+  // mine[i] est désormais la CLÉ (index d'origine) de l'élément B choisi pour
+  // le A d'index i, pas son texte (voir completeAssociationPair) — la paire i
+  // est toujours correcte quand mine[i] === i, par construction (a[i]<->b[i]).
   const mine = Array.isArray(myAssociationSubmission) ? myAssociationSubmission : []
   Array.from(associationColA.children).forEach((el, i) => {
     el.classList.remove('is-selected')
-    const correct = mine[i] !== undefined && mine[i] !== null && mine[i] === correctPairs[i]?.b
+    const correct = mine[i] === i
     el.classList.toggle('correct-reveal', correct)
     el.classList.toggle('incorrect-reveal', !correct)
-    if (!correct && correctPairs[i]) {
+    // Pas d'indice textuel si le B correct n'a pas de texte (élément identifié
+    // par une image seule) : " → " tout seul serait plus confus qu'utile.
+    if (!correct && correctPairs[i]?.b) {
       const hint = document.createElement('span')
       hint.className = 'assoc-correct-hint'
       hint.textContent = ' → ' + correctPairs[i].b
@@ -1025,9 +1036,8 @@ const revealAssociationPairs = (correctPairs) => {
     }
   })
   Array.from(associationColB.children).forEach((el) => {
-    const text = el.textContent
-    const pairIdx = correctPairs.findIndex(p => p.b === text)
-    const wasChosenCorrectly = pairIdx !== -1 && mine[pairIdx] === text
+    const key = Number(el.dataset.assocKey)
+    const wasChosenCorrectly = mine[key] === key
     el.classList.toggle('correct-reveal', wasChosenCorrectly)
   })
 }
@@ -4259,7 +4269,7 @@ socket.on('question:reveal', payload => {
     const correctPairs = payload.correct || []
     revealAssociationPairs(correctPairs)
     const mine = Array.isArray(myAssociationSubmission) ? myAssociationSubmission : []
-    const correctCount = correctPairs.reduce((acc, pair, i) => acc + (mine[i] === pair.b ? 1 : 0), 0)
+    const correctCount = correctPairs.reduce((acc, pair, i) => acc + (mine[i] === i ? 1 : 0), 0)
     if (correctCount === correctPairs.length && correctPairs.length > 0) {
       showMyResultBanner()
     } else if (myAnsweredCorrectlyThisQuestion) {

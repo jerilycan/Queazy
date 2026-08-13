@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.37.0'
+const APP_VERSION = '1.37.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1133,13 +1133,16 @@ const start = async () => {
 
       if (q.type === 'association') {
         // q.correct = [{a,b}, ...] (voir question:show) : la paire i associe
-        // TOUJOURS a[i] à b[i] par construction — pas besoin de retrouver un
-        // index après mélange, la comparaison se fait par le TEXTE b soumis
-        // pour la position i (voir emitQuestion côté client : seule la
-        // colonne B est mélangée avant envoi, la colonne A garde son ordre
-        // d'origine, qui sert justement d'index stable ici). Score
-        // proportionnel au nombre de paires correctes (pas de tout-ou-rien,
-        // demande explicite) : pointsFor() × (correctCount / total).
+        // TOUJOURS a[i] à b[i] par construction. submitted[i] est désormais
+        // la CLÉ (index d'origine 0..n-1) de l'élément B choisi pour le A
+        // d'index i, pas son texte (voir completeAssociationPair côté
+        // index.js) : un élément association peut n'avoir qu'une image et
+        // pas de texte du tout (voir editor.js buildAssocPhotoSlot), le texte
+        // ne peut donc plus servir d'identifiant fiable — deux éléments B
+        // sans texte auraient été indiscernables l'un de l'autre en comparant
+        // des chaînes vides. La paire i est correcte quand submitted[i] === i.
+        // Score proportionnel au nombre de paires correctes (pas de
+        // tout-ou-rien, demande explicite) : pointsFor() × (correctCount / total).
         let submitted
         try { submitted = JSON.parse(payload?.content || '[]') } catch { submitted = null }
         const pairs = Array.isArray(q.correct) ? q.correct : []
@@ -1148,7 +1151,7 @@ const start = async () => {
         // .slice(0, pairTotal) : un client qui enverrait un tableau plus long
         // ne peut pas gagner plus que pairTotal correspondances — la boucle
         // ne regarde jamais au-delà de la vraie liste de paires de toute façon.
-        const correctCount = pairs.reduce((acc, pair, i) => acc + (submitted[i] === pair.b ? 1 : 0), 0)
+        const correctCount = pairs.reduce((acc, pair, i) => acc + (submitted[i] === i ? 1 : 0), 0)
         const fraction = Math.max(0, Math.min(1, correctCount / pairTotal))
         const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * fraction)
         const total = (room.scores.get(socket.id) || 0) + delta
@@ -1162,13 +1165,20 @@ const start = async () => {
             // le score, lui, reste proportionnel.
             q.historyEntry.results[p.token] = correctCount === pairTotal ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
-            q.historyEntry.answers[p.token] = pairs.map((pair, i) => `${pair.a} → ${submitted[i] ?? '—'}`).join(' · ')
+            // Affichage lisible pour l'hôte/le récap : on retrouve le texte du
+            // B choisi via sa clé plutôt que d'afficher l'index brut — repli
+            // "(image)" si ce B n'a pas de texte du tout.
+            const bLabel = (key) => {
+              if (key === undefined || key === null || !pairs[key]) return '—'
+              return pairs[key].b || '(image)'
+            }
+            q.historyEntry.answers[p.token] = pairs.map((pair, i) => `${pair.a || '(image)'} → ${bLabel(submitted[i])}`).join(' · ')
             // Une ligne par paire (séparateur \n) pour le détail par joueur
             // du panneau récap : le format condensé ci-dessus (answers,
             // séparé par ' · ') devient illisible dès 3-4 paires sur une
             // seule ligne tronquée (retour hôte : "doit être lisible").
             q.historyEntry.answerDetails = q.historyEntry.answerDetails || {}
-            q.historyEntry.answerDetails[p.token] = pairs.map((pair, i) => `${pair.a} → ${submitted[i] ?? '—'}`).join('\n')
+            q.historyEntry.answerDetails[p.token] = pairs.map((pair, i) => `${pair.a || '(image)'} → ${bLabel(submitted[i])}`).join('\n')
           }
         }
         q.answered?.add(socket.id)
