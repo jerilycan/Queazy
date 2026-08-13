@@ -108,7 +108,7 @@
           
           <div id="lobbyBuilder" class="d-flex flex-column align-center gap-md">
             <div id="lobbyPreview" class="avatar-main avatar-lg">🙂</div>
-            <input id="lobbyName" placeholder="Ton pseudo" class="w-full" />
+            <input id="lobbyName" placeholder="Ton pseudo" class="w-full" maxlength="20" />
             <div class="icon-grid" id="iconGrid">
               <!-- Rempli par JS -->
             </div>
@@ -124,7 +124,7 @@
         <h2 class="mb-lg font-32">C’est l’heure du quiz !</h2>
         <div class="d-flex flex-column gap-md">
           <div class="d-grid grid-cols-split gap-sm">
-            <input id="room" placeholder="Code salle" class="text-center font-bold uppercase" />
+            <input id="room" placeholder="Code salle" class="text-center font-bold uppercase" maxlength="8" />
             <input id="name" placeholder="Ton pseudo" maxlength="20" />
           </div>
           <button id="join" class="btn btn-primary h-56 font-18 w-full">
@@ -349,10 +349,10 @@
             </div>
           </div>
           <div id="freeText" class="free-text-input">
-            <input id="answer" placeholder="Votre réponse..." class="h-60 border-none bg-transparent font-18" />
+            <input id="answer" placeholder="Votre réponse..." class="h-60 border-none bg-transparent font-18" maxlength="150" />
             <div id="blindtestFields" class="blindtest-fields d-none">
-              <input id="blindtestTitleInput" placeholder="Titre du morceau..." class="h-56 border-none bg-transparent font-16" />
-              <input id="blindtestArtistInput" placeholder="Artiste..." class="h-56 border-none bg-transparent font-16" />
+              <input id="blindtestTitleInput" placeholder="Titre du morceau..." class="h-56 border-none bg-transparent font-16" maxlength="100" />
+              <input id="blindtestArtistInput" placeholder="Artiste..." class="h-56 border-none bg-transparent font-16" maxlength="100" />
             </div>
             <button id="send" class="btn btn-primary w-140 h-60 font-16">Envoyer</button>
           </div>

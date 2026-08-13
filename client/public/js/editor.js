@@ -155,6 +155,16 @@ if (mcqRequireAllToggle) {
 // largement assez pour un quiz jouable, et cohérent d'un type à l'autre.
 const MCQ_MIN_OPTIONS = 2
 const MCQ_MAX_OPTIONS = 8
+
+// Garde-fous de longueur sur les champs de texte libre (retour utilisateur :
+// "éviter les dérives classiques" — un pavé de texte collé dans une option,
+// un élément à ordonner/associer ou un titre d'événement casse la mise en
+// page d'une tuile, et rien de tout ça n'a jamais besoin d'être long dans un
+// quiz jouable). Seuil "court" pour les éléments unitaires (options,
+// réponses acceptées, éléments order/association/timeline), "long" pour les
+// zones de texte libre (énoncé, explication) qui restent des phrases.
+const TEXT_SHORT_MAXLENGTH = 120
+const TEXT_LONG_MAXLENGTH = 400
 const correctSection = document.getElementById('correctSection')
 const correctList = document.getElementById('correctList')
 const addCorrectBtn = document.getElementById('addCorrect')
@@ -1443,6 +1453,7 @@ const renderOrderItems = () => {
     input.placeholder = 'Élément ' + (idx + 1)
     input.style.flex = '1'
     input.disabled = readOnly
+    input.maxLength = TEXT_SHORT_MAXLENGTH
     input.oninput = (e) => { q.correct[idx] = e.target.value }
     row.appendChild(input)
 
@@ -1937,6 +1948,7 @@ const renderAssociationPairs = () => {
     inputA.placeholder = 'Élément A'
     inputA.style.flex = '1'
     inputA.disabled = readOnly
+    inputA.maxLength = TEXT_SHORT_MAXLENGTH
     inputA.oninput = (e) => { pair.a = e.target.value }
     row.appendChild(inputA)
 
@@ -1954,6 +1966,7 @@ const renderAssociationPairs = () => {
     inputB.placeholder = 'Élément B'
     inputB.style.flex = '1'
     inputB.disabled = readOnly
+    inputB.maxLength = TEXT_SHORT_MAXLENGTH
     inputB.oninput = (e) => { pair.b = e.target.value }
     row.appendChild(inputB)
 
@@ -2092,6 +2105,7 @@ const renderTimelineEvents = () => {
     titleInput.value = ev.title || ''
     titleInput.placeholder = 'Titre de l\'événement'
     titleInput.disabled = readOnly
+    titleInput.maxLength = TEXT_SHORT_MAXLENGTH
     titleInput.oninput = (e) => { ev.title = e.target.value }
     fields.appendChild(titleInput)
 
@@ -2100,6 +2114,7 @@ const renderTimelineEvents = () => {
     descInput.value = ev.description || ''
     descInput.placeholder = 'Description courte (optionnelle)'
     descInput.disabled = readOnly
+    descInput.maxLength = TEXT_SHORT_MAXLENGTH
     descInput.oninput = (e) => { ev.description = e.target.value }
     fields.appendChild(descInput)
 
@@ -2400,6 +2415,7 @@ const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked =
   input.placeholder = 'Entrez du texte...'
   input.style.flex = '1'
   input.disabled = readOnly
+  input.maxLength = TEXT_SHORT_MAXLENGTH
   input.oninput = (e) => onInput(e.target.value)
 
   div.appendChild(input)

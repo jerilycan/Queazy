@@ -42,7 +42,7 @@
 
       <div class="editor-top-bar">
         <div class="quiz-meta">
-          <input id="title" placeholder="Titre du quiz" />
+          <input id="title" placeholder="Titre du quiz" maxlength="100" />
           <div class="align-center d-flex gap-sm">
             <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
               <input id="singleAttempt" type="checkbox" checked class="qz-toggle-input" />
@@ -128,7 +128,7 @@
 
           <div class="detail-section">
             <label>Énoncé de la question</label>
-            <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..."></textarea>
+            <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..." maxlength="400"></textarea>
           </div>
 
           <!-- Ordre volontaire (retour utilisateur) : brouillon -> type+minuteur
@@ -150,7 +150,7 @@
 
           <div class="detail-section">
             <label>Explication (optionnelle, affichée après la révélation)</label>
-            <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986."></textarea>
+            <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986." maxlength="400"></textarea>
           </div>
 
           <div id="zoomGuessSection" class="detail-section d-none">
@@ -380,7 +380,7 @@
       <div class="modal-content card">
         <h2 class="mb-lg font-32">Signaler ce quiz</h2>
         <p class="text-muted mb-lg">Dis-nous ce qui ne va pas (optionnel) — on va vérifier.</p>
-        <textarea id="reportReason" rows="3" placeholder="Motif (optionnel)..." class="w-full mb-lg"></textarea>
+        <textarea id="reportReason" rows="3" placeholder="Motif (optionnel)..." class="w-full mb-lg" maxlength="500"></textarea>
         <div class="d-flex gap-sm justify-end">
           <button id="cancelReport" class="btn h-48">Annuler</button>
           <button id="confirmReport" class="btn btn-primary h-48">Envoyer le signalement</button>
