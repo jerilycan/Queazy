@@ -2095,8 +2095,17 @@ const resetUI = () => {
   isHost = false
   roomInput.value = ''
   
-  // Hide all dynamic panels
-  const panels = ['lobby', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle']
+  document.body.classList.remove('game-active', 'is-host')
+  // Hide all dynamic panels — 'main' (toute la zone de jeu : question,
+  // illustration, options/association/timeline/etc., bandeau de résultat)
+  // en particulier : jamais togglée nulle part avant (toujours visible par
+  // défaut, voir index.html), donc jamais nettoyée en quittant une partie
+  // en cours — cliquer Créer/Rejoindre en pleine partie laissait la
+  // dernière question affichée derrière la nouvelle carte (retour
+  // utilisateur : "laisse des traces"). Réaffichée par le prochain
+  // question:show reçu (voir son handler). 'leaderOverlay' : même raison,
+  // pour l'écran de classement plein écran.
+  const panels = ['lobby', 'main', 'leaderOverlay', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle']
   panels.forEach(id => {
     const el = document.getElementById(id)
     if (el) {
@@ -2300,6 +2309,14 @@ const showLobby = () => {
   if (lobby) {
     lobby.classList.remove('d-none')
     lobby.style.display = 'block'
+  }
+  // Même raison que dans resetUI (voir son commentaire) : la dernière
+  // question affichée ne doit jamais rester visible derrière le salon
+  // d'attente d'une partie suivante.
+  const mainEl = document.getElementById('main')
+  if (mainEl) {
+    mainEl.classList.add('d-none')
+    mainEl.style.display = 'none'
   }
   const timerContainer = document.getElementById('timerContainer')
   if (timerContainer) {
@@ -3249,6 +3266,14 @@ socket.on('question:show', payload => {
   if (lobby) {
     lobby.classList.add('d-none')
     lobby.style.display = 'none'
+  }
+  // Symétrique du masquage dans resetUI (voir son commentaire) : remet la
+  // zone de jeu au premier plan si un Créer/Rejoindre l'avait cachée entre
+  // deux parties dans le même onglet.
+  const mainEl = document.getElementById('main')
+  if (mainEl) {
+    mainEl.classList.remove('d-none')
+    mainEl.style.display = 'block'
   }
   // Sur mobile, la navbar (boutons Créer/Mes Quiz/etc.) prend trop de place
   // pendant la partie : on la réduit au seul nom, non cliquable, pour éviter
