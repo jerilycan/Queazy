@@ -3839,8 +3839,78 @@ moderationDiv.className = 'card'
 moderationDiv.style.marginTop = '16px'
 moderationDiv.style.display = 'none' // Caché par défaut
 document.querySelector('.container').appendChild(moderationDiv)
+
+// "Petit Bac" : contrairement au reste de la modération (une réponse jugée
+// isolément), l'hôte doit ici REGROUPER lui-même les réponses qu'il juge
+// identiques avant de les valider ensemble (retour utilisateur — jamais de
+// correspondance automatique, il n'existe aucune liste de bonnes réponses
+// pour ce type). Chaque ligne pbac de moderationDiv porte une case à cocher
+// (voir plus bas) ; ce bandeau, unique et partagé, se met à jour en direct
+// selon le nombre actuellement coché et affiche le montant de points qui en
+// résultera (voir PBAC_BASE_POINTS) avant même de valider.
+const pbacGroupBar = document.createElement('div')
+pbacGroupBar.className = 'card'
+pbacGroupBar.style.marginTop = '8px'
+pbacGroupBar.style.display = 'none'
+pbacGroupBar.style.alignItems = 'center'
+pbacGroupBar.style.justifyContent = 'space-between'
+pbacGroupBar.style.gap = '12px'
+pbacGroupBar.style.flexWrap = 'wrap'
+const pbacGroupLabel = document.createElement('div')
+pbacGroupLabel.style.fontSize = '13px'
+pbacGroupLabel.style.opacity = '0.75'
+pbacGroupLabel.textContent = 'Coche les réponses identiques entre elles, puis valide la famille'
+const pbacGroupBtn = document.createElement('button')
+pbacGroupBtn.className = 'btn btn-primary'
+pbacGroupBtn.style.padding = '8px 16px'
+pbacGroupBtn.disabled = true
+pbacGroupBtn.textContent = 'Valider la famille'
+pbacGroupBar.appendChild(pbacGroupLabel)
+pbacGroupBar.appendChild(pbacGroupBtn)
+document.querySelector('.container').appendChild(pbacGroupBar)
+
+// Rafraîchit le libellé/l'état du bandeau à partir des cases actuellement
+// cochées — appelée à chaque coche/décoche ainsi qu'après tout ajout/retrait
+// de ligne pbac (nouvelle réponse, famille validée, réponse refusée).
+const updatePbacGroupBar = () => {
+  const anyPbacRow = moderationDiv.querySelector('[data-pbac="1"]')
+  pbacGroupBar.style.display = anyPbacRow ? 'flex' : 'none'
+  const n = moderationDiv.querySelectorAll('input.pbac-check:checked').length
+  if (n === 0) {
+    pbacGroupBtn.disabled = true
+    pbacGroupBtn.textContent = 'Valider la famille'
+    return
+  }
+  pbacGroupBtn.disabled = false
+  const pts = n === 1 ? PBAC_BASE_POINTS : n === 2 ? Math.round(PBAC_BASE_POINTS / 2) : 0
+  pbacGroupBtn.textContent = n === 1
+    ? `Valider (réponse unique, +${pts} pts)`
+    : n === 2
+      ? `Valider ces 2 réponses (+${pts} pts chacune)`
+      : `Valider ces ${n} réponses (0 pt, trop de doublons)`
+}
+pbacGroupBtn.onclick = () => {
+  const roomCode = roomInput.value.trim()
+  const answerIds = [...moderationDiv.querySelectorAll('input.pbac-check:checked')]
+    .map(cb => cb.closest('[data-answer-id]')?.dataset.answerId)
+    .filter(Boolean)
+  if (answerIds.length === 0) return
+  socket.emit('moderation:pbacGroup', { roomCode, answerIds })
+  answerIds.forEach(id => moderationDiv.querySelector(`[data-answer-id="${id}"]`)?.remove())
+  if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
+  updatePbacGroupBar()
+}
+// Confirmation serveur (voir server/index.js moderation:pbacGroup) : retire
+// les lignes correspondantes si elles existent encore — filet de sécurité en
+// plus du retrait optimiste ci-dessus (ex. plusieurs onglets hôte ouverts).
+socket.on('moderation:pbacGrouped', ({ answerIds }) => {
+  (answerIds || []).forEach(id => moderationDiv.querySelector(`[data-answer-id="${id}"]`)?.remove())
+  if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
+  updatePbacGroupBar()
+})
+
 let isModerationPending = false
-socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest, fields }) => {
+socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest, fields, pbac }) => {
   if (!isHost) {
     const isMcq = !optionsDiv.classList.contains('d-none')
     if (!isMcq) {
@@ -3854,6 +3924,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
   const item = document.createElement('div')
   item.style.padding = '12px'
   item.style.borderBottom = '1px solid var(--color-border)'
+  item.dataset.answerId = answerId
 
   const nameTag = document.createElement('div')
   nameTag.style.fontWeight = '700'
@@ -3862,6 +3933,50 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
   nameTag.style.marginBottom = '4px'
   nameTag.textContent = playerName || 'Joueur'
   item.appendChild(nameTag)
+
+  if (pbac) {
+    item.dataset.pbac = '1'
+    const row = document.createElement('div')
+    row.style.display = 'flex'
+    row.style.alignItems = 'center'
+    row.style.justifyContent = 'space-between'
+    row.style.gap = '12px'
+
+    const left = document.createElement('label')
+    left.style.display = 'flex'
+    left.style.alignItems = 'center'
+    left.style.gap = '10px'
+    left.style.cursor = 'pointer'
+    left.style.flex = '1'
+    const check = document.createElement('input')
+    check.type = 'checkbox'
+    check.className = 'pbac-check'
+    check.onchange = updatePbacGroupBar
+    const answerLabel = document.createElement('span')
+    answerLabel.style.fontWeight = '600'
+    answerLabel.textContent = content
+    left.appendChild(check)
+    left.appendChild(answerLabel)
+
+    const reject = document.createElement('button')
+    reject.className = 'btn'
+    reject.style.padding = '8px 16px'
+    reject.textContent = 'Refuser'
+    reject.onclick = () => {
+      const roomCode = roomInput.value.trim()
+      socket.emit('moderation:reject', { roomCode, answerId })
+      item.remove()
+      if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
+      updatePbacGroupBar()
+    }
+
+    row.appendChild(left)
+    row.appendChild(reject)
+    item.appendChild(row)
+    moderationDiv.appendChild(item)
+    updatePbacGroupBar()
+    return
+  }
 
   if (blindtest && fields) {
     // Deux champs (titre/artiste), chacun peut avoir besoin d'un jugement

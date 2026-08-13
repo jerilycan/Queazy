@@ -357,18 +357,23 @@
             <button id="addCorrect" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse correcte</button>
           </div>
 
-          <!-- "Petit Bac" : pas de liste de bonnes réponses possible pour une
-               catégorie ouverte (retour utilisateur) — c'est l'hôte qui juge
-               chaque réponse en direct pendant la partie (voir index.js
-               moderation, même écran que le texte libre). Juste un rappel de
-               la règle de points ici, rien à configurer. -->
+          <!-- "Petit Bac" : contrairement au Blind Test (qui valide
+               automatiquement toute réponse EXACTEMENT identique à une liste
+               fournie par le créateur), il n'y a ici AUCUNE liste de bonnes
+               réponses possible pour une catégorie ouverte (retour
+               utilisateur) — tout passe par l'hôte en direct pendant la
+               partie, qui regroupe lui-même les réponses en "familles" (voir
+               index.js moderation:pbacGroup). Juste un rappel de la règle de
+               points ici, rien à configurer. -->
           <div id="pbacSection" class="detail-section d-none">
             <label>🎩 Petit Bac — catégorie ouverte</label>
             <p class="text-muted font-13">
               Les joueurs tapent une réponse libre pour ta catégorie (ex : « Citez un pays d'Europe »).
-              Aucune liste de bonnes réponses à préparer : c'est toi qui juges chaque réponse pendant la partie
-              (comme pour le Blind Test). Les points dépendent ensuite des doublons entre joueurs :
-              seul·e sur sa réponse → tous les points, à deux → la moitié chacun, à trois ou plus → zéro.
+              Aucune liste de bonnes réponses à préparer : pendant la partie, TOUTES les réponses passent par toi —
+              tu coches celles que tu juges identiques entre elles (ex. « France » et une coquille « Frnce ») pour
+              former une "famille", puis tu valides. Tu peux aussi refuser une réponse hors sujet.
+              Les points dépendent de la taille de la famille : seul·e (famille de 1) → tous les points,
+              à deux → la moitié chacun, à trois ou plus → zéro.
             </p>
           </div>
 
