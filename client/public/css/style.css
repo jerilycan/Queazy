@@ -2335,6 +2335,16 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   gap: 8px;
 }
 
+/* "Question X / X" (voir editor.html) : sous la liste, dans la même colonne
+   que la sidebar (retour utilisateur : alignée avec la liste des questions
+   sur PC), plutôt que partagée avec le bouton Sauvegarder dans la barre
+   fixe du bas. */
+.sidebar-footer {
+  padding: 10px var(--space-md);
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
 .question-item {
   position: relative;
   padding: 12px 16px 12px 20px;
@@ -2532,24 +2542,14 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  /* Secours si jamais les deux ne tenaient toujours pas côte à côte (très
-     petit écran + libellé "Question 10 / 10" large) : passe sur deux lignes
-     plutôt que de déborder, sans changer l'ordre gauche/droite. */
-  flex-wrap: wrap;
+  /* Un seul bouton désormais (Question X/X a migré sous la sidebar, voir
+     .sidebar-footer) — aligné à droite, comme le "Sauvegarder" du bandeau
+     du haut qu'il duplique. */
+  justify-content: flex-end;
 }
-.save-bar-btn-short { display: none; }
 @media (max-width: 640px) {
   .question-save-bar { padding: 10px 16px; }
-  .question-save-bar-inner #qIndexLabel { font-size: 12px; }
   #saveQuestion { padding: 10px 16px; }
-  /* Le libellé complet ("💾 Sauvegarder cette question") ne tient plus à
-     côté de "Question X / X" sans déborder sur un petit écran — retombe sur
-     une version raccourcie plutôt que de dépendre uniquement du repli
-     flex-wrap ci-dessus (qui casserait la disposition côte à côte demandée). */
-  .save-bar-btn-full { display: none; }
-  .save-bar-btn-short { display: inline; }
 }
 
 .detail-section {

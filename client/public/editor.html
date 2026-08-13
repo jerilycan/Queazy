@@ -75,6 +75,12 @@
           <div id="questionList" class="question-list">
             <!-- Rempli par JS -->
           </div>
+          <!-- "Question X / X" a migré ici (sous la liste, retour utilisateur) :
+               reste dans la colonne sidebar, donc aligné avec elle sur PC,
+               au lieu de partager la barre fixe avec le bouton Sauvegarder. -->
+          <div class="sidebar-footer">
+            <div class="text-muted font-13" id="qIndexLabel">Question 1 / 1</div>
+          </div>
         </div>
 
         <!-- Detail: Éditeur de la question sélectionnée -->
@@ -350,14 +356,6 @@
             <button id="addCorrect" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse correcte</button>
           </div>
 
-          <!-- "Sauvegarder cette question" a migré dans la barre fixe en bas de
-               fenêtre (voir #questionSaveBar, retour utilisateur) : ne reste ici
-               que Supprimer, déjà doublé par la croix de la liste latérale
-               (voir editor.js confirmDeleteQuestionAt) — cette version-ci reste
-               utile une fois en train d'éditer, sans avoir à revenir à la liste. -->
-          <div class="mt-auto d-flex justify-end align-center pt-20 border-accent-top">
-            <button id="deleteQuestion" class="btn text-danger font-14">Supprimer cette question</button>
-          </div>
         </div>
       </div>
     </div>
@@ -365,23 +363,14 @@
     <!-- Barre fixe "Sauvegarder cette question" — reste visible en bas de la
          fenêtre pendant le scroll (retour utilisateur), plutôt qu'un pied de
          panneau qui pouvait disparaître avec un formulaire de question long.
-         Masquée par défaut (voir editor.js showQuestionSaveBar/applyReadOnly) :
-         n'a de sens qu'une fois une question sélectionnée, jamais en lecture
-         seule. -->
+         Simple doublon du bouton "Sauvegarder" du bandeau du haut (retour
+         utilisateur) : mêmes validation + écriture pour tout le quiz, voir
+         editor.js saveQuestionBtn. Masquée par défaut (voir editor.js
+         selectQuestion/applyReadOnly) : n'a de sens qu'une fois une question
+         sélectionnée, jamais en lecture seule. -->
     <div id="questionSaveBar" class="question-save-bar d-none">
       <div class="question-save-bar-inner">
-        <div class="text-muted font-13" id="qIndexLabel">Question 1 / 1</div>
-        <!-- Ne valide/n'affiche un message que pour CETTE question (voir
-             editor.js saveQuestionBtn) — l'écriture réseau reste globale (une
-             seule ligne Supabase pour tout le quiz), seule la validation
-             bloquante est ciblée. -->
-        <!-- Deux libellés, un seul affiché à la fois selon la largeur d'écran
-             (voir style.css @media) : le texte complet ne tenait plus à côté
-             de "Question X / X" sur mobile sans déborder. -->
-        <button id="saveQuestion" class="btn btn-primary font-14">
-          <span class="save-bar-btn-full">💾 Sauvegarder cette question</span>
-          <span class="save-bar-btn-short">💾 Sauvegarder</span>
-        </button>
+        <button id="saveQuestion" class="btn btn-primary font-14">💾 Sauvegarder</button>
       </div>
     </div>
 

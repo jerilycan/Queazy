@@ -2569,7 +2569,10 @@ const deleteQuestionAt = (index) => {
   if (deletingActive) qPrompt.focus()
 }
 
-deleteQuestionBtn.onclick = () => deleteQuestionAt(activeIndex)
+// Bouton "Supprimer cette question" retiré du bas du panneau (retour
+// utilisateur, doublon avec la croix de la sidebar) — deleteQuestionBtn
+// n'existe donc plus dans le DOM, guard nécessaire.
+if (deleteQuestionBtn) deleteQuestionBtn.onclick = () => deleteQuestionAt(activeIndex)
 
 // Confirmation avant suppression depuis la sidebar : contrairement au
 // bouton "Supprimer" du panneau de détail (qu'il faut déjà avoir ouvert
@@ -2989,22 +2992,13 @@ saveQuizBtn.onclick = async () => {
   await persistQuiz('Sauvegarde effectuée !')
 }
 
-// Bouton "Sauvegarder cette question" (bas du panneau, à côté de Supprimer,
-// retour utilisateur) : ne valide QUE la question en cours d'édition, pas
-// tout le quiz — évite d'être bloqué par une AUTRE question pas encore
-// terminée juste pour enregistrer celle-ci. L'écriture réseau reste malgré
-// tout globale (voir persistQuiz), le quiz entier est donc bien réécrit à
-// chaque clic — seule la VALIDATION est ciblée sur cette question.
+// Bouton "Sauvegarder" de la barre fixe en bas — simple doublon du bouton
+// "Sauvegarder" du bandeau du haut (retour utilisateur), même comportement
+// exact (valide TOUT le quiz, écrit toute la ligne Supabase), juste accessible
+// sans remonter en haut de page pendant l'édition d'une question.
 const saveQuestionBtn = document.getElementById('saveQuestion')
 if (saveQuestionBtn) {
-  saveQuestionBtn.onclick = async () => {
-    if (readOnly) return
-    if (activeIndex < 0 || activeIndex >= questions.length) return
-    saveCurrentQuestionState()
-    const q = questions[activeIndex]
-    if (!validateQuestion(q, activeIndex)) return
-    await persistQuiz(`Question ${activeIndex + 1} sauvegardée !`)
-  }
+  saveQuestionBtn.onclick = (...args) => saveQuizBtn.onclick(...args)
 }
 
 // Dupliquer le quiz d'un autre créateur dans mes propres quiz (copie privée éditable)
