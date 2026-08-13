@@ -2771,12 +2771,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    dans el.textContent (utilisé tel quel comme identifiant de correspondance,
    voir completeAssociationPair/revealAssociationPairs). */
 .assoc-item-img {
-  /* height FIXE (pas max-height) : indispensable pour qu'object-fit:cover
-     recadre proprement plutôt que d'étirer l'image (retour utilisateur :
-     "c'est écrasé" — une hauteur seulement plafonnée sans hauteur définie
-     laisse le navigateur redimensionner la BOÎTE sans jamais figer son
-     ratio, ce qui déforme le contenu au lieu de le recadrer). */
-  display: block; width: 100%; height: 120px; object-fit: cover;
+  /* aspect-ratio (pas une hauteur fixe en px) : la hauteur reste
+     déterminée (indispensable pour qu'object-fit:cover recadre proprement
+     plutôt que d'étirer l'image, voir historique ci-dessous) tout en
+     s'adaptant à la largeur réelle de la tuile — un ratio moins large que
+     l'ancien 120px fixe (qui donnait ~2.5:1 sur une tuile de ~300px, un
+     recadrage très serré coupant l'essentiel d'une photo portrait, retour
+     utilisateur : "toujours le même soucis de taille"). 4:3 montre
+     nettement plus de la photo sans redevenir un pavé disproportionné. */
+  display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
   border-radius: 8px; margin-bottom: 8px;
 }
 
