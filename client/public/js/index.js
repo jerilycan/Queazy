@@ -1809,6 +1809,12 @@ const scores = new Map()
 // revealMyPositionChange), jamais pendant que les réponses sont encore en
 // train d'arriver.
 let preQuestionOrder = []
+// Points gagnés par CHAQUE joueur pendant la question en cours (playerId ->
+// somme des deltas, voir score:update) — sert au "+XXX" affiché sur chaque
+// tuile du classement au moment de la révélation (retour utilisateur), à ne
+// pas confondre avec myLastDelta qui ne couvre que MOI (bandeau de résultat
+// perso). Remis à zéro à chaque question:show.
+const questionDeltas = new Map()
 // Rafraîchi à chaque question:show, mis à true si un score:update pour MOI
 // arrive avant la révélation — sert uniquement à choisir le son (correct.wav
 // / wrong.wav) joué à la révélation, jamais affiché avant.
@@ -3342,6 +3348,11 @@ socket.on('question:show', payload => {
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
   preQuestionOrder = computeOrder().filter(([id, s]) => !s.isHost).map(([id]) => id)
+  // Remis à zéro à chaque question (voir score:update) : sert au "+XXX"
+  // affiché sur chaque tuile du classement (retour utilisateur), un par
+  // joueur plutôt qu'un seul (myLastDelta, réservé à MON propre bandeau de
+  // résultat).
+  questionDeltas.clear()
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.add('d-none')
@@ -4150,6 +4161,53 @@ const leaderRows = new Map() // socketId -> élément ligne
 // "on ne voit toujours rien".
 const leaderRowsRevealed = new Set()
 const LEADER_ENTER_STAGGER_MS = 130
+// Ids dont le "+XXX -> fusion dans le score" a déjà joué POUR CETTE
+// révélation du classement (retour utilisateur) — contrairement à
+// leaderRowsRevealed (persiste toute la partie, une ligne ne rejoue jamais
+// son entrée), celui-ci est remis à zéro à CHAQUE leaderboard:show : le gain
+// de points doit rejouer à chaque question, pas une seule fois dans toute la
+// partie. Sans ce garde-fou, renderBoard() (rappelée par ex. à la moindre
+// reconnexion pendant que le classement reste affiché) relancerait le
+// décompte depuis zéro à chaque appel.
+const leaderScoreAnimated = new Set()
+// Anime le score d'une ligne de `oldTotal` à `newTotal`, avec un badge
+// "+delta" qui apparaît d'abord à côté (retour utilisateur : "sur la
+// droite des tuiles joueurs"), puis se fond dans le nombre au moment où
+// celui-ci commence réellement à monter — plutôt que deux animations
+// indépendantes, sans lien visuel entre elles.
+const LEADER_GAIN_HOLD_MS = 550 // le badge reste lisible avant de fusionner
+const LEADER_COUNT_DURATION_MS = 900
+const animateScoreGain = (row, oldTotal, newTotal, delta) => {
+  const scoreEl = row.querySelector('.leader-score')
+  const gainEl = row.querySelector('.leader-score-gain')
+  if (!scoreEl) return
+  if (!gainEl || !(delta > 0)) { scoreEl.textContent = `${newTotal} pts`; return }
+  scoreEl.textContent = `${oldTotal} pts`
+  gainEl.textContent = `+${delta}`
+  gainEl.classList.remove('d-none', 'leader-score-gain-merge')
+  // Force le navigateur à appliquer l'état "juste apparu" avant d'enchaîner
+  // sur la transition d'entrée (même pattern que les autres animations de
+  // ce fichier — sans ce reflow forcé, l'ajout immédiat d'une classe de
+  // transition ne joue pas, le badge apparaîtrait déjà à son état final).
+  void gainEl.offsetWidth
+  gainEl.classList.add('leader-score-gain-in')
+  setTimeout(() => {
+    gainEl.classList.add('leader-score-gain-merge')
+    const start = performance.now()
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / LEADER_COUNT_DURATION_MS)
+      const eased = 1 - Math.pow(1 - t, 3) // ease-out cubique : rapide au début, ralentit en approchant la cible
+      scoreEl.textContent = `${Math.round(oldTotal + (newTotal - oldTotal) * eased)} pts`
+      if (t < 1) requestAnimationFrame(tick)
+      else {
+        scoreEl.textContent = `${newTotal} pts`
+        gainEl.classList.add('d-none')
+        gainEl.classList.remove('leader-score-gain-in', 'leader-score-gain-merge')
+      }
+    }
+    requestAnimationFrame(tick)
+  }, LEADER_GAIN_HOLD_MS)
+}
 
 const renderBoard = () => {
   const ordered = computeOrder().filter(([id, s]) => !s.isHost)
@@ -4168,7 +4226,7 @@ const renderBoard = () => {
     if (!row) {
       row = document.createElement('div')
       row.className = 'leader-row'
-      row.innerHTML = `<span class="leader-rank"></span><span class="leader-name"></span><span class="leader-gone-badge d-none">Parti</span><span class="leader-score"></span>`
+      row.innerHTML = `<span class="leader-rank"></span><span class="leader-name"></span><span class="leader-gone-badge d-none">Parti</span><span class="leader-score-gain d-none"></span><span class="leader-score"></span>`
       leaderRows.set(id, row)
     }
     row.classList.toggle('is-me', id === window.myId)
@@ -4176,7 +4234,23 @@ const renderBoard = () => {
     row.querySelector('.leader-rank').textContent = idx + 1
     row.querySelector('.leader-name').textContent = s.name
     row.querySelector('.leader-gone-badge').classList.toggle('d-none', s.connected !== false)
-    row.querySelector('.leader-score').textContent = `${s.total} pts`
+    // "+XXX" qui se fond dans le score au moment où il commence à monter
+    // (retour utilisateur) : seulement au premier renderBoard() de CETTE
+    // révélation du classement (overlayVisible + pas déjà joué, voir
+    // leaderScoreAnimated) — un appel ultérieur (reconnexion pendant que le
+    // classement reste affiché, etc.) affiche directement le score final,
+    // sans rejouer le décompte.
+    const gained = questionDeltas.get(id) || 0
+    const alreadyAnimated = leaderScoreAnimated.has(id)
+    if (overlayVisible && gained > 0 && !alreadyAnimated) {
+      leaderScoreAnimated.add(id)
+      animateScoreGain(row, s.total - gained, s.total, gained)
+    } else if (!alreadyAnimated) {
+      // Pas encore révélé (overlay caché — ex. simple mise à jour du salon)
+      // ou rien gagné cette question : score final affiché tel quel, aucune
+      // animation à déclencher.
+      row.querySelector('.leader-score').textContent = `${s.total} pts`
+    }
     leaderboard.appendChild(row) // déplace le nœud existant : préserve son identité pour le FLIP
   })
 
@@ -4588,6 +4662,11 @@ socket.on('leaderboard:show', () => {
   clearRevealState()
   const beforeOrder = preQuestionOrder
   preQuestionOrder = []
+  // Nouvelle révélation : le "+XXX -> fusion" (voir animateScoreGain) doit
+  // pouvoir rejouer pour cette question, contrairement à leaderRowsRevealed
+  // (l'entrée d'une ligne, elle, ne se rejoue qu'une fois par joueur sur
+  // toute la partie).
+  leaderScoreAnimated.clear()
   // L'overlay doit être VISIBLE avant renderBoard() : le FLIP qu'il fait a
   // besoin de mesurer les lignes (getBoundingClientRect) pour capturer leur
   // position de départ, or un élément caché (display:none) mesure toujours
@@ -4637,6 +4716,12 @@ socket.on('score:update', ({ playerId, total, delta }) => {
   if (playerId === window.myId && total > prevTotal) {
     myAnsweredCorrectlyThisQuestion = true
     myLastDelta += typeof delta === 'number' ? delta : (total - prevTotal)
+  }
+  // Idem mais pour TOUS les joueurs (pas seulement moi) : sert au "+XXX"
+  // affiché sur chaque tuile du classement (voir renderBoard/animateScoreGain).
+  if (total > prevTotal) {
+    const gained = typeof delta === 'number' ? delta : (total - prevTotal)
+    questionDeltas.set(playerId, (questionDeltas.get(playerId) || 0) + gained)
   }
 })
 
