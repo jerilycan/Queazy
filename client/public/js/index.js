@@ -1813,6 +1813,16 @@ let preQuestionOrder = []
 // arrive avant la révélation — sert uniquement à choisir le son (correct.wav
 // / wrong.wav) joué à la révélation, jamais affiché avant.
 let myAnsweredCorrectlyThisQuestion = false
+// "Presque !" (curseur graduation) ne doit s'afficher que pour une réponse
+// VRAIMENT proche — pas dès qu'un delta > 0 a été gagné (retour utilisateur :
+// plage 0-25, cible 13, réponse 7 → "Presque !" alors que l'écart de 6
+// représente presque la moitié de l'écart maximum possible). closeness est
+// linéaire (0-1, voir plus bas), pas encore passé à la puissance
+// GRAD_CLOSENESS_EXPONENT (serveur) qui, elle, ne pèse que sur les points —
+// 0.8 exige un écart d'au plus 20% de l'intervalle min/max pour mériter le
+// label "Presque !", sinon c'est une "Mauvaise réponse" même si quelques
+// points résiduels ont été marqués.
+const GRAD_PRESQUE_MIN_CLOSENESS = 0.8
 // Delta de points du dernier score:update me concernant — sert au bandeau
 // "Bonne réponse ! +X points" affiché au reveal (voir showMyResultBanner).
 let myLastDelta = 0
@@ -4366,7 +4376,7 @@ socket.on('question:reveal', payload => {
     const closeness = absDiff !== null ? Math.max(0, 1 - absDiff / range) : null
     if (absDiff !== null && absDiff <= tolerance) {
       showMyResultBanner()
-    } else if (closeness !== null && myAnsweredCorrectlyThisQuestion) {
+    } else if (closeness !== null && closeness >= GRAD_PRESQUE_MIN_CLOSENESS && myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
     } else {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
