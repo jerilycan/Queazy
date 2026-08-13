@@ -1548,37 +1548,42 @@ const wireAssociationEditDrag = (row) => {
 }
 
 // Point focal utilisé par object-position en jeu (voir index.js
-// renderAssociationColumns/fillAssociationImages) — {x,y} normalisés 0..1,
-// 0.5/0.5 = centré (comportement par défaut si absent, identique à l'ancien
-// recadrage automatique). ASPECT DOIT rester synchronisé avec .assoc-item-img
-// côté jeu (voir style.css) : le point choisi ici ne "tombe juste" en partie
-// que si l'aperçu du recadreur a le même ratio que la tuile réelle.
-const ASSOC_CROP_ASPECT = 4 / 3
-const ASSOC_CROP_VIEWPORT_W = 360
+// renderAssociationColumns/renderIntrusOptions équivalent) — {x,y} normalisés
+// 0..1, 0.5/0.5 = centré (comportement par défaut si absent, identique à
+// l'ancien recadrage automatique). ASPECT DOIT rester synchronisé avec
+// .assoc-item-img / .intrus-tile-img côté jeu (voir style.css, les deux sont
+// déjà en 4:3) : le point choisi ici ne "tombe juste" que si l'aperçu du
+// recadreur a le même ratio que la tuile réelle.
+const IMAGE_CROP_ASPECT = 4 / 3
+const IMAGE_CROP_VIEWPORT_W = 360
 
-// Popup "glisser pour recadrer" — même principe qu'un recadrage de photo de
-// profil (retour utilisateur) : l'image entière reste chargée en arrière-plan
-// (object-fit:cover), on fait glisser pour choisir quelle partie reste
-// visible dans le format 4:3 utilisé en jeu, plutôt que de subir un
-// centrage automatique qui coupe parfois le sujet.
-const openAssocCropModal = (pair, imgField, rerender) => {
-  const posField = imgField.replace('Image', 'Pos')
-  const startPos = pair[posField] && Number.isFinite(pair[posField].x) && Number.isFinite(pair[posField].y)
-    ? { x: pair[posField].x, y: pair[posField].y }
+// Popup "glisser pour recadrer" générique — même principe qu'un recadrage de
+// photo de profil (retour utilisateur) : l'image entière reste chargée en
+// arrière-plan (object-fit:cover), on fait glisser pour choisir quelle partie
+// reste visible dans le format 4:3 utilisé en jeu, plutôt que de subir un
+// centrage automatique qui coupe parfois le sujet. Partagée entre "association"
+// (voir openAssocCropModal) et "intrus" (voir renderIntrusOptions) — les deux
+// types affichent une image en tuile 4:3 avec object-fit:cover.
+// currentPos : {x,y} actuel ou null/undefined (= centré). callbacks :
+// { onSave(pos), onReplace(dataUrl) } — onReplace reçoit la nouvelle image
+// déjà compressée, à l'appelant de réinitialiser le cadrage associé.
+const openImageCropModal = (imageSrc, currentPos, callbacks) => {
+  const startPos = currentPos && Number.isFinite(currentPos.x) && Number.isFinite(currentPos.y)
+    ? { x: currentPos.x, y: currentPos.y }
     : { x: 0.5, y: 0.5 }
   const pos = { ...startPos }
 
   const overlay = document.createElement('div')
   overlay.className = 'modal-overlay'
-  const viewportH = Math.round(ASSOC_CROP_VIEWPORT_W / ASSOC_CROP_ASPECT)
+  const viewportH = Math.round(IMAGE_CROP_VIEWPORT_W / IMAGE_CROP_ASPECT)
   overlay.innerHTML = `
     <div class="modal-content card max-w-500 assoc-crop-modal">
       <h2 class="mb-md font-20">Recadrer l'image</h2>
       <p class="text-muted font-13 mb-md">Fais glisser l'image pour choisir la partie visible en jeu.</p>
-      <div class="assoc-crop-viewport" style="width:${ASSOC_CROP_VIEWPORT_W}px; height:${viewportH}px;">
-        <img class="assoc-crop-img" src="${pair[imgField]}" alt="" draggable="false" />
+      <div class="assoc-crop-viewport" style="width:${IMAGE_CROP_VIEWPORT_W}px; height:${viewportH}px;">
+        <img class="assoc-crop-img" src="${imageSrc}" alt="" draggable="false" />
       </div>
-      <div class="d-flex justify-between align-center mt-md assoc-crop-actions">
+      <div class="d-flex justify-between align-center mt-20 assoc-crop-actions">
         <button type="button" class="btn h-48 assoc-crop-replace">Remplacer l'image</button>
         <div class="d-flex gap-sm">
           <button type="button" class="btn h-48 assoc-crop-cancel">Annuler</button>
@@ -1629,9 +1634,8 @@ const openAssocCropModal = (pair, imgField, rerender) => {
   overlay.querySelector('.assoc-crop-cancel').onclick = close
   overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close() })
   overlay.querySelector('.assoc-crop-ok').onclick = () => {
-    pair[posField] = { x: pos.x, y: pos.y }
     close()
-    rerender()
+    callbacks.onSave({ x: pos.x, y: pos.y })
   }
   overlay.querySelector('.assoc-crop-replace').onclick = () => {
     const input = document.createElement('input')
@@ -1641,14 +1645,26 @@ const openAssocCropModal = (pair, imgField, rerender) => {
       const file = input.files && input.files[0]
       if (!file) return
       compressImageFile(file, (dataUrl) => {
-        pair[imgField] = dataUrl
-        delete pair[posField] // nouvelle image : l'ancien cadrage n'a plus de sens
         close()
-        rerender()
+        callbacks.onReplace(dataUrl)
       })
     }
     input.click()
   }
+}
+
+// Wrapper association : pos stocké sur pair.aPos/bPos (voir index.js
+// emitQuestion/fillAssociationImages pour la transmission au jeu).
+const openAssocCropModal = (pair, imgField, rerender) => {
+  const posField = imgField.replace('Image', 'Pos')
+  openImageCropModal(pair[imgField], pair[posField], {
+    onSave: (pos) => { pair[posField] = pos; rerender() },
+    onReplace: (dataUrl) => {
+      pair[imgField] = dataUrl
+      delete pair[posField] // nouvelle image : l'ancien cadrage n'a plus de sens
+      rerender()
+    }
+  })
 }
 
 // Vignette optionnelle pour un côté (A ou B) d'une paire association — même
@@ -1972,7 +1988,11 @@ let intrusEditDragActive = false
 const wireIntrusEditDrag = (row) => {
   row.addEventListener('pointerdown', (e) => {
     if (readOnly || intrusEditDragActive) return
-    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
+    // .intrus-photo-thumb : même exclusion que .assoc-photo-slot pour
+    // l'association (voir wireAssociationEditDrag) — sinon le clic sur la
+    // vignette pour ouvrir le recadreur était capturé par ce glisser de
+    // réordonnancement avant d'atteindre son onclick.
+    if (e.target.tagName === 'INPUT' || e.target.closest('button') || e.target.classList.contains('intrus-photo-thumb')) return
     e.preventDefault()
     intrusEditDragActive = true
     const startY = e.clientY
@@ -2049,24 +2069,25 @@ const renderIntrusOptions = () => {
     thumb.className = 'intrus-photo-thumb'
     thumb.src = opt.image
     thumb.alt = ''
-    // Cliquer la vignette permet de remplacer CETTE photo précise, sans
-    // perdre sa place dans la liste ni son statut d'intrus éventuel.
+    if (opt.pos && Number.isFinite(opt.pos.x) && Number.isFinite(opt.pos.y)) {
+      thumb.style.objectPosition = `${opt.pos.x * 100}% ${opt.pos.y * 100}%`
+    }
+    // Cliquer la vignette ouvre le même recadreur "glisser pour repositionner"
+    // que pour l'image association (voir openImageCropModal) — remplacer la
+    // photo reste possible depuis cette popup, sans perdre la place de la
+    // photo dans la liste ni son statut d'intrus éventuel.
     if (!readOnly) {
-      thumb.title = 'Cliquer pour remplacer cette photo'
+      thumb.title = 'Cliquer pour recadrer cette photo'
       thumb.classList.add('cursor-pointer')
       thumb.onclick = () => {
-        const input = document.createElement('input')
-        input.type = 'file'
-        input.accept = 'image/*'
-        input.onchange = () => {
-          const file = input.files && input.files[0]
-          if (!file) return
-          compressImageFile(file, (dataUrl) => {
+        openImageCropModal(opt.image, opt.pos, {
+          onSave: (pos) => { q.options[idx].pos = pos; renderIntrusOptions() },
+          onReplace: (dataUrl) => {
             q.options[idx].image = dataUrl
+            delete q.options[idx].pos
             renderIntrusOptions()
-          })
-        }
-        input.click()
+          }
+        })
       }
     }
     row.appendChild(thumb)

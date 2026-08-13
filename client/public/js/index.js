@@ -3613,7 +3613,17 @@ socket.on('question:show', payload => {
       fetch(payload.intrusImagesUrl).then(res => res.json()).then(({ images }) => {
         (images || []).forEach(item => {
           const img = intrusTileImgById[item.id]
-          if (img) img.src = item.image
+          if (!img) return
+          img.src = item.image
+          // Point focal choisi à l'édition (voir editor.js renderIntrusOptions
+          // / openImageCropModal) — absent = centrage par défaut (déjà le
+          // comportement CSS natif de object-position).
+          const pos = item.pos
+          if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+            const x = Math.min(1, Math.max(0, pos.x))
+            const y = Math.min(1, Math.max(0, pos.y))
+            img.style.objectPosition = `${x * 100}% ${y * 100}%`
+          }
         })
       }).catch(() => {})
     }
