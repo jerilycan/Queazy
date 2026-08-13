@@ -351,7 +351,14 @@
           </div>
 
           <div class="mt-auto d-flex justify-between align-center pt-20 border-accent-top">
-            <button id="deleteQuestion" class="btn text-danger font-14">Supprimer cette question</button>
+            <div class="d-flex gap-sm align-center">
+              <button id="deleteQuestion" class="btn text-danger font-14">Supprimer cette question</button>
+              <!-- Ne valide/n'affiche un message que pour CETTE question (voir
+                   editor.js saveQuestionBtn) — l'écriture réseau reste globale
+                   (une seule ligne Supabase pour tout le quiz), seule la
+                   validation bloquante est ciblée. -->
+              <button id="saveQuestion" class="btn btn-primary font-14">💾 Sauvegarder cette question</button>
+            </div>
             <div class="text-muted font-13" id="qIndexLabel">Question 1 / 1</div>
           </div>
         </div>

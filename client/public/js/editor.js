@@ -339,6 +339,8 @@ const applyReadOnly = () => {
   ]
   controls.forEach(el => { if (el) el.disabled = true })
   if (saveQuizBtn) saveQuizBtn.style.display = 'none'
+  const saveQuestionBtnEl = document.getElementById('saveQuestion')
+  if (saveQuestionBtnEl) saveQuestionBtnEl.style.display = 'none'
   if (deleteQuizBtn) deleteQuizBtn.style.display = 'none'
   if (duplicateQuizBtn) duplicateQuizBtn.classList.remove('d-none')
   if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
@@ -2547,209 +2549,217 @@ const showSaveSuccess = (message) => {
   setTimeout(hideSaveLoading, 1400)
 }
 
-saveQuizBtn.onclick = async () => {
-  if (readOnly) return
-  saveCurrentQuestionState()
+// Extrait de saveQuizBtn.onclick (retour utilisateur : pouvoir sauvegarder
+// UNE SEULE question sans que le reste du quiz doive déjà être valide, voir
+// saveQuestionBtn plus bas) — vérifie q (la question d'index i), et en cas
+// d'erreur sélectionne l'onglet concerné + affiche le toast, exactement comme
+// avant. true = valide, false = invalide (déjà signalé à l'utilisateur).
+const validateQuestion = (q, i) => {
+  // "Brouillon" : le but explicite est de pouvoir sauvegarder une question
+  // inachevée (retour utilisateur) — aucune des règles ci-dessous ne doit
+  // bloquer la sauvegarde tant que ce réglage reste coché. Elle est de
+  // toute façon exclue de la partie (voir index.js, filtrée au chargement
+  // du quiz pour l'hôte).
+  if (q.draft) return true
 
-  // Validation avant sauvegarde
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i]
+  // Vérifier l'énoncé (commun à tous les types)
+  if (!q.prompt || q.prompt.trim() === '') {
+    selectQuestion(i)
+    flagFieldError(qPrompt)
+    showToast(`La question ${i + 1} n'a pas d'énoncé`, 'error')
+    return false
+  }
 
-    // "Brouillon" : le but explicite est de pouvoir sauvegarder une question
-    // inachevée (retour utilisateur) — aucune des règles ci-dessous ne doit
-    // bloquer la sauvegarde tant que ce réglage reste coché. Elle est de
-    // toute façon exclue de la partie (voir index.js, filtrée au chargement
-    // du quiz pour l'hôte).
-    if (q.draft) continue
-
-    // Vérifier l'énoncé (commun à tous les types)
-    if (!q.prompt || q.prompt.trim() === '') {
+  if (q.type === 'mcq') {
+    // Au moins une option non vide
+    const validOptions = (q.options || []).filter(o => o && o.trim() !== '')
+    if (validOptions.length === 0) {
       selectQuestion(i)
-      flagFieldError(qPrompt)
-      showToast(`La question ${i + 1} n'a pas d'énoncé`, 'error')
-      return
+      showToast(`Le QCM ${i + 1} doit avoir au moins une option de réponse`, 'error')
+      return false
     }
-
-    if (q.type === 'mcq') {
-      // Au moins une option non vide
-      const validOptions = (q.options || []).filter(o => o && o.trim() !== '')
-      if (validOptions.length === 0) {
-        selectQuestion(i)
-        showToast(`Le QCM ${i + 1} doit avoir au moins une option de réponse`, 'error')
-        return
-      }
-      // Au moins une option cochée comme correcte
-      const hasChecked = validOptions.some(o => (q.correct || []).includes(o))
-      if (!hasChecked) {
-        selectQuestion(i)
-        showToast(`Le QCM ${i + 1} : cochez au moins une bonne réponse`, 'error')
-        return
-      }
-    } else if (q.type === 'free') {
-      // Au moins une réponse acceptée renseignée
-      const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
-      if (!hasAnswer) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
-        return
-      }
-    } else if (q.type === 'zoomguess') {
-      // Une image à deviner ET au moins une réponse acceptée sont obligatoires
-      // (contrairement à l'illustration générique des autres types, purement
-      // décorative et optionnelle).
-      if (!q.image) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : importe une image à deviner`, 'error')
-        return
-      }
-      const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
-      if (!hasAnswer) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
-        return
-      }
+    // Au moins une option cochée comme correcte
+    const hasChecked = validOptions.some(o => (q.correct || []).includes(o))
+    if (!hasChecked) {
+      selectQuestion(i)
+      showToast(`Le QCM ${i + 1} : cochez au moins une bonne réponse`, 'error')
+      return false
     }
-
-    // Pour les curseurs numériques, vérifier la cohérence min/max/cible
-    if (q.type === 'graduation') {
-      const min = Number(q.min), max = Number(q.max), target = Number(q.correct?.[0])
-      if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(target)) {
-        selectQuestion(i)
-        showToast(`Le curseur ${i + 1} a des valeurs invalides`, 'error')
-        return
-      }
-      if (min >= max) {
-        selectQuestion(i)
-        showToast(`Le curseur ${i + 1} : le minimum doit être inférieur au maximum`, 'error')
-        return
-      }
-      if (target < min || target > max) {
-        selectQuestion(i)
-        showToast(`Le curseur ${i + 1} : la valeur correcte doit être entre le min et le max`, 'error')
-        return
-      }
+  } else if (q.type === 'free') {
+    // Au moins une réponse acceptée renseignée
+    const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
+    if (!hasAnswer) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
+      return false
     }
-
-    // Pour l'ordre/classement, il faut au moins 2 éléments non vides
-    if (q.type === 'order') {
-      const validItems = (q.correct || []).filter(item => item && item.trim() !== '')
-      if (validItems.length < 2) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : il faut au moins 2 éléments à ordonner`, 'error')
-        return
-      }
+  } else if (q.type === 'zoomguess') {
+    // Une image à deviner ET au moins une réponse acceptée sont obligatoires
+    // (contrairement à l'illustration générique des autres types, purement
+    // décorative et optionnelle).
+    if (!q.image) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : importe une image à deviner`, 'error')
+      return false
     }
-
-    // Pour "association", entre 2 et 8 paires, chaque élément A et B rempli
-    if (q.type === 'association') {
-      const pairs = Array.isArray(q.correct) ? q.correct : []
-      if (pairs.length < ASSOCIATION_MIN_PAIRS || pairs.length > ASSOCIATION_MAX_PAIRS) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : il faut entre ${ASSOCIATION_MIN_PAIRS} et ${ASSOCIATION_MAX_PAIRS} paires`, 'error')
-        return
-      }
-      // Chaque élément (A et B) doit avoir AU MOINS un texte OU une image —
-      // les deux ensemble restent possibles, mais une image seule suffit
-      // désormais (retour utilisateur : bloqué à la sauvegarde avec des
-      // éléments image-seule, le texte était jusque-là obligatoire à tort).
-      const hasEmpty = pairs.some(p => (!p.a || !p.a.trim()) && !p.aImage) || pairs.some(p => (!p.b || !p.b.trim()) && !p.bImage)
-      if (hasEmpty) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : chaque élément doit avoir un texte ou une image`, 'error')
-        return
-      }
+    const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
+    if (!hasAnswer) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
+      return false
     }
+  }
 
-    // Pour "timeline", entre 3 et 8 événements, chacun avec un titre et une
-    // date numérique valide (l'ordre correct est calculé côté serveur à
-    // partir de "date", peu importe l'ordre de saisie ici).
-    if (q.type === 'timeline') {
-      const events = Array.isArray(q.correct) ? q.correct : []
-      if (events.length < TIMELINE_MIN_EVENTS || events.length > TIMELINE_MAX_EVENTS) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : il faut entre ${TIMELINE_MIN_EVENTS} et ${TIMELINE_MAX_EVENTS} événements`, 'error')
-        return
-      }
-      const hasEmptyTitle = events.some(e => !e.title || !e.title.trim())
-      if (hasEmptyTitle) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : chaque événement doit avoir un titre`, 'error')
-        return
-      }
-      const hasInvalidDate = events.some(e => !Number.isFinite(Number(e.date)))
-      if (hasInvalidDate) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : chaque événement doit avoir une date (année) valide`, 'error')
-        return
-      }
+  // Pour les curseurs numériques, vérifier la cohérence min/max/cible
+  if (q.type === 'graduation') {
+    const min = Number(q.min), max = Number(q.max), target = Number(q.correct?.[0])
+    if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(target)) {
+      selectQuestion(i)
+      showToast(`Le curseur ${i + 1} a des valeurs invalides`, 'error')
+      return false
     }
-
-    // Pour "intrus", entre 3 et 8 photos toutes importées, et exactement un
-    // intrus désigné (le radio garantit déjà "au plus un" côté UI ; ici on
-    // vérifie qu'il y en a bien "au moins un").
-    if (q.type === 'intrus') {
-      const opts = Array.isArray(q.options) ? q.options : []
-      if (opts.length < INTRUS_MIN_OPTIONS || opts.length > INTRUS_MAX_OPTIONS) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : il faut entre ${INTRUS_MIN_OPTIONS} et ${INTRUS_MAX_OPTIONS} photos`, 'error')
-        return
-      }
-      const hasMissingImage = opts.some(o => !o || !o.image)
-      if (hasMissingImage) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : chaque emplacement doit avoir une photo`, 'error')
-        return
-      }
-      if (!Array.isArray(q.correct) || q.correct.length !== 1 || !opts.some(o => o.id === q.correct[0])) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : désigne l'intrus parmi les photos`, 'error')
-        return
-      }
+    if (min >= max) {
+      selectQuestion(i)
+      showToast(`Le curseur ${i + 1} : le minimum doit être inférieur au maximum`, 'error')
+      return false
     }
-
-    // Pour "image", il faut une image importée et une case désignée
-    if (q.type === 'image') {
-      if (!q.image) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : importe une image`, 'error')
-        return
-      }
-      if (!Array.isArray(q.correct) || !q.correct.some(zone => zoneToPolygonPoints(zone).length >= 3)) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : trace une zone sur l'image pour indiquer la bonne réponse`, 'error')
-        return
-      }
+    if (target < min || target > max) {
+      selectQuestion(i)
+      showToast(`Le curseur ${i + 1} : la valeur correcte doit être entre le min et le max`, 'error')
+      return false
     }
+  }
 
-    // Pour "blindtest", il faut un extrait audio validé et au moins une
-    // réponse acceptée pour le titre — et pour l'artiste aussi, SAUF en mode
-    // "titre uniquement" (voir btTitleOnlyToggle), où ce champ est caché
-    // côté joueur et jamais jugé côté serveur (voir answer:submit) : rien à
-    // exiger ici non plus, sans quoi on bloque la sauvegarde pour un champ
-    // que personne ne remplira jamais (bug remonté par l'utilisateur).
-    if (q.type === 'blindtest') {
-      if (!q.audio) {
+  // Pour l'ordre/classement, il faut au moins 2 éléments non vides
+  if (q.type === 'order') {
+    const validItems = (q.correct || []).filter(item => item && item.trim() !== '')
+    if (validItems.length < 2) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : il faut au moins 2 éléments à ordonner`, 'error')
+      return false
+    }
+  }
+
+  // Pour "association", entre 2 et 8 paires, chaque élément A et B rempli
+  if (q.type === 'association') {
+    const pairs = Array.isArray(q.correct) ? q.correct : []
+    if (pairs.length < ASSOCIATION_MIN_PAIRS || pairs.length > ASSOCIATION_MAX_PAIRS) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : il faut entre ${ASSOCIATION_MIN_PAIRS} et ${ASSOCIATION_MAX_PAIRS} paires`, 'error')
+      return false
+    }
+    // Chaque élément (A et B) doit avoir AU MOINS un texte OU une image —
+    // les deux ensemble restent possibles, mais une image seule suffit
+    // désormais (retour utilisateur : bloqué à la sauvegarde avec des
+    // éléments image-seule, le texte était jusque-là obligatoire à tort).
+    const hasEmpty = pairs.some(p => (!p.a || !p.a.trim()) && !p.aImage) || pairs.some(p => (!p.b || !p.b.trim()) && !p.bImage)
+    if (hasEmpty) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : chaque élément doit avoir un texte ou une image`, 'error')
+      return false
+    }
+  }
+
+  // Pour "timeline", entre 3 et 8 événements, chacun avec un titre et une
+  // date numérique valide (l'ordre correct est calculé côté serveur à
+  // partir de "date", peu importe l'ordre de saisie ici).
+  if (q.type === 'timeline') {
+    const events = Array.isArray(q.correct) ? q.correct : []
+    if (events.length < TIMELINE_MIN_EVENTS || events.length > TIMELINE_MAX_EVENTS) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : il faut entre ${TIMELINE_MIN_EVENTS} et ${TIMELINE_MAX_EVENTS} événements`, 'error')
+      return false
+    }
+    const hasEmptyTitle = events.some(e => !e.title || !e.title.trim())
+    if (hasEmptyTitle) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : chaque événement doit avoir un titre`, 'error')
+      return false
+    }
+    const hasInvalidDate = events.some(e => !Number.isFinite(Number(e.date)))
+    if (hasInvalidDate) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : chaque événement doit avoir une date (année) valide`, 'error')
+      return false
+    }
+  }
+
+  // Pour "intrus", entre 3 et 8 photos toutes importées, et exactement un
+  // intrus désigné (le radio garantit déjà "au plus un" côté UI ; ici on
+  // vérifie qu'il y en a bien "au moins un").
+  if (q.type === 'intrus') {
+    const opts = Array.isArray(q.options) ? q.options : []
+    if (opts.length < INTRUS_MIN_OPTIONS || opts.length > INTRUS_MAX_OPTIONS) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : il faut entre ${INTRUS_MIN_OPTIONS} et ${INTRUS_MAX_OPTIONS} photos`, 'error')
+      return false
+    }
+    const hasMissingImage = opts.some(o => !o || !o.image)
+    if (hasMissingImage) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : chaque emplacement doit avoir une photo`, 'error')
+      return false
+    }
+    if (!Array.isArray(q.correct) || q.correct.length !== 1 || !opts.some(o => o.id === q.correct[0])) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : désigne l'intrus parmi les photos`, 'error')
+      return false
+    }
+  }
+
+  // Pour "image", il faut une image importée et une case désignée
+  if (q.type === 'image') {
+    if (!q.image) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : importe une image`, 'error')
+      return false
+    }
+    if (!Array.isArray(q.correct) || !q.correct.some(zone => zoneToPolygonPoints(zone).length >= 3)) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : trace une zone sur l'image pour indiquer la bonne réponse`, 'error')
+      return false
+    }
+  }
+
+  // Pour "blindtest", il faut un extrait audio validé et au moins une
+  // réponse acceptée pour le titre — et pour l'artiste aussi, SAUF en mode
+  // "titre uniquement" (voir btTitleOnlyToggle), où ce champ est caché
+  // côté joueur et jamais jugé côté serveur (voir answer:submit) : rien à
+  // exiger ici non plus, sans quoi on bloque la sauvegarde pour un champ
+  // que personne ne remplira jamais (bug remonté par l'utilisateur).
+  if (q.type === 'blindtest') {
+    if (!q.audio) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : importe et valide un extrait audio`, 'error')
+      return false
+    }
+    const hasTitle = (q.correct?.title || []).some(c => c && c.trim() !== '')
+    if (!hasTitle) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : renseigne au moins un titre accepté`, 'error')
+      return false
+    }
+    if (!q.titleOnly) {
+      const hasArtist = (q.correct?.artist || []).some(c => c && c.trim() !== '')
+      if (!hasArtist) {
         selectQuestion(i)
-        showToast(`La question ${i + 1} : importe et valide un extrait audio`, 'error')
-        return
-      }
-      const hasTitle = (q.correct?.title || []).some(c => c && c.trim() !== '')
-      if (!hasTitle) {
-        selectQuestion(i)
-        showToast(`La question ${i + 1} : renseigne au moins un titre accepté`, 'error')
-        return
-      }
-      if (!q.titleOnly) {
-        const hasArtist = (q.correct?.artist || []).some(c => c && c.trim() !== '')
-        if (!hasArtist) {
-          selectQuestion(i)
-          showToast(`La question ${i + 1} : renseigne au moins un artiste accepté`, 'error')
-          return
-        }
+        showToast(`La question ${i + 1} : renseigne au moins un artiste accepté`, 'error')
+        return false
       }
     }
   }
-  
+
+  return true
+}
+
+// Écriture réseau proprement dite — QUEL que soit le déclencheur ("Sauvegarder"
+// en haut, valide TOUT le quiz, ou "Sauvegarder cette question" en bas, ne
+// valide QUE la question active), la ligne Supabase est toujours réécrite en
+// entier (une seule colonne JSON `questions` pour tout le quiz, pas de
+// granularité par question côté base) — impossible techniquement de
+// persister "seulement" une question. successMessage adapte juste le texte
+// affiché à l'utilisateur pour rester honnête sur ce qui vient de se passer.
+const persistQuiz = async (successMessage) => {
   const title = titleEl.value.trim() || 'Mon Quiz sans titre'
   const body = {
     title,
@@ -2761,6 +2771,7 @@ saveQuizBtn.onclick = async () => {
   isSaving = true
   showSaveLoading()
   saveQuizBtn.disabled = true
+  if (saveQuestionBtn) saveQuestionBtn.disabled = true
   try {
     const { data: { session } } = await sb.auth.getSession()
     if (!session) {
@@ -2773,7 +2784,7 @@ saveQuizBtn.onclick = async () => {
         .update({ title, questions, single_attempt: body.singleAttempt, is_public: body.isPublic })
         .eq('id', currentId)
       if (error) throw error
-      showSaveSuccess('Sauvegarde effectuée !')
+      showSaveSuccess(successMessage)
       markSaved()
     } else {
       const { data, error } = await sb.from('quizzes')
@@ -2791,6 +2802,34 @@ saveQuizBtn.onclick = async () => {
   } finally {
     isSaving = false
     saveQuizBtn.disabled = false
+    if (saveQuestionBtn) saveQuestionBtn.disabled = false
+  }
+}
+
+saveQuizBtn.onclick = async () => {
+  if (readOnly) return
+  saveCurrentQuestionState()
+  for (let i = 0; i < questions.length; i++) {
+    if (!validateQuestion(questions[i], i)) return
+  }
+  await persistQuiz('Sauvegarde effectuée !')
+}
+
+// Bouton "Sauvegarder cette question" (bas du panneau, à côté de Supprimer,
+// retour utilisateur) : ne valide QUE la question en cours d'édition, pas
+// tout le quiz — évite d'être bloqué par une AUTRE question pas encore
+// terminée juste pour enregistrer celle-ci. L'écriture réseau reste malgré
+// tout globale (voir persistQuiz), le quiz entier est donc bien réécrit à
+// chaque clic — seule la VALIDATION est ciblée sur cette question.
+const saveQuestionBtn = document.getElementById('saveQuestion')
+if (saveQuestionBtn) {
+  saveQuestionBtn.onclick = async () => {
+    if (readOnly) return
+    if (activeIndex < 0 || activeIndex >= questions.length) return
+    saveCurrentQuestionState()
+    const q = questions[activeIndex]
+    if (!validateQuestion(q, activeIndex)) return
+    await persistQuiz(`Question ${activeIndex + 1} sauvegardée !`)
   }
 }
 
