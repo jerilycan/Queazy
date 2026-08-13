@@ -1539,12 +1539,115 @@ const wireAssociationEditDrag = (row) => {
   })
 }
 
+// Point focal utilisé par object-position en jeu (voir index.js
+// renderAssociationColumns/fillAssociationImages) — {x,y} normalisés 0..1,
+// 0.5/0.5 = centré (comportement par défaut si absent, identique à l'ancien
+// recadrage automatique). ASPECT DOIT rester synchronisé avec .assoc-item-img
+// côté jeu (voir style.css) : le point choisi ici ne "tombe juste" en partie
+// que si l'aperçu du recadreur a le même ratio que la tuile réelle.
+const ASSOC_CROP_ASPECT = 4 / 3
+const ASSOC_CROP_VIEWPORT_W = 360
+
+// Popup "glisser pour recadrer" — même principe qu'un recadrage de photo de
+// profil (retour utilisateur) : l'image entière reste chargée en arrière-plan
+// (object-fit:cover), on fait glisser pour choisir quelle partie reste
+// visible dans le format 4:3 utilisé en jeu, plutôt que de subir un
+// centrage automatique qui coupe parfois le sujet.
+const openAssocCropModal = (pair, imgField, rerender) => {
+  const posField = imgField.replace('Image', 'Pos')
+  const startPos = pair[posField] && Number.isFinite(pair[posField].x) && Number.isFinite(pair[posField].y)
+    ? { x: pair[posField].x, y: pair[posField].y }
+    : { x: 0.5, y: 0.5 }
+  const pos = { ...startPos }
+
+  const overlay = document.createElement('div')
+  overlay.className = 'modal-overlay'
+  const viewportH = Math.round(ASSOC_CROP_VIEWPORT_W / ASSOC_CROP_ASPECT)
+  overlay.innerHTML = `
+    <div class="modal-content card max-w-500 assoc-crop-modal">
+      <h2 class="mb-md font-20">Recadrer l'image</h2>
+      <p class="text-muted font-13 mb-md">Fais glisser l'image pour choisir la partie visible en jeu.</p>
+      <div class="assoc-crop-viewport" style="width:${ASSOC_CROP_VIEWPORT_W}px; height:${viewportH}px;">
+        <img class="assoc-crop-img" src="${pair[imgField]}" alt="" draggable="false" />
+      </div>
+      <div class="d-flex gap-sm justify-end mt-md">
+        <button type="button" class="btn h-48 assoc-crop-replace">Remplacer l'image</button>
+        <button type="button" class="btn h-48 assoc-crop-cancel">Annuler</button>
+        <button type="button" class="btn btn-primary h-48 assoc-crop-ok">Valider</button>
+      </div>
+    </div>
+  `
+  document.body.appendChild(overlay)
+
+  const viewport = overlay.querySelector('.assoc-crop-viewport')
+  const img = overlay.querySelector('.assoc-crop-img')
+  let overflowX = 0
+  let overflowY = 0
+  const applyPos = () => { img.style.objectPosition = `${pos.x * 100}% ${pos.y * 100}%` }
+  const computeOverflow = () => {
+    const boxW = viewport.clientWidth
+    const boxH = viewport.clientHeight
+    const scale = Math.max(boxW / img.naturalWidth, boxH / img.naturalHeight)
+    overflowX = Math.max(0, img.naturalWidth * scale - boxW)
+    overflowY = Math.max(0, img.naturalHeight * scale - boxH)
+  }
+  if (img.complete && img.naturalWidth) { computeOverflow(); applyPos() }
+  img.onload = () => { computeOverflow(); applyPos() }
+
+  let dragStart = null
+  viewport.addEventListener('pointerdown', (e) => {
+    dragStart = { x: e.clientX, y: e.clientY, posX: pos.x, posY: pos.y }
+    viewport.classList.add('is-dragging')
+    try { viewport.setPointerCapture(e.pointerId) } catch {}
+  })
+  viewport.addEventListener('pointermove', (e) => {
+    if (!dragStart) return
+    const dx = e.clientX - dragStart.x
+    const dy = e.clientY - dragStart.y
+    // Glisser l'image vers la DROITE doit révéler la partie GAUCHE de la
+    // photo (comme on la déplace physiquement) : la fraction se déplace
+    // donc dans le sens INVERSE du geste.
+    pos.x = overflowX > 0 ? Math.min(1, Math.max(0, dragStart.posX - dx / overflowX)) : 0.5
+    pos.y = overflowY > 0 ? Math.min(1, Math.max(0, dragStart.posY - dy / overflowY)) : 0.5
+    applyPos()
+  })
+  const endDrag = () => { dragStart = null; viewport.classList.remove('is-dragging') }
+  viewport.addEventListener('pointerup', endDrag)
+  viewport.addEventListener('pointercancel', endDrag)
+
+  const close = () => overlay.remove()
+  overlay.querySelector('.assoc-crop-cancel').onclick = close
+  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close() })
+  overlay.querySelector('.assoc-crop-ok').onclick = () => {
+    pair[posField] = { x: pos.x, y: pos.y }
+    close()
+    rerender()
+  }
+  overlay.querySelector('.assoc-crop-replace').onclick = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = () => {
+      const file = input.files && input.files[0]
+      if (!file) return
+      compressImageFile(file, (dataUrl) => {
+        pair[imgField] = dataUrl
+        delete pair[posField] // nouvelle image : l'ancien cadrage n'a plus de sens
+        close()
+        rerender()
+      })
+    }
+    input.click()
+  }
+}
+
 // Vignette optionnelle pour un côté (A ou B) d'une paire association — même
-// principe que la vignette "intrus" (cliquer une image existante la
-// remplace), plus un petit bouton "×" séparé pour la retirer complètement et
-// retomber sur le texte seul (l'image reste facultative, contrairement à
-// "intrus" où elle est le contenu même de la tuile). imgField vaut 'aImage'
-// ou 'bImage' — stocké directement sur l'objet pair, comme pair.a/pair.b.
+// principe que la vignette "intrus" (cliquer une image existante l'ouvre
+// pour la recadrer, voir openAssocCropModal), plus un petit bouton "×"
+// séparé pour la retirer complètement et retomber sur le texte seul (l'image
+// reste facultative, contrairement à "intrus" où elle est le contenu même de
+// la tuile). imgField vaut 'aImage' ou 'bImage' — stocké directement sur
+// l'objet pair, comme pair.a/pair.b.
 const buildAssocPhotoSlot = (pair, imgField, rerender) => {
   const wrap = document.createElement('div')
   wrap.className = 'assoc-photo-slot'
@@ -1570,9 +1673,9 @@ const buildAssocPhotoSlot = (pair, imgField, rerender) => {
     thumb.src = pair[imgField]
     thumb.alt = ''
     if (!readOnly) {
-      thumb.title = 'Cliquer pour remplacer cette image'
+      thumb.title = 'Cliquer pour recadrer cette image'
       thumb.classList.add('cursor-pointer')
-      thumb.onclick = openPicker
+      thumb.onclick = () => openAssocCropModal(pair, imgField, rerender)
     }
     wrap.appendChild(thumb)
     if (!readOnly) {
@@ -1583,6 +1686,7 @@ const buildAssocPhotoSlot = (pair, imgField, rerender) => {
       clear.onclick = (e) => {
         e.stopPropagation()
         delete pair[imgField]
+        delete pair[imgField.replace('Image', 'Pos')]
         rerender()
       }
       wrap.appendChild(clear)

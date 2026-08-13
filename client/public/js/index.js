@@ -989,6 +989,15 @@ const fillAssociationImages = (imagesUrl) => {
       if (img) {
         img.src = item.image
         img.classList.remove('d-none')
+        // Point focal choisi à l'édition (voir editor.js openAssocCropModal) —
+        // absent = centrage par défaut (déjà le comportement CSS natif de
+        // object-position, pas besoin de le fixer explicitement ici).
+        const pos = item.pos
+        if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+          const x = Math.min(1, Math.max(0, pos.x))
+          const y = Math.min(1, Math.max(0, pos.y))
+          img.style.objectPosition = `${x * 100}% ${y * 100}%`
+        }
       }
     })
   }).catch(() => {})
@@ -3105,10 +3114,15 @@ const emitQuestion = (index) => {
     // id "<indexPaire><a|b>" (ex. "3b") : indexPaire toujours l'index
     // D'ORIGINE dans correctOrder (stable pour A, retrouvable pour B via
     // pairsBKeys ci-dessus, voir server/index.js pour le pattern attendu).
+    // pos : point focal choisi à l'édition (voir editor.js
+    // openAssocCropModal), transmis tel quel — objet {x,y} normalisés 0..1,
+    // absent si l'image n'a jamais été recadrée (centrage par défaut côté
+    // CSS, voir .assoc-item-img). Purement cosmétique, jamais validé
+    // strictement côté serveur (voir /api/room-association-images).
     const assocImages = []
     correctOrder.forEach((pair, i) => {
-      if (pair?.aImage) assocImages.push({ id: `${i}a`, image: pair.aImage })
-      if (pair?.bImage) assocImages.push({ id: `${i}b`, image: pair.bImage })
+      if (pair?.aImage) assocImages.push({ id: `${i}a`, image: pair.aImage, pos: pair.aPos || undefined })
+      if (pair?.bImage) assocImages.push({ id: `${i}b`, image: pair.bImage, pos: pair.bPos || undefined })
     })
     if (assocImages.length > 0) {
       uploads.push(uploadRoomAssociationImages(roomCode, assocImages).then(url => { payload.associationImagesUrl = url }))

@@ -2766,6 +2766,23 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 .assoc-photo-add:hover { border-color: var(--color-accent); color: var(--color-accent); }
 
+/* Popup de recadrage association (voir editor.js openAssocCropModal) —
+   glisser-déposer type "photo de profil" : la vignette de la modale doit
+   garder le MÊME ratio que .assoc-item-img en jeu (4:3, voir plus bas) pour
+   que le cadrage choisi ici corresponde exactement à ce que verront les
+   joueurs. */
+.assoc-crop-modal { max-width: 420px; }
+.assoc-crop-viewport {
+  position: relative; margin: 0 auto; overflow: hidden;
+  border-radius: var(--radius-md); border: 2px solid var(--color-border);
+  cursor: grab; touch-action: none; background: var(--color-bg-alt);
+}
+.assoc-crop-viewport.is-dragging { cursor: grabbing; }
+.assoc-crop-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; user-select: none; pointer-events: none;
+}
+
 /* Image optionnelle en jeu, au-dessus du texte d'une tuile association (voir
    index.js renderAssociationColumns) — display:block pour ne jamais entrer
    dans el.textContent (utilisé tel quel comme identifiant de correspondance,
