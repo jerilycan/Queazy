@@ -901,18 +901,65 @@ const completeAssociationPair = (aIdx, bIdx) => {
 // SILENCIEUSEMENT rien (retour utilisateur : "bug sur le 5e sélection" — un
 // joueur qui change d'ordre d'habitude sur sa dernière paire tombait sur ce
 // clic mort sans aucun message).
+// Géométrie de recadrage partagée avec l'éditeur (voir editor.js
+// computeCropGeometry, dupliquée volontairement — scripts classiques
+// indépendants, pas de module partagé) : traduit {x,y,zoom} en échelle +
+// décalage à appliquer à l'<img>. zoom=1 = cadrage plein (comportement
+// d'origine, aucun bord vide) ; zoom<1 dézoome, ce qui PEUT faire apparaître
+// des bords vides — comblés par la couleur de fond du conteneur (voir
+// applyCropTransform, réglée séparément depuis la couleur dominante calculée
+// à l'édition).
+const computeCropGeometry = (natW, natH, boxW, boxH, zoom, posX, posY) => {
+  const coverScale = Math.max(boxW / natW, boxH / natH)
+  const scale = coverScale * (Number.isFinite(zoom) ? zoom : 1)
+  const renderedW = natW * scale
+  const renderedH = natH * scale
+  const overflowX = Math.max(0, renderedW - boxW)
+  const overflowY = Math.max(0, renderedH - boxH)
+  const offsetX = overflowX > 0 ? -overflowX * posX : (boxW - renderedW) / 2
+  const offsetY = overflowY > 0 ? -overflowY * posY : (boxH - renderedH) / 2
+  return { scale, offsetX, offsetY }
+}
+
+// Pose taille + transform sur une <img> déjà chargée, à l'intérieur d'un
+// conteneur `wrapEl` (position:relative, overflow:hidden — voir style.css) :
+// utilisé aussi bien pour "association" (.assoc-item-img) que "intrus"
+// (.option-btn.intrus-tile), les deux en tuile 4:3.
+const applyCropTransform = (wrapEl, imgEl, pos) => {
+  const boxW = wrapEl.clientWidth
+  const boxH = wrapEl.clientHeight
+  if (!boxW || !boxH || !imgEl.naturalWidth) return
+  const p = pos || {}
+  const posX = Number.isFinite(p.x) ? p.x : 0.5
+  const posY = Number.isFinite(p.y) ? p.y : 0.5
+  const zoom = Number.isFinite(p.zoom) ? p.zoom : 1
+  const { scale, offsetX, offsetY } = computeCropGeometry(imgEl.naturalWidth, imgEl.naturalHeight, boxW, boxH, zoom, posX, posY)
+  imgEl.style.width = `${imgEl.naturalWidth}px`
+  imgEl.style.height = `${imgEl.naturalHeight}px`
+  imgEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
+}
+
 // Vignette optionnelle insérée AVANT le texte d'une tuile association (voir
-// editor.js buildAssocPhotoSlot pour l'origine de l'image). Créée vide/
-// cachée à chaque tuile — même si aucune image n'existe pour elle, voir
-// fillAssociationImages ci-dessous qui la remplit une fois le fetch résolu.
-// display:none tant que src est vide : ne participe jamais à el.textContent
-// (identifiant de correspondance utilisé tel quel par completeAssociationPair
-// / revealAssociationPairs), qu'une image finisse par être chargée ou non.
+// editor.js buildAssocPhotoSlot pour l'origine de l'image) — un conteneur
+// (.assoc-item-img, position:relative/overflow:hidden, voir style.css) avec
+// l'<img> réelle à l'intérieur (.assoc-item-img-inner), jamais l'inverse :
+// object-fit ne permettant pas de dézoomer sous le cadrage plein (retour
+// utilisateur), le positionnement se fait désormais à la main (voir
+// applyCropTransform) une fois l'image chargée. Créé vide/caché à chaque
+// tuile — même si aucune image n'existe pour elle, voir fillAssociationImages
+// ci-dessous qui le remplit une fois le fetch résolu. d-none tant que src est
+// vide : le conteneur (comme l'image) ne participe de toute façon jamais à
+// el.textContent (identifiant de correspondance utilisé tel quel par
+// completeAssociationPair/revealAssociationPairs), qu'une image finisse par
+// être chargée ou non.
 const buildAssocItemImg = () => {
+  const wrap = document.createElement('div')
+  wrap.className = 'assoc-item-img d-none'
   const img = document.createElement('img')
-  img.className = 'assoc-item-img d-none'
+  img.className = 'assoc-item-img-inner'
   img.alt = ''
-  return img
+  wrap.appendChild(img)
+  return wrap
 }
 
 const renderAssociationColumns = () => {
@@ -984,21 +1031,21 @@ const fillAssociationImages = (imagesUrl) => {
   if (!imagesUrl) return
   fetch(imagesUrl).then(res => res.json()).then(({ images }) => {
     (images || []).forEach(item => {
-      const tile = associationArea?.querySelector(`[data-assoc-id="${item.id}"]`)
-      const img = tile?.querySelector('.assoc-item-img')
-      if (img) {
-        img.src = item.image
-        img.classList.remove('d-none')
-        // Point focal choisi à l'édition (voir editor.js openAssocCropModal) —
-        // absent = centrage par défaut (déjà le comportement CSS natif de
-        // object-position, pas besoin de le fixer explicitement ici).
-        const pos = item.pos
-        if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
-          const x = Math.min(1, Math.max(0, pos.x))
-          const y = Math.min(1, Math.max(0, pos.y))
-          img.style.objectPosition = `${x * 100}% ${y * 100}%`
-        }
-      }
+      const wrap = associationArea?.querySelector(`[data-assoc-id="${item.id}"]`)
+      const img = wrap?.querySelector('.assoc-item-img-inner')
+      if (!wrap || !img) return
+      // Couleur dominante calculée à l'édition (voir editor.js
+      // computeDominantEdgeColor) — ne se voit que si l'image a été dézoomée
+      // sous le cadrage plein (voir applyCropTransform), sinon entièrement
+      // recouverte par la photo elle-même. Repli CSS sinon (voir style.css).
+      if (item.bg) wrap.style.background = item.bg
+      img.src = item.image
+      wrap.classList.remove('d-none')
+      // Cadrage choisi à l'édition (voir editor.js openImageCropModal) —
+      // {x, y, zoom}, absent = centré + zoom plein (comportement d'origine).
+      const applyNow = () => applyCropTransform(wrap, img, item.pos)
+      if (img.complete && img.naturalWidth) applyNow()
+      img.onload = applyNow
     })
   }).catch(() => {})
 }
@@ -3114,15 +3161,17 @@ const emitQuestion = (index) => {
     // id "<indexPaire><a|b>" (ex. "3b") : indexPaire toujours l'index
     // D'ORIGINE dans correctOrder (stable pour A, retrouvable pour B via
     // pairsBKeys ci-dessus, voir server/index.js pour le pattern attendu).
-    // pos : point focal choisi à l'édition (voir editor.js
-    // openAssocCropModal), transmis tel quel — objet {x,y} normalisés 0..1,
-    // absent si l'image n'a jamais été recadrée (centrage par défaut côté
-    // CSS, voir .assoc-item-img). Purement cosmétique, jamais validé
-    // strictement côté serveur (voir /api/room-association-images).
+    // pos : cadrage choisi à l'édition (voir editor.js openAssocCropModal),
+    // transmis tel quel — {x,y,zoom} normalisés/multiplicateur, absent si
+    // l'image n'a jamais été recadrée (cadrage plein par défaut côté rendu,
+    // voir applyCropTransform). bg : couleur dominante du pourtour de la
+    // photo (voir editor.js computeDominantEdgeColor), ne se voit que si
+    // dézoomée sous le cadrage plein. Les deux sont purement cosmétiques,
+    // jamais validés strictement côté serveur (voir /api/room-association-images).
     const assocImages = []
     correctOrder.forEach((pair, i) => {
-      if (pair?.aImage) assocImages.push({ id: `${i}a`, image: pair.aImage, pos: pair.aPos || undefined })
-      if (pair?.bImage) assocImages.push({ id: `${i}b`, image: pair.bImage, pos: pair.bPos || undefined })
+      if (pair?.aImage) assocImages.push({ id: `${i}a`, image: pair.aImage, pos: pair.aPos || undefined, bg: pair.aBg || undefined })
+      if (pair?.bImage) assocImages.push({ id: `${i}b`, image: pair.bImage, pos: pair.bPos || undefined, bg: pair.bBg || undefined })
     })
     if (assocImages.length > 0) {
       uploads.push(uploadRoomAssociationImages(roomCode, assocImages).then(url => { payload.associationImagesUrl = url }))
@@ -3590,7 +3639,7 @@ socket.on('question:show', payload => {
     // Les tuiles existent tout de suite (nécessaire pour applyTileReveal,
     // l'animation d'entrée), les photos arrivent un instant après via une
     // requête HTTP à part.
-    const intrusTileImgById = {}
+    const intrusTileElById = {}
     payload.options.forEach((id, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn intrus-tile'
@@ -3607,23 +3656,25 @@ socket.on('question:show', payload => {
       }
       optionsDiv.appendChild(el)
       applyTileReveal(el, i)
-      intrusTileImgById[id] = img
+      intrusTileElById[id] = el
     })
     if (payload.intrusImagesUrl) {
       fetch(payload.intrusImagesUrl).then(res => res.json()).then(({ images }) => {
         (images || []).forEach(item => {
-          const img = intrusTileImgById[item.id]
-          if (!img) return
+          const el = intrusTileElById[item.id]
+          const img = el?.querySelector('.intrus-tile-img')
+          if (!el || !img) return
+          // Couleur dominante calculée à l'édition (voir editor.js
+          // computeDominantEdgeColor) — ne se voit que si l'image a été
+          // dézoomée sous le cadrage plein (voir applyCropTransform).
+          if (item.bg) el.style.background = item.bg
           img.src = item.image
-          // Point focal choisi à l'édition (voir editor.js renderIntrusOptions
-          // / openImageCropModal) — absent = centrage par défaut (déjà le
-          // comportement CSS natif de object-position).
-          const pos = item.pos
-          if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
-            const x = Math.min(1, Math.max(0, pos.x))
-            const y = Math.min(1, Math.max(0, pos.y))
-            img.style.objectPosition = `${x * 100}% ${y * 100}%`
-          }
+          // Cadrage choisi à l'édition (voir editor.js renderIntrusOptions /
+          // openImageCropModal) — {x, y, zoom}, absent = centré + zoom plein
+          // (comportement d'origine).
+          const applyNow = () => applyCropTransform(el, img, item.pos)
+          if (img.complete && img.naturalWidth) applyNow()
+          img.onload = applyNow
         })
       }).catch(() => {})
     }

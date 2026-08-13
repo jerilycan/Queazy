@@ -1558,22 +1558,109 @@ const wireAssociationEditDrag = (row) => {
 // recadreur a le même ratio que la tuile réelle.
 const IMAGE_CROP_ASPECT = 4 / 3
 const IMAGE_CROP_VIEWPORT_W = 360
+// Bornes du zoom, en multiple de "coverScale" (1 = cadrage plein, identique
+// au comportement d'origine avant l'ajout du dézoom — voir computeCropGeometry).
+const IMAGE_CROP_ZOOM_MAX = 4
 
-// Popup "glisser pour recadrer" générique — même principe qu'un recadrage de
-// photo de profil (retour utilisateur) : l'image entière reste chargée en
-// arrière-plan (object-fit:cover), on fait glisser pour choisir quelle partie
-// reste visible dans le format 4:3 utilisé en jeu, plutôt que de subir un
-// centrage automatique qui coupe parfois le sujet. Partagée entre "association"
-// (voir openAssocCropModal) et "intrus" (voir renderIntrusOptions) — les deux
-// types affichent une image en tuile 4:3 avec object-fit:cover.
-// currentPos : {x,y} actuel ou null/undefined (= centré). callbacks :
-// { onSave(pos), onReplace(dataUrl) } — onReplace reçoit la nouvelle image
-// déjà compressée, à l'appelant de réinitialiser le cadrage associé.
-const openImageCropModal = (imageSrc, currentPos, callbacks) => {
-  const startPos = currentPos && Number.isFinite(currentPos.x) && Number.isFinite(currentPos.y)
-    ? { x: currentPos.x, y: currentPos.y }
-    : { x: 0.5, y: 0.5 }
-  const pos = { ...startPos }
+// Échantillonne le pourtour de l'image (haut/bas/gauche/droite) sur une petite
+// version réduite (rapide, la précision au pixel près n'a aucun intérêt ici)
+// et regroupe les couleurs par "seau" pour dégager la teinte la PLUS
+// FRÉQUENTE sur ce pourtour (pas une simple moyenne, qui donnerait une bouillie
+// grisâtre dès que les bords sont bariolés) — sert de fond derrière l'image
+// une fois dézoomée (voir applyCropTransform), pour que les bandes vides ne
+// jurent pas avec la photo. Fonctionne uniquement parce que nos images sont
+// toujours des data-URI locales (jamais de canvas "taint" cross-origin).
+const computeDominantEdgeColor = (img) => {
+  try {
+    const size = 32
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, 0, 0, size, size)
+    const { data } = ctx.getImageData(0, 0, size, size)
+    const buckets = new Map()
+    const step = 24 // quantification : regroupe les teintes proches ensemble
+    const addPixel = (x, y) => {
+      const i = (y * size + x) * 4
+      if (data[i + 3] < 200) return // pixel (quasi-)transparent, ignoré
+      const key = [0, 1, 2].map(k => Math.round(data[i + k] / step) * step).join(',')
+      buckets.set(key, (buckets.get(key) || 0) + 1)
+    }
+    for (let x = 0; x < size; x++) { addPixel(x, 0); addPixel(x, size - 1) }
+    for (let y = 0; y < size; y++) { addPixel(0, y); addPixel(size - 1, y) }
+    let bestKey = null
+    let bestCount = 0
+    buckets.forEach((count, key) => { if (count > bestCount) { bestCount = count; bestKey = key } })
+    return bestKey ? `rgb(${bestKey})` : null
+  } catch {
+    return null // ne devrait pas arriver (data-URI locale) mais ne bloque jamais le recadrage
+  }
+}
+
+// Géométrie partagée par la popup ET par le rendu en jeu (voir la fonction
+// jumelle côté index.js, dupliquée volontairement — les deux fichiers sont
+// des scripts classiques indépendants, pas de module partagé) : à partir de
+// la taille naturelle de l'image, de la boîte d'affichage et du zoom choisi,
+// calcule l'échelle et le décalage (translation) à appliquer. zoom=1 =
+// "coverScale", exactement l'ancien recadrage automatique (l'image remplit
+// toute la boîte, jamais de bord vide) ; zoom<1 dézoome en dessous de ce
+// seuil, ce qui FAIT apparaître des bords vides (comblés par la couleur
+// dominante, voir computeDominantEdgeColor) — c'est précisément le but.
+const computeCropGeometry = (natW, natH, boxW, boxH, zoom, posX, posY) => {
+  const coverScale = Math.max(boxW / natW, boxH / natH)
+  const scale = coverScale * (Number.isFinite(zoom) ? zoom : 1)
+  const renderedW = natW * scale
+  const renderedH = natH * scale
+  const overflowX = Math.max(0, renderedW - boxW)
+  const overflowY = Math.max(0, renderedH - boxH)
+  // Zoomé/cadré normalement (l'image dépasse la boîte sur cet axe) : offset
+  // dérivé de la fraction 0..1 choisie, comme avant. Dézoomé au point que
+  // l'image tienne entièrement sur cet axe : plus de fraction pertinente,
+  // on centre simplement (sinon l'image resterait collée à un bord).
+  const offsetX = overflowX > 0 ? -overflowX * posX : (boxW - renderedW) / 2
+  const offsetY = overflowY > 0 ? -overflowY * posY : (boxH - renderedH) / 2
+  return { scale, overflowX, overflowY, offsetX, offsetY, coverScale }
+}
+
+// Pose la taille/transform sur un <img> déjà chargé (naturalWidth/Height
+// connus), à l'intérieur d'un conteneur `wrapEl` (position:relative,
+// overflow:hidden — voir style.css .assoc-item-img-wrap/.intrus-tile) dont la
+// couleur de fond a déjà été réglée séparément (voir bg/computeDominantEdgeColor).
+const applyCropTransform = (wrapEl, imgEl, pos) => {
+  const boxW = wrapEl.clientWidth
+  const boxH = wrapEl.clientHeight
+  if (!boxW || !boxH || !imgEl.naturalWidth) return
+  const p = pos || {}
+  const posX = Number.isFinite(p.x) ? p.x : 0.5
+  const posY = Number.isFinite(p.y) ? p.y : 0.5
+  const zoom = Number.isFinite(p.zoom) ? p.zoom : 1
+  const { scale, offsetX, offsetY } = computeCropGeometry(imgEl.naturalWidth, imgEl.naturalHeight, boxW, boxH, zoom, posX, posY)
+  imgEl.style.width = `${imgEl.naturalWidth}px`
+  imgEl.style.height = `${imgEl.naturalHeight}px`
+  imgEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
+}
+
+// Popup "glisser pour recadrer, molette/pincement pour zoomer" générique —
+// même principe qu'un recadrage de photo de profil (retour utilisateur),
+// avec en plus la possibilité de dézoomer pour montrer davantage de la photo
+// (les bords vides que ça révèle sont comblés par sa couleur dominante,
+// plutôt qu'une couleur fixe qui jurerait). Partagée entre "association" (voir
+// openAssocCropModal) et "intrus" (voir renderIntrusOptions).
+// currentPos : {x,y,zoom} actuel ou null/undefined (= centré, zoom plein).
+// bgColor : couleur déjà connue pour cette image, ou null si jamais calculée.
+// callbacks : { onSave(pos), onReplace(dataUrl), onBgReady(bgColor) } —
+// onReplace reçoit la nouvelle image déjà compressée (l'appelant réinitialise
+// le cadrage associé) ; onBgReady est TOUJOURS appelé une fois la couleur
+// dominante connue (recalculée si bgColor était absent), pour que l'appelant
+// la persiste et n'ait plus à la recalculer la prochaine fois.
+const openImageCropModal = (imageSrc, currentPos, bgColor, callbacks) => {
+  const pos = {
+    x: Number.isFinite(currentPos?.x) ? currentPos.x : 0.5,
+    y: Number.isFinite(currentPos?.y) ? currentPos.y : 0.5,
+    zoom: Number.isFinite(currentPos?.zoom) ? currentPos.zoom : 1
+  }
+  let minZoom = 0.3 // resserré dès que la géométrie réelle est connue (voir computeOverflow)
 
   const overlay = document.createElement('div')
   overlay.className = 'modal-overlay'
@@ -1581,9 +1668,14 @@ const openImageCropModal = (imageSrc, currentPos, callbacks) => {
   overlay.innerHTML = `
     <div class="modal-content card max-w-500 assoc-crop-modal">
       <h2 class="mb-md font-20">Recadrer l'image</h2>
-      <p class="text-muted font-13 mb-md">Fais glisser l'image pour choisir la partie visible en jeu.</p>
-      <div class="assoc-crop-viewport" style="width:${IMAGE_CROP_VIEWPORT_W}px; height:${viewportH}px;">
+      <p class="text-muted font-13 mb-md">Glisse l'image pour la repositionner, molette ou pincement pour zoomer/dézoomer.</p>
+      <div class="assoc-crop-viewport" style="width:${IMAGE_CROP_VIEWPORT_W}px; height:${viewportH}px; background:${bgColor || 'var(--color-bg-alt)'};">
         <img class="assoc-crop-img" src="${imageSrc}" alt="" draggable="false" />
+      </div>
+      <div class="d-flex align-center gap-sm mt-12 assoc-crop-zoom-row">
+        <button type="button" class="btn-timer assoc-crop-zoom-out" title="Dézoomer">-</button>
+        <span class="text-muted font-13 assoc-crop-zoom-label" style="min-width:4ch; text-align:center;">100%</span>
+        <button type="button" class="btn-timer assoc-crop-zoom-in" title="Zoomer">+</button>
       </div>
       <div class="d-flex justify-between align-center mt-20 assoc-crop-actions">
         <button type="button" class="btn h-48 assoc-crop-replace">Remplacer l'image</button>
@@ -1598,27 +1690,75 @@ const openImageCropModal = (imageSrc, currentPos, callbacks) => {
 
   const viewport = overlay.querySelector('.assoc-crop-viewport')
   const img = overlay.querySelector('.assoc-crop-img')
+  const zoomLabel = overlay.querySelector('.assoc-crop-zoom-label')
   let overflowX = 0
   let overflowY = 0
-  const applyPos = () => { img.style.objectPosition = `${pos.x * 100}% ${pos.y * 100}%` }
-  const computeOverflow = () => {
-    const boxW = viewport.clientWidth
-    const boxH = viewport.clientHeight
-    const scale = Math.max(boxW / img.naturalWidth, boxH / img.naturalHeight)
-    overflowX = Math.max(0, img.naturalWidth * scale - boxW)
-    overflowY = Math.max(0, img.naturalHeight * scale - boxH)
-  }
-  if (img.complete && img.naturalWidth) { computeOverflow(); applyPos() }
-  img.onload = () => { computeOverflow(); applyPos() }
 
+  const applyPos = () => {
+    const { overflowX: ofx, overflowY: ofy, offsetX, offsetY, scale } = computeCropGeometry(
+      img.naturalWidth, img.naturalHeight, viewport.clientWidth, viewport.clientHeight, pos.zoom, pos.x, pos.y
+    )
+    overflowX = ofx
+    overflowY = ofy
+    img.style.width = `${img.naturalWidth}px`
+    img.style.height = `${img.naturalHeight}px`
+    img.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
+    zoomLabel.textContent = `${Math.round(pos.zoom * 100)}%`
+  }
+  const setZoom = (z) => { pos.zoom = Math.min(IMAGE_CROP_ZOOM_MAX, Math.max(minZoom, z)); applyPos() }
+  const onImageReady = () => {
+    // Le plancher de zoom est celui qui montre l'image ENTIÈRE sans dépasser
+    // (ratio "contain"/"cover") — inutile de dézoomer davantage, ça ne
+    // révélerait plus rien de nouveau, juste plus de bord vide autour.
+    const containScale = Math.min(viewport.clientWidth / img.naturalWidth, viewport.clientHeight / img.naturalHeight)
+    const coverScale = Math.max(viewport.clientWidth / img.naturalWidth, viewport.clientHeight / img.naturalHeight)
+    minZoom = Math.min(1, containScale / coverScale)
+    pos.zoom = Math.min(IMAGE_CROP_ZOOM_MAX, Math.max(minZoom, pos.zoom))
+    applyPos()
+    if (!bgColor) {
+      const computed = computeDominantEdgeColor(img)
+      if (computed) {
+        viewport.style.background = computed
+        callbacks.onBgReady(computed)
+      }
+    } else {
+      callbacks.onBgReady(bgColor)
+    }
+  }
+  if (img.complete && img.naturalWidth) onImageReady()
+  img.onload = onImageReady
+
+  // Un 2e doigt qui se pose bascule en pincement (zoom) et annule le glisser
+  // à un seul doigt en cours — même principe que le pincement déjà en place
+  // pour le type "image" en jeu (voir index.js activeImagePointers/imagePinch),
+  // adapté ici en zoom pur (pas de pan lié à l'ancrage du pincement, cette
+  // popup reste petite : le centrage automatique de computeCropGeometry suffit).
+  const activeCropPointers = new Map()
+  let cropPinch = null
   let dragStart = null
   viewport.addEventListener('pointerdown', (e) => {
-    dragStart = { x: e.clientX, y: e.clientY, posX: pos.x, posY: pos.y }
-    viewport.classList.add('is-dragging')
+    activeCropPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     try { viewport.setPointerCapture(e.pointerId) } catch {}
+    if (activeCropPointers.size >= 2) {
+      dragStart = null
+      const [p1, p2] = Array.from(activeCropPointers.values())
+      cropPinch = { startDist: Math.hypot(p1.x - p2.x, p1.y - p2.y), startZoom: pos.zoom }
+    } else {
+      dragStart = { x: e.clientX, y: e.clientY, posX: pos.x, posY: pos.y, pointerId: e.pointerId }
+      viewport.classList.add('is-dragging')
+    }
   })
   viewport.addEventListener('pointermove', (e) => {
-    if (!dragStart) return
+    if (!activeCropPointers.has(e.pointerId)) return
+    activeCropPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (cropPinch && activeCropPointers.size >= 2) {
+      const [p1, p2] = Array.from(activeCropPointers.values())
+      const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y)
+      if (dist > 0 && cropPinch.startDist > 0) setZoom(cropPinch.startZoom * (dist / cropPinch.startDist))
+      return
+    }
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return
     const dx = e.clientX - dragStart.x
     const dy = e.clientY - dragStart.y
     // Glisser l'image vers la DROITE doit révéler la partie GAUCHE de la
@@ -1628,16 +1768,37 @@ const openImageCropModal = (imageSrc, currentPos, callbacks) => {
     pos.y = overflowY > 0 ? Math.min(1, Math.max(0, dragStart.posY - dy / overflowY)) : 0.5
     applyPos()
   })
-  const endDrag = () => { dragStart = null; viewport.classList.remove('is-dragging') }
+  const endDrag = (e) => {
+    activeCropPointers.delete(e.pointerId)
+    try { viewport.releasePointerCapture(e.pointerId) } catch {}
+    if (cropPinch) {
+      if (activeCropPointers.size < 2) cropPinch = null
+      dragStart = null
+      viewport.classList.remove('is-dragging')
+      return
+    }
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return
+    dragStart = null
+    viewport.classList.remove('is-dragging')
+  }
   viewport.addEventListener('pointerup', endDrag)
   viewport.addEventListener('pointercancel', endDrag)
+  // Molette (desktop) — un cran ~10% de zoom, centré sur la boîte (pas sur le
+  // curseur : la popup est petite, l'anchoring précis n'apporte pas grand-chose
+  // ici contrairement au zoom plein écran de l'éditeur d'image "zoomguess").
+  viewport.addEventListener('wheel', (e) => {
+    e.preventDefault()
+    setZoom(pos.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))
+  }, { passive: false })
+  overlay.querySelector('.assoc-crop-zoom-in').onclick = () => setZoom(pos.zoom * 1.2)
+  overlay.querySelector('.assoc-crop-zoom-out').onclick = () => setZoom(pos.zoom / 1.2)
 
   const close = () => overlay.remove()
   overlay.querySelector('.assoc-crop-cancel').onclick = close
   overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close() })
   overlay.querySelector('.assoc-crop-ok').onclick = () => {
     close()
-    callbacks.onSave({ x: pos.x, y: pos.y })
+    callbacks.onSave({ x: pos.x, y: pos.y, zoom: pos.zoom })
   }
   overlay.querySelector('.assoc-crop-replace').onclick = () => {
     const input = document.createElement('input')
@@ -1655,15 +1816,19 @@ const openImageCropModal = (imageSrc, currentPos, callbacks) => {
   }
 }
 
-// Wrapper association : pos stocké sur pair.aPos/bPos (voir index.js
-// emitQuestion/fillAssociationImages pour la transmission au jeu).
+// Wrapper association : pos stocké sur pair.aPos/bPos, couleur de fond sur
+// pair.aBg/bBg (voir index.js emitQuestion/fillAssociationImages pour la
+// transmission au jeu).
 const openAssocCropModal = (pair, imgField, rerender) => {
   const posField = imgField.replace('Image', 'Pos')
-  openImageCropModal(pair[imgField], pair[posField], {
+  const bgField = imgField.replace('Image', 'Bg')
+  openImageCropModal(pair[imgField], pair[posField], pair[bgField], {
     onSave: (pos) => { pair[posField] = pos; rerender() },
+    onBgReady: (bg) => { pair[bgField] = bg },
     onReplace: (dataUrl) => {
       pair[imgField] = dataUrl
       delete pair[posField] // nouvelle image : l'ancien cadrage n'a plus de sens
+      delete pair[bgField]
       rerender()
     }
   })
@@ -2082,11 +2247,13 @@ const renderIntrusOptions = () => {
       thumb.title = 'Cliquer pour recadrer cette photo'
       thumb.classList.add('cursor-pointer')
       thumb.onclick = () => {
-        openImageCropModal(opt.image, opt.pos, {
+        openImageCropModal(opt.image, opt.pos, opt.bg, {
           onSave: (pos) => { q.options[idx].pos = pos; renderIntrusOptions() },
+          onBgReady: (bg) => { q.options[idx].bg = bg },
           onReplace: (dataUrl) => {
             q.options[idx].image = dataUrl
             delete q.options[idx].pos
+            delete q.options[idx].bg
             renderIntrusOptions()
           }
         })
