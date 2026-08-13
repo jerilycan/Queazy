@@ -2881,11 +2881,14 @@ const EDITOR_TOUR_STEPS = [
   { target: '#title', title: 'Titre du quiz', text: 'Donne un nom à ton quiz — c\'est ce que tes joueurs verront pour le choisir.' },
   { target: '#addQuestion', title: 'Ajouter une question', text: 'Clique ici pour ajouter une nouvelle question à ton quiz.' },
   { target: '#questionList', title: 'Liste des questions', text: 'Toutes tes questions apparaissent ici. Glisse-les pour les réordonner, clique pour éditer, la croix pour supprimer.' },
-  { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
-  { target: '#qType', title: 'Type de question', text: '10 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, blind test, association, timeline, intrus... Chacun a sa propre zone de configuration juste en dessous, qui s\'adapte automatiquement à ton choix.' },
+  // Ordre aligné sur la disposition actuelle du formulaire (retour
+  // utilisateur) : type + minuteur remontés tout en haut (juste sous
+  // Brouillon), avant l'énoncé — voir editor.html.
+  { target: '#qType', title: 'Type de question', text: '10 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, blind test, association, timeline, intrus... Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
   { target: '#qTimer', title: 'Temps imparti', text: 'Règle en secondes le temps laissé aux joueurs pour répondre, avec les boutons - et +.' },
-  { target: '#qExplanation', title: 'Explication (optionnelle)', text: 'Un texte affiché juste après la révélation de la bonne réponse, pour donner un peu de contexte.' },
+  { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
   { target: '#illustrationUpload', title: 'Illustration (optionnelle)', text: 'Ajoute une image au-dessus de la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },
+  { target: '#qExplanation', title: 'Explication (optionnelle)', text: 'Un texte affiché juste après la révélation de la bonne réponse, pour donner un peu de contexte.' },
   { target: '#saveQuiz', title: 'Sauvegarder', text: 'N\'oublie pas de sauvegarder une fois ton quiz prêt !' }
 ]
 const startEditorTour = (force) => {
