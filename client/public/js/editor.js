@@ -1578,10 +1578,12 @@ const openAssocCropModal = (pair, imgField, rerender) => {
       <div class="assoc-crop-viewport" style="width:${ASSOC_CROP_VIEWPORT_W}px; height:${viewportH}px;">
         <img class="assoc-crop-img" src="${pair[imgField]}" alt="" draggable="false" />
       </div>
-      <div class="d-flex gap-sm justify-end mt-md">
+      <div class="d-flex justify-between align-center mt-md assoc-crop-actions">
         <button type="button" class="btn h-48 assoc-crop-replace">Remplacer l'image</button>
-        <button type="button" class="btn h-48 assoc-crop-cancel">Annuler</button>
-        <button type="button" class="btn btn-primary h-48 assoc-crop-ok">Valider</button>
+        <div class="d-flex gap-sm">
+          <button type="button" class="btn h-48 assoc-crop-cancel">Annuler</button>
+          <button type="button" class="btn btn-primary h-48 assoc-crop-ok">Valider</button>
+        </div>
       </div>
     </div>
   `

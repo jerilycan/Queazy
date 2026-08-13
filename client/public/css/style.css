@@ -2772,6 +2772,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    que le cadrage choisi ici corresponde exactement à ce que verront les
    joueurs. */
 .assoc-crop-modal { max-width: 420px; }
+/* Remplacer l'image (action secondaire) à gauche, Annuler/Valider (paire
+   confirmation) groupés à droite — plutôt que les 3 boutons alignés à droite
+   en vrac, qui rendait la hiérarchie des actions illisible (retour
+   utilisateur : "pas équilibré"). flex-wrap en secours sur les très petits
+   écrans, où les 3 boutons ne tiennent plus sur une ligne. */
+.assoc-crop-actions { flex-wrap: wrap; gap: 10px; }
 .assoc-crop-viewport {
   position: relative; margin: 0 auto; overflow: hidden;
   border-radius: var(--radius-md); border: 2px solid var(--color-border);
