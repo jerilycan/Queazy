@@ -88,31 +88,11 @@
             <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
           </div>
 
-          <div class="detail-section">
-            <label>Énoncé de la question</label>
-            <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..."></textarea>
-          </div>
-
-          <!-- Ordre volontaire (retour utilisateur) : question -> image ->
-               explication -> type+minuteur -> configuration de la réponse.
-               Reproduit à l'identique côté joueur (voir index.html/index.js,
-               question:show) pour que l'ordre de saisie ici corresponde à
-               l'ordre de lecture pendant la partie. -->
-          <div id="illustrationSection" class="detail-section">
-            <label>Image d'illustration (optionnelle)</label>
-            <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
-            <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
-              <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
-              <button type="button" id="removeIllustrationBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
-            </div>
-            <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
-          </div>
-
-          <div class="detail-section">
-            <label>Explication (optionnelle, affichée après la révélation)</label>
-            <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986."></textarea>
-          </div>
-
+          <!-- Type + minuteur remontés tout en haut (juste sous Brouillon,
+               retour utilisateur) : ce sont les deux réglages qui cadrent
+               tout le reste du formulaire (les sections spécifiques au type
+               n'apparaissent qu'une fois choisi), plus logique de les fixer
+               avant même de rédiger l'énoncé. -->
           <div class="d-grid grid-cols-split gap-lg">
             <div class="detail-section">
               <label>Type de réponse</label>
@@ -138,6 +118,33 @@
                 <button id="timerPlus" class="btn-timer">+</button>
               </div>
             </div>
+          </div>
+
+          <div class="detail-section">
+            <label>Énoncé de la question</label>
+            <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..."></textarea>
+          </div>
+
+          <!-- Ordre volontaire (retour utilisateur) : brouillon -> type+minuteur
+               -> énoncé -> image -> explication -> configuration de la
+               réponse. Le corps de question (énoncé/image/explication) suit
+               le même ordre côté joueur (voir index.html/index.js,
+               question:show) — seuls type+minuteur sont remontés tout en haut
+               ici, spécifiques à l'édition (ils cadrent le reste du formulaire,
+               jamais montrés tels quels au joueur). -->
+          <div id="illustrationSection" class="detail-section">
+            <label>Image d'illustration (optionnelle)</label>
+            <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
+            <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
+              <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
+              <button type="button" id="removeIllustrationBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+            </div>
+            <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
+          </div>
+
+          <div class="detail-section">
+            <label>Explication (optionnelle, affichée après la révélation)</label>
+            <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986."></textarea>
           </div>
 
           <div id="zoomGuessSection" class="detail-section d-none">
