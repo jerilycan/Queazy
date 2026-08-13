@@ -1487,7 +1487,15 @@ let associationEditDragActive = false
 const wireAssociationEditDrag = (row) => {
   row.addEventListener('pointerdown', (e) => {
     if (readOnly || associationEditDragActive) return
-    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
+    // .assoc-photo-slot (vignette + bouton 📷/×, voir buildAssocPhotoSlot) :
+    // sans cette exclusion, le pointerdown sur l'image elle-même était
+    // capturé par CE glisser (réordonnancement de la ligne) avant de pouvoir
+    // atteindre le onclick de la vignette (ouverture du recadreur) —
+    // e.preventDefault() + setPointerCapture juste en dessous empêchaient
+    // alors tout click d'être émis sur l'image (retour utilisateur : "ça ne
+    // fonctionne pas, peut-être l'évènement de drag & drop qui prend la
+    // main").
+    if (e.target.tagName === 'INPUT' || e.target.closest('button') || e.target.closest('.assoc-photo-slot')) return
     e.preventDefault()
     associationEditDragActive = true
     const startY = e.clientY
