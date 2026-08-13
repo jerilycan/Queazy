@@ -2245,8 +2245,8 @@ const loadQuizById = (id) => {
       quizIndex = 0
       currentSingleAttempt = loadedQuiz.singleAttempt !== false
       const draftNote = draftCount > 0 ? ` (${draftCount} brouillon${draftCount > 1 ? 's' : ''} ignoré${draftCount > 1 ? 's' : ''})` : ''
-      loadedInfo.textContent = 'Quizz chargé: ' + (loadedQuiz.title || id) + draftNote
-      log('Quizz chargé: ' + (loadedQuiz.title || id) + draftNote)
+      loadedInfo.textContent = 'Quiz chargé: ' + (loadedQuiz.title || id) + draftNote
+      log('Quiz chargé: ' + (loadedQuiz.title || id) + draftNote)
     })
     .catch(() => {})
 }
@@ -2723,7 +2723,7 @@ const renderLobbyGrid = (arr) => {
   if (isHost) {
     if (playerCount === 0) {
       startQuizBtn.classList.add('is-disabled')
-      startQuizBtn.title = "Il faut au moins un joueur pour lancer le quizz !"
+      startQuizBtn.title = "Il faut au moins un joueur pour lancer le quiz !"
     } else {
       startQuizBtn.classList.remove('is-disabled')
       startQuizBtn.removeAttribute('title')
@@ -2973,7 +2973,7 @@ socket.on('lobby:readyStatus', ({ allReady }) => {
     startQuizBtn.classList.toggle('is-disabled', !allReady || !hasPlayers)
 
     if (!hasPlayers) {
-      startQuizBtn.title = "Il faut au moins un joueur pour lancer le quizz !"
+      startQuizBtn.title = "Il faut au moins un joueur pour lancer le quiz !"
     } else if (!allReady) {
       startQuizBtn.title = "Tous les joueurs ne sont pas prêts !"
     } else {
@@ -3048,7 +3048,7 @@ const emitQuestion = (index) => {
   if (!roomCode || !loadedQuiz) return
   const q = loadedQuiz.questions && loadedQuiz.questions[index]
   if (!q) {
-    if (index >= loadedQuiz.questions.length) log('Quizz terminé')
+    if (index >= loadedQuiz.questions.length) log('Quiz terminé')
     return
   }
   // Repère de progression dans la barre hôte, complété par le compteur
@@ -3265,7 +3265,7 @@ startQuizBtn.onclick = () => {
   if (startQuizBtn.classList.contains('is-disabled')) {
     const players = document.querySelectorAll('.player-tile')
     if (players.length === 0) {
-      showAnnounce('Il faut au moins un joueur pour lancer le quizz !')
+      showAnnounce('Il faut au moins un joueur pour lancer le quiz !')
     } else {
       showAnnounce('Tous les joueurs ne sont pas prêts !')
     }
@@ -3459,6 +3459,15 @@ socket.on('question:show', payload => {
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
     if (blindtestFields) blindtestFields.classList.toggle('d-none', !isBlindtest)
     sendBtn.textContent = isTileType ? 'Valider' : 'Envoyer'
+    // Curseur placé directement dans le champ de saisie sur PC (retour
+    // utilisateur) : évite un clic superflu avant de pouvoir taper une
+    // question à saisie libre ("free"/"zoomguess", seuls types affichant
+    // answerInput). Uniquement sur pointeur fin (souris/trackpad) — sur
+    // mobile, focus() ferait surgir le clavier virtuel par-dessus l'écran
+    // avant même que le joueur ait vu la question.
+    if ((payload.type === 'free' || payload.type === 'zoomguess') && window.matchMedia('(pointer: fine)').matches) {
+      answerInput.focus()
+    }
   }
   if (payload.type === 'graduation' && gradSlider) {
     const min = Number(payload.min ?? 0)
