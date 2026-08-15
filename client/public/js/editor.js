@@ -2886,6 +2886,19 @@ const validateQuestion = (q, i) => {
       showToast(`Le QCM ${i + 1} doit avoir au moins une option de réponse`, 'error')
       return false
     }
+    // Deux options identiques (à la casse/aux espaces près) : source
+    // documentée d'un bug déjà corrigé côté scoring (voir plus bas, JSON
+    // plutôt que join(',') pour les options avec virgule) — mais la cause
+    // racine, une saisie ambiguë en amont, restait possible. Le serveur
+    // compare par texte exact (voir server/index.js) : deux options
+    // identiques rendent alors indissociables laquelle a été cochée par un
+    // joueur, faussant silencieusement le scoring.
+    const normalized = validOptions.map(o => o.trim().toLowerCase())
+    if (new Set(normalized).size !== normalized.length) {
+      selectQuestion(i)
+      showToast(`Le QCM ${i + 1} a deux options identiques`, 'error')
+      return false
+    }
     // Au moins une option cochée comme correcte
     const hasChecked = validOptions.some(o => (q.correct || []).includes(o))
     if (!hasChecked) {
