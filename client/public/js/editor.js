@@ -3235,6 +3235,15 @@ if (duplicateQuizBtn) {
   duplicateQuizBtn.onclick = async () => {
     const { data: { session } } = await sb.auth.getSession()
     if (!session) { window.location.href = '/login.html?reason=create'; return }
+    // Contrairement à saveQuizBtn, ce handler lisait `questions` sans jamais
+    // resynchroniser la question active depuis les champs du formulaire —
+    // q.draft (case "Brouillon") n'est mis à jour dans le modèle QUE par
+    // cet appel (pas d'onchange dédié sur la case). Cocher/décocher puis
+    // dupliquer immédiatement, sans changer de question ni sauvegarder,
+    // copiait l'ancien état plutôt que celui affiché à l'écran (bug trouvé
+    // en audit — devenu possible depuis que ce bouton est aussi actionnable
+    // sur son propre quiz, pas seulement en lecture seule).
+    saveCurrentQuestionState()
     const srcTitle = titleEl.value.trim() || 'Quiz'
     duplicateQuizBtn.disabled = true
     try {
