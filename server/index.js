@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.40.1'
+const APP_VERSION = '1.40.2'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -514,7 +514,13 @@ const start = async () => {
         })
         .filter(Boolean)
     }
-    io.to(code).emit('question:reveal', {
+    // Gardé sur la question (même principe que question.showPayload, voir
+    // room:join) : un hôte/joueur qui se reconnecte PENDANT la phase
+    // révélation ou classement n'avait jusqu'ici RIEN pour se resynchroniser
+    // (le showPayload seul ne rend que l'écran "en train de répondre") — il
+    // restait bloqué (côté hôte : bouton "Suivant" grisé en permanence, sans
+    // recours, en plein direct devant son public).
+    question.revealPayload = {
       id: question.id,
       type: question.type,
       correct: revealCorrect,
@@ -522,7 +528,8 @@ const start = async () => {
       target: question.type === 'graduation' ? question.correct?.[0] : undefined,
       tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined,
       players: imagePlayers
-    })
+    }
+    io.to(code).emit('question:reveal', question.revealPayload)
   }
 
   app.get('/server-info', async (req) => ({ url: getBaseUrl(req.headers), port: PORT, version: APP_VERSION }))
@@ -856,7 +863,8 @@ const start = async () => {
         teams: new Map(),
         hostDisconnectedAt: null,
         lastActivityAt: Date.now(), // voir sweepAbandonedRooms plus bas
-        speedLevel: 'normal' // voir game:setSpeedLevel / floorForSpeedLevel
+        speedLevel: 'normal', // voir game:setSpeedLevel / floorForSpeedLevel
+        leaderboardShown: false // voir leaderboard:show / question:show / room:join
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
       await socket.join(code)
@@ -950,13 +958,24 @@ const start = async () => {
       // ça, il restait bloqué sur l'écran salon d'attente jusqu'à la
       // question SUIVANTE, sans jamais pouvoir répondre à celle en cours —
       // alors que le serveur, lui, acceptait déjà sa réponse si on la lui
-      // envoyait directement (juste jamais présentée dans l'UI). On ne
-      // renvoie rien si la question est déjà terminée (ended, ou chrono
-      // écoulé) : elle est alors en phase de révélation/classement, un tout
-      // autre écran qu'un simple resend de question:show rendrait faux.
+      // envoyait directement (juste jamais présentée dans l'UI).
       const q = room.currentQuestion
       if (q && !q.ended && Date.now() < q.startTs + q.timerMs && q.showPayload) {
         socket.emit('question:show', q.showPayload)
+      } else if (q && q.ended && q.revealPayload) {
+        // Question déjà terminée (phase révélation ou classement) : sans ce
+        // rattrapage, un reconnectant (coupure réseau de l'hôte pendant le
+        // délai de grâce, par ex.) ne recevait RIEN et restait bloqué —
+        // côté hôte, un bouton "Suivant" grisé en permanence, sans recours,
+        // en plein direct (retour utilisateur). On rejoue la même séquence
+        // qu'un client resté connecté aurait vue : d'abord question:show
+        // (état de base, nécessaire aux handlers client qui en dépendent),
+        // puis question:reveal, puis leaderboard:show si l'hôte en était
+        // déjà là — chaque handler client remet lui-même hostPhase à jour à
+        // sa réception, aucun changement client requis.
+        socket.emit('question:show', q.showPayload)
+        socket.emit('question:reveal', q.revealPayload)
+        if (room.leaderboardShown) socket.emit('leaderboard:show')
       }
     })
 
@@ -1093,6 +1112,10 @@ const start = async () => {
         socket.emit('quiz:notReady', { message: 'Tous les joueurs ne sont pas prêts !' })
         return
       }
+
+      // Nouvelle question : le classement affiché pour la précédente n'a
+      // plus lieu d'être resynchronisé à un reconnectant (voir room:join).
+      room.leaderboardShown = false
 
       const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {}, deltas: {}, answers: {} }
       room.history.push(historyEntry)
@@ -1943,6 +1966,10 @@ const start = async () => {
       const room = rooms.get(code)
       if (!room || socket.id !== room.hostId) return
       room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
+      // Voir room:join : permet de resynchroniser un hôte/joueur qui se
+      // reconnecte pendant que le classement est déjà affiché à toute la
+      // salle. Remis à false dès la question suivante (voir question:show).
+      room.leaderboardShown = true
       io.to(code).emit('leaderboard:show')
     })
 
