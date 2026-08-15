@@ -2593,6 +2593,24 @@ qType.onchange = () => {
     // sensé pour une photo pas encore importée, l'utilisateur doit uploader.
     if (!isValidIntrusOptions(q.options)) q.options = []
     if (!Array.isArray(q.correct) || q.correct.length !== 1) q.correct = []
+  } else if (qType.value === 'free') {
+    // Seul type (avec zoomguess/mcq) resté sans branche ici jusqu'ici : un
+    // q.correct hérité d'un autre type (objet blindtest, paires association,
+    // id intrus...) restait dans une forme incompatible avec la liste de
+    // réponses acceptées classique attendue par renderCorrects() pour ce
+    // type — repart propre sauf s'il a déjà la bonne forme (ex. retour sur
+    // ce type, ou venant de zoomguess/mcq qui partagent la même forme).
+    if (!Array.isArray(q.options) || !q.options.every(o => typeof o === 'string')) q.options = []
+    if (!Array.isArray(q.correct)) q.correct = ['']
+  } else if (qType.value === 'pbac') {
+    // "Petit Bac" n'a aucune liste de bonnes réponses prédéfinie (tout passe
+    // par le regroupement de l'hôte en direct, voir server/index.js) : q.
+    // correct/q.options hérités d'un autre type (paires association, zones
+    // image, id intrus...) n'ont jamais de sens ici et restaient tels quels
+    // — polluant silencieusement l'objet question envoyé au serveur sans
+    // jamais être réellement utilisés (seul type oublié de ce nettoyage).
+    q.correct = []
+    q.options = []
   }
   toggleTypeSections()
   renderOptions()
