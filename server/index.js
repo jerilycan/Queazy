@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.42.5'
+const APP_VERSION = '1.42.6'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -911,8 +911,13 @@ const start = async () => {
       const isHostJoining = token === room.hostToken
       let player
       if (existing) {
+        // Préserve le statut "prêt" plutôt que de toujours le remettre à
+        // zéro : sinon une coupure wifi de quelques secondes DANS le salon
+        // d'attente (avant le lancement) obligeait à recliquer "Je suis
+        // prêt" sans que rien ne l'indique.
+        const wasReady = !!room.players.get(existing.id)?.ready
         room.players.delete(existing.id)
-        player = { id: socket.id, name: existing.name || name, score: existing.score || 0, token, avatar: payload?.avatar || existing.avatar || '', ready: false, connected: true, teamId: existing.teamId || null }
+        player = { id: socket.id, name: existing.name || name, score: existing.score || 0, token, avatar: payload?.avatar || existing.avatar || '', ready: wasReady, connected: true, teamId: existing.teamId || null }
         room.players.set(socket.id, player)
         room.scores.set(socket.id, existing.score || 0)
       } else {
@@ -1134,7 +1139,17 @@ const start = async () => {
       if (!room) return
       room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
 
-      if (!computeAllReady(room)) {
+      // Uniquement avant la TOUTE PREMIÈRE question (salon d'attente) : le
+      // statut "prêt" n'a de sens qu'au lancement. room:join remet pourtant
+      // ready à false à CHAQUE reconnexion (voir plus haut) — y compris en
+      // pleine partie (coupure wifi de quelques secondes) — et rien ne le
+      // repasse à true ensuite (le bouton "Je suis prêt" n'existe que dans
+      // le salon). Sans cette garde sur room.history.length, un seul joueur
+      // ayant reconnecté une fois bloquait alors SILENCIEUSEMENT toutes les
+      // questions suivantes pour toute la salle, sans que rien n'explique
+      // pourquoi (retour utilisateur : "un joueur a été déconnecté" pointé
+      // comme cause, alors que tout le monde était bien présent).
+      if (room.history.length === 0 && !computeAllReady(room)) {
         socket.emit('quiz:notReady', { message: 'Tous les joueurs ne sont pas prêts !' })
         return
       }
