@@ -3285,7 +3285,7 @@ const EDITOR_TOUR_STEPS = [
   // Ordre aligné sur la disposition actuelle du formulaire (retour
   // utilisateur) : type + minuteur remontés tout en haut (juste sous
   // Brouillon), avant l'énoncé — voir editor.html.
-  { target: '#qType', title: 'Type de question', text: '10 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, blind test, association, timeline, intrus... Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
+  { target: '#qType', title: 'Type de question', text: '12 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, blind test, association, timeline, intrus, Petit Bac, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
   { target: '#qTimer', title: 'Temps imparti', text: 'Règle en secondes le temps laissé aux joueurs pour répondre, avec les boutons - et +.' },
   { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
   { target: '#illustrationUpload', title: 'Illustration (optionnelle)', text: 'Ajoute une image au-dessus de la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },
