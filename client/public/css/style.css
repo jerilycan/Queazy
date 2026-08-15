@@ -1574,7 +1574,8 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   color: var(--color-text-muted, #888);
   font-weight: 600;
 }
-.image-error-msg #imageReloadBtn { display: block; margin: 14px auto 0; }
+.image-error-msg #imageReloadBtn,
+.image-error-msg #blindtestReloadBtn { display: block; margin: 14px auto 0; }
 
 /* Illustration optionnelle (tous les types sauf "image") : juste une image
    au-dessus de la question, pas cliquable, contrairement à .image-wrap. */

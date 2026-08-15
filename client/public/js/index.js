@@ -298,6 +298,8 @@ const imageZoomResetBtn = document.getElementById('imageZoomResetBtn')
 const imageZoomLabel = document.getElementById('imageZoomLabel')
 const blindtestArea = document.getElementById('blindtestArea')
 const blindtestAudio = document.getElementById('blindtestAudio')
+const blindtestErrorMsg = document.getElementById('blindtestErrorMsg')
+const blindtestReloadBtn = document.getElementById('blindtestReloadBtn')
 const blindtestOrb = document.getElementById('blindtestOrb')
 const blindtestUnlockBtn = document.getElementById('blindtestUnlockBtn')
 const blindtestFields = document.getElementById('blindtestFields')
@@ -1698,6 +1700,10 @@ const startBlindTestPulse = () => {
   loop()
 }
 
+// URL d'origine de l'extrait "blind test" en cours (SANS cache-buster) —
+// posée une seule fois par question, lue par blindtestReloadBtn ci-dessous
+// pour retenter le chargement sans empiler de paramètres à chaque tentative.
+let currentBlindTestAudioSrc = null
 const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
   if (!blindtestAudio) return
   stopBlindTestPulse()
@@ -1705,11 +1711,25 @@ const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
   if (blindtestTitleInput) blindtestTitleInput.value = ''
   if (blindtestArtistInput) blindtestArtistInput.value = ''
   myBlindTestSubmission = null
+  currentBlindTestAudioSrc = audioUrl || null
+  if (blindtestErrorMsg) blindtestErrorMsg.classList.add('d-none')
+  if (blindtestOrb) blindtestOrb.classList.remove('d-none')
   // "à distance" : personne n'est muet, chacun entend sur son poste.
   // "irl" (par défaut) : seul l'hôte (l'écran/les enceintes de la salle) entend.
   blindtestAudio.muted = mode === 'remote' ? false : !isHost
   blindtestAudio.pause()
   blindtestAudio.currentTime = 0
+  // Peut arriver suite à une coupure réseau/serveur momentanée, pas
+  // seulement un vrai échec d'upload — même raison/même remède que
+  // imageImg.onerror (voir buildImageAnswerArea) : jusqu'ici, un extrait qui
+  // ne chargeait pas laissait le joueur dans un silence total, sans aucun
+  // message ni recours (retour utilisateur : "j'entends rien, c'est cassé
+  // ou normal ?").
+  blindtestAudio.onerror = () => {
+    console.error('[blindtest] échec de chargement de l\'extrait audio :', audioUrl)
+    if (blindtestOrb) blindtestOrb.classList.add('d-none')
+    if (blindtestErrorMsg) blindtestErrorMsg.classList.remove('d-none')
+  }
   blindtestAudio.src = audioUrl || ''
   // Volume : la valeur "par défaut" choisie par l'hôte ne sert QUE de point
   // de départ pour quelqu'un qui n'a JAMAIS touché à son propre curseur (ni
@@ -1721,6 +1741,18 @@ const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
   const startVolumePct = myVolumePct !== null ? myVolumePct : (typeof hostVolumePct === 'number' ? hostVolumePct : 70)
   blindtestAudio.volume = Math.min(1, Math.max(0, startVolumePct / 100))
   blindtestVolumeSlider.setPct(startVolumePct)
+}
+if (blindtestReloadBtn) {
+  blindtestReloadBtn.onclick = () => {
+    if (!currentBlindTestAudioSrc || !blindtestAudio) return
+    // Cache-buster : sans ça, un navigateur qui a mis l'échec en cache pour
+    // cette URL exacte peut re-échouer instantanément sans même retenter la
+    // requête réseau (même technique que imageReloadBtn).
+    const sep = currentBlindTestAudioSrc.includes('?') ? '&' : '?'
+    if (blindtestErrorMsg) blindtestErrorMsg.classList.add('d-none')
+    if (blindtestOrb) blindtestOrb.classList.remove('d-none')
+    blindtestAudio.src = `${currentBlindTestAudioSrc}${sep}retry=${Date.now()}`
+  }
 }
 
 const playBlindTestAudio = () => {
