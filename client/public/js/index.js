@@ -3350,14 +3350,19 @@ const goNext = () => {
   if (leaderNextBtn) leaderNextBtn.classList.add('is-disabled')
   emitQuestion(index).then(started => {
     goNextPending = false
+    // Retiré dans TOUS les cas (succès ET échec) — ne l'était qu'en cas
+    // d'échec, le bouton restait grisé en permanence dès le premier succès,
+    // à chaque question suivante (retour utilisateur : "le bouton se grise
+    // entre deux questions"). Il reste bien fonctionnel malgré le griséé
+    // (pointer-events:auto, voir plus haut), mais donne l'impression d'être
+    // cassé.
+    if (leaderNextBtn) leaderNextBtn.classList.remove('is-disabled')
     if (started) {
       quizIndex = index + 1
-    } else if (leaderNextBtn) {
-      // Échec (upload média, déconnexion pendant l'envoi...) : quizIndex n'a
-      // pas bougé, un nouveau clic relance la MÊME question plutôt que de
-      // sauter à la suivante.
-      leaderNextBtn.classList.remove('is-disabled')
     }
+    // Échec (upload média, déconnexion pendant l'envoi...) : quizIndex n'a
+    // pas bougé, un nouveau clic relance la MÊME question plutôt que de
+    // sauter à la suivante.
   })
 }
 nextQuestionBtn.onclick = goNext
