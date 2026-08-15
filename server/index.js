@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.41.8'
+const APP_VERSION = '1.41.9'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1225,8 +1225,17 @@ const start = async () => {
       // serveur pour l'ouverture réelle de la fenêtre de réponse.
       if (Date.now() < q.startTs) return
       if (Date.now() - q.startTs > q.timerMs) return
-      if (q.answered?.has(socket.id)) return
-      if (q.singleAttempt && q.submissions?.has(socket.id)) return
+      // q.answered/q.submissions sont indexés par TOKEN (stable), pas par
+      // socket.id (qui change à chaque reconnexion) : un joueur qui répond,
+      // subit une coupure réseau puis se reconnecte AVANT la fin du chrono
+      // recevait un nouveau socket.id, invisible pour ces deux gardes tant
+      // qu'elles comparaient à l'ancien — il pouvait alors soumettre une
+      // seconde fois et voir son score compté deux fois (bug réel constaté
+      // en audit). room.tokens est déjà tenu à jour à chaque reconnexion
+      // (voir room:join) et à chaque score marqué, donc toujours à jour ici.
+      const token = room.players.get(socket.id)?.token
+      if (q.answered?.has(token)) return
+      if (q.singleAttempt && q.submissions?.has(token)) return
       socket.emit('answer:ack', { playerId: socket.id })
 
       // Compteur « X/Y ont répondu » pour l'écran de l'hôte : émis après chaque
@@ -1269,8 +1278,8 @@ const start = async () => {
             q.historyEntry.answers[p.token] = String(clamped)
           }
         }
-        q.answered?.add(socket.id)
-        q.submissions?.set(socket.id, 'graded')
+        q.answered?.add(token)
+        q.submissions?.set(token, 'graded')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
         return
@@ -1306,8 +1315,8 @@ const start = async () => {
             q.historyEntry.answers[p.token] = `${Math.round(closeness * 100)}% proche`
           }
         }
-        q.answered?.add(socket.id)
-        q.submissions?.set(socket.id, 'graded')
+        q.answered?.add(token)
+        q.submissions?.set(token, 'graded')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
         return
@@ -1363,8 +1372,8 @@ const start = async () => {
             q.historyEntry.answerDetails[p.token] = pairs.map((pair, i) => `${pair.a || '(image)'} → ${bLabel(submitted[i])}`).join('\n')
           }
         }
-        q.answered?.add(socket.id)
-        q.submissions?.set(socket.id, 'graded')
+        q.answered?.add(token)
+        q.submissions?.set(token, 'graded')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
         return
@@ -1451,7 +1460,7 @@ const start = async () => {
           }
         }
 
-        q.submissions?.set(socket.id, `${socket.id}:${submitTs}`)
+        q.submissions?.set(token, `${socket.id}:${submitTs}`)
 
         if (titleStatus === 'pending' || artistStatus === 'pending') {
           const answerId = `${socket.id}:${submitTs}`
@@ -1475,7 +1484,7 @@ const start = async () => {
         // Le(s) champ(s) pertinent(s) sont déjà tranchés (correct ou
         // incorrect) : rien à envoyer en modération, le résultat final est
         // connu tout de suite.
-        q.answered?.add(socket.id)
+        q.answered?.add(token)
         if (p?.token && q.historyEntry) {
           q.historyEntry.results[p.token] = q.titleOnly
             ? (titleStatus === 'correct' ? 'correct' : 'incorrect')
@@ -1509,15 +1518,15 @@ const start = async () => {
               if (Array.isArray(submitted)) q.historyEntry.answers[p.token] = submitted.join(' → ')
             }
           }
-          q.answered?.add(socket.id)
-          q.submissions?.set(socket.id, 'correct')
+          q.answered?.add(token)
+          q.submissions?.set(token, 'correct')
           io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         } else {
           if (p?.token && q.historyEntry) {
             q.historyEntry.results[p.token] = 'incorrect'
             if (Array.isArray(submitted)) q.historyEntry.answers[p.token] = submitted.join(' → ')
           }
-          q.submissions?.set(socket.id, 'incorrect')
+          q.submissions?.set(token, 'incorrect')
         }
         emitProgress()
         return
@@ -1571,8 +1580,8 @@ const start = async () => {
               .join('\n')
           }
         }
-        q.answered?.add(socket.id)
-        q.submissions?.set(socket.id, 'graded')
+        q.answered?.add(token)
+        q.submissions?.set(token, 'graded')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
         return
@@ -1623,11 +1632,11 @@ const start = async () => {
               q.historyEntry.answers[p.token] = submitted.join(', ')
             }
           }
-          q.answered?.add(socket.id)
-          q.submissions?.set(socket.id, 'correct')
+          q.answered?.add(token)
+          q.submissions?.set(token, 'correct')
           io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         } else {
-          q.submissions?.set(socket.id, 'incorrect')
+          q.submissions?.set(token, 'incorrect')
           if (p?.token && q.historyEntry) {
             q.historyEntry.results[p.token] = 'incorrect'
             q.historyEntry.answers[p.token] = submitted.join(', ')
@@ -1647,7 +1656,7 @@ const start = async () => {
         const text = String(payload?.content || '').trim()
         const p = room.players.get(socket.id)
         if (!text) {
-          q.submissions?.set(socket.id, 'incorrect')
+          q.submissions?.set(token, 'incorrect')
           if (p?.token && q.historyEntry) {
             q.historyEntry.results[p.token] = 'incorrect'
             q.historyEntry.answers[p.token] = ''
@@ -1659,14 +1668,14 @@ const start = async () => {
         // temps (mode multi-tentatives) — même principe que "free" juste
         // au-dessus : on retire l'ancienne entrée de la file plutôt que d'en
         // garder deux pour le même joueur.
-        const prevId = q.submissions?.get(socket.id)
+        const prevId = q.submissions?.get(token)
         if (!q.singleAttempt && typeof prevId === 'string' && room.pending.has(prevId)) {
           room.pending.delete(prevId)
         }
         const submitTs = Date.now()
         const answerId = `${socket.id}:${submitTs}`
         room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, content: text, ts: submitTs, historyEntry: q.historyEntry, pbac: true })
-        q.submissions?.set(socket.id, answerId)
+        q.submissions?.set(token, answerId)
         io.to(code).emit('answer:queue', { answerId, playerId: socket.id, playerName: p?.name || 'Joueur', content: text, pbac: true })
         emitProgress()
         return
@@ -1687,8 +1696,8 @@ const start = async () => {
             q.historyEntry.answers[p.token] = payload?.content || ''
           }
         }
-        q.answered?.add(socket.id)
-        q.submissions?.set(socket.id, 'correct')
+        q.answered?.add(token)
+        q.submissions?.set(token, 'correct')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
       } else {
@@ -1701,7 +1710,7 @@ const start = async () => {
         // requis là-bas. "mcq" a désormais sa propre branche dédiée plus
         // haut (voir q.requireAllCorrect) : n'atteint jamais ce code-ci.
         if (q.type === 'truefalse' || q.type === 'intrus') {
-          q.submissions?.set(socket.id, 'incorrect')
+          q.submissions?.set(token, 'incorrect')
           const p = room.players.get(socket.id)
           if (p?.token && q.historyEntry) {
             q.historyEntry.results[p.token] = 'incorrect'
@@ -1711,7 +1720,7 @@ const start = async () => {
           return
         }
 
-        const prevId = q.submissions?.get(socket.id)
+        const prevId = q.submissions?.get(token)
         if (!q.singleAttempt && prevId) {
           room.pending.delete(prevId)
         }
@@ -1723,7 +1732,7 @@ const start = async () => {
         // token en plus de playerId : voir le commentaire équivalent sur la
         // file d'attente blindtest plus haut (resolvePendingId).
         room.pending.set(answerId, { playerId: socket.id, token: p?.token || null, content: payload?.content, ts: submitTs, delta, timerMs: q.timerMs, pointsFloor: q.pointsFloor, historyEntry: q.historyEntry })
-        q.submissions?.set(socket.id, answerId)
+        q.submissions?.set(token, answerId)
         io.to(code).emit('answer:queue', { answerId, playerId: socket.id, playerName: p?.name || 'Joueur', content: payload?.content })
         emitProgress()
       }
@@ -1777,7 +1786,10 @@ const start = async () => {
       if (stillPending) return
       room.pending.delete(answerId)
       const q = room.currentQuestion
-      q?.answered?.add(currentId)
+      // token (stable), pas currentId (socket.id résolu à CET instant) : voir
+      // le même correctif dans answer:submit — q.answered doit rester
+      // cohérent même si ce joueur se reconnecte encore une fois après.
+      q?.answered?.add(item.token)
       const p = room.players.get(currentId)
       if (p?.token && item.historyEntry) {
         const allCorrect = item.titleOnly
@@ -1841,7 +1853,7 @@ const start = async () => {
           historyEntry.deltas[p.token] = delta
           historyEntry.answers[p.token] = item.content
         }
-        if (q && q.historyEntry === historyEntry) q.answered?.add(currentId)
+        if (q && q.historyEntry === historyEntry) q.answered?.add(item.token)
         if (delta > 0) io.to(code).emit('score:update', { playerId: currentId, delta, total })
       }
       io.to(code).emit('moderation:pbacGrouped', { answerIds: group.map(([id]) => id), size: n, delta })
@@ -1872,7 +1884,7 @@ const start = async () => {
       room.pending.delete(payload?.answerId)
       const q = room.currentQuestion
       const currentId = resolvePendingId(room, item)
-      if (q?.answered?.has(currentId)) return
+      if (q?.answered?.has(item.token)) return
       // item.delta est normalement toujours déjà posé (voir answer:submit
       // plus haut) ; ce repli n'existe que par prudence, et réutilise le
       // timerMs/pointsFloor ENREGISTRÉS SUR LA SOUMISSION plutôt que ceux de
@@ -1889,7 +1901,7 @@ const start = async () => {
           item.historyEntry.deltas[p.token] = delta
         }
       }
-      q?.answered?.add(currentId)
+      q?.answered?.add(item.token)
       io.to(code).emit('score:update', { playerId: currentId, delta, total })
 
       // Si plus aucune réponse en attente après approbation, on peut enfin
