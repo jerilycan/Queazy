@@ -1197,11 +1197,32 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    colore les DEUX cartes concernées avec la même teinte (palette .pair-N,
    reprise du mode équipe), qui sert de lien visuel. */
 .association-area {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-md);
   max-width: 640px;
   margin: var(--space-lg) auto 0;
+}
+/* Trait reliant les deux tuiles d'une paire choisie, en plus de leur couleur
+   commune (voir .assoc-item.is-matched.pair-N plus bas) — demande explicite
+   d'un retour visuel plus direct que la seule couleur partagée. Les lignes
+   ne traversent jamais une tuile (tracées du bord droit de la tuile A au
+   bord gauche de la tuile B, donc seulement dans l'espace entre les deux
+   colonnes) : pas besoin de gérer un z-index par rapport aux tuiles. */
+.association-links-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.association-link {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0.9;
 }
 .association-col-list {
   display: flex;
@@ -1244,6 +1265,18 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .assoc-item.is-matched.pair-7 { background: rgba(255,159,90,0.18); border-color: var(--tile-bronze); }
 .assoc-item.correct-reveal { border-color: var(--tile-green); box-shadow: 0 0 0 4px rgba(var(--tile-green-rgb),0.35); }
 .assoc-item.incorrect-reveal { border-color: var(--color-danger); opacity: 0.75; }
+/* Mêmes couleurs que les tuiles .assoc-item.is-matched.pair-N ci-dessus,
+   appliquées au trait plutôt qu'au fond. */
+.association-link.pair-0 { stroke: var(--color-indigo); }
+.association-link.pair-1 { stroke: var(--tile-blue); }
+.association-link.pair-2 { stroke: var(--tile-yellow); }
+.association-link.pair-3 { stroke: var(--tile-green); }
+.association-link.pair-4 { stroke: var(--color-cyan); }
+.association-link.pair-5 { stroke: var(--color-accent-2); }
+.association-link.pair-6 { stroke: var(--color-accent); }
+.association-link.pair-7 { stroke: var(--tile-bronze); }
+.association-link.correct-reveal { stroke: var(--tile-green); opacity: 1; }
+.association-link.incorrect-reveal { stroke: var(--color-danger); opacity: 0.5; }
 .assoc-correct-hint { color: var(--tile-green); font-weight: 800; margin-left: 6px; }
 
 @media (max-width: 600px) {

@@ -281,6 +281,7 @@ const timelineList = document.getElementById('timelineList')
 const associationArea = document.getElementById('associationArea')
 const associationColA = document.getElementById('associationColA')
 const associationColB = document.getElementById('associationColB')
+const associationLinksSvg = document.getElementById('associationLinksSvg')
 const imageArea = document.getElementById('imageArea')
 const imageViewport = document.getElementById('imageViewport')
 const imageWrap = document.getElementById('imageWrap')
@@ -869,9 +870,13 @@ const revealTimelineList = (correctEvents) => {
 // (sert de repère stable, colonne A jamais mélangée) ; payload.pairsB est
 // mélangé une fois par emitQuestion (hôte) avant l'envoi — jamais dans
 // l'ordre correct. Chaque paire que le joueur crée est coloriée (une couleur
-// par index A, palette reprise du mode équipe) plutôt que reliée par un
-// trait à tracer : plus lisible sur mobile, pas de précision au pixel requise.
+// par index A, palette reprise du mode équipe) ET reliée par un trait SVG
+// (voir renderAssociationLinks plus bas, demande explicite d'un retour
+// visuel plus direct que la seule couleur partagée) — les deux réutilisent
+// la même palette, donc restent cohérents entre eux.
 const ASSOCIATION_PAIR_COLORS = ['pair-0', 'pair-1', 'pair-2', 'pair-3', 'pair-4', 'pair-5', 'pair-6', 'pair-7']
+let associationRevealed = false // bascule la couleur des traits en vert/rouge à la révélation (voir revealAssociationPairs)
+let associationResizeObserver = null
 let associationState = null // { pairsA, pairsB, matches, selected } pendant la question active
 let myAssociationSubmission = null // matches[] tel qu'envoyé, gardé pour la comparaison au reveal
 let associationDisabled = true
@@ -904,6 +909,56 @@ const updateAssociationClasses = () => {
     el.classList.toggle('is-matched', matchedAIdx !== -1)
     if (matchedAIdx !== -1) el.classList.add(ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
     el.classList.toggle('is-selected', selected?.side === 'b' && selected.index === j)
+  })
+  renderAssociationLinks()
+}
+
+// Un ResizeObserver plutôt qu'un recalcul ponctuel : la position/hauteur
+// réelle des tuiles peut bouger sans clic (image d'un élément qui finit de
+// charger après coup, voir fillAssociationImages ; redimensionnement de la
+// fenêtre) — un seul point d'observation sur le conteneur entier suffit à
+// tout couvrir, y compris le cas où #associationArea passe de masqué (d-none,
+// donc 0×0) à visible en changeant de question. Créé une seule fois : la
+// même balise #associationArea est réutilisée d'une question à l'autre,
+// jamais recréée.
+const ensureAssociationResizeObserver = () => {
+  if (associationResizeObserver || !associationArea || typeof ResizeObserver === 'undefined') return
+  associationResizeObserver = new ResizeObserver(() => renderAssociationLinks())
+  associationResizeObserver.observe(associationArea)
+}
+
+// Trace un trait entre la tuile A choisie et la tuile B qui lui est associée,
+// pour CHAQUE paire déjà complétée — coordonnées lues directement sur le DOM
+// (getBoundingClientRect) plutôt que déduites de la grille, pour rester
+// justes quel que soit le nombre de lignes que prend le texte d'une tuile.
+// Le trait va du bord DROIT de la tuile A au bord GAUCHE de la tuile B (pas
+// centre à centre) : il ne traverse ainsi jamais l'intérieur d'une tuile,
+// seulement l'espace vide entre les deux colonnes — pas besoin de le passer
+// derrière les tuiles avec un z-index.
+const renderAssociationLinks = () => {
+  if (!associationLinksSvg || !associationState || !associationColA || !associationColB || !associationArea) return
+  const { matches } = associationState
+  const areaRect = associationArea.getBoundingClientRect()
+  associationLinksSvg.innerHTML = ''
+  if (!areaRect.width || !areaRect.height) return
+  associationLinksSvg.setAttribute('viewBox', `0 0 ${areaRect.width} ${areaRect.height}`)
+  Array.from(associationColA.children).forEach((elA, i) => {
+    const key = matches[i]
+    if (key === null || key === undefined) return
+    const elB = associationColB.querySelector(`[data-assoc-key="${key}"]`)
+    if (!elB) return
+    const rectA = elA.getBoundingClientRect()
+    const rectB = elB.getBoundingClientRect()
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+    line.setAttribute('x1', rectA.right - areaRect.left)
+    line.setAttribute('y1', rectA.top + rectA.height / 2 - areaRect.top)
+    line.setAttribute('x2', rectB.left - areaRect.left)
+    line.setAttribute('y2', rectB.top + rectB.height / 2 - areaRect.top)
+    const colorClass = associationRevealed
+      ? (key === i ? 'correct-reveal' : 'incorrect-reveal')
+      : ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length]
+    line.setAttribute('class', `association-link ${colorClass}`)
+    associationLinksSvg.appendChild(line)
   })
 }
 
@@ -1094,8 +1149,11 @@ const buildAssociationArea = (pairsA, pairsB, pairsBKeys, imagesUrl) => {
     selected: null
   }
   associationDisabled = true
+  associationRevealed = false
+  if (associationLinksSvg) associationLinksSvg.innerHTML = ''
   renderAssociationColumns()
   fillAssociationImages(imagesUrl)
+  ensureAssociationResizeObserver()
 }
 
 // Révélation : même principe que revealOrderList (comparaison ligne à ligne
@@ -1107,6 +1165,7 @@ const buildAssociationArea = (pairsA, pairsB, pairsBKeys, imagesUrl) => {
 const revealAssociationPairs = (correctPairs) => {
   if (!associationColA || !associationColB || !Array.isArray(correctPairs)) return
   setAssociationDisabled(true)
+  associationRevealed = true
   // mine[i] est désormais la CLÉ (index d'origine) de l'élément B choisi pour
   // le A d'index i, pas son texte (voir completeAssociationPair) — la paire i
   // est toujours correcte quand mine[i] === i, par construction (a[i]<->b[i]).
@@ -1130,6 +1189,11 @@ const revealAssociationPairs = (correctPairs) => {
     const wasChosenCorrectly = mine[key] === key
     el.classList.toggle('correct-reveal', wasChosenCorrectly)
   })
+  // Le hint textuel ajouté juste au-dessus peut faire grandir une tuile A
+  // (retour à la ligne) : recalculer les traits maintenant plutôt que
+  // d'attendre le prochain déclenchement du ResizeObserver évite un instant
+  // de trait mal aligné.
+  renderAssociationLinks()
 }
 
 // --- Question "image" : où sur l'image ? ---
