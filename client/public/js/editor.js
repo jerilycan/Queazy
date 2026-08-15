@@ -2555,7 +2555,13 @@ qType.onchange = () => {
     // q.correct venant d'un autre type (une seule réponse acceptée, options
     // QCM...) n'a pas de sens comme séquence à ordonner : on repart propre
     // sauf s'il contient déjà au moins 2 éléments (ex. retour sur ce type).
-    if (!Array.isArray(q.correct) || q.correct.length < 2) q.correct = ['', '']
+    // Vérifier aussi le CONTENU (pas juste la longueur) : "timeline"
+    // (3 éléments {title,description,date} par défaut) et "association"
+    // (2 éléments {a,b} par défaut) produisent aussi des tableaux d'objets
+    // ≥2 éléments, qui passaient ce garde-fou avant de faire planter
+    // validateQuestion (item.trim is not a function) dans une promesse non
+    // catchée à la sauvegarde — échec silencieux, bug réel constaté en audit.
+    if (!Array.isArray(q.correct) || q.correct.length < 2 || !q.correct.every(item => typeof item === 'string')) q.correct = ['', '']
   } else if (qType.value === 'image') {
     // q.correct venant d'un autre type (texte, séquence...) ne correspond pas
     // au format zone attendu ({points:[...]} ou {x0,y0,x1,y1} legacy) : on
@@ -3198,10 +3204,21 @@ const persistQuiz = async (successMessage) => {
 saveQuizBtn.onclick = async () => {
   if (readOnly) return
   saveCurrentQuestionState()
-  for (let i = 0; i < questions.length; i++) {
-    if (!validateQuestion(questions[i], i)) return
+  // Filet de sécurité : un onclick async dont la promesse rejette ne montre
+  // RIEN à l'utilisateur (pas de .catch implicite pour un event handler) —
+  // le cas précis déjà corrigé ci-dessus (type "order" avec un q.correct mal
+  // formé) aurait pu se reproduire pour n'importe quelle autre validation
+  // imprévue ; ce garde-fou couvre la classe de bug entière, pas juste ce
+  // seul cas.
+  try {
+    for (let i = 0; i < questions.length; i++) {
+      if (!validateQuestion(questions[i], i)) return
+    }
+    await persistQuiz('Sauvegarde effectuée !')
+  } catch (err) {
+    console.error('[quiz] échec inattendu à la validation/sauvegarde :', err)
+    showToast('Erreur inattendue — la sauvegarde a échoué', 'error')
   }
-  await persistQuiz('Sauvegarde effectuée !')
 }
 
 // Bouton "Sauvegarder" de la barre fixe en bas — simple doublon du bouton
