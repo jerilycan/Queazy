@@ -2370,6 +2370,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   .options-grid.intrus-grid .option-btn.intrus-tile {
     min-height: 0;
   }
+  /* Vrai/Faux : binaire, reste en 2 colonnes côte à côte même en mobile
+     (empilé verticalement, ça casse la lecture visuelle en 2 blocs opposés
+     voulue par le design du bouton vrai/faux). */
+  .options-grid.truefalse-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
   .icon-grid { grid-template-columns: repeat(4, 1fr); }
   .question-text { font-size: 26px; margin-bottom: 24px; }
   /* Barre hôte : contrôles empilés et pleine largeur */
