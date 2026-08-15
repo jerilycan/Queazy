@@ -772,9 +772,20 @@ const populateImageFields = (q) => {
 // optionnelle des autres types (même pipeline, juste stocké différemment).
 const IMAGE_MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10 Mo, avant compression
 const IMAGE_MAX_DIMENSION = 1280
+// Vignettes "association"/"intrus" (voir buildAssocPhotoSlot/addIntrusPhotos
+// plus bas) : jamais affichées plus grandes qu'une tuile 4:3 dans une grille
+// (voir .assoc-item-img/.intrus-tile en CSS), inutile de garder la même
+// définition qu'une illustration pleine largeur. Une question association
+// peut cumuler jusqu'à 16 de ces images dans UN SEUL envoi HTTP au moment de
+// démarrer la question (voir emitQuestion côté index.js) — les compresser
+// plus fort ici réduit d'autant ce pic d'upload, qui partage la même
+// connexion que le WebSocket de la partie en cours (retour utilisateur :
+// l'hôte se voit déconnecté par l'appli pendant cet envoi, alors même que sa
+// connexion n'a jamais vraiment coupé — juste saturée par cet envoi).
+const TILE_IMAGE_MAX_DIMENSION = 640
 const IMAGE_JPEG_QUALITY = 0.8
 
-const compressImageFile = (file, onSuccess) => {
+const compressImageFile = (file, onSuccess, maxDimension = IMAGE_MAX_DIMENSION) => {
   if (!file) return
   if (!file.type || !file.type.startsWith('image/')) {
     showToast('Ce fichier n\'est pas une image', 'error')
@@ -788,7 +799,7 @@ const compressImageFile = (file, onSuccess) => {
   const objectUrl = URL.createObjectURL(file)
   img.onload = () => {
     URL.revokeObjectURL(objectUrl)
-    const scale = Math.min(1, IMAGE_MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight))
+    const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight))
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
     canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
@@ -1830,7 +1841,7 @@ const openImageCropModal = (imageSrc, currentPos, bgColor, callbacks) => {
       compressImageFile(file, (dataUrl) => {
         close()
         callbacks.onReplace(dataUrl)
-      })
+      }, TILE_IMAGE_MAX_DIMENSION)
     }
     input.click()
   }
@@ -1875,7 +1886,7 @@ const buildAssocPhotoSlot = (pair, imgField, rerender) => {
       compressImageFile(file, (dataUrl) => {
         pair[imgField] = dataUrl
         rerender()
-      })
+      }, TILE_IMAGE_MAX_DIMENSION)
     }
     input.click()
   }
@@ -2348,7 +2359,7 @@ function addIntrusPhotos (files) {
     compressImageFile(file, (dataUrl) => {
       q.options.push({ id: genIntrusOptionId(), image: dataUrl })
       renderIntrusOptions()
-    })
+    }, TILE_IMAGE_MAX_DIMENSION)
   })
 }
 

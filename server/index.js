@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.39.2'
+const APP_VERSION = '1.39.4'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -24,6 +24,29 @@ const APP_VERSION = '1.39.2'
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://btlmhieavrvkznkrqrrm.supabase.co'
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0bG1oaWVhdnJ2a3pua3JxcnJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMTA0NjcsImV4cCI6MjA5ODU4NjQ2N30.cvcmBhLRzFobbvGc9ObQABOV43NlsOAlMW1Hxuppv0c'
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// CSP : la session Supabase (access + refresh token) vit en localStorage côté
+// client (supabase-js par défaut, voir client/public/js/supabase-config.js) —
+// lisible par n'importe quel script si une faille XSS survient. Sans
+// restriction sur les scripts autorisés à s'exécuter, une telle faille suffit
+// à exfiltrer ces tokens ; c'est cette précondition qu'on ferme ici, pas le
+// stockage lui-même (qui demanderait un vrai proxy d'auth serveur pour passer
+// en cookie HttpOnly — hors scope pour l'instant). style-src reste en
+// 'unsafe-inline' : le rendu génère massivement des style="" inline (voir
+// index.js/results.js/editor.js), les retirer serait un chantier séparé — un
+// style inline ne permet de toute façon pas d'exécuter du JS.
+const supabaseHost = new URL(SUPABASE_URL).host
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' https://cdn.jsdelivr.net https://cdn.socket.io https://cdnjs.cloudflare.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  `connect-src 'self' https://${supabaseHost} wss://${supabaseHost}`,
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'self'"
+].join('; ')
 
 // Plancher de points minimum garanti sur une bonne réponse répondue au
 // dernier moment (voir pointsFor plus bas) — modifiable sans redéploiement
@@ -69,6 +92,11 @@ const floorForSpeedLevel = (level) => {
   if (level === 'high') return SPEED_LEVEL_FLOOR.high
   return minPointsFloor // 'normal', ou toute valeur absente/invalide
 }
+
+app.addHook('onSend', (req, reply, payload, done) => {
+  reply.header('Content-Security-Policy', CONTENT_SECURITY_POLICY)
+  done(null, payload)
+})
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 app.register(fastifyStatic, { root: publicDir })

@@ -387,6 +387,9 @@ const AVATAR_CHOICES = [
 
 let loadedQuiz = null
 let quizIndex = 0
+// Anti double-clic pendant l'upload média d'une question (voir goNext) —
+// .is-disabled seul ne bloque pas les clics (pointer-events:auto).
+let goNextPending = false
 let isHost = false
 let currentSingleAttempt = true
 let selectedIcon = AVATAR_CHOICES[0]
@@ -3066,13 +3069,20 @@ const uploadRoomAssociationImages = (roomCode, images) => {
   })
 }
 
+// Retourne une Promise<boolean> (true = question:show effectivement émise) —
+// indispensable pour goNext/startQuizBtn : voir plus bas, l'incrémentation de
+// quizIndex n'a le droit d'avoir lieu qu'une fois cette promesse résolue à
+// true, jamais avant (sinon un upload de médias qui échoue — coupure réseau
+// pendant l'upload des images d'une question "association", le cas le plus
+// gros — fait quand même avancer l'index : la question suivante remplace
+// silencieusement celle qui n'a jamais démarré, comme "sautée").
 const emitQuestion = (index) => {
   const roomCode = roomInput.value.trim()
-  if (!roomCode || !loadedQuiz) return
+  if (!roomCode || !loadedQuiz) return Promise.resolve(false)
   const q = loadedQuiz.questions && loadedQuiz.questions[index]
   if (!q) {
     if (index >= loadedQuiz.questions.length) log('Quiz terminé')
-    return
+    return Promise.resolve(false)
   }
   // Repère de progression dans la barre hôte, complété par le compteur
   // de réponses reçu via answer:progress.
@@ -3201,14 +3211,16 @@ const emitQuestion = (index) => {
     }
   }
   if (uploads.length > 0) {
-    Promise.all(uploads).then(() => {
+    return Promise.all(uploads).then(() => {
       socket.emit('question:show', payload)
+      return true
     }).catch(() => {
-      log('Échec de l\'envoi du média, question non démarrée')
+      log('Échec de l\'envoi du média, question non démarrée — réessayez')
+      return false
     })
-    return
   }
   socket.emit('question:show', payload)
+  return Promise.resolve(true)
 }
 
 const goNext = () => {
@@ -3221,9 +3233,24 @@ const goNext = () => {
   // ne fonctionne pas"). Les deux boutons ne branchent goNext que dans les
   // phases où c'est déjà légitime (voir updateHostControls) : plus besoin
   // de re-vérifier ici.
-  if (!loadedQuiz || quizIndex >= loadedQuiz.questions.length) return
-  emitQuestion(quizIndex)
-  quizIndex += 1
+  if (!loadedQuiz || quizIndex >= loadedQuiz.questions.length || goNextPending) return
+  const index = quizIndex
+  goNextPending = true
+  // .is-disabled seul ne bloque pas les clics (voir CSS, pointer-events:auto
+  // volontaire) — le vrai garde-fou contre un double-clic pendant l'upload
+  // est goNextPending ci-dessus, la classe n'est qu'un repère visuel.
+  if (leaderNextBtn) leaderNextBtn.classList.add('is-disabled')
+  emitQuestion(index).then(started => {
+    goNextPending = false
+    if (started) {
+      quizIndex = index + 1
+    } else if (leaderNextBtn) {
+      // Échec (upload média, déconnexion pendant l'envoi...) : quizIndex n'a
+      // pas bougé, un nouveau clic relance la MÊME question plutôt que de
+      // sauter à la suivante.
+      leaderNextBtn.classList.remove('is-disabled')
+    }
+  })
 }
 nextQuestionBtn.onclick = goNext
 
@@ -3326,8 +3353,22 @@ startQuizBtn.onclick = () => {
   // nextQuestionBtn) : le bouton reste grisé/onclick=null tant que la question
   // n'est pas révélée (voir updateHostControls), donc un .click() ici ne
   // déclencherait plus rien depuis qu'il reste affiché-mais-grisé par défaut.
-  emitQuestion(quizIndex)
-  quizIndex += 1
+  const startIndex = quizIndex
+  emitQuestion(startIndex).then(started => {
+    if (started) {
+      quizIndex = startIndex + 1
+    } else {
+      // Échec au tout premier envoi (upload média...) : on revient à l'écran
+      // de lancement plutôt que de laisser l'hôte bloqué sur des boutons de
+      // navigation grisés sans aucune question jamais démarrée.
+      startQuizBtn.classList.remove('d-none')
+      startQuizBtn.style.display = ''
+      selectQuizBtn.classList.remove('d-none')
+      selectQuizBtn.style.display = ''
+      nextQuestionBtn.classList.add('d-none')
+      nextQuestionBtn.style.display = 'none'
+    }
+  })
   nextQuestionBtn.classList.add('is-disabled')
   nextQuestionBtn.onclick = null
 }
