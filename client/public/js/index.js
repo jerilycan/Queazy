@@ -445,6 +445,22 @@ const applyTileReveal = (el, index) => {
   }, { once: true })
 }
 
+// Accessibilité clavier des tuiles mcq/truefalse/intrus (<div> avec
+// seulement un .onclick, injouables au clavier — retour utilisateur,
+// contrairement au curseur de graduation qui a déjà tabindex/role/flèches).
+// Un simple tabindex + role + relais Entrée/Espace vers le même .onclick
+// suffit, sans dupliquer la logique de sélection propre à chaque type.
+const makeTileFocusable = (el) => {
+  el.tabIndex = 0
+  el.setAttribute('role', 'button')
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault()
+      el.click()
+    }
+  })
+}
+
 // --- Curseur classique sur piste : les bornes min/max sont les deux bouts
 // physiques de la piste (toujours visibles), donc jamais ambiguës — remplace
 // l'ancienne règle à viseur fixe/graduation défilante. ---
@@ -3793,6 +3809,7 @@ socket.on('question:show', payload => {
       const el = document.createElement('div')
       el.className = 'option-btn'
       el.textContent = opt
+      makeTileFocusable(el)
       el.onclick = () => {
         if (currentSingleAttempt && sendBtn.disabled) return
 
@@ -3823,6 +3840,11 @@ socket.on('question:show', payload => {
       const el = document.createElement('div')
       el.className = 'option-btn intrus-tile'
       el.dataset.optionId = id
+      makeTileFocusable(el)
+      // Pas de texte dans la tuile (juste une photo) : role="button" seul ne
+      // suffit pas à un lecteur d'écran pour identifier laquelle est
+      // laquelle, d'où ce label explicite basé sur la position affichée.
+      el.setAttribute('aria-label', `Photo ${i + 1}`)
       const img = document.createElement('img')
       img.className = 'intrus-tile-img'
       img.alt = ''
@@ -3869,6 +3891,7 @@ socket.on('question:show', payload => {
       // avec le QCM). La grande forme (losange/triangle) est un ::before CSS
       // à content vide, donc invisible pour cette comparaison.
       el.textContent = opt
+      makeTileFocusable(el)
       el.onclick = () => {
         if (currentSingleAttempt && sendBtn.disabled) return
         selectedMcqOptions = [opt]
