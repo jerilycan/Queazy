@@ -687,8 +687,20 @@ if (imageEditWrap) {
 if (clearImageZoneBtn) {
   clearImageZoneBtn.onclick = () => {
     if (readOnly || !questions[activeIndex]) return
-    questions[activeIndex].correct = []
-    renderImageZones([])
+    // Retour utilisateur : contrairement à la suppression d'une question,
+    // ce bouton n'avait aucune confirmation alors qu'il efface d'un coup
+    // une ou plusieurs zones tracées à main levée — souvent le travail le
+    // plus long à refaire de toute la question.
+    QzUI.confirm({
+      title: 'Effacer toutes les zones ?',
+      message: 'Toutes les zones de bonne réponse tracées pour cette question seront supprimées.',
+      confirmLabel: 'Effacer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].correct = []
+      renderImageZones([])
+    })
   }
 }
 
@@ -870,8 +882,18 @@ if (illustrationUploadInput) {
 if (removeIllustrationBtn) {
   removeIllustrationBtn.onclick = () => {
     if (!questions[activeIndex]) return
-    questions[activeIndex].illustration = null
-    populateIllustrationFields(questions[activeIndex])
+    // Retour utilisateur : contrairement à la suppression d'une question,
+    // retirer l'illustration se faisait en un clic sans confirmation.
+    QzUI.confirm({
+      title: 'Retirer cette illustration ?',
+      message: 'Il faudra réimporter une image pour en remettre une.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].illustration = null
+      populateIllustrationFields(questions[activeIndex])
+    })
   }
 }
 
@@ -918,8 +940,19 @@ if (zoomGuessUploadInput) {
 if (removeZoomGuessBtn) {
   removeZoomGuessBtn.onclick = () => {
     if (!questions[activeIndex]) return
-    questions[activeIndex].image = null
-    populateZoomGuessFields(questions[activeIndex])
+    // Retour utilisateur : contrairement à la suppression d'une question,
+    // retirer l'image ZoomOut Devinette (avec son point de zoom déjà
+    // choisi) se faisait en un clic sans confirmation.
+    QzUI.confirm({
+      title: 'Retirer cette image ?',
+      message: 'Le point de zoom déjà choisi sera perdu avec elle.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].image = null
+      populateZoomGuessFields(questions[activeIndex])
+    })
   }
 }
 
@@ -1147,8 +1180,20 @@ if (audioExtractBtn) {
 if (removeAudioClipBtn) {
   removeAudioClipBtn.onclick = () => {
     if (!questions[activeIndex]) return
-    questions[activeIndex].audio = null
-    populateAudioFields(questions[activeIndex])
+    // Retour utilisateur : contrairement à la suppression d'une question,
+    // retirer l'extrait audio se faisait en un clic sans confirmation — le
+    // découpage (début/durée) est pourtant souvent le réglage le plus long
+    // à refaire de tout l'éditeur.
+    QzUI.confirm({
+      title: 'Retirer cet extrait audio ?',
+      message: 'Le découpage (début/durée) déjà réglé sera perdu avec lui.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].audio = null
+      populateAudioFields(questions[activeIndex])
+    })
   }
 }
 
