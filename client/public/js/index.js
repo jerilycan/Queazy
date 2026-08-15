@@ -1506,6 +1506,16 @@ const revealImagePlayerPoints = (players) => {
 // animation générique.
 let blindtestAudioCtx = null
 let blindtestAnalyser = null
+// Contrôle RÉEL du volume/de la coupure une fois le graphe Web Audio monté
+// (voir ensureBlindTestAnalyser plus bas) : <audio>.muted/.volume natifs ne
+// sont plus lus par le navigateur une fois l'élément routé dans un graphe
+// Web Audio — tout le son sort du graphe, plus jamais de l'élément lui-même.
+// Les poser seuls ne coupait donc plus rien après la première mise en route
+// de l'analyseur (nécessaire à l'animation de l'orbe) : un joueur "muet" en
+// mode IRL entendait quand même le morceau — bug remonté surtout sur iPhone
+// (Safari iOS étant plus strict sur le déblocage audio, l'analyseur y
+// démarre plus systématiquement que sur d'autres navigateurs).
+let blindtestGain = null
 let blindtestPulseRAF = null
 let myBlindTestSubmission = null // { title, artist } — capturé à l'envoi (voir sendBtn.onclick)
 let audioMode = 'irl' // 'irl' | 'remote' — lu depuis #audioModeRemote côté hôte, transmis dans le payload
@@ -1601,6 +1611,7 @@ const getMyBlindTestVolumePct = () => {
 const blindtestVolumeSlider = wireVolumeSlider(blindtestVolumeTrack, blindtestVolumeFill, blindtestVolumeThumb, getMyBlindTestVolumePct() ?? 70, (pct) => {
   localStorage.setItem(BLINDTEST_VOLUME_KEY, String(pct))
   if (blindtestAudio) blindtestAudio.volume = Math.min(1, Math.max(0, pct / 100))
+  applyBlindTestAudioOutput()
 })
 
 // Monte le graphe Web Audio <audio> -> analyser -> destination UNE SEULE FOIS
@@ -1616,8 +1627,18 @@ const ensureBlindTestAnalyser = () => {
     const source = blindtestAudioCtx.createMediaElementSource(blindtestAudio)
     blindtestAnalyser = blindtestAudioCtx.createAnalyser()
     blindtestAnalyser.fftSize = 256
+    // Nœud de gain entre l'analyseur et les enceintes : seul point qui
+    // contrôle vraiment le son entendu une fois ce graphe monté (voir le
+    // commentaire sur blindtestGain plus haut).
+    blindtestGain = blindtestAudioCtx.createGain()
     source.connect(blindtestAnalyser)
-    blindtestAnalyser.connect(blindtestAudioCtx.destination)
+    blindtestAnalyser.connect(blindtestGain)
+    blindtestGain.connect(blindtestAudioCtx.destination)
+    // Applique tout de suite l'état muted/volume déjà posé sur <audio>
+    // avant que ce graphe n'existe (voir buildBlindTestArea) — sinon ce
+    // nœud tout neuf démarrerait à son gain par défaut (1), pas au bon
+    // niveau/muet.
+    applyBlindTestAudioOutput()
   } catch (e) {
     // Web Audio indisponible/bloqué (ex. navigateur trop restrictif) : l'orbe
     // retombe simplement sur sa respiration CSS générique (voir orb-idle),
@@ -1625,6 +1646,15 @@ const ensureBlindTestAnalyser = () => {
     blindtestAnalyser = null
   }
   return blindtestAnalyser
+}
+
+// Synchronise le nœud de gain (vraie sortie une fois le graphe monté) avec
+// l'état muted/volume posé sur <audio> — à appeler après CHAQUE changement
+// de l'un ou l'autre. Sans effet tant que le graphe n'existe pas encore :
+// l'élément <audio> gère alors le son nativement, correctement.
+const applyBlindTestAudioOutput = () => {
+  if (!blindtestAudio || !blindtestGain) return
+  blindtestGain.gain.value = blindtestAudio.muted ? 0 : blindtestAudio.volume
 }
 
 // Un AudioContext démarre (ou repasse) "suspended" tant qu'aucun geste
@@ -1741,6 +1771,7 @@ const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
   // "à distance" : personne n'est muet, chacun entend sur son poste.
   // "irl" (par défaut) : seul l'hôte (l'écran/les enceintes de la salle) entend.
   blindtestAudio.muted = mode === 'remote' ? false : !isHost
+  applyBlindTestAudioOutput()
   blindtestAudio.pause()
   blindtestAudio.currentTime = 0
   // Peut arriver suite à une coupure réseau/serveur momentanée, pas
@@ -1765,6 +1796,7 @@ const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
   const startVolumePct = myVolumePct !== null ? myVolumePct : (typeof hostVolumePct === 'number' ? hostVolumePct : 70)
   blindtestAudio.volume = Math.min(1, Math.max(0, startVolumePct / 100))
   blindtestVolumeSlider.setPct(startVolumePct)
+  applyBlindTestAudioOutput()
 }
 if (blindtestReloadBtn) {
   blindtestReloadBtn.onclick = () => {
