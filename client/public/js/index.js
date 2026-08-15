@@ -2131,7 +2131,7 @@ if (confirmQuizSelect) {
       loadQuizById(selectedQuizId) // Load the selected quiz
       hideQuizSelectPopup()
     } else {
-      showAnnounce('Veuillez sélectionner un quiz.', 'error')
+      showAnnounce('Sélectionne un quiz.', 'error')
     }
   }
 }
@@ -2236,7 +2236,7 @@ if (navMyQuizzes) {
     e.preventDefault()
     const { data: { session } } = await window.supabaseClient.auth.getSession()
     if (!session) {
-      showAnnounce('Vous devez être connecté pour accéder à vos quiz !', 'error')
+      showAnnounce('Connecte-toi pour accéder à tes quiz !', 'error')
       return
     }
     window.location.href = navMyQuizzes.href
@@ -2622,7 +2622,7 @@ joinBtn.onclick = () => {
   const roomCode = roomInput.value.trim()
   const playerName = nameInput.value.trim()
 
-  if (!roomCode) { log('Veuillez entrer un code de salle'); return }
+  if (!roomCode) { log('Entre un code de salle'); return }
 
   if (!playerName) {
     // If player name is empty, show guest join options
@@ -2652,8 +2652,8 @@ guestNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') confirm
 confirmGuestJoin.onclick = () => {
   const roomCode = roomInput.value.trim()
   const guestName = guestNameInput.value.trim()
-  if (!roomCode) { log('Veuillez entrer un code de salle'); return }
-  if (!guestName) { log('Veuillez entrer un pseudo invité'); return }
+  if (!roomCode) { log('Entre un code de salle'); return }
+  if (!guestName) { log('Entre un pseudo'); return }
 
   const guestAvatar = '🙂' // Default guest avatar
   // genToken() (pas getToken()) : un invité n'a pas de compte, son jeton
@@ -3413,7 +3413,7 @@ startQuizBtn.onclick = () => {
     return
   }
   if (!loadedQuiz || !loadedQuiz.questions || loadedQuiz.questions.length === 0) {
-    showAnnounce('Veuillez charger un quiz avant de lancer la partie !')
+    showAnnounce('Charge un quiz avant de lancer la partie !')
     return
   }
   
@@ -3916,7 +3916,7 @@ const submitCurrentAnswer = () => {
 
   if (currentQuestionType === 'mcq') {
     if (selectedMcqOptions.length === 0) {
-      showAnnounce('Veuillez sélectionner au moins une réponse')
+      showAnnounce('Sélectionne au moins une réponse')
       return
     }
     // JSON plutôt que join(', ') : une option dont le texte contient
@@ -3927,7 +3927,7 @@ const submitCurrentAnswer = () => {
     content = JSON.stringify(selectedMcqOptions)
   } else if (currentQuestionType === 'truefalse' || currentQuestionType === 'intrus') {
     if (selectedMcqOptions.length === 0) {
-      showAnnounce('Veuillez sélectionner au moins une réponse')
+      showAnnounce('Sélectionne au moins une réponse')
       return
     }
     // PAS de JSON.stringify ici (contrairement au QCM juste au-dessus) : un

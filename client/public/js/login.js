@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const password = loginPasswordInput.value
 
       if (!identifier || !password) {
-        showLoginError('Veuillez remplir tous les champs.')
+        showLoginError('Remplis tous les champs.')
         return
       }
 
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const pseudo = signupPseudoInput.value ? signupPseudoInput.value.trim() : ''
 
       if (!email || !password) {
-        showSignupError('Veuillez remplir au moins l\'email et le mot de passe.')
+        showSignupError('Remplis au moins l\'email et le mot de passe.')
         return
       }
 
@@ -264,8 +264,8 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const email = signupEmailInput.value;
       if (!email) {
-        if (window.QzUI) window.QzUI.toast("Veuillez entrer votre email d'abord.", 'error')
-        else alert("Veuillez entrer votre email d'abord.");
+        if (window.QzUI) window.QzUI.toast("Entre ton email d'abord.", 'error')
+        else alert("Entre ton email d'abord.");
         return;
       }
 

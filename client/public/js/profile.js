@@ -185,7 +185,7 @@ if (logoutBtn) {
 
 saveBtn.onclick = async () => {
   const nm = nameEl.value.trim().slice(0, 20)
-  if (!nm) { showToast('Veuillez entrer un pseudo', 'error'); return }
+  if (!nm) { showToast('Entre un pseudo', 'error'); return }
 
   const { data: { session } } = await sb.auth.getSession()
   if (session) {
