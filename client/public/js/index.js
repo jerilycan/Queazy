@@ -3408,7 +3408,14 @@ startQuizBtn.onclick = () => {
     if (players.length === 0) {
       showAnnounce('Il faut au moins un joueur pour lancer le quiz !')
     } else {
-      showAnnounce('Tous les joueurs ne sont pas prêts !')
+      // Retour utilisateur : le message générique ne disait ni QUI bloquait
+      // ni comment débloquer — seul recours jusqu'ici, repérer soi-même la
+      // bonne tuile dans le salon et l'exclure, sans qu'aucun texte ne le
+      // suggère. lastLobbyArr (voir renderLobbyGrid) donne directement les
+      // noms des joueurs encore en "Attente".
+      const notReady = (lastLobbyArr || []).filter(p => !p.isHost && p.connected !== false && !p.ready).map(p => p.name)
+      const names = notReady.length ? ` : ${notReady.join(', ')}` : ''
+      showAnnounce(`Tous les joueurs ne sont pas prêts${names}. Tu peux exclure un joueur bloqué depuis sa tuile dans le salon.`)
     }
     return
   }
