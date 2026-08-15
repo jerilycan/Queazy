@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.39.7'
+const APP_VERSION = '1.39.8'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -345,6 +345,20 @@ const start = async () => {
     const correct = entries.filter(([, v]) => v === 'correct').length
     const correctPct = Math.round((100 * correct) / total)
 
+    // "intrus" : he.answers stocke l'id opaque de la tuile cliquée (voir
+    // index.js payload.type === 'intrus' ? el.dataset.optionId : ...) —
+    // illisible tel quel dans le récap hôte (retour utilisateur : "suite de
+    // caractères incompréhensible"). Retraduit ici en "Image N" via l'ordre
+    // des tuiles envoyé aux joueurs pour CETTE question (question.options,
+    // voir plus haut) ; id introuvable (vieux quiz, désync) -> valeur brute
+    // en repli plutôt que de masquer la réponse.
+    const intrusOptionIds = question.type === 'intrus' && Array.isArray(question.options) ? question.options : null
+    const labelFor = (raw) => {
+      if (!intrusOptionIds) return raw
+      const idx = intrusOptionIds.indexOf(raw)
+      return idx === -1 ? raw : `Image ${idx + 1}`
+    }
+
     let topAnswer = null
     const counts = new Map() // clé normalisée -> { text, count }
     for (const [tok, raw] of Object.entries(he.answers || {})) {
@@ -352,10 +366,11 @@ const start = async () => {
       if (typeof raw !== 'string') continue
       const trimmed = raw.trim()
       if (!trimmed) continue
-      const key = norm(trimmed)
+      const label = labelFor(trimmed)
+      const key = norm(label)
       const entry = counts.get(key)
       if (entry) entry.count += 1
-      else counts.set(key, { text: trimmed, count: 1 })
+      else counts.set(key, { text: label, count: 1 })
     }
     let best = null
     for (const entry of counts.values()) {
@@ -387,7 +402,7 @@ const start = async () => {
         const delta = he.deltas?.[tok] || 0
         return {
           name: room.tokens.get(tok)?.name || 'Joueur',
-          answer: (he.answerDetails || {})[tok] ?? (he.answers || {})[tok] ?? '',
+          answer: (he.answerDetails || {})[tok] ?? labelFor((he.answers || {})[tok] ?? ''),
           correct,
           state: correct ? 'correct' : (delta > 0 ? 'almost' : 'incorrect')
         }
@@ -1019,7 +1034,12 @@ const start = async () => {
       // cause d'une déconnexion, temporaire ou non : au pire, l'optimisation
       // "clore dès que tout le monde a répondu" ne se déclenche pas et on
       // attend la fin normale du chrono, jamais de fin prématurée.
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length }
+      // options : uniquement gardé pour "intrus" (liste ordonnée des id de
+      // tuiles envoyée aux joueurs, voir emitQuestion côté index.js) — sert à
+      // retraduire l'id opaque stocké dans he.answers en "Image N" lisible
+      // pour le récap hôte (voir buildRecap plus bas). Inutile de le garder
+      // pour les autres types, qui n'en ont pas besoin ici.
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length, options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est

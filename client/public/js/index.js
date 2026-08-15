@@ -315,6 +315,10 @@ const blindtestVolumeThumb = document.getElementById('blindtestVolumeThumb')
 // décorative au-dessus de l'énoncé.
 const illustrationImg = document.getElementById('illustrationImg')
 const illustrationImgWrap = document.getElementById('illustrationImgWrap')
+// "ZoomOut Devinette" : filet en plus de draggable="false"/-webkit-user-drag
+// (voir index.html/style.css) — bloque le drag natif qui montrerait sinon un
+// fantôme de l'image source non zoomée/floutée (retour utilisateur).
+if (illustrationImg) illustrationImg.addEventListener('dragstart', e => e.preventDefault())
 const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const leaderNextBtn = document.getElementById('leaderNextBtn')

@@ -1138,6 +1138,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   position: relative;
 }
 .option-btn.intrus-tile::before { content: none; }
+/* Le contour blanc générique de .option-btn.selected (voir plus haut) se
+   fond souvent dans les zones claires d'une photo, peu visible sur une tuile
+   "intrus" (retour utilisateur : "rajouter un contour à la sélection") —
+   accent coloré + halo, jamais confondu avec le contenu de la photo. */
+.option-btn.intrus-tile.selected {
+  outline: 4px solid var(--color-accent);
+  outline-offset: -4px;
+  box-shadow: 0 0 0 4px var(--color-accent-soft), var(--shadow-md);
+}
 .intrus-tile-img {
   position: absolute;
   top: 0;
@@ -1596,6 +1605,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   margin: 0 auto var(--space-md);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
+  /* "ZoomOut Devinette" : un clic-glissé sur l'image déclenche le drag natif
+     du navigateur, qui affiche un fantôme de l'image SOURCE non zoomée/non
+     floutée (le CSS transform/filter appliqué à l'élément affiché n'est pas
+     repris dans ce fantôme) — moyen trivial de voir la réponse avant le
+     dézoom complet (retour utilisateur). draggable="false" sur la balise
+     (voir index.html) suffit sur Chrome/Safari ; -webkit-user-drag en repli
+     pour les moteurs qui l'ignorent malgré tout. */
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 /* Type "ZoomOut Devinette" (voir editor.js + index.js) : sans conteneur de
    taille FIXE avec overflow:hidden, un transform:scale() posé directement
@@ -2094,15 +2112,20 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   }
 }
 
-.question-text { 
+.question-text {
   font-family: 'Baloo 2', sans-serif;
-  font-size: 36px; 
-  font-weight: 800; 
-  text-align: center; 
-  margin-bottom: 40px; 
-  line-height: 1.2; 
+  font-size: 36px;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 40px;
+  line-height: 1.2;
   color: white;
   text-shadow: 0 3px 0 rgba(0,0,0,0.2);
+  /* Posé via .textContent (voir index.js) : les retours à la ligne tapés par
+     l'hôte survivent déjà dans le texte, il ne manquait que ça pour être
+     rendus (white-space:normal, par défaut, les collabe en un espace) —
+     retour utilisateur : "je veux que ça s'affiche de la même façon". */
+  white-space: pre-wrap;
 }
 .free-text-input { display: flex; gap: 12px; background: var(--color-card); padding: 12px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); border: none; }
 .free-text-input.mcq-mode { background: transparent; padding: 0; box-shadow: none; justify-content: center; margin-top: 24px; }
