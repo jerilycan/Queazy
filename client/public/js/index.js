@@ -4383,8 +4383,25 @@ const animateScoreGain = (row, oldTotal, newTotal, delta) => {
   }, LEADER_GAIN_HOLD_MS)
 }
 
+// Au-delà de ce nombre, le classement plein (tout le monde) devient une
+// longue liste défilante peu lisible une fois projeté à l'écran pour une
+// grande salle — incohérent avec le podium final, qui ne montre déjà que le
+// top 3 (voir results.js). Seul le top N + la ligne du joueur qui consulte
+// son propre écran (si hors top N) reste affiché.
+const LEADERBOARD_MAX_ROWS = 15
+
 const renderBoard = () => {
-  const ordered = computeOrder().filter(([id, s]) => !s.isHost)
+  const fullOrder = computeOrder().filter(([id, s]) => !s.isHost)
+  // Rang RÉEL de chacun, calculé sur la liste complète — même tronqué à
+  // l'affichage, le numéro affiché doit rester le vrai classement, pas la
+  // position dans la liste réduite.
+  const rankById = new Map(fullOrder.map(([id], i) => [id, i]))
+  let ordered = fullOrder
+  if (fullOrder.length > LEADERBOARD_MAX_ROWS) {
+    const top = fullOrder.slice(0, LEADERBOARD_MAX_ROWS)
+    const mine = fullOrder.find(([id]) => id === window.myId)
+    ordered = (mine && !top.some(([id]) => id === window.myId)) ? [...top, mine] : top
+  }
   const overlayVisible = !!leaderOverlay && !leaderOverlay.classList.contains('d-none') && leaderOverlay.style.display !== 'none'
 
   const first = new Map()
@@ -4405,7 +4422,13 @@ const renderBoard = () => {
     }
     row.classList.toggle('is-me', id === window.myId)
     row.classList.toggle('is-gone', s.connected === false)
-    row.querySelector('.leader-rank').textContent = idx + 1
+    // Repère visuel (léger espace + séparateur, voir style.css) quand cette
+    // ligne est le joueur qui consulte son propre écran, accroché à la fin
+    // de la liste malgré un rang bien plus loin que le top affiché — sans
+    // ça, "38" apparaissant juste sous "15" ressemblerait à un bug plutôt
+    // qu'à une troncature volontaire.
+    row.classList.toggle('is-detached', idx === LEADERBOARD_MAX_ROWS)
+    row.querySelector('.leader-rank').textContent = rankById.get(id) + 1
     row.querySelector('.leader-name').textContent = s.name
     row.querySelector('.leader-gone-badge').classList.toggle('d-none', s.connected !== false)
     // "+XXX" qui se fond dans le score au moment où il commence à monter
