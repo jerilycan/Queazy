@@ -4120,6 +4120,13 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
     return
   }
 
+  // Évite un doublon si cet évènement est rejoué au reconnect de l'hôte
+  // (voir server/index.js room:join, rattrapage pendant une modération en
+  // cours) alors que la ligne existe déjà dans le panneau (reconnexion sans
+  // recharger la page — le DOM du panneau n'est jamais vidé entre deux
+  // évènements, seulement ligne par ligne à la résolution de chacune).
+  if (moderationDiv.querySelector(`[data-answer-id="${answerId}"]`)) return
+
   moderationDiv.style.display = 'block'
 
   const item = document.createElement('div')

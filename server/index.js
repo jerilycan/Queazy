@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.42.0'
+const APP_VERSION = '1.42.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -976,6 +976,32 @@ const start = async () => {
         socket.emit('question:show', q.showPayload)
         socket.emit('question:reveal', q.revealPayload)
         if (room.leaderboardShown) socket.emit('leaderboard:show')
+      } else if (q && q.ended && !q.revealPayload && room.pending.size > 0) {
+        // Troisième état possible, distinct des deux ci-dessus (trouvé en
+        // audit) : le chrono est fini mais au moins une réponse (texte
+        // libre/blindtest/pbac) attend encore une décision de l'hôte —
+        // revealQuestion n'a donc pas encore tourné (voir endQuestion, elle
+        // n'est appelée qu'une fois room.pending vide). Sans ce rattrapage,
+        // un hôte qui se déconnecte pile à ce moment (le délai de grâce de
+        // 45s existe justement pour ce genre de coupure) revenait sans
+        // question:show NI le panneau de modération — bloqué sans aucun
+        // recours pour trancher les réponses en attente et faire avancer la
+        // partie. Ne rejoue que les réponses de CETTE question précise
+        // (comparaison par historyEntry, pas juste "tout room.pending").
+        socket.emit('question:show', q.showPayload)
+        socket.emit('timer:end', { id: q.id })
+        for (const [answerId, item] of room.pending) {
+          if (item.historyEntry !== q.historyEntry) continue
+          const currentPlayerId = resolvePendingId(room, item)
+          const playerName = room.players.get(currentPlayerId)?.name || 'Joueur'
+          if (item.fields) {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, blindtest: true, fields: item.fields })
+          } else if (item.pbac) {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content, pbac: true })
+          } else {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content })
+          }
+        }
       }
     })
 
