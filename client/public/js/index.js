@@ -288,6 +288,7 @@ const imageImg = document.getElementById('imageImg')
 const imageClickLayer = document.getElementById('imageClickLayer')
 const imageMarker = document.getElementById('imageMarker')
 const imageZonesRevealPath = document.getElementById('imageZonesRevealPath')
+const imagePlayersLayer = document.getElementById('imagePlayersLayer')
 const imageErrorMsg = document.getElementById('imageErrorMsg')
 const imageReloadBtn = document.getElementById('imageReloadBtn')
 const imageZoomControls = document.getElementById('imageZoomControls')
@@ -1260,6 +1261,7 @@ const buildImageAnswerArea = (src, { baseSrc } = {}) => {
   imageDisabled = true
   if (imageMarker) imageMarker.classList.add('d-none')
   if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
+  if (imagePlayersLayer) imagePlayersLayer.innerHTML = ''
   if (imageWrap) applyTileReveal(imageWrap, 0)
   if (imageZoomControls) imageZoomControls.classList.remove('d-none')
   // Repli synchrone : évite un flash de l'ancien cadre/zoom pendant que la
@@ -1439,6 +1441,32 @@ const revealImageZones = (zones) => {
     imageMarker.classList.toggle('marker-correct', dist === 0)
     imageMarker.classList.toggle('marker-incorrect', dist !== 0)
   }
+}
+
+// Point + pseudo de CHAQUE joueur (voir server/index.js revealQuestion, qui
+// calcule déjà `correct` avec le même calcul que le scoring réel) — affichés
+// en plus du gros marqueur ci-dessus (réservé au point du joueur COURANT,
+// sans pseudo). Retour utilisateur : voir où tout le monde a cliqué, pas
+// seulement soi-même.
+const revealImagePlayerPoints = (players) => {
+  if (!imagePlayersLayer) return
+  imagePlayersLayer.innerHTML = ''
+  const list = Array.isArray(players) ? players : []
+  list.forEach(p => {
+    if (typeof p?.x !== 'number' || typeof p?.y !== 'number') return
+    const el = document.createElement('div')
+    el.className = 'image-player-marker'
+    el.style.left = `${p.x * 100}%`
+    el.style.top = `${p.y * 100}%`
+    const name = document.createElement('span')
+    name.className = 'image-player-name'
+    name.textContent = p.name || 'Joueur'
+    const dot = document.createElement('span')
+    dot.className = `image-player-dot${p.correct ? ' is-correct' : ''}`
+    el.appendChild(name)
+    el.appendChild(dot)
+    imagePlayersLayer.appendChild(el)
+  })
 }
 
 // --- Question "blind test" : extrait audio + orbe néon réactif ---
@@ -4675,6 +4703,7 @@ socket.on('question:reveal', payload => {
   } else if (payload.type === 'image') {
     const zones = payload.correct || []
     revealImageZones(zones)
+    revealImagePlayerPoints(payload.players)
     const dist = imageSelectedPoint ? imageMinZoneDistance(imageSelectedPoint, zones) : null
     if (dist !== null && dist > 0 && myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')

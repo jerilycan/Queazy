@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.39.9'
+const APP_VERSION = '1.39.10'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -430,13 +430,35 @@ const start = async () => {
     const revealCorrect = question.type === 'timeline' && Array.isArray(question.correct)
       ? [...question.correct].sort((a, b) => Number(a?.date) - Number(b?.date))
       : question.correct
+    // "image" : jusqu'ici seul le point du joueur COURANT s'affichait à la
+    // révélation (voir index.js imageMarker) — retour utilisateur : montrer
+    // le point de TOUT LE MONDE avec son pseudo au-dessus. he.answers stocke
+    // le JSON {x,y} de chaque joueur (voir index.js submitCurrentAnswer) ;
+    // correct recalculé ici avec le MÊME calcul que le scoring réel
+    // (distPointToPolygon === 0, voir answer:submit) pour que le vert/rouge
+    // affiché corresponde exactement aux points marqués.
+    let imagePlayers
+    if (question.type === 'image') {
+      const zones = (Array.isArray(question.correct) ? question.correct : []).map(z => zoneToPolygonPoints(z)).filter(pts => pts.length >= 3)
+      imagePlayers = Object.entries(question.historyEntry?.answers || {})
+        .filter(([tok]) => tok !== room.hostToken)
+        .map(([tok, raw]) => {
+          let point = null
+          try { point = JSON.parse(raw) } catch { point = null }
+          if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return null
+          const dist = zones.length ? Math.min(...zones.map(pts => distPointToPolygon(point, pts))) : Infinity
+          return { name: room.tokens.get(tok)?.name || 'Joueur', x: point.x, y: point.y, correct: dist === 0 }
+        })
+        .filter(Boolean)
+    }
     io.to(code).emit('question:reveal', {
       id: question.id,
       type: question.type,
       correct: revealCorrect,
       explanation: question.explanation || '',
       target: question.type === 'graduation' ? question.correct?.[0] : undefined,
-      tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined
+      tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined,
+      players: imagePlayers
     })
   }
 
