@@ -131,6 +131,16 @@ if (timerMinus && timerPlus && qTimer) {
       questions[activeIndex].timerMs = val * 1000
     }
   }
+  // Saisie directe (retour utilisateur : champ passé en "readonly" par
+  // erreur, impossible d'y taper une valeur — seuls - / + fonctionnaient).
+  // onchange (au blur/Enter, pas à chaque frappe) : cloner le clampage sur
+  // 'input' aurait re-clampé "1" en "5" dès la première frappe de "15",
+  // empêchant de jamais taper la suite.
+  qTimer.onchange = () => {
+    const val = Math.min(120, Math.max(5, parseInt(qTimer.value) || 15))
+    qTimer.value = val
+    if (questions[activeIndex]) questions[activeIndex].timerMs = val * 1000
+  }
 }
 
 const mcqSection = document.getElementById('mcqSection')
@@ -277,6 +287,8 @@ const audioTrimWrap = document.getElementById('audioTrimWrap')
 const audioTrimPlayer = document.getElementById('audioTrimPlayer')
 const audioStartInput = document.getElementById('audioStartInput')
 const audioDurationInput = document.getElementById('audioDurationInput')
+const audioStartFromEndBtn = document.getElementById('audioStartFromEndBtn')
+const audioTotalDurationEl = document.getElementById('audioTotalDuration')
 const audioPreviewBtn = document.getElementById('audioPreviewBtn')
 const audioExtractBtn = document.getElementById('audioExtractBtn')
 const audioClipWrap = document.getElementById('audioClipWrap')
@@ -339,7 +351,7 @@ const applyReadOnly = () => {
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn,
-    audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
+    audioUploadInput, audioStartInput, audioDurationInput, audioStartFromEndBtn, audioPreviewBtn, audioExtractBtn,
     removeAudioClipBtn, addCorrectTitleBtn, addCorrectArtistBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
@@ -938,6 +950,15 @@ if (zoomGuessZoomMinusBtn) {
 if (zoomGuessZoomPlusBtn) {
   zoomGuessZoomPlusBtn.onclick = () => commitZoomGuessLevel((Number(zoomGuessZoomInput?.value) || ZOOM_GUESS_DEFAULT) + 1)
 }
+// Saisie directe (retour utilisateur : champ passé en "readonly" par erreur,
+// impossible d'y taper une valeur — seuls - / + fonctionnaient, et même sans
+// le readonly, rien ne relayait une saisie tapée vers q.zoom.startScale, voir
+// commitZoomGuessLevel). onchange (au blur/Enter) plutôt que oninput : sinon
+// le clampage à ZOOM_GUESS_MIN (2) dès la première frappe de "25" empêcherait
+// de jamais taper la suite.
+if (zoomGuessZoomInput) {
+  zoomGuessZoomInput.onchange = () => commitZoomGuessLevel(Number(zoomGuessZoomInput.value) || ZOOM_GUESS_DEFAULT)
+}
 
 // --- Question "blind test" : upload + recadrage audio ---
 // q.audio stocke directement l'extrait déjà coupé (jamais le fichier
@@ -961,6 +982,23 @@ const clampAudioTrimInputs = () => {
   let start = Math.max(0, Math.min(Number(audioStartInput.value) || 0, pendingAudioBuffer.duration - duration))
   audioDurationInput.value = Math.round(duration)
   audioStartInput.value = Math.round(start)
+}
+
+// "Depuis la fin" (retour utilisateur : viser la fin d'un morceau obligeait à
+// calculer et taper durée_totale - durée_extrait à la main, sans même voir la
+// durée totale affichée quelque part) — affichée à côté du champ "Début" dès
+// qu'un fichier est chargé (voir audioUploadInput.onchange plus bas).
+const formatAudioDuration = (sec) => {
+  const s = Math.max(0, Math.round(sec))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+if (audioStartFromEndBtn) {
+  audioStartFromEndBtn.onclick = () => {
+    if (!pendingAudioBuffer) return
+    const duration = Number(audioDurationInput.value) || 1
+    audioStartInput.value = Math.round(pendingAudioBuffer.duration - duration)
+    clampAudioTrimInputs()
+  }
 }
 
 const encodeWavMono = (audioBuffer, startSec, durationSec) => {
@@ -1042,6 +1080,7 @@ if (audioUploadInput) {
       audioStartInput.value = 0
       audioDurationInput.value = Math.min(15, Math.floor(audioBuffer.duration))
       clampAudioTrimInputs()
+      if (audioTotalDurationEl) audioTotalDurationEl.textContent = `(morceau : ${formatAudioDuration(audioBuffer.duration)})`
       audioTrimWrap.classList.remove('d-none')
     }).catch(() => {
       showToast('Impossible de lire ce fichier audio', 'error')

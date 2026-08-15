@@ -121,7 +121,7 @@
               <label>Temps imparti (secondes)</label>
               <div class="timer-controls">
                 <button id="timerMinus" class="btn-timer">-</button>
-                <input type="number" id="qTimer" value="15" min="5" max="120" readonly />
+                <input type="number" id="qTimer" value="15" min="5" max="120" />
                 <button id="timerPlus" class="btn-timer">+</button>
               </div>
             </div>
@@ -167,7 +167,7 @@
               <label>Niveau de zoom initial</label>
               <div class="timer-controls">
                 <button id="zoomGuessZoomMinus" class="btn-timer" type="button">-</button>
-                <input type="number" id="zoomGuessZoomInput" class="stepper-input" value="4" min="2" max="25" readonly />
+                <input type="number" id="zoomGuessZoomInput" class="stepper-input" value="4" min="2" max="25" />
                 <button id="zoomGuessZoomPlus" class="btn-timer" type="button">+</button>
               </div>
             </div>
@@ -301,12 +301,13 @@
               <audio id="audioTrimPlayer" controls></audio>
               <div class="d-grid grid-cols-split gap-lg mt-8">
                 <div class="detail-section">
-                  <label>Début (secondes)</label>
+                  <label>Début (secondes) <span id="audioTotalDuration" class="text-muted font-13"></span></label>
                   <div class="timer-controls">
                     <button id="audioStartMinus" class="btn-timer" type="button">-</button>
                     <input type="number" id="audioStartInput" class="stepper-input" value="0" min="0" />
                     <button id="audioStartPlus" class="btn-timer" type="button">+</button>
                   </div>
+                  <button type="button" id="audioStartFromEndBtn" class="btn btn-nav-secondary font-13 mt-8">Depuis la fin</button>
                 </div>
                 <div class="detail-section">
                   <label>Durée (secondes)</label>
