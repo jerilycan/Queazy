@@ -3551,6 +3551,11 @@ socket.on('question:show', payload => {
   // partie (signalé par l'utilisateur : "je ne peux pas écrire").
   if (blindtestTitleInput) blindtestTitleInput.disabled = false
   if (blindtestArtistInput) blindtestArtistInput.disabled = false
+  // Symétrique du .add('is-locked') posé dans submitCurrentAnswer — sans
+  // ça, le grisage de la question précédente resterait affiché sur celle-ci.
+  ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields].forEach(el => {
+    if (el) el.classList.remove('is-locked')
+  })
   // "Titre uniquement" (voir editor.js) : masque le champ artiste plutôt que
   // de le laisser visible mais inutile — rien ne l'attend côté scoring
   // (voir server/index.js), le montrer inviterait à le remplir pour rien.
@@ -3933,6 +3938,14 @@ const submitCurrentAnswer = () => {
       if (!c.classList.contains('selected')) {
         c.style.opacity = '0.5'
       }
+    })
+    // Retour visuel "verrouillé" pour les types sans équivalent des tuiles
+    // ci-dessus (retour utilisateur : seuls mcq/truefalse/intrus grisaient
+    // visiblement après envoi — les autres restaient identiques à l'écran,
+    // le joueur pouvait continuer à toucher/glisser sans aucun effet
+    // visible et se demander si son geste avait un effet).
+    ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields].forEach(el => {
+      if (el) el.classList.add('is-locked')
     })
   }
 }

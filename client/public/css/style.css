@@ -1165,6 +1165,20 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .answers-locked .image-click-layer {
   pointer-events: none;
 }
+/* Grisage après un envoi en mode "une seule tentative" (voir index.js
+   submitCurrentAnswer/is-locked) — AVANT la fin du chrono (.answers-locked
+   ci-dessus ne s'applique qu'APRÈS). Seuls mcq/truefalse/intrus grisaient
+   déjà leurs tuiles à l'envoi ; ces types-ci restaient visuellement
+   identiques, sans aucun signe que le geste du joueur avait un effet. */
+#gradSlider.is-locked,
+#orderList.is-locked,
+#associationArea.is-locked,
+#timelineList.is-locked,
+#imageWrap.is-locked,
+#blindtestFields.is-locked {
+  opacity: 0.5;
+  pointer-events: none;
+}
 
 /* Question "association" : deux colonnes de cartes cliquables (voir
    index.js buildAssociationArea) — pas de trait à tracer entre les deux
