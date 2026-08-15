@@ -3169,7 +3169,12 @@ const persistQuiz = async (successMessage) => {
     }
   } catch (err) {
     hideSaveLoading()
-    showToast('Erreur: ' + (err.message || 'sauvegarde'), 'error')
+    // Message générique côté utilisateur (retour utilisateur : le message
+    // brut du SDK Supabase/Postgres, ex. une violation de policy RLS, est du
+    // jargon technique illisible pour un créateur de quiz) — le détail reste
+    // disponible en console pour le débogage.
+    console.error('[quiz] sauvegarde impossible :', err)
+    showToast('Erreur lors de la sauvegarde du quiz', 'error')
   } finally {
     isSaving = false
     saveQuizBtn.disabled = false
@@ -3218,7 +3223,8 @@ if (duplicateQuizBtn) {
       window.location.href = '/editor.html?id=' + encodeURIComponent(data.id)
     } catch (err) {
       duplicateQuizBtn.disabled = false
-      showToast('Erreur lors de la duplication : ' + (err.message || ''), 'error')
+      console.error('[quiz] duplication impossible :', err)
+      showToast('Erreur lors de la duplication du quiz', 'error')
     }
   }
 }
@@ -3247,7 +3253,8 @@ if (reportQuizBtn && reportPopup) {
       reportPopup.classList.add('d-none')
       showToast('Merci, ton signalement a été envoyé.')
     } catch (err) {
-      showToast('Erreur lors de l\'envoi du signalement : ' + (err.message || ''), 'error')
+      console.error('[quiz] envoi du signalement impossible :', err)
+      showToast('Erreur lors de l\'envoi du signalement', 'error')
     } finally {
       confirmReportBtn.disabled = false
     }
@@ -3267,7 +3274,12 @@ deleteQuizBtn.onclick = async () => {
       if (error) throw error
       window.location.href = '/select.html'
     })
-    .catch(err => showToast(err.message, 'error'))
+    .catch(err => {
+      // Pire cas des 4 (retour utilisateur) : aucun préfixe, le message brut
+      // du SDK Supabase/Postgres partait tel quel à l'écran.
+      console.error('[quiz] suppression impossible :', err)
+      showToast('Erreur lors de la suppression du quiz', 'error')
+    })
 }
 
 // --- Tutoriel de prise en main (visite guidée "spotlight", voir QzUI.tour
