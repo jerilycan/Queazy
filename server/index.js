@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.42.8'
+const APP_VERSION = '1.42.9'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -495,19 +495,19 @@ const start = async () => {
       : question.correct
     // "image" : jusqu'ici seul le point du joueur COURANT s'affichait à la
     // révélation (voir index.js imageMarker) — retour utilisateur : montrer
-    // le point de TOUT LE MONDE avec son pseudo au-dessus. he.answers stocke
-    // le JSON {x,y} de chaque joueur (voir index.js submitCurrentAnswer) ;
-    // correct recalculé ici avec le MÊME calcul que le scoring réel
-    // (distPointToPolygon === 0, voir answer:submit) pour que le vert/rouge
-    // affiché corresponde exactement aux points marqués.
+    // le point de TOUT LE MONDE avec son pseudo au-dessus. question.imagePoints
+    // stocke le point brut {x,y} de chaque joueur (voir answer:submit) —
+    // historyEntry.answers, lui, contient la chaîne lisible "X% proche", pas
+    // du JSON, donc inutilisable ici. correct recalculé ici avec le MÊME
+    // calcul que le scoring réel (distPointToPolygon === 0, voir
+    // answer:submit) pour que le vert/rouge affiché corresponde exactement
+    // aux points marqués.
     let imagePlayers
     if (question.type === 'image') {
       const zones = (Array.isArray(question.correct) ? question.correct : []).map(z => zoneToPolygonPoints(z)).filter(pts => pts.length >= 3)
-      imagePlayers = Object.entries(question.historyEntry?.answers || {})
+      imagePlayers = Object.entries(question.imagePoints || {})
         .filter(([tok]) => tok !== room.hostToken)
-        .map(([tok, raw]) => {
-          let point = null
-          try { point = JSON.parse(raw) } catch { point = null }
+        .map(([tok, point]) => {
           if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return null
           const dist = zones.length ? Math.min(...zones.map(pts => distPointToPolygon(point, pts))) : Infinity
           return { name: room.tokens.get(tok)?.name || 'Joueur', x: point.x, y: point.y, correct: dist === 0 }
@@ -1355,6 +1355,11 @@ const start = async () => {
             // c'était proche de la zone attendue.
             q.historyEntry.answers[p.token] = `${Math.round(closeness * 100)}% proche`
           }
+          // Point brut gardé à part (pas dans historyEntry.answers, qui est
+          // la chaîne lisible ci-dessus) : c'est CE point que revealQuestion
+          // affiche sur l'image avec le pseudo de chacun à la révélation.
+          if (!q.imagePoints) q.imagePoints = {}
+          q.imagePoints[p.token] = point
         }
         q.answered?.add(token)
         q.submissions?.set(token, 'graded')
