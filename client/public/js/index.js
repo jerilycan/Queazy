@@ -3722,13 +3722,26 @@ socket.on('question:show', payload => {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'blindtest' && ((blindtestTitleInput?.value || '').trim() || (blindtestArtistInput?.value || '').trim())) {
         submitCurrentAnswer()
-      } else if (currentQuestionType === 'order') {
-        // "order" n'a pas de garde de contenu dans submitCurrentAnswer (voir
-        // plus bas) : l'ordre actuellement affiché — réordonné ou pas —
+      } else if (currentQuestionType === 'mcq' && selectedMcqOptions.length > 0) {
+        submitCurrentAnswer()
+      } else if ((currentQuestionType === 'truefalse' || currentQuestionType === 'intrus') && selectedMcqOptions.length > 0) {
+        submitCurrentAnswer()
+      } else if (currentQuestionType === 'image' && imageSelectedPoint) {
+        submitCurrentAnswer()
+      } else if (currentQuestionType === 'order' || currentQuestionType === 'graduation' || currentQuestionType === 'association' || currentQuestionType === 'timeline') {
+        // Ces quatre types n'ont aucune garde de contenu dans
+        // submitCurrentAnswer (voir plus bas) : l'état actuellement affiché
+        // — modifié ou pas (ordre mélangé tel quel, curseur resté au
+        // milieu, aucune paire faite, dates dans l'ordre de mélange...) —
         // est toujours une soumission valide, donc toujours sûr d'auto-
-        // envoyer ici (retour utilisateur : "validation automatique",
-        // évite de perdre la tentative d'un joueur qui a réordonné les
-        // tuiles sans jamais cliquer "Valider").
+        // envoyer ici plutôt que de perdre la tentative d'un joueur qui a
+        // interagi sans jamais cliquer "Valider" (retour utilisateur —
+        // corrigé d'abord pour "order" seul cette session, étendu ici aux
+        // 3 autres types dans exactement le même cas). mcq/truefalse/
+        // intrus/image restent à part juste au-dessus : eux DOIVENT avoir
+        // une vraie garde ("Rien n'est envoyé si le champ est resté vide"),
+        // sans quoi un joueur n'ayant jamais touché l'écran se verrait
+        // quand même compter une tentative.
         submitCurrentAnswer()
       }
     }
