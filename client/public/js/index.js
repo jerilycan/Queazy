@@ -1057,7 +1057,15 @@ const fillAssociationImages = (imagesUrl) => {
   if (!imagesUrl) return
   fetch(imagesUrl).then(res => res.json()).then(({ images }) => {
     (images || []).forEach(item => {
-      const wrap = associationArea?.querySelector(`[data-assoc-id="${item.id}"]`)
+      // [data-assoc-id] cible la TUILE (.assoc-item), pas le conteneur
+      // d'image (.assoc-item-img, imbriqué dedans — voir buildAssocItemImg)
+      // qui porte le "d-none" à retirer. Le retirer directement de la tuile
+      // ne faisait donc jamais rien (elle ne l'a jamais eu) : les images
+      // restaient invisibles en permanence, quel que soit l'upload (bug
+      // réel constaté : "les images du mode association ne s'affichent
+      // pas", présent depuis l'origine de cette fonctionnalité).
+      const tile = associationArea?.querySelector(`[data-assoc-id="${item.id}"]`)
+      const wrap = tile?.querySelector('.assoc-item-img')
       const img = wrap?.querySelector('.assoc-item-img-inner')
       if (!wrap || !img) return
       // Couleur dominante calculée à l'édition (voir editor.js
