@@ -3302,11 +3302,20 @@ const emitQuestion = (index) => {
     }
   }
   if (uploads.length > 0) {
+    // Retour utilisateur : rien n'indiquait qu'un envoi était en cours
+    // pendant l'upload d'image/son avant de démarrer la question — sur une
+    // connexion lente ou un gros fichier, l'hôte pouvait croire l'appli
+    // figée. is-disabled (voir goNext) bloque déjà le double-clic, mais
+    // c'est un repère purement visuel, sans texte.
+    if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · envoi du média en cours…`
     return Promise.all(uploads).then(() => {
+      if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · en attente des réponses…`
       socket.emit('question:show', payload)
       return true
     }).catch(() => {
+      if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · échec de l'envoi du média`
       log('Échec de l\'envoi du média, question non démarrée — réessayez')
+      showAnnounce('Échec de l\'envoi du média — réessaie')
       return false
     })
   }
