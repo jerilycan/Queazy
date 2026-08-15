@@ -4591,7 +4591,16 @@ const showResults = () => {
 socket.on('quiz:end', () => {
   inActiveGame = false // voir beforeunload : navigation volontaire vers les résultats
   const roomCode = roomInput.value.trim()
-  if (roomCode) window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}`
+  if (!roomCode) return
+  // loadedQuiz n'existe que côté hôte (seul à appeler loadQuizById) : ce
+  // paramètre part donc naturellement vide pour les joueurs, qui n'ont pas
+  // accès à relancer une partie — pas besoin de détection de rôle dédiée.
+  // Repris par result.html (bouton "Rejouer ce quiz", voir results.js) pour
+  // ramener l'hôte sur l'accueil avec le MÊME quiz déjà chargé plutôt que de
+  // lui faire retraverser tout l'écran de sélection (retour utilisateur :
+  // aucun moyen de relancer la même partie une fois sur les résultats).
+  const quizParam = loadedQuiz?.id ? `&quiz=${encodeURIComponent(loadedQuiz.id)}` : ''
+  window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}`
 })
 
 socket.on('player:joined', ({ id, name }) => {

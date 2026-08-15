@@ -34,6 +34,18 @@ const fanfareSound = new Audio('/audio/fanfare.wav')
 const backBtn = document.getElementById('backHome')
 if (backBtn) backBtn.onclick = () => { window.location.href = '/' }
 
+// N'apparaît que côté hôte : ?quiz= n'est ajouté à l'URL que par l'hôte
+// (voir index.js quiz:end, seul à connaître loadedQuiz.id) — un joueur qui
+// arrive ici n'a jamais ce paramètre, donc jamais ce bouton. Retour
+// utilisateur : aucun moyen de relancer la même partie une fois sur les
+// résultats, seulement "Retour à l'accueil" puis re-sélectionner le quiz.
+const replayQuizId = params.get('quiz')
+const replayBtn = document.getElementById('replayQuiz')
+if (replayBtn && replayQuizId) {
+  replayBtn.classList.remove('d-none')
+  replayBtn.onclick = () => { window.location.href = `/?quiz=${encodeURIComponent(replayQuizId)}` }
+}
+
 const checkAuth = async () => {
   const isGuest = localStorage.getItem('queazy_guest') === 'true'
   const sb = window.supabaseClient
