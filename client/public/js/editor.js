@@ -3355,6 +3355,14 @@ const init = () => {
         const { data: { session } } = await sb.auth.getSession()
         if (!session || session.user.id !== data.owner_id) {
           applyReadOnly()
+        } else if (duplicateQuizBtn) {
+          // Jusqu'ici visible uniquement en lecture seule (quiz d'un autre
+          // créateur) — retour utilisateur : aucun moyen de dupliquer son
+          // PROPRE quiz pour en créer une variante, un usage tout aussi
+          // courant (garder l'original intact tout en testant des
+          // changements, ou partir d'un quiz existant pour une autre
+          // occasion).
+          duplicateQuizBtn.classList.remove('d-none')
         }
         maybeStartEditorTour()
       })
