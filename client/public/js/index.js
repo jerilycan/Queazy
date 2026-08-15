@@ -3683,6 +3683,14 @@ socket.on('question:show', payload => {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'blindtest' && ((blindtestTitleInput?.value || '').trim() || (blindtestArtistInput?.value || '').trim())) {
         submitCurrentAnswer()
+      } else if (currentQuestionType === 'order') {
+        // "order" n'a pas de garde de contenu dans submitCurrentAnswer (voir
+        // plus bas) : l'ordre actuellement affiché — réordonné ou pas —
+        // est toujours une soumission valide, donc toujours sûr d'auto-
+        // envoyer ici (retour utilisateur : "validation automatique",
+        // évite de perdre la tentative d'un joueur qui a réordonné les
+        // tuiles sans jamais cliquer "Valider").
+        submitCurrentAnswer()
       }
     }
 
@@ -3785,9 +3793,10 @@ socket.on('question:show', payload => {
 })
 
 // Extrait en fonction nommée (au lieu d'un simple sendBtn.onclick) : "order"
-// et "truefalse" n'ont plus de bouton Valider (voir question:show) et doivent
-// pouvoir déclencher le même envoi automatiquement — au clic pour truefalse,
-// à l'approche de la fin du chrono pour order (voir plus bas).
+// garde son bouton "Valider" mais doit aussi pouvoir déclencher le même
+// envoi automatiquement à l'approche de la fin du chrono (voir le bloc
+// d'auto-envoi plus haut), pour ne pas perdre la tentative d'un joueur qui a
+// réordonné les tuiles sans jamais cliquer dessus.
 const submitCurrentAnswer = () => {
   const roomCode = roomInput.value.trim()
 
