@@ -2997,6 +2997,68 @@ const validateQuestion = (q, i) => {
   return true
 }
 
+// Upload à la sauvegarde vers le bucket Supabase Storage "quiz-media" (voir
+// supabase/schema.sql) : jusqu'ici chaque image/son de question était
+// stocké en base64 DANS la colonne JSON `questions` elle-même — ça alourdit
+// la base pour rien (surtout les extraits blind test, en WAV non compressé,
+// voir encodeWavMono plus haut). Un champ déjà en URL (http...) est laissé
+// tel quel, idempotent : une re-sauvegarde ne réuploade pas ce qui n'a pas
+// changé. Les vieux quiz jamais resauvegardés depuis ce chantier restent en
+// base64 indéfiniment — pas de migration automatique de l'existant (voir
+// emitQuestion côté index.js, qui gère toujours les deux formats).
+// Tolérant à l'échec (jamais de throw) : le bucket/les policies "quiz-media"
+// (voir supabase/schema.sql) doivent être collés à la main dans le Dashboard
+// Supabase — tant que ce n'est pas fait (ou en cas de souci réseau/quota),
+// l'upload échoue et cette fonction garde le base64 tel quel plutôt que de
+// bloquer TOUTE la sauvegarde du quiz (retour utilisateur : le code peut
+// partir en prod avant que le SQL soit collé). La migration s'active
+// automatiquement dès que le bucket existe, sans nouveau déploiement.
+const uploadMediaField = async (sb, ownerId, dataUrl) => {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl
+  try {
+    const match = /^data:([^;]+);base64,/.exec(dataUrl)
+    const mime = match ? match[1] : 'application/octet-stream'
+    const ext = mime.split('/')[1] || 'bin'
+    const blob = await (await fetch(dataUrl)).blob()
+    // owner_id/... : correspond exactement à la policy RLS d'upload sur
+    // storage.objects (voir schema.sql) — sinon rejeté par Supabase.
+    const path = `${ownerId}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`
+    const { error } = await sb.storage.from('quiz-media').upload(path, blob, { contentType: mime })
+    if (error) throw error
+    return sb.storage.from('quiz-media').getPublicUrl(path).data.publicUrl
+  } catch (err) {
+    console.warn('[quiz-media] upload impossible, base64 conservé :', err?.message || err)
+    return dataUrl
+  }
+}
+
+// Parcourt tous les champs média connus, quel que soit le type de question
+// (voir emitQuestion côté index.js pour la liste de référence : q.image,
+// q.illustration, q.audio, pair.aImage/bImage pour "association",
+// options[].image pour "intrus"). Uploads en parallèle, pas séquentiels.
+const uploadQuestionMedia = async (sb, ownerId, qs) => {
+  const uploads = []
+  const field = (obj, key) => {
+    if (!obj?.[key]) return
+    uploads.push(uploadMediaField(sb, ownerId, obj[key]).then(url => { obj[key] = url }))
+  }
+  qs.forEach(q => {
+    field(q, 'image')
+    field(q, 'illustration')
+    field(q, 'audio')
+    if (q.type === 'association' && Array.isArray(q.correct)) {
+      q.correct.forEach(pair => {
+        field(pair, 'aImage')
+        field(pair, 'bImage')
+      })
+    }
+    if (q.type === 'intrus' && Array.isArray(q.options)) {
+      q.options.forEach(opt => field(opt, 'image'))
+    }
+  })
+  await Promise.all(uploads)
+}
+
 // Écriture réseau proprement dite — QUEL que soit le déclencheur ("Sauvegarder"
 // en haut, valide TOUT le quiz, ou "Sauvegarder cette question" en bas, ne
 // valide QUE la question active), la ligne Supabase est toujours réécrite en
@@ -3006,12 +3068,6 @@ const validateQuestion = (q, i) => {
 // affiché à l'utilisateur pour rester honnête sur ce qui vient de se passer.
 const persistQuiz = async (successMessage) => {
   const title = titleEl.value.trim() || 'Mon Quiz sans titre'
-  const body = {
-    title,
-    questions,
-    singleAttempt: singleAttemptEl.checked,
-    isPublic: isPublicEl.checked
-  }
   const sb = window.supabaseClient
   isSaving = true
   showSaveLoading()
@@ -3023,6 +3079,13 @@ const persistQuiz = async (successMessage) => {
       hideSaveLoading()
       showToast('Connecte-toi pour sauvegarder', 'error')
       return
+    }
+    await uploadQuestionMedia(sb, session.user.id, questions)
+    const body = {
+      title,
+      questions,
+      singleAttempt: singleAttemptEl.checked,
+      isPublic: isPublicEl.checked
     }
     if (currentId) {
       const { error } = await sb.from('quizzes')

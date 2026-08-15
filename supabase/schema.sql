@@ -239,3 +239,50 @@ create trigger app_settings_set_updated_at
 insert into public.app_settings (key, value)
 values ('min_points_floor', '300')
 on conflict (key) do nothing;
+
+-- Plafond de stockage (Mo) et seuil d'alerte (%), voir server/index.js
+-- checkStorageUsage — modifiables ici sans redéploiement, comme
+-- min_points_floor ci-dessus.
+insert into public.app_settings (key, value)
+values ('storage_cap_mb', '1024')
+on conflict (key) do nothing;
+
+insert into public.app_settings (key, value)
+values ('storage_alert_threshold_pct', '80')
+on conflict (key) do nothing;
+
+-- ============================================================
+-- 5. STORAGE — bucket quiz-media (images/audio des quiz, voir editor.js
+--    persistQuiz/uploadQuestionMedia) — remplace le stockage base64 dans la
+--    colonne questions ci-dessus pour tout NOUVEL enregistrement (les quiz
+--    déjà sauvegardés avant ce chantier restent en base64 tant qu'ils ne
+--    sont pas resauvegardés, voir le commentaire dans editor.js).
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('quiz-media', 'quiz-media', true)
+on conflict (id) do nothing;
+
+-- Upload : un utilisateur connecté ne peut écrire que dans SON propre
+-- dossier — chemin toujours "<owner_id>/<fichier>" côté client (voir
+-- uploadQuestionMedia). Même principe que les policies owner_id sur
+-- quizzes/profiles ci-dessus, transposé aux noms de fichiers du bucket
+-- (storage.foldername renvoie le chemin découpé en segments, [1] = le
+-- premier dossier).
+drop policy if exists "quiz-media: upload dans son propre dossier" on storage.objects;
+create policy "quiz-media: upload dans son propre dossier"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'quiz-media'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- Lecture : ouverte à tout le monde, y compris anon — nécessaire pour que
+-- les joueurs (jamais connectés) chargent les images/audio en jeu, ET pour
+-- que le serveur liste le bucket avec la clé anon (voir checkStorageUsage,
+-- jamais de clé service_role dans ce projet). Un bucket "public" sert déjà
+-- les fichiers en lecture directe sans RLS, mais l'API de LISTING (utilisée
+-- par checkStorageUsage) reste soumise à cette policy.
+drop policy if exists "quiz-media: lecture publique" on storage.objects;
+create policy "quiz-media: lecture publique"
+  on storage.objects for select
+  using (bucket_id = 'quiz-media');

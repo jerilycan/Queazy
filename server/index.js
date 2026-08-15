@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.39.10'
+const APP_VERSION = '1.40.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -76,6 +76,69 @@ const refreshMinPointsFloor = async () => {
     // dernière valeur connue (ou le défaut) plutôt que de faire échouer quoi
     // que ce soit côté jeu.
     app.log.warn(`min_points_floor: lecture Supabase impossible, valeur conservée (${minPointsFloor}) — ${err.message || err}`)
+  }
+}
+
+// Alerte quand le stockage média (bucket Supabase Storage "quiz-media", voir
+// client/public/js/editor.js uploadQuestionMedia + supabase/schema.sql)
+// approche du plafond du plan Supabase — pour être prévenu avant que les
+// uploads échouent en pleine soirée quiz plutôt que de le découvrir sur le
+// coup. Plafond/seuil configurables sans redéploiement via `app_settings`
+// (même table/pattern que min_points_floor ci-dessus). Toujours via la clé
+// anon (supabaseAdmin) : aucune clé service_role introduite, la policy
+// SELECT ouverte sur storage.objects (voir schema.sql) suffit pour lister.
+const STORAGE_BUCKET = 'quiz-media'
+const STORAGE_CHECK_INTERVAL_MS = 60 * 60 * 1000 // usage lent à bouger, ~1h suffit
+const STORAGE_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000 // 1 alerte/24h max tant que le seuil reste dépassé
+let lastStorageAlertAt = 0 // remis à zéro si le process redémarre — compromis assumé
+
+// Un bucket Storage renvoie, au niveau racine, un mélange de "dossiers"
+// (objets sans metadata, id === null — un par owner_id, voir le chemin posé
+// par uploadMediaField côté client) et éventuellement de fichiers directs.
+// Additionne la taille réelle de chaque fichier, en descendant d'un niveau
+// pour chaque dossier owner_id.
+const getStorageUsageBytes = async () => {
+  const { data: entries, error } = await supabaseAdmin.storage.from(STORAGE_BUCKET).list('', { limit: 1000 })
+  if (error) throw error
+  let total = 0
+  for (const entry of entries || []) {
+    if (entry.id) { total += entry.metadata?.size || 0; continue }
+    const { data: files, error: filesError } = await supabaseAdmin.storage.from(STORAGE_BUCKET).list(entry.name, { limit: 1000 })
+    if (filesError) throw filesError
+    total += (files || []).reduce((sum, f) => sum + (f.metadata?.size || 0), 0)
+  }
+  return total
+}
+
+const checkStorageUsage = async () => {
+  try {
+    const [{ data: capRow }, { data: thresholdRow }] = await Promise.all([
+      supabaseAdmin.from('app_settings').select('value').eq('key', 'storage_cap_mb').maybeSingle(),
+      supabaseAdmin.from('app_settings').select('value').eq('key', 'storage_alert_threshold_pct').maybeSingle()
+    ])
+    const capMb = Number(capRow?.value) || 1024
+    const thresholdPct = Number(thresholdRow?.value) || 80
+    const usedMb = (await getStorageUsageBytes()) / (1024 * 1024)
+    const pct = (usedMb / capMb) * 100
+    if (pct < thresholdPct) return
+    if (Date.now() - lastStorageAlertAt < STORAGE_ALERT_COOLDOWN_MS) return
+    lastStorageAlertAt = Date.now()
+    const message = `⚠️ Stockage QuEazy (bucket ${STORAGE_BUCKET}) : ${usedMb.toFixed(0)} Mo / ${capMb} Mo utilisés (${pct.toFixed(0)}%, seuil ${thresholdPct}%).`
+    const webhookUrl = process.env.STORAGE_ALERT_WEBHOOK_URL
+    if (!webhookUrl) {
+      app.log.warn(`checkStorageUsage: seuil dépassé mais STORAGE_ALERT_WEBHOOK_URL absent — ${message}`)
+      return
+    }
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message })
+    })
+    if (!res.ok) app.log.warn(`checkStorageUsage: envoi webhook Discord échoué (HTTP ${res.status})`)
+  } catch (err) {
+    // Bucket pas encore créé (SQL pas encore collé dans Supabase), réseau
+    // indisponible, etc. : ne fait jamais échouer autre chose côté jeu.
+    app.log.warn(`checkStorageUsage: vérification impossible — ${err.message || err}`)
   }
 }
 
@@ -495,6 +558,15 @@ const start = async () => {
     return Buffer.from(match[2], 'base64')
   })
 
+  // item.image d'une tuile intrus/association : soit un base64 encore non
+  // migré (voir editor.js uploadQuestionMedia), soit déjà une URL publique
+  // Supabase Storage pour un quiz sauvegardé depuis ce chantier — la
+  // contrainte de longueur ne vaut que pour le base64 (une URL est de toute
+  // façon minuscule).
+  const isValidImageValue = v =>
+    (typeof v === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(v) && v.length <= 2_000_000) ||
+    (typeof v === 'string' && /^https?:\/\//i.test(v))
+
   // Question "intrus" (photos) : même principe que /api/room-image, mais pour
   // PLUSIEURS images à la fois (3 à 8, une grille entière à afficher d'un
   // coup) — impossible de réutiliser le slot pendingImage unique ci-dessus.
@@ -509,8 +581,7 @@ const start = async () => {
     const images = req.body?.images
     const valid = Array.isArray(images) && images.length >= 3 && images.length <= 8 &&
       images.every(item =>
-        item && typeof item.id === 'string' && /^[a-z0-9]{1,16}$/.test(item.id) &&
-        typeof item.image === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(item.image) && item.image.length <= 2_000_000
+        item && typeof item.id === 'string' && /^[a-z0-9]{1,16}$/.test(item.id) && isValidImageValue(item.image)
       )
     if (!valid) return reply.code(400).send({ error: 'invalid_images' })
     room.pendingIntrusImages = images
@@ -536,8 +607,7 @@ const start = async () => {
     const images = req.body?.images
     const valid = Array.isArray(images) && images.length >= 1 && images.length <= 16 &&
       images.every(item =>
-        item && typeof item.id === 'string' && /^[0-9]{1,2}[ab]$/.test(item.id) &&
-        typeof item.image === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(item.image) && item.image.length <= 2_000_000
+        item && typeof item.id === 'string' && /^[0-9]{1,2}[ab]$/.test(item.id) && isValidImageValue(item.image)
       )
     if (!valid) return reply.code(400).send({ error: 'invalid_images' })
     room.pendingAssociationImages = images
@@ -581,6 +651,8 @@ const start = async () => {
 
   await refreshMinPointsFloor()
   setInterval(refreshMinPointsFloor, MIN_POINTS_FLOOR_REFRESH_MS)
+  await checkStorageUsage()
+  setInterval(checkStorageUsage, STORAGE_CHECK_INTERVAL_MS)
 
   await app.listen({ port: PORT, host: '0.0.0.0' })
   const io = new Server(app.server, { cors: { origin: '*' } })

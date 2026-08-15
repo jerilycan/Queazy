@@ -3210,13 +3210,24 @@ const emitQuestion = (index) => {
   const imageToUpload = (q.type === 'image' || q.type === 'zoomguess') ? q.image : q.illustration
   const audioToUpload = q.type === 'blindtest' ? q.audio : null
   const uploads = []
-  if (imageToUpload) {
+  // Quiz sauvegardé depuis le chantier Supabase Storage (voir editor.js
+  // uploadQuestionMedia) : q.image/q.illustration/q.audio sont déjà des URLs
+  // publiques, plus besoin du relais HTTP (créé à l'origine uniquement pour
+  // éviter les gros blobs base64 dans la frame websocket — non pertinent
+  // pour une simple URL). Un vieux quiz jamais resauvegardé garde son
+  // base64 et passe toujours par le relais, inchangé.
+  if (imageToUpload && /^https?:\/\//.test(imageToUpload)) {
+    if (q.type === 'image' || q.type === 'zoomguess') payload.imageUrl = imageToUpload
+    else payload.illustrationUrl = imageToUpload
+  } else if (imageToUpload) {
     uploads.push(uploadRoomImage(roomCode, imageToUpload).then(url => {
       if (q.type === 'image' || q.type === 'zoomguess') payload.imageUrl = url
       else payload.illustrationUrl = url
     }))
   }
-  if (audioToUpload) {
+  if (audioToUpload && /^https?:\/\//.test(audioToUpload)) {
+    payload.audioUrl = audioToUpload
+  } else if (audioToUpload) {
     uploads.push(uploadRoomAudio(roomCode, audioToUpload).then(url => { payload.audioUrl = url }))
   }
   if (q.type === 'intrus' && Array.isArray(q.options) && q.options.length > 0) {
