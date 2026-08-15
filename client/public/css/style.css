@@ -1252,7 +1252,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
      scroller pour voir toutes les cartes. Reste en 2 colonnes côte à côte,
      juste des cartes plus compactes pour que tout tienne à l'écran. */
   .association-area { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .assoc-item { padding: 10px 8px; font-size: 13px; }
+  /* padding vertical remonté à 13px (min ~44px de hauteur tactile visée,
+     recommandation Apple/Google) — retour utilisateur : cible trop petite
+     comparée aux tuiles .option-btn (min-height: 64px même en mobile).
+     Horizontal reste comprimé à 8px : c'est la largeur de colonne qui est
+     réellement contrainte en 2 colonnes côte à côte, pas la hauteur. */
+  .assoc-item { padding: 13px 8px; font-size: 13px; }
 }
 
 /* Liste réordonnable (question "order") */
