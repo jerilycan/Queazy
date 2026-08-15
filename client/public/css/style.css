@@ -3414,8 +3414,9 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
      cubic-bezier(0.22,1,0.36,1) atteint visuellement sa position quasi
      immédiatement (la courbe grimpe à 1 dès x=0.22) puis reste figé le
      reste du temps — ça se ressentait comme un "saut" plutôt qu'un
-     glissement, retour utilisateur à l'appui. */
-  transition: transform 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+     glissement, retour utilisateur à l'appui. Repassée de 1.4s à 2s (retour
+     utilisateur : encore trop rapide pour suivre qui monte/descend). */
+  transition: transform 2s cubic-bezier(0.16, 1, 0.3, 1);
   /* Sans ça, un appui long sur mobile lance la sélection de texte native du
      navigateur sur ces lignes (jamais censées être sélectionnables/déplacées
      à la main) — combiné au réarrangement FLIP qui déplace le nœud DOM sous
@@ -3486,7 +3487,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .leader-score-gain.leader-score-gain-merge {
   opacity: 0;
   transform: translateX(-10px) scale(0.7);
-  transition: opacity 0.5s ease-in, transform 0.5s cubic-bezier(0.55, 0, 1, 0.45);
+  transition: opacity 0.7s ease-in, transform 0.7s cubic-bezier(0.55, 0, 1, 0.45);
 }
 
 /* Podium final — "course arcade néon" : chaque barre grimpe question par

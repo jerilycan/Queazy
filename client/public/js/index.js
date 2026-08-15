@@ -4481,8 +4481,8 @@ const leaderScoreAnimated = new Set()
 // droite des tuiles joueurs"), puis se fond dans le nombre au moment où
 // celui-ci commence réellement à monter — plutôt que deux animations
 // indépendantes, sans lien visuel entre elles.
-const LEADER_GAIN_HOLD_MS = 550 // le badge reste lisible avant de fusionner
-const LEADER_COUNT_DURATION_MS = 900
+const LEADER_GAIN_HOLD_MS = 1300 // le badge reste lisible avant de fusionner (retour utilisateur : trop court à 550ms, pas le temps de lire le score avant qu'il ne fusionne)
+const LEADER_COUNT_DURATION_MS = 1500
 const animateScoreGain = (row, oldTotal, newTotal, delta) => {
   const scoreEl = row.querySelector('.leader-score')
   const gainEl = row.querySelector('.leader-score-gain')
