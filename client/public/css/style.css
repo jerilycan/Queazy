@@ -3984,12 +3984,15 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
 .qz-select-trigger:focus-visible { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 4px var(--color-accent-soft); }
 .qz-select-trigger.is-open::after { transform: translateY(-30%) rotate(-135deg); }
 .qz-select-trigger.is-disabled, .qz-select-trigger:disabled { opacity: 0.6; cursor: not-allowed; }
+/* position:fixed + left/width/top posés en JS (voir enhanceSelect,
+   positionList) plutôt que relatif à .qz-select : la liste vit à part dans
+   <body> (retour utilisateur : "la dropdown list passe en dessous du quizz
+   à distance" — un position:absolute imbriqué dans .qz-select restait
+   prisonnier de l'overflow:hidden/contexte d'empilement du premier ancêtre
+   concerné, ex. .card pour ses coins arrondis, voir #lobby). */
 .qz-select-list {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
+  position: fixed;
+  z-index: 1000;
   margin: 0;
   padding: 6px;
   list-style: none;

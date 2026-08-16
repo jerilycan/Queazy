@@ -34,10 +34,19 @@
     trigger.setAttribute('aria-expanded', 'false')
     wrap.appendChild(trigger)
 
+    // Ajoutée à <body> plutôt qu'à wrap (contrairement à trigger juste au-
+    // dessus) : en position:absolute imbriquée dans son .qz-select, la liste
+    // déroulante restait prisonnière de l'overflow:hidden du premier
+    // ancêtre qui en a un (ex. .card, pour ses coins arrondis — voir #lobby)
+    // et pouvait finir recouverte par le champ suivant du même contexte
+    // d'empilement (retour utilisateur : "la dropdown list passe en dessous
+    // du quizz à distance"). Repositionnée en JS (voir positionList) à
+    // chaque ouverture, en position:fixed — même stratégie de "portail" que
+    // .info-bubble-portal juste au-dessus dans ce fichier, même cause.
     const list = document.createElement('ul')
     list.className = 'qz-select-list d-none'
     list.setAttribute('role', 'listbox')
-    wrap.appendChild(list)
+    document.body.appendChild(list)
 
     let items = []
 
@@ -63,6 +72,22 @@
     }
     syncLabel()
 
+    // Positionnée en JS (getBoundingClientRect du déclencheur) plutôt qu'en
+    // CSS relatif à wrap, puisque list vit maintenant à part dans <body> —
+    // mesurée une 2de fois APRÈS affichage pour basculer au-dessus du
+    // déclencheur si elle déborderait en bas de l'écran (même logique que
+    // openInfoBubble plus haut dans ce fichier).
+    const positionList = () => {
+      const rect = trigger.getBoundingClientRect()
+      const EDGE = 8, GAP = 8
+      list.style.left = Math.max(EDGE, Math.min(rect.left, window.innerWidth - rect.width - EDGE)) + 'px'
+      list.style.width = rect.width + 'px'
+      list.style.top = (rect.bottom + GAP) + 'px'
+      const listRect = list.getBoundingClientRect()
+      if (listRect.bottom > window.innerHeight - EDGE) {
+        list.style.top = Math.max(EDGE, rect.top - GAP - listRect.height) + 'px'
+      }
+    }
     const closeList = () => {
       list.classList.add('d-none')
       trigger.setAttribute('aria-expanded', 'false')
@@ -74,6 +99,7 @@
       trigger.setAttribute('aria-expanded', 'true')
       trigger.classList.add('is-open')
       items.forEach(li => li.classList.toggle('is-active', li.dataset.value === selectEl.value))
+      positionList()
       const active = items.find(li => li.classList.contains('is-active'))
       if (active) active.scrollIntoView({ block: 'nearest' })
     }
@@ -117,8 +143,20 @@
     })
 
     document.addEventListener('click', (e) => {
-      if (!wrap.contains(e.target)) closeList()
+      // list vit désormais hors de wrap (voir plus haut) : un clic dessus
+      // (choix d'une option) ne doit pas être traité comme "extérieur".
+      if (!wrap.contains(e.target) && !list.contains(e.target)) closeList()
     })
+    // PAS de fermeture au scroll ici (contrairement à une 1ère version) :
+    // cliquer trigger lui donne le focus, ce qui peut déclencher un
+    // micro-scroll AUTOMATIQUE du navigateur pour le ramener dans le
+    // viewport (bouton proche d'un bord) — un listener 'scroll' refermait
+    // alors la liste une fraction de seconde après son ouverture, avant même
+    // que quiconque ait pu cliquer une option. La position reste donc figée
+    // au moment de l'ouverture ; un vrai défilement pendant que le menu est
+    // ouvert la laisse simplement en place (repositionnée au prochain
+    // openList()), compromis largement préférable à ce faux déclenchement.
+    window.addEventListener('resize', () => { if (!list.classList.contains('d-none')) closeList() })
 
     // Le reste de l'appli continue d'écrire `selectEl.value = ...` ou
     // `selectEl.disabled = ...` directement (ex. socket.on('game:speedLevel'),
@@ -495,10 +533,15 @@
     // sélectionnable sans se refermer) : referme tout.
     if (!e.target.closest('.info-bubble-portal')) closeInfoBubbles()
   })
-  // Une bulle ouverte reste positionnée par rapport à l'icône au moment du
-  // clic (coordonnées figées, pas re-calculées en continu) : un défilement
-  // la laisserait affichée au mauvais endroit, mieux vaut la refermer.
-  window.addEventListener('scroll', closeInfoBubbles, true)
+  // PAS de fermeture au scroll (contrairement à une 1ère version) : l'icône
+  // est focusable au clic (tabindex), ce qui peut déclencher un micro-
+  // scroll AUTOMATIQUE du navigateur pour la ramener dans le viewport
+  // (icône proche d'un bord) — un listener 'scroll' refermait alors la
+  // bulle une fraction de seconde après son ouverture, avant même d'avoir pu
+  // en lire le contenu (même piège que .qz-select-list plus haut dans ce
+  // fichier). La position reste figée au moment du clic ; un vrai
+  // défilement pendant que la bulle est ouverte la laisse simplement en
+  // place, compromis largement préférable à ce faux déclenchement.
   window.addEventListener('resize', closeInfoBubbles)
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return
