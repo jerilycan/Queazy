@@ -2819,10 +2819,24 @@ socket.on('connect', () => {
     // "disparaître" au prochain rendu).
     socket.emit('room:join', { roomCode: myJoinedRoomCode, playerName: myJoinedName, token: myJoinedToken, avatar: myJoinedAvatar })
   } else if (preRoom) {
-    const nm = nameInput.value.trim() || localStorage.getItem('queazy_profile_name') || 'Joueur'
-    const av = selectedIcon || localStorage.getItem('queazy_profile_avatar') || '🙂'
-    rememberJoin(preRoom.toUpperCase(), nm, av, getToken())
-    socket.emit('room:join', { roomCode: preRoom.toUpperCase(), playerName: nm, token: getToken(), avatar: av })
+    // Auto-join UNIQUEMENT pour un visiteur qui a déjà un profil enregistré
+    // (retour utilisateur/joueur régulier) — jamais sur le simple CHARGEMENT
+    // de la page. Certaines apps qui ouvrent un lien scanné au QR code (ou
+    // en génèrent un aperçu) chargent la page en arrière-plan pour la
+    // prévisualiser, dans un contexte SANS profil enregistré : sans cette
+    // garde, ce simple aperçu suffisait à faire rejoindre la salle pour de
+    // vrai (nom générique "Joueur", jamais prêt), créant un "joueur
+    // fantôme" qui disparaissait avec l'aperçu — bug remonté comme
+    // intermittent, dépendant de l'app utilisée pour scanner. Un visiteur
+    // sans profil enregistré passe par le formulaire/popup de
+    // personnalisation comme d'habitude (le code salle reste pré-rempli,
+    // voir plus haut).
+    const savedName = localStorage.getItem('queazy_profile_name')
+    if (savedName) {
+      const av = selectedIcon || localStorage.getItem('queazy_profile_avatar') || '🙂'
+      rememberJoin(preRoom.toUpperCase(), savedName, av, getToken())
+      socket.emit('room:join', { roomCode: preRoom.toUpperCase(), playerName: savedName, token: getToken(), avatar: av })
+    }
   }
 })
 
