@@ -481,6 +481,14 @@ const wireQuestionDrag = (item, idx) => {
   item.addEventListener('pointerdown', (e) => {
     if (questionDragActive || e.button) return
     if (e.target.closest('.q-delete-btn')) return
+    // Au tactile, seule la poignée (.q-drag-handle, seule à garder
+    // touch-action:none — voir style.css) déclenche un glisser : un doigt
+    // posé ailleurs sur la tuile doit pouvoir faire défiler la liste des
+    // questions normalement (retour utilisateur : "on ne peut pas
+    // scroller"). Comportement souris/stylet inchangé (on peut toujours
+    // saisir n'importe où sur la tuile, comme avant) — touch-action
+    // n'affecte de toute façon que le tactile.
+    if (e.pointerType === 'touch' && !e.target.closest('.q-drag-handle')) return
     questionDragActive = true
     dragMoved = false
     const startY = e.clientY

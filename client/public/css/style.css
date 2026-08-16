@@ -2604,7 +2604,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   align-items: center;
   gap: 12px;
   background: var(--color-surface);
-  touch-action: none;
+  /* PAS touch-action:none ici (contrairement à avant) : ça désactivait le
+     scroll tactile natif sur TOUTE la tuile, alors que le glisser pour
+     réordonner (voir editor.js wireQuestionDrag) part d'un simple
+     pointerdown n'importe où dessus — un doigt qui essaie juste de faire
+     défiler la liste des questions déclenchait le glisser à la place
+     (retour utilisateur : "on ne peut pas scroller"). Le glisser tactile
+     est désormais restreint à la poignée .q-drag-handle ci-dessous, seule à
+     garder touch-action:none ; le reste de la tuile scrolle normalement.
+     Aucun changement côté souris (touch-action n'affecte que le tactile). */
   user-select: none;
   /* La barre de couleur (::before) est une bande pleine hauteur avec son
      propre petit rayon (4px) : bien plus serré que le radius-md (16px) de
@@ -2687,6 +2695,10 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   font-size: 16px;
   line-height: 1;
   user-select: none;
+  /* Seul point de la tuile où un geste tactile est TOUJOURS traité comme un
+     glisser (jamais un scroll) — voir le commentaire sur .question-item
+     plus haut. */
+  touch-action: none;
 }
 .question-item:hover .q-drag-handle { opacity: 0.7; }
 .question-item.active .q-drag-handle { opacity: 0.8; }
