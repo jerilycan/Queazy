@@ -1,6 +1,7 @@
 const path = require('path')
 const Fastify = require('fastify')
 const fastifyStatic = require('@fastify/static')
+const fastifyCompress = require('@fastify/compress')
 const { Server } = require('socket.io')
 const { createClient } = require('@supabase/supabase-js')
 
@@ -14,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.46.5'
+const APP_VERSION = '1.47.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -161,8 +162,22 @@ app.addHook('onSend', (req, reply, payload, done) => {
   done(null, payload)
 })
 
+// Aucune compression n'était appliquée : style.css (~165 Ko) et index.js
+// (~254 Ko) partaient bruts sur le réseau à chaque chargement, malgré le
+// navigateur qui demande explicitement gzip/br (Accept-Encoding) — un gain
+// concret surtout sur mobile/réseau lent. global: true applique la
+// compression à TOUTES les routes (statique ET API), pas seulement /static.
+app.register(fastifyCompress, { global: true })
+
 const publicDir = path.join(__dirname, '..', 'client', 'public')
-app.register(fastifyStatic, { root: publicDir })
+// maxAge modéré (2 min) plutôt qu'agressif : ce projet est redéployé très
+// souvent (plusieurs fois par session de travail), un cache trop long
+// laisserait des utilisateurs sur une vieille version du CSS/JS bien après
+// un correctif. 2 minutes suffit déjà à éviter l'aller-retour de
+// revalidation (Cache-Control: max-age=0 par défaut, voir plus haut) pour
+// le cas le plus fréquent : naviguer entre plusieurs pages de l'appli en
+// quelques secondes dans la même session.
+app.register(fastifyStatic, { root: publicDir, maxAge: '2m' })
 
 app.get('/health', async () => ({ ok: true }))
 

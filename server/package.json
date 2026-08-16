@@ -8,6 +8,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "@fastify/compress": "^6.5.0",
     "@fastify/static": "^6.12.0",
     "@supabase/supabase-js": "^2.95.3",
     "fastify": "^4.25.2",
