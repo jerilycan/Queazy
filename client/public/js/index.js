@@ -306,7 +306,6 @@ const blindtestUnlockBtn = document.getElementById('blindtestUnlockBtn')
 const blindtestFields = document.getElementById('blindtestFields')
 const blindtestTitleInput = document.getElementById('blindtestTitleInput')
 const blindtestArtistInput = document.getElementById('blindtestArtistInput')
-const audioModeRemoteInput = document.getElementById('audioModeRemote')
 const audioVolumeTrack = document.getElementById('audioVolumeTrack')
 const audioVolumeFill = document.getElementById('audioVolumeFill')
 const audioVolumeThumb = document.getElementById('audioVolumeThumb')
@@ -1588,11 +1587,6 @@ let blindtestAnalyser = null
 let blindtestGain = null
 let blindtestPulseRAF = null
 let myBlindTestSubmission = null // { title, artist } — capturé à l'envoi (voir sendBtn.onclick)
-let audioMode = 'irl' // 'irl' | 'remote' — lu depuis #audioModeRemote côté hôte, transmis dans le payload
-if (audioModeRemoteInput) {
-  audioModeRemoteInput.checked = audioMode === 'remote'
-  audioModeRemoteInput.onchange = () => { audioMode = audioModeRemoteInput.checked ? 'remote' : 'irl' }
-}
 
 // Curseur de volume "maison" (div + pointer events) plutôt qu'un
 // <input type="range"> restylé — voir style.css .volume-track pour le
@@ -3422,7 +3416,11 @@ const emitQuestion = (index) => {
     // question dans l'éditeur (voir server/index.js GRAD_CORRECT_ABS_TOLERANCE_DEFAULT
     // pour la valeur de repli si absente).
     tolerance: q.type === 'graduation' ? (Math.max(0, Number(q.tolerance) || 0)) : undefined,
-    audioMode: q.type === 'blindtest' ? audioMode : undefined,
+    // Suit désormais le réglage "Quiz à distance" du salon (room.gameMode) —
+    // plus de bascule séparée dans les contrôles de l'hôte : les deux
+    // notions se recouvraient (retour utilisateur), inutile de les régler
+    // deux fois.
+    audioMode: q.type === 'blindtest' ? gameMode : undefined,
     audioVolume: q.type === 'blindtest' ? hostAudioVolume : undefined,
     // "Titre uniquement" (voir editor.js) : pas d'artiste attendu pour ce
     // morceau (ex. générique de dessin animé). Le champ artiste n'est alors
