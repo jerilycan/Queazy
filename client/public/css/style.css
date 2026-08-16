@@ -4186,6 +4186,44 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
   .install-banner-text { white-space: normal; text-align: center; flex-basis: 100%; }
 }
 
+/* Mode IRL joueur (voir index.js body.irl-player-mode, activé pour les
+   JOUEURS non-hôtes quand room.gameMode === 'irl') : navbar remplacée par
+   une petite roue crantée, images décoratives des questions masquées (le
+   présentateur les montre sur l'écran commun). Jamais appliqué en mode "à
+   distance" ni côté hôte — la mise en page normale reste inchangée. */
+body.irl-player-mode .navbar { display: none; }
+body.irl-player-mode #illustrationImgWrap { display: none; }
+.irl-menu-btn {
+  display: none;
+  position: fixed; top: 14px; right: 14px; z-index: 200;
+  width: 42px; height: 42px; border-radius: 50%;
+  align-items: center; justify-content: center;
+  background: rgba(5,5,12,0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,47,176,0.18);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  font-size: 19px; cursor: pointer;
+}
+body.irl-player-mode .irl-menu-btn { display: flex; }
+.irl-menu-dropdown {
+  display: none;
+  position: fixed; top: 62px; right: 14px; z-index: 200;
+  min-width: 190px;
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+}
+.irl-menu-dropdown.is-open { display: block; }
+.irl-menu-item {
+  width: 100%; text-align: left; background: none; border: none;
+  padding: 10px 12px; border-radius: var(--radius-sm); cursor: pointer;
+  font-weight: 700; font-size: 14px; color: var(--color-text);
+}
+.irl-menu-item:hover { background: rgba(255,255,255,0.08); }
+
 /* ============================================================
    Responsive — placé en fin de fichier pour primer sur les
    définitions de base (même spécificité, ordre du fichier).

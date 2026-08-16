@@ -380,6 +380,12 @@ const speedLevelSelect = document.getElementById('speedLevelSelect')
 // reste du code ci-dessous continue de lire/écrire speedLevelSelect.value
 // et d'écouter 'change' sans rien savoir de ce widget.
 if (window.QzUI) window.QzUI.enhanceSelect(speedLevelSelect)
+// Mode de partie (hôte uniquement), voir socket.on('game:mode') plus bas.
+const gameModePanel = document.getElementById('gameModePanel')
+const gameModeRemoteToggle = document.getElementById('gameModeRemoteToggle')
+const irlMenuBtn = document.getElementById('irlMenuBtn')
+const irlMenuDropdown = document.getElementById('irlMenuDropdown')
+const irlLeaveBtn = document.getElementById('irlLeaveBtn')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
 const AVATAR_CHOICES = [
@@ -2361,7 +2367,9 @@ const resetUI = () => {
   isHost = false
   roomInput.value = ''
   
-  document.body.classList.remove('game-active', 'is-host')
+  document.body.classList.remove('game-active', 'is-host', 'irl-player-mode')
+  gameMode = 'irl'
+  irlMenuDropdown?.classList.remove('is-open')
   // Hide all dynamic panels — 'main' (toute la zone de jeu : question,
   // illustration, options/association/timeline/etc., bandeau de résultat)
   // en particulier : jamais togglée nulle part avant (toujours visible par
@@ -2902,6 +2910,73 @@ if (speedLevelSelect) {
   })
 }
 
+// --- Mode de partie IRL / à distance (voir server/index.js room.gameMode /
+// game:setMode) — même pattern de diffusion que game:speedLevel ci-dessus.
+// Purement une bascule de PRÉSENTATION côté client (voir updateIrlPlayerUI) :
+// aucune règle de jeu/scoring n'en dépend jamais côté serveur.
+let gameMode = 'irl'
+
+// N'affecte JAMAIS le mode "à distance" ni l'hôte (retour utilisateur
+// explicite : la disposition ne doit pas changer pour eux) — seul un joueur
+// non-hôte en salle IRL bascule la navbar contre la roue crantée et masque
+// l'image décorative de la question (voir CSS body.irl-player-mode).
+// Rappelée à chaque changement possible de l'un ou l'autre facteur (isHost
+// posé dans renderLobbyGrid, gameMode reçu par socket) : l'ordre d'arrivée
+// entre les deux n'est jamais garanti.
+const updateIrlPlayerUI = () => {
+  document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && !isHost)
+}
+
+socket.on('game:mode', ({ mode }) => {
+  gameMode = mode === 'remote' ? 'remote' : 'irl'
+  if (gameModeRemoteToggle) gameModeRemoteToggle.checked = gameMode === 'remote'
+  updateIrlPlayerUI()
+})
+
+if (gameModeRemoteToggle) {
+  gameModeRemoteToggle.addEventListener('change', () => {
+    const roomCode = roomInput.value.trim()
+    if (!roomCode) return
+    socket.emit('game:setMode', { roomCode, mode: gameModeRemoteToggle.checked ? 'remote' : 'irl' })
+  })
+}
+
+// Menu "roue crantée" (voir index.html #irlMenuBtn) : jamais un vrai modal,
+// juste un petit menu qui se ferme au clic ailleurs — ne doit surtout pas
+// bloquer la partie en cours (retour utilisateur explicite).
+if (irlMenuBtn && irlMenuDropdown) {
+  irlMenuBtn.onclick = (e) => {
+    e.stopPropagation()
+    const open = irlMenuDropdown.classList.toggle('is-open')
+    irlMenuBtn.setAttribute('aria-expanded', String(open))
+  }
+  document.addEventListener('click', (e) => {
+    if (!irlMenuDropdown.classList.contains('is-open')) return
+    if (irlMenuDropdown.contains(e.target) || e.target === irlMenuBtn) return
+    irlMenuDropdown.classList.remove('is-open')
+    irlMenuBtn.setAttribute('aria-expanded', 'false')
+  })
+}
+if (irlLeaveBtn) {
+  irlLeaveBtn.onclick = () => {
+    irlMenuDropdown.classList.remove('is-open')
+    irlMenuBtn.setAttribute('aria-expanded', 'false')
+    const proceed = () => { inActiveGame = false; allowNavigation = true; window.location.href = '/' }
+    // Même popup de confirmation que le clic sur un lien de navbar en pleine
+    // partie (voir tout en haut du fichier) — pas de confirmation nécessaire
+    // hors partie active (salon d'attente, classement...), quitter n'y coûte
+    // rien.
+    if (!inActiveGame) return proceed()
+    QzUI.confirm({
+      title: 'Quitter la partie ?',
+      message: 'Une partie est en cours. Si tu quittes maintenant, tu risques de perdre ta place et ta progression.',
+      confirmLabel: 'Quitter la partie',
+      cancelLabel: 'Rester',
+      danger: true
+    }).then((ok) => { if (ok) proceed() })
+  }
+}
+
 const renderLobbyGrid = (arr) => {
   lastLobbyArr = arr || []
   console.log('Lobby list received:', arr)
@@ -2972,6 +3047,7 @@ const renderLobbyGrid = (arr) => {
     // panneau gênait une présentation IRL projetée, la place centrale doit
     // rester pour la question/l'image, pas les boutons de contrôle.
     document.body.classList.toggle('is-host', isHost)
+    updateIrlPlayerUI() // isHost vient de changer, la bascule navbar/roue crantée doit suivre
 
     if (isMe && p.isHost) {
       hostPanel.classList.remove('d-none')
@@ -2988,6 +3064,7 @@ const renderLobbyGrid = (arr) => {
       if (!inActiveGame) {
         if (teamModePanel) teamModePanel.classList.remove('d-none')
         if (speedLevelPanel) speedLevelPanel.classList.remove('d-none')
+        if (gameModePanel) gameModePanel.classList.remove('d-none')
 
         // Reset buttons visibility when entering lobby as host
         startQuizBtn.classList.remove('d-none')

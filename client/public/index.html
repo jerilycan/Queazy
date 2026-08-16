@@ -57,6 +57,15 @@
       </div>
     </div>
 
+    <!-- Remplace la navbar sur le téléphone des joueurs en mode IRL (voir
+         body.irl-player-mode, index.js) : jamais bloquant (pas d'overlay
+         plein écran), juste un petit bouton coin haut-droit avec un seul
+         choix utile en pleine partie. -->
+    <button id="irlMenuBtn" type="button" class="irl-menu-btn" aria-label="Menu" aria-haspopup="true" aria-expanded="false">⚙️</button>
+    <div id="irlMenuDropdown" class="irl-menu-dropdown">
+      <button type="button" id="irlLeaveBtn" class="irl-menu-item">🚪 Quitter le salon</button>
+    </div>
+
     <div class="container mt-20">
 
       <!-- Salon d'attente -->
@@ -101,6 +110,18 @@
             </select>
           </label>
           <span class="font-12 text-muted d-block mt-8">Score max toujours 1000 pour une réponse quasi instantanée ; le score minimum d'une bonne réponse tardive dépend du niveau choisi.</span>
+        </div>
+
+        <!-- Mode de partie (hôte uniquement, verrouillé une fois la partie
+             lancée comme les panneaux ci-dessus). Voir index.js et
+             server/index.js (room.gameMode / game:setMode). -->
+        <div id="gameModePanel" class="team-mode-panel d-none">
+          <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+            <input id="gameModeRemoteToggle" type="checkbox" class="qz-toggle-input" />
+            <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+            🖥️ Quiz à distance (chacun sur son écran)
+          </label>
+          <span class="font-12 text-muted d-block mt-8">Décoché (par défaut) = IRL : sur le téléphone des joueurs, la navbar disparaît au profit d'une petite roue crantée, et les images décoratives des questions sont masquées (un présentateur les montre sur l'écran commun).</span>
         </div>
 
         <h3 class="mb-md opacity-80">Joueurs connectés</h3>

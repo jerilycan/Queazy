@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.44.2'
+const APP_VERSION = '1.45.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -864,7 +864,8 @@ const start = async () => {
         hostDisconnectedAt: null,
         lastActivityAt: Date.now(), // voir sweepAbandonedRooms plus bas
         speedLevel: 'normal', // voir game:setSpeedLevel / floorForSpeedLevel
-        leaderboardShown: false // voir leaderboard:show / question:show / room:join
+        leaderboardShown: false, // voir leaderboard:show / question:show / room:join
+        gameMode: 'irl' // voir game:setMode ; 'irl' (par défaut) ou 'remote'
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
       await socket.join(code)
@@ -954,6 +955,7 @@ const start = async () => {
 
       io.to(code).emit('team:list', { teamMode: room.teamMode, teams: buildTeamList(room) })
       io.to(code).emit('game:speedLevel', { level: room.speedLevel })
+      io.to(code).emit('game:mode', { mode: room.gameMode })
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
 
@@ -1092,6 +1094,22 @@ const start = async () => {
       const level = ['low', 'normal', 'high'].includes(payload?.level) ? payload.level : 'normal'
       room.speedLevel = level
       io.to(code).emit('game:speedLevel', { level })
+    })
+
+    // Mode de partie "IRL" (par défaut, un présentateur/écran commun) vs "à
+    // distance" (chacun sur son propre écran) — même pattern que
+    // game:setSpeedLevel juste au-dessus : hôte uniquement, verrouillé dès
+    // que la partie est lancée. Purement côté présentation (voir index.js
+    // côté client, body.irl-player-mode) : ne change jamais le calcul du
+    // score ni aucune règle de jeu, seulement ce qui s'affiche sur le
+    // téléphone des JOUEURS (navbar/image décorative masquées en IRL).
+    socket.on('game:setMode', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || room.hostId !== socket.id || gameStarted(room)) return
+      const mode = payload?.mode === 'remote' ? 'remote' : 'irl'
+      room.gameMode = mode
+      io.to(code).emit('game:mode', { mode })
     })
 
     socket.on('player:ready', payload => {
