@@ -4154,6 +4154,38 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
   .qz-tour-actions .qz-tour-close { margin-right: 0; order: 3; flex-basis: 100%; text-align: center; }
 }
 
+/* Bannière "Installer l'application" (voir js/pwa.js, évènement
+   beforeinstallprompt) — ancrée en bas de l'écran plutôt qu'insérée dans la
+   navbar, dont la structure varie trop d'une page à l'autre (login.html n'a
+   même aucun .nav-group) pour y glisser un bouton de façon uniforme. */
+.install-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 24px);
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 10px 12px 10px 16px;
+}
+.install-banner-text { font-size: 14px; font-weight: 700; color: var(--color-text); white-space: nowrap; }
+.install-banner-btn { height: 36px; padding: 0 16px; font-size: 14px; flex-shrink: 0; }
+.install-banner-close {
+  background: none; border: none; cursor: pointer; flex-shrink: 0;
+  font-size: 20px; line-height: 1; color: var(--color-text-muted); padding: 4px 6px;
+}
+.install-banner-close:hover { color: var(--color-text); }
+@media (max-width: 480px) {
+  .install-banner { flex-wrap: wrap; justify-content: center; }
+  .install-banner-text { white-space: normal; text-align: center; flex-basis: 100%; }
+}
+
 /* ============================================================
    Responsive — placé en fin de fichier pour primer sur les
    définitions de base (même spécificité, ordre du fichier).
