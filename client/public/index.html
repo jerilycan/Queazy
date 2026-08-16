@@ -101,27 +101,37 @@
              équipe ci-dessus. Voir index.js et server/index.js
              (room.speedLevel / game:setSpeedLevel / floorForSpeedLevel). -->
         <div id="speedLevelPanel" class="team-mode-panel d-none">
-          <label for="speedLevelSelect" class="align-center d-flex gap-xs font-bold font-14" style="justify-content: space-between;">
-            <span>⚡ Importance de la rapidité</span>
+          <div class="align-center d-flex gap-xs" style="justify-content: space-between;">
+            <span class="align-center d-flex gap-xs font-bold font-14">
+              ⚡ Importance de la rapidité
+              <span class="info-bubble">
+                <span class="info-bubble-icon" tabindex="0" role="button" aria-label="Plus d'infos">i</span>
+                <span class="info-bubble-text">Score max toujours 1000 pour une réponse quasi instantanée ; le score minimum d'une bonne réponse tardive dépend du niveau choisi.</span>
+              </span>
+            </span>
             <select id="speedLevelSelect" class="speed-level-select">
               <option value="low">Faible (1000 → 500)</option>
               <option value="normal" selected>Normal (1000 → 300)</option>
               <option value="high">Forte (1000 → 100)</option>
             </select>
-          </label>
-          <span class="font-12 text-muted d-block mt-8">Score max toujours 1000 pour une réponse quasi instantanée ; le score minimum d'une bonne réponse tardive dépend du niveau choisi.</span>
+          </div>
         </div>
 
         <!-- Mode de partie (hôte uniquement, verrouillé une fois la partie
              lancée comme les panneaux ci-dessus). Voir index.js et
              server/index.js (room.gameMode / game:setMode). -->
         <div id="gameModePanel" class="team-mode-panel d-none">
-          <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
-            <input id="gameModeRemoteToggle" type="checkbox" class="qz-toggle-input" />
-            <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
-            🖥️ Quiz à distance (chacun sur son écran)
-          </label>
-          <span class="font-12 text-muted d-block mt-8">Décoché (par défaut) = IRL : sur le téléphone des joueurs, la navbar disparaît au profit d'une petite roue crantée, les images décoratives des questions sont masquées (un présentateur les montre sur l'écran commun), et la musique des Blind Tests ne joue que sur l'écran de l'hôte.</span>
+          <div class="align-center d-flex gap-xs">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+              <input id="gameModeRemoteToggle" type="checkbox" class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+              🖥️ Quiz à distance (chacun sur son écran)
+            </label>
+            <span class="info-bubble">
+              <span class="info-bubble-icon" tabindex="0" role="button" aria-label="Plus d'infos">i</span>
+              <span class="info-bubble-text">Décoché (par défaut) = IRL : sur le téléphone des joueurs, la navbar disparaît au profit d'une petite roue crantée, les images décoratives des questions sont masquées (un présentateur les montre sur l'écran commun), et la musique des Blind Tests ne joue que sur l'écran de l'hôte.</span>
+            </span>
+          </div>
         </div>
 
         <h3 class="mb-md opacity-80">Joueurs connectés</h3>

@@ -435,5 +435,36 @@
     render()
   }
 
+  // --- Bulle d'info "i" (voir style.css .info-bubble) -------------------
+  // Délégué sur tout le document plutôt qu'un câblage par instance : un
+  // .info-bubble ajouté n'importe où (y compris dynamiquement, plus tard)
+  // fonctionne sans rien de plus à écrire ailleurs.
+  document.addEventListener('click', (e) => {
+    const icon = e.target.closest('.info-bubble-icon')
+    if (icon) {
+      const bubble = icon.closest('.info-bubble')
+      const wasOpen = bubble.classList.contains('is-open')
+      document.querySelectorAll('.info-bubble.is-open').forEach(b => b.classList.remove('is-open'))
+      if (!wasOpen) bubble.classList.add('is-open')
+      return
+    }
+    // Clic ailleurs que DANS une bulle déjà ouverte (le texte lui-même
+    // reste cliquable/sélectionnable sans la refermer) : referme tout.
+    if (!e.target.closest('.info-bubble')) {
+      document.querySelectorAll('.info-bubble.is-open').forEach(b => b.classList.remove('is-open'))
+    }
+  })
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    document.querySelectorAll('.info-bubble.is-open').forEach(b => b.classList.remove('is-open'))
+  })
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    const icon = document.activeElement
+    if (!icon || !icon.classList.contains('info-bubble-icon')) return
+    e.preventDefault()
+    icon.click()
+  })
+
   window.QzUI = { enhanceSelect: enhanceSelect, confirm: qzConfirm, toast: qzToast, tour: qzTour }
 })()
