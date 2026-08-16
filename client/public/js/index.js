@@ -2579,6 +2579,7 @@ const hideJoinPanel = () => {
 
 const showLobby = () => {
   document.body.classList.remove('game-active')
+  updateIrlPlayerUI() // retour au salon : la navbar doit redevenir accessible (voir plus bas)
   const lobby = document.getElementById('lobby')
   if (lobby) {
     lobby.classList.remove('d-none')
@@ -2920,11 +2921,17 @@ let gameMode = 'irl'
 // explicite : la disposition ne doit pas changer pour eux) — seul un joueur
 // non-hôte en salle IRL bascule la navbar contre la roue crantée et masque
 // l'image décorative de la question (voir CSS body.irl-player-mode).
-// Rappelée à chaque changement possible de l'un ou l'autre facteur (isHost
-// posé dans renderLobbyGrid, gameMode reçu par socket) : l'ordre d'arrivée
-// entre les deux n'est jamais garanti.
+// Restreint en plus à la partie EFFECTIVEMENT lancée (body.game-active) :
+// dans le salon d'attente, la navbar reste utile pour repartir/rejoindre un
+// autre salon si l'hôte a un souci (retour utilisateur explicite — masquer
+// la navbar dès le salon empêchait ce repli).
+// Rappelée à chaque changement possible de l'un des trois facteurs (isHost
+// posé dans renderLobbyGrid, gameMode reçu par socket, game-active posé au
+// lancement/retour au salon) : l'ordre d'arrivée entre eux n'est jamais
+// garanti.
 const updateIrlPlayerUI = () => {
-  document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && !isHost)
+  const gameActive = document.body.classList.contains('game-active')
+  document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && !isHost && gameActive)
 }
 
 socket.on('game:mode', ({ mode }) => {
@@ -3704,6 +3711,7 @@ socket.on('question:show', payload => {
   // pendant la partie : on la réduit au seul nom, non cliquable, pour éviter
   // qu'un joueur ne quitte la partie par erreur (voir règle CSS associée).
   document.body.classList.add('game-active')
+  updateIrlPlayerUI() // partie effectivement lancée : bascule navbar -> roue crantée si IRL (voir plus haut)
   const timerContainer = document.getElementById('timerContainer')
   if (timerContainer) {
     timerContainer.classList.remove('d-none')

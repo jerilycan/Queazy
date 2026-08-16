@@ -2208,6 +2208,10 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     padding: 4px 10px;
     font-size: 12px;
   }
+  /* En mode IRL joueur, la roue crantée (voir .irl-menu-btn) occupe déjà ce
+     même coin haut-droit — sans ce décalage, elle passait devant le badge
+     et cachait complètement le code salle (retour utilisateur). */
+  body.irl-player-mode .persistent-code { right: 64px; }
 }
 
 .question-text {
