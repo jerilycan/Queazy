@@ -2482,6 +2482,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   .select-header-tabs { width: 100%; }
   .select-header-tabs .btn { flex: 1; }
   .select-header #newQuizBtn { width: 100%; }
+  /* Page Profil (voir profile.html .profile-layout) : l'avatar (120px fixe)
+     à côté du formulaire poussait "Pseudo"/le bouton "Sauvegarder"/la
+     grille d'avatars hors de l'écran sur mobile (retour utilisateur :
+     "moche et dépasse sur le côté") — l'avatar seul + les 4 colonnes
+     d'.icon-grid (voir plus bas) dépassaient déjà la largeur disponible une
+     fois côte à côte. Empilé verticalement, avatar centré au-dessus.
+     Desktop (row + align-start) inchangé. */
+  .profile-layout { flex-direction: column; align-items: center; }
+  .profile-layout > .flex-1 { width: 100%; }
   .options-grid { grid-template-columns: 1fr; }
   /* "Intrus" (tuiles photo) reste volontairement en 2 colonnes même ici,
      contrairement au reste (texte MCQ, illisible sur une seule longue
