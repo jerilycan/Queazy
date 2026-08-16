@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.45.6'
+const APP_VERSION = '1.46.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -475,6 +475,18 @@ const start = async () => {
     return { id: question.id, type: question.type, correct, total, correctPct, topAnswer, perPlayer }
   }
 
+  // Contenu de l'évènement "timer:end" (chrono écoulé pour de vrai, voir
+  // endQuestion) — extrait en fonction plutôt que réécrit à chaque site
+  // d'émission (fermeture normale + 2 rattrapages de reconnexion, voir
+  // room:join) : pour une question "révélation", c'est LE signal qui livre
+  // enfin l'image réponse à tout le monde, indépendamment d'une éventuelle
+  // modération encore en attente sur la réponse texte (qui peut retarder
+  // question:reveal, jamais timer:end).
+  const timerEndPayload = (question) => ({
+    id: question.id,
+    reponseImage: question.type === 'reveal' ? question.reponseImage : undefined
+  })
+
   // Diffuse la bonne réponse (+ le récap juste avant) à toute la salle.
   // Point de sortie UNIQUE vers la révélation, appelé soit directement à la
   // fermeture du chrono (endQuestion, si rien n'attend de modération), soit
@@ -563,6 +575,26 @@ const start = async () => {
     reply.header('Cache-Control', 'no-store')
     reply.type(match[1])
     return Buffer.from(match[2], 'base64')
+  })
+
+  // Question "révélation" : image réponse (celle qui apparaît en fondu à la
+  // fin du chrono). Même validation que /api/room-image ci-dessus, mais
+  // DÉLIBÉRÉMENT AUCUN endpoint GET associé — contrairement à l'image
+  // "énigme" (relayée via /api/room-image, montrée à tout le monde dès le
+  // début), celle-ci EST la réponse à deviner : un GET public la rendrait
+  // consultable en devtools avant même la fin du chrono. Elle n'est lue que
+  // côté serveur (voir question:show, qui la copie sur question.reponseImage
+  // puis vide ce slot) et ne repart vers les clients qu'au moment choisi par
+  // le serveur lui-même (voir timer:end), jamais avant.
+  app.post('/api/room-reveal-answer/:code', async (req, reply) => {
+    const room = rooms.get(req.params.code)
+    if (!room) return reply.code(404).send({ error: 'room_not_found' })
+    const image = req.body?.image
+    if (typeof image !== 'string' || !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(image) || image.length > 2_000_000) {
+      return reply.code(400).send({ error: 'invalid_image' })
+    }
+    room.pendingRevealAnswer = image
+    return { ok: true }
   })
 
   // item.image d'une tuile intrus/association : soit un base64 encore non
@@ -981,6 +1013,11 @@ const start = async () => {
         // déjà là — chaque handler client remet lui-même hostPhase à jour à
         // sa réception, aucun changement client requis.
         socket.emit('question:show', q.showPayload)
+        // "révélation" : timer:end est ce qui livre l'image réponse côté
+        // client (voir plus haut timerEndPayload) — sans le rejouer ici,
+        // un reconnectant arrivant à CE stade ne la recevrait jamais et
+        // resterait bloqué sur l'image énigme malgré question:reveal.
+        if (q.type === 'reveal') socket.emit('timer:end', timerEndPayload(q))
         socket.emit('question:reveal', q.revealPayload)
         if (room.leaderboardShown) socket.emit('leaderboard:show')
       } else if (q && q.ended && !q.revealPayload && room.pending.size > 0) {
@@ -996,7 +1033,7 @@ const start = async () => {
         // partie. Ne rejoue que les réponses de CETTE question précise
         // (comparaison par historyEntry, pas juste "tout room.pending").
         socket.emit('question:show', q.showPayload)
-        socket.emit('timer:end', { id: q.id })
+        socket.emit('timer:end', timerEndPayload(q))
         for (const [answerId, item] of room.pending) {
           if (item.historyEntry !== q.historyEntry) continue
           const currentPlayerId = resolvePendingId(room, item)
@@ -1215,7 +1252,18 @@ const start = async () => {
       // retraduire l'id opaque stocké dans he.answers en "Image N" lisible
       // pour le récap hôte (voir buildRecap plus bas). Inutile de le garder
       // pour les autres types, qui n'en ont pas besoin ici.
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length, options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined }
+      // reponseImage ("révélation") : soit déjà une URL (quiz sauvegardé
+      // depuis le chantier Supabase Storage, transmise directement dans
+      // payload.reponseImageUrl — minuscule, aucun souci à la faire
+      // transiter dans ce payload puisqu'elle n'est jamais rediffusée avant
+      // l'heure, voir plus bas), soit un base64 pas encore migré déposé
+      // juste avant via /api/room-reveal-answer (voir plus haut, room.
+      // pendingRevealAnswer). Consommé immédiatement (vidé une fois copié
+      // sur la question) pour ne jamais laisser un ancien dépôt traîner et
+      // fuiter sur une question SUIVANTE qui ne serait pas de type "reveal".
+      const reponseImage = payload?.type === 'reveal' ? (payload?.reponseImageUrl || room.pendingRevealAnswer || null) : undefined
+      room.pendingRevealAnswer = null
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length, options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -1225,8 +1273,10 @@ const start = async () => {
       // 'association'/'timeline' : q.correct porte les paires/dates réelles —
       // jamais diffusé tel quel (les colonnes/cartes mélangées voyagent dans
       // des champs séparés, voir emitQuestion côté client, eux non filtrés).
-      const { correct, explanation, ...payloadWithoutCorrectOrExplanation } = payload || {}
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'zoomguess' || payload?.type === 'intrus')
+      // 'reveal' : reponseImageUrl retiré aussi (voir juste au-dessus, déjà
+      // copiée sur question.reponseImage) — jamais diffusée avant timer:end.
+      const { correct, explanation, reponseImageUrl, ...payloadWithoutCorrectOrExplanation } = payload || {}
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal')
         ? payloadWithoutCorrectOrExplanation
         : { ...payloadWithoutCorrectOrExplanation, correct }
 
@@ -1260,7 +1310,7 @@ const start = async () => {
           if (!(token in historyEntry.results)) historyEntry.results[token] = 'incorrect'
         }
 
-        io.to(code).emit('timer:end', { id: question.id })
+        io.to(code).emit('timer:end', timerEndPayload(question))
 
         // Si une réponse texte libre est encore en attente de validation par
         // l'hôte, on ne révèle pas tout de suite : voir revealQuestion, elle

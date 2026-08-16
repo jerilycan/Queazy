@@ -392,6 +392,17 @@
               <button type="button" id="blindtestReloadBtn" class="btn btn-nav-secondary font-13">↻ Recharger l'extrait</button>
             </div>
           </div>
+          <!-- Question "révélation" : image énigme visible pendant toute la
+               fenêtre de réponse, réponse jamais reçue du serveur avant
+               timer:end (voir server/index.js) — les deux <img> sont
+               empilées, la réponse par-dessus, opacity 0 jusqu'à ce que
+               .is-revealed bascule le fondu (voir style.css). -->
+          <div id="revealArea" class="reveal-area d-none">
+            <div id="revealImgWrap" class="reveal-img-wrap">
+              <img id="revealEnigmeImg" class="reveal-img reveal-img-enigme" alt="" draggable="false" />
+              <img id="revealReponseImg" class="reveal-img reveal-img-reponse" alt="" draggable="false" />
+            </div>
+          </div>
           <div id="freeText" class="free-text-input">
             <input id="answer" placeholder="Ta réponse..." class="h-60 border-none bg-transparent font-18" maxlength="150" />
             <div id="blindtestFields" class="blindtest-fields d-none">

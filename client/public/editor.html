@@ -119,6 +119,7 @@
                 <option value="order">↕️ Ordre / classement</option>
                 <option value="image">📍 Image (où se trouve ?)</option>
                 <option value="zoomguess">🔍 ZoomOut Devinette</option>
+                <option value="reveal">🖼️ Révélation</option>
                 <option value="blindtest">🎵 Blind Test (extrait audio)</option>
                 <option value="association">🔗 Association</option>
                 <option value="timeline">⏳ Timeline</option>
@@ -181,6 +182,33 @@
               </div>
             </div>
             <p class="text-muted font-13 mt-8">L'image démarre zoomée à ce niveau et se dézoome progressivement jusqu'à l'image complète, au rythme du chronomètre de la question. Les joueurs devinent avant le dézoom complet.</p>
+          </div>
+
+          <!-- "Révélation" : deux images DISTINCTES (contrairement à
+               "ZoomOut Devinette", qui dézoome progressivement une seule et
+               même image) — l'énigme reste affichée pendant tout le temps de
+               réponse, puis la réponse apparaît en fondu enchaîné pile à la
+               fin du chrono (voir index.js timer:end côté joueur). L'image
+               réponse n'est JAMAIS envoyée au navigateur avant cet instant
+               (voir server/index.js /api/room-reveal-answer, sans endpoint
+               de lecture public contrairement aux autres images du projet). -->
+          <div id="revealSection" class="detail-section d-none">
+            <label>Image "énigme" (affichée pendant que les joueurs répondent)</label>
+            <input type="file" id="revealEnigmeUpload" accept="image/*" class="cursor-pointer" />
+            <div id="revealEnigmePreviewWrap" class="illustration-preview-wrap d-none mt-8">
+              <img id="revealEnigmePreviewImg" class="illustration-preview-img" alt="" />
+              <button type="button" id="removeRevealEnigmeBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+            </div>
+            <p class="text-muted font-13 mt-8">Ex. une affiche de film retouchée (titre/logo masqués).</p>
+            <div class="detail-section mt-16">
+              <label>Image "réponse" (révélée en fondu à la fin du chrono)</label>
+              <input type="file" id="revealReponseUpload" accept="image/*" class="cursor-pointer" />
+              <div id="revealReponsePreviewWrap" class="illustration-preview-wrap d-none mt-8">
+                <img id="revealReponsePreviewImg" class="illustration-preview-img" alt="" />
+                <button type="button" id="removeRevealReponseBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+              </div>
+              <p class="text-muted font-13 mt-8">Ex. l'affiche originale, non retouchée.</p>
+            </div>
           </div>
 
           <div id="mcqSection" class="detail-section d-none">

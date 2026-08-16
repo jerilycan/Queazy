@@ -278,6 +278,21 @@ const ZOOM_GUESS_MIN = 2
 const ZOOM_GUESS_MAX = 25
 const ZOOM_GUESS_DEFAULT = 4
 
+// Type "Révélation" : deux images distinctes (q.enigmeImage / q.reponseImage,
+// jamais mélangées avec q.image/q.illustration des autres types) — l'énigme
+// affichée pendant les réponses, la réponse révélée en fondu à la fin du
+// chrono (voir index.js côté joueur). La liste de réponses acceptées
+// réutilise #correctSection, générique, comme "free"/"zoomguess".
+const revealSection = document.getElementById('revealSection')
+const revealEnigmeUploadInput = document.getElementById('revealEnigmeUpload')
+const revealEnigmePreviewWrap = document.getElementById('revealEnigmePreviewWrap')
+const revealEnigmePreviewImg = document.getElementById('revealEnigmePreviewImg')
+const removeRevealEnigmeBtn = document.getElementById('removeRevealEnigmeBtn')
+const revealReponseUploadInput = document.getElementById('revealReponseUpload')
+const revealReponsePreviewWrap = document.getElementById('revealReponsePreviewWrap')
+const revealReponsePreviewImg = document.getElementById('revealReponsePreviewImg')
+const removeRevealReponseBtn = document.getElementById('removeRevealReponseBtn')
+
 // Question "blind test" : upload du morceau + recadrage (début/durée) en un
 // extrait court, encodé en WAV mono côté client (voir plus bas) — q.audio
 // stocke directement l'extrait déjà coupé, jamais le fichier complet importé.
@@ -351,6 +366,7 @@ const applyReadOnly = () => {
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn,
+    revealEnigmeUploadInput, removeRevealEnigmeBtn, revealReponseUploadInput, removeRevealReponseBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioStartFromEndBtn, audioPreviewBtn, audioExtractBtn,
     removeAudioClipBtn, addCorrectTitleBtn, addCorrectArtistBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
@@ -993,6 +1009,78 @@ if (zoomGuessZoomInput) {
   zoomGuessZoomInput.onchange = () => commitZoomGuessLevel(Number(zoomGuessZoomInput.value) || ZOOM_GUESS_DEFAULT)
 }
 
+// --- Question "Révélation" : deux images (énigme / réponse) --------------
+const populateRevealFields = (q) => {
+  if (!revealEnigmePreviewWrap || !revealReponsePreviewWrap) return
+  if (q.type !== 'reveal') return
+  if (q.enigmeImage) {
+    revealEnigmePreviewImg.src = q.enigmeImage
+    revealEnigmePreviewWrap.classList.remove('d-none')
+  } else {
+    revealEnigmePreviewWrap.classList.add('d-none')
+  }
+  if (q.reponseImage) {
+    revealReponsePreviewImg.src = q.reponseImage
+    revealReponsePreviewWrap.classList.remove('d-none')
+  } else {
+    revealReponsePreviewWrap.classList.add('d-none')
+  }
+}
+
+if (revealEnigmeUploadInput) {
+  revealEnigmeUploadInput.onchange = () => {
+    const file = revealEnigmeUploadInput.files && revealEnigmeUploadInput.files[0]
+    revealEnigmeUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    compressImageFile(file, (dataUrl) => {
+      questions[activeIndex].enigmeImage = dataUrl
+      populateRevealFields(questions[activeIndex])
+    })
+  }
+}
+if (removeRevealEnigmeBtn) {
+  removeRevealEnigmeBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    QzUI.confirm({
+      title: 'Retirer cette image ?',
+      message: 'Il faudra réimporter une image "énigme" pour en remettre une.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].enigmeImage = null
+      populateRevealFields(questions[activeIndex])
+    })
+  }
+}
+
+if (revealReponseUploadInput) {
+  revealReponseUploadInput.onchange = () => {
+    const file = revealReponseUploadInput.files && revealReponseUploadInput.files[0]
+    revealReponseUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    compressImageFile(file, (dataUrl) => {
+      questions[activeIndex].reponseImage = dataUrl
+      populateRevealFields(questions[activeIndex])
+    })
+  }
+}
+if (removeRevealReponseBtn) {
+  removeRevealReponseBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    QzUI.confirm({
+      title: 'Retirer cette image ?',
+      message: 'Il faudra réimporter une image "réponse" pour en remettre une.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].reponseImage = null
+      populateRevealFields(questions[activeIndex])
+    })
+  }
+}
+
 // --- Question "blind test" : upload + recadrage audio ---
 // q.audio stocke directement l'extrait déjà coupé (jamais le fichier
 // complet importé) : on décode le fichier importé en mémoire (Web Audio
@@ -1263,6 +1351,7 @@ const selectQuestion = (index) => {
   populateImageFields(q)
   populateIllustrationFields(q)
   populateZoomGuessFields(q)
+  populateRevealFields(q)
   populateAudioFields(q)
   if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
 
@@ -1317,6 +1406,7 @@ const toggleTypeSections = () => {
   if (orderSection) orderSection.classList.toggle('d-none', qType.value !== 'order')
   if (imageSection) imageSection.classList.toggle('d-none', qType.value !== 'image')
   if (zoomGuessSection) zoomGuessSection.classList.toggle('d-none', qType.value !== 'zoomguess')
+  if (revealSection) revealSection.classList.toggle('d-none', qType.value !== 'reveal')
   if (blindtestSection) blindtestSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
@@ -1324,20 +1414,21 @@ const toggleTypeSections = () => {
   if (pbacSection) pbacSection.classList.toggle('d-none', qType.value !== 'pbac')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
   // déjà leur propre image (le type "image" utilise la sienne comme cible
-  // cliquable, "zoomguess" la sienne comme photo à deviner — pas comme
-  // simple décoration).
-  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess')
+  // cliquable, "zoomguess" la sienne comme photo à deviner, "reveal" ses deux
+  // images énigme/réponse — pas comme simple décoration).
+  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal')
   // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
   // blindtestSection ci-dessus) au lieu de la liste générique "correct".
   // "mcq" a aussi sa propre façon de désigner la bonne réponse : la case à
   // cocher sur chaque option (voir renderOptions), qui alimente déjà
   // entièrement q.correct — la liste "correct" générique ci-dessous ferait
   // donc double emploi (retaper le texte d'une réponse déjà cochée), d'où
-  // la confusion remontée par l'utilisateur. "free" (texte libre) ET
-  // "zoomguess" (deviner à partir de l'image) ont besoin de cette liste.
+  // la confusion remontée par l'utilisateur. "free" (texte libre), "zoomguess"
+  // (deviner à partir de l'image) ET "reveal" (deviner avant la révélation)
+  // ont besoin de cette liste.
   // "association" / "timeline" / "intrus" ont chacun leur propre section
   // ci-dessus.
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess')
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess' && qType.value !== 'reveal')
   correctLabel.textContent = 'Réponses acceptées'
 }
 
@@ -2575,6 +2666,12 @@ qType.onchange = () => {
     // retour sur ce type, ou venant de "free" qui a la même forme).
     if (!Array.isArray(q.correct)) q.correct = ['']
     populateZoomGuessFields(q)
+  } else if (qType.value === 'reveal') {
+    // Même logique que "zoomguess" juste au-dessus (q.correct venant d'un
+    // autre type peut être un objet/une forme spécifique) : on repart sur
+    // une liste de réponses acceptées classique, sauf s'il en a déjà une.
+    if (!Array.isArray(q.correct)) q.correct = ['']
+    populateRevealFields(q)
   } else if (qType.value === 'blindtest') {
     // q.correct venant d'un autre type est un tableau, pas l'objet
     // {title, artist} attendu ici : on repart propre sauf s'il a déjà la bonne
@@ -2681,6 +2778,7 @@ const deleteQuestionAt = (index) => {
     populateImageFields(q)
     populateIllustrationFields(q)
     populateZoomGuessFields(q)
+    populateRevealFields(q)
     populateAudioFields(q)
     if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
 
@@ -2935,6 +3033,26 @@ const validateQuestion = (q, i) => {
       showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
       return false
     }
+  } else if (q.type === 'reveal') {
+    // Les deux images (énigme ET réponse) sont obligatoires, comme l'image
+    // de "zoomguess" ci-dessus — sans l'une des deux, rien à montrer/à
+    // révéler.
+    if (!q.enigmeImage) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : importe une image "énigme"`, 'error')
+      return false
+    }
+    if (!q.reponseImage) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : importe une image "réponse"`, 'error')
+      return false
+    }
+    const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
+    if (!hasAnswer) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
+      return false
+    }
   }
 
   // Pour les curseurs numériques, vérifier la cohérence min/max/cible
@@ -3116,8 +3234,9 @@ const uploadMediaField = async (sb, ownerId, dataUrl) => {
 
 // Parcourt tous les champs média connus, quel que soit le type de question
 // (voir emitQuestion côté index.js pour la liste de référence : q.image,
-// q.illustration, q.audio, pair.aImage/bImage pour "association",
-// options[].image pour "intrus"). Uploads en parallèle, pas séquentiels.
+// q.illustration, q.audio, q.enigmeImage/q.reponseImage pour "reveal",
+// pair.aImage/bImage pour "association", options[].image pour "intrus").
+// Uploads en parallèle, pas séquentiels.
 const uploadQuestionMedia = async (sb, ownerId, qs) => {
   const uploads = []
   const field = (obj, key) => {
@@ -3128,6 +3247,8 @@ const uploadQuestionMedia = async (sb, ownerId, qs) => {
     field(q, 'image')
     field(q, 'illustration')
     field(q, 'audio')
+    field(q, 'enigmeImage')
+    field(q, 'reponseImage')
     if (q.type === 'association' && Array.isArray(q.correct)) {
       q.correct.forEach(pair => {
         field(pair, 'aImage')
@@ -3336,7 +3457,7 @@ const EDITOR_TOUR_STEPS = [
   // Ordre aligné sur la disposition actuelle du formulaire (retour
   // utilisateur) : type + minuteur remontés tout en haut (juste sous
   // Brouillon), avant l'énoncé — voir editor.html.
-  { target: '#qType', title: 'Type de question', text: '12 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, blind test, association, timeline, intrus, Petit Bac, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
+  { target: '#qType', title: 'Type de question', text: '13 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, Révélation, blind test, association, timeline, intrus, Petit Bac, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
   { target: '#qTimer', title: 'Temps imparti', text: 'Règle en secondes le temps laissé aux joueurs pour répondre, avec les boutons - et +.' },
   { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
   { target: '#illustrationUpload', title: 'Illustration (optionnelle)', text: 'Ajoute une image au-dessus de la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },

@@ -1785,6 +1785,40 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   transition: transform 0.12s linear, filter 0.12s linear;
 }
 
+/* Question "révélation" : deux <img> empilées dans une boîte de taille FIXE
+   (même gabarit que .illustration-img-wrap.is-zoomed ci-dessus, pour une
+   cohérence visuelle entre les types "l'image EST la question") — la
+   réponse, par-dessus, part d'opacity:0 et bascule à 1 quand .is-revealed
+   est posée sur le wrapper (voir index.js, au moment de timer:end
+   uniquement, jamais avant). object-fit:contain plutôt que cover : une
+   affiche à moitié rognée perdrait justement les éléments que le créateur a
+   pris soin de masquer/révéler. */
+.reveal-area { max-width: 640px; margin: var(--space-lg) auto 0; }
+.reveal-img-wrap {
+  position: relative;
+  width: min(640px, 100%);
+  height: min(70vh, 420px);
+  margin: 0 auto var(--space-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+.reveal-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+.reveal-img-reponse {
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+.reveal-img-wrap.is-revealed .reveal-img-reponse { opacity: 1; }
+
 /* Question "blind test" : orbe néon qui pulse en direct avec le volume de
    l'extrait audio (voir index.js startBlindTestPulse — Web Audio API, analyse
    locale du fichier décodé). "orb-idle" est la respiration CSS générique
@@ -2578,6 +2612,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-item.type-intrus::before { background: linear-gradient(90deg, var(--color-violet) 0, var(--color-violet) 3px, transparent 60%); }
 .question-item.type-zoomguess::before { background: linear-gradient(90deg, var(--color-indigo) 0, var(--color-indigo) 3px, transparent 60%); }
 .question-item.type-pbac::before { background: linear-gradient(90deg, var(--color-lime) 0, var(--color-lime) 3px, transparent 60%); }
+.question-item.type-reveal::before { background: linear-gradient(90deg, var(--tile-silver) 0, var(--tile-silver) 3px, transparent 60%); }
 
 .question-item:hover {
   background: var(--color-accent-soft);

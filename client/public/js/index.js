@@ -313,6 +313,14 @@ const audioVolumeLabel = document.getElementById('audioVolumeLabel')
 const blindtestVolumeTrack = document.getElementById('blindtestVolumeTrack')
 const blindtestVolumeFill = document.getElementById('blindtestVolumeFill')
 const blindtestVolumeThumb = document.getElementById('blindtestVolumeThumb')
+// Question "révélation" : deux <img> empilées (voir index.html/style.css) —
+// l'énigme, visible dès le début, et la réponse, qui ne reçoit son .src
+// qu'au moment de timer:end (jamais avant, voir server/index.js) puis
+// bascule en fondu via la classe .is-revealed sur le wrapper.
+const revealArea = document.getElementById('revealArea')
+const revealImgWrap = document.getElementById('revealImgWrap')
+const revealEnigmeImg = document.getElementById('revealEnigmeImg')
+const revealReponseImg = document.getElementById('revealReponseImg')
 // Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
 // décorative au-dessus de l'énoncé.
@@ -3315,6 +3323,23 @@ const uploadRoomAudio = (roomCode, base64Audio) => {
   })
 }
 
+// Question "révélation" : image réponse, déposée via /api/room-reveal-answer
+// (voir server/index.js) — contrairement à uploadRoomImage/uploadRoomAudio
+// ci-dessus, PAS de GET correspondant à retourner : cette image reste
+// interne au serveur (question.reponseImage) jusqu'à timer:end, jamais
+// consultable via une URL avant l'heure. Ne renvoie donc rien d'utile au
+// payload — juste une Promise qui échoue si l'upload échoue, pour que
+// Promise.all(uploads) bloque bien le démarrage de la question le cas échéant.
+const uploadRoomRevealAnswer = (roomCode, base64Image) => {
+  return fetch(`/api/room-reveal-answer/${encodeURIComponent(roomCode)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64Image })
+  }).then(res => {
+    if (!res.ok) throw new Error('upload failed')
+  })
+}
+
 // Même principe encore, pour les PLUSIEURS photos du type "intrus" (voir
 // server/index.js /api/room-intrus-images/:code) — un seul upload pour
 // toute la grille plutôt qu'un par photo. `images` = [{id, image}, ...]
@@ -3455,8 +3480,12 @@ const emitQuestion = (index) => {
   // on les dépose d'abord via une requête HTTP classique, puis on démarre la
   // question avec juste leur URL. Si un upload échoue, on ne démarre pas la
   // question plutôt que de l'afficher sans média à personne.
-  const imageToUpload = (q.type === 'image' || q.type === 'zoomguess') ? q.image : q.illustration
+  const imageToUpload = (q.type === 'image' || q.type === 'zoomguess') ? q.image : (q.type === 'reveal' ? q.enigmeImage : q.illustration)
   const audioToUpload = q.type === 'blindtest' ? q.audio : null
+  // "révélation" : l'image réponse ne passe JAMAIS par uploadRoomImage (relais
+  // à GET public) — voir uploadRoomRevealAnswer plus haut, qui la dépose sans
+  // jamais la rendre consultable avant l'heure.
+  const reponseImageToUpload = q.type === 'reveal' ? q.reponseImage : null
   const uploads = []
   // Quiz sauvegardé depuis le chantier Supabase Storage (voir editor.js
   // uploadQuestionMedia) : q.image/q.illustration/q.audio sont déjà des URLs
@@ -3466,10 +3495,12 @@ const emitQuestion = (index) => {
   // base64 et passe toujours par le relais, inchangé.
   if (imageToUpload && /^https?:\/\//.test(imageToUpload)) {
     if (q.type === 'image' || q.type === 'zoomguess') payload.imageUrl = imageToUpload
+    else if (q.type === 'reveal') payload.enigmeImageUrl = imageToUpload
     else payload.illustrationUrl = imageToUpload
   } else if (imageToUpload) {
     uploads.push(uploadRoomImage(roomCode, imageToUpload).then(url => {
       if (q.type === 'image' || q.type === 'zoomguess') payload.imageUrl = url
+      else if (q.type === 'reveal') payload.enigmeImageUrl = url
       else payload.illustrationUrl = url
     }))
   }
@@ -3477,6 +3508,15 @@ const emitQuestion = (index) => {
     payload.audioUrl = audioToUpload
   } else if (audioToUpload) {
     uploads.push(uploadRoomAudio(roomCode, audioToUpload).then(url => { payload.audioUrl = url }))
+  }
+  // reponseImageUrl : petite (déjà une URL Supabase Storage courte) ou
+  // absente si base64 encore non migré — dans ce dernier cas, le serveur ira
+  // la lire lui-même sur room.pendingRevealAnswer une fois l'upload ci-
+  // dessous terminé (voir server/index.js question:show).
+  if (reponseImageToUpload && /^https?:\/\//.test(reponseImageToUpload)) {
+    payload.reponseImageUrl = reponseImageToUpload
+  } else if (reponseImageToUpload) {
+    uploads.push(uploadRoomRevealAnswer(roomCode, reponseImageToUpload))
   }
   if (q.type === 'intrus' && Array.isArray(q.options) && q.options.length > 0) {
     uploads.push(uploadRoomIntrusImages(roomCode, q.options).then(url => { payload.intrusImagesUrl = url }))
@@ -3767,6 +3807,30 @@ socket.on('question:show', payload => {
   if (blindtestArea) {
     blindtestArea.classList.toggle('d-none', payload.type !== 'blindtest')
   }
+  if (revealArea) {
+    revealArea.classList.toggle('d-none', payload.type !== 'reveal')
+    if (payload.type === 'reveal') {
+      // Repart toujours du fondu "fermé" : sinon une question "révélation"
+      // qui suit une AUTRE question "révélation" démarrerait avec la
+      // réponse précédente déjà visible en surimpression (classe encore
+      // posée depuis timer:end, voir plus bas).
+      if (revealImgWrap) revealImgWrap.classList.remove('is-revealed')
+      if (revealEnigmeImg) {
+        if (payload.enigmeImageUrl) {
+          revealEnigmeImg.src = payload.enigmeImageUrl
+          revealEnigmeImg.classList.remove('d-none')
+        } else {
+          revealEnigmeImg.classList.add('d-none')
+          revealEnigmeImg.removeAttribute('src')
+        }
+      }
+      // La réponse n'arrive JAMAIS ici (voir server/index.js) — vidée pour
+      // ne jamais garder par erreur le src de la question précédente affiché
+      // en dessous avant que timer:end ne la fournisse pour de vrai.
+      if (revealReponseImg) revealReponseImg.removeAttribute('src')
+      applyTileReveal(revealImgWrap || revealArea, 0)
+    }
+  }
   if (illustrationImg) {
     // "zoomguess" utilise sa PROPRE image (payload.imageUrl, obligatoire),
     // avec zoom toujours actif ; les autres types réutilisent le même
@@ -3852,7 +3916,7 @@ socket.on('question:show', payload => {
     // answerInput). Uniquement sur pointeur fin (souris/trackpad) — sur
     // mobile, focus() ferait surgir le clavier virtuel par-dessus l'écran
     // avant même que le joueur ait vu la question.
-    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac') && window.matchMedia('(pointer: fine)').matches) {
+    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac' || payload.type === 'reveal') && window.matchMedia('(pointer: fine)').matches) {
       answerInput.focus()
     }
   }
@@ -3993,7 +4057,7 @@ socket.on('question:show', payload => {
     // submitCurrentAnswer() lui-même pose hasAnsweredThisQuestion = true,
     // donc ce bloc ne se déclenche qu'une seule fois.
     if (!isHost && !hasAnsweredThisQuestion && remaining > 0 && remaining <= 500) {
-      if ((currentQuestionType === 'free' || currentQuestionType === 'pbac') && answerInput.value.trim()) {
+      if ((currentQuestionType === 'free' || currentQuestionType === 'pbac' || currentQuestionType === 'reveal') && answerInput.value.trim()) {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'blindtest' && ((blindtestTitleInput?.value || '').trim() || (blindtestArtistInput?.value || '').trim())) {
         submitCurrentAnswer()
@@ -4860,7 +4924,7 @@ socket.on('player:joined', ({ id, name }) => {
   renderLeaderboard()
 })
 
-socket.on('timer:end', () => {
+socket.on('timer:end', (payload) => {
   // Le serveur peut clore la question bien avant la fin nominale du chrono
   // (tout le monde a déjà répondu, voir server/index.js emitProgress) : sans
   // ça, la barre continuerait de descendre toute seule pendant que la
@@ -4877,6 +4941,16 @@ socket.on('timer:end', () => {
   // (tout le monde a répondu en avance) — on force l'image complète tout de
   // suite pour rester cohérent avec la révélation qui s'affiche en dessous.
   if (currentIllustrationZoom && illustrationImg) { illustrationImg.style.transform = 'scale(1)'; illustrationImg.style.filter = '' }
+  // "révélation" : timer:end est le SEUL moment où l'image réponse arrive
+  // enfin du serveur (voir server/index.js, jamais transmise avant) — pour
+  // TOUT LE MONDE, hôte compris (c'est souvent son écran qui est projeté en
+  // IRL, voir la mécanique IRL/à distance). Bascule le fondu enchaîné (voir
+  // style.css .reveal-img-reponse/.is-revealed) dès que le src est posé, pas
+  // avant, pour ne jamais laisser transparaître une image vide.
+  if (currentQuestionType === 'reveal' && payload?.reponseImage && revealReponseImg && revealImgWrap) {
+    revealReponseImg.src = payload.reponseImage
+    revealImgWrap.classList.add('is-revealed')
+  }
   // Coupe l'extrait s'il n'était pas déjà terminé (le chrono peut être plus
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).
@@ -4984,7 +5058,7 @@ socket.on('question:reveal', payload => {
       else el.classList.add('incorrect-reveal')
     })
     showMyResultBanner()
-  } else if (payload.type === 'free' || payload.type === 'zoomguess') {
+  } else if (payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'reveal') {
     revealFreeAnswer((payload.correct || [])[0] || '')
     showMyResultBanner()
   } else if (payload.type === 'pbac') {
