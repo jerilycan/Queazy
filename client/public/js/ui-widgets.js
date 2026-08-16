@@ -435,28 +435,74 @@
     render()
   }
 
-  // --- Bulle d'info "i" (voir style.css .info-bubble) -------------------
+  // --- Bulle d'info "i" (voir style.css .info-bubble/.info-bubble-portal) --
+  // .info-bubble-text (dans le HTML, à côté de chaque libellé) ne sert plus
+  // que de SOURCE pour le texte — jamais affichée directement. Le panneau
+  // réellement visible est un unique "portail" partagé, ajouté tout en haut
+  // de <body> et repositionné en JS à chaque ouverture (getBoundingClientRect
+  // de l'icône cliquée) : échappe ainsi à l'overflow:hidden et au contexte
+  // d'empilement de n'importe quel ancêtre (ex. .card, qui a overflow:hidden
+  // pour ses coins arrondis — un simple position:absolute imbriqué dedans
+  // restait rogné/passait derrière les champs suivants, retour utilisateur).
   // Délégué sur tout le document plutôt qu'un câblage par instance : un
   // .info-bubble ajouté n'importe où (y compris dynamiquement, plus tard)
   // fonctionne sans rien de plus à écrire ailleurs.
+  let infoBubblePortal = null
+  const ensureInfoBubblePortal = () => {
+    if (infoBubblePortal) return infoBubblePortal
+    infoBubblePortal = document.createElement('div')
+    infoBubblePortal.className = 'info-bubble-portal'
+    document.body.appendChild(infoBubblePortal)
+    return infoBubblePortal
+  }
+  const closeInfoBubbles = () => {
+    document.querySelectorAll('.info-bubble.is-open').forEach(b => b.classList.remove('is-open'))
+    if (infoBubblePortal) infoBubblePortal.classList.remove('is-visible')
+  }
+  const openInfoBubble = (icon) => {
+    const bubble = icon.closest('.info-bubble')
+    const textEl = bubble.querySelector('.info-bubble-text')
+    if (!textEl) return
+    const portal = ensureInfoBubblePortal()
+    portal.textContent = textEl.textContent
+    portal.classList.add('is-visible')
+    bubble.classList.add('is-open')
+    // Mesuré APRÈS affichage (portal.offsetWidth dépend de son propre
+    // contenu/largeur CSS, pas de celle de l'icône) pour caler le bord
+    // droit à l'intérieur du viewport plutôt que de le laisser déborder sur
+    // un écran étroit.
+    const iconRect = icon.getBoundingClientRect()
+    const portalRect = portal.getBoundingClientRect()
+    const EDGE = 12, GAP = 6
+    let left = iconRect.left
+    left = Math.min(left, window.innerWidth - portalRect.width - EDGE)
+    left = Math.max(EDGE, left)
+    let top = iconRect.bottom + GAP
+    if (top + portalRect.height > window.innerHeight - EDGE) top = iconRect.top - portalRect.height - GAP
+    portal.style.left = left + 'px'
+    portal.style.top = Math.max(EDGE, top) + 'px'
+  }
   document.addEventListener('click', (e) => {
     const icon = e.target.closest('.info-bubble-icon')
     if (icon) {
       const bubble = icon.closest('.info-bubble')
       const wasOpen = bubble.classList.contains('is-open')
-      document.querySelectorAll('.info-bubble.is-open').forEach(b => b.classList.remove('is-open'))
-      if (!wasOpen) bubble.classList.add('is-open')
+      closeInfoBubbles()
+      if (!wasOpen) openInfoBubble(icon)
       return
     }
-    // Clic ailleurs que DANS une bulle déjà ouverte (le texte lui-même
-    // reste cliquable/sélectionnable sans la refermer) : referme tout.
-    if (!e.target.closest('.info-bubble')) {
-      document.querySelectorAll('.info-bubble.is-open').forEach(b => b.classList.remove('is-open'))
-    }
+    // Clic ailleurs que DANS le portail déjà ouvert (le texte lui-même reste
+    // sélectionnable sans se refermer) : referme tout.
+    if (!e.target.closest('.info-bubble-portal')) closeInfoBubbles()
   })
+  // Une bulle ouverte reste positionnée par rapport à l'icône au moment du
+  // clic (coordonnées figées, pas re-calculées en continu) : un défilement
+  // la laisserait affichée au mauvais endroit, mieux vaut la refermer.
+  window.addEventListener('scroll', closeInfoBubbles, true)
+  window.addEventListener('resize', closeInfoBubbles)
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return
-    document.querySelectorAll('.info-bubble.is-open').forEach(b => b.classList.remove('is-open'))
+    closeInfoBubbles()
   })
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return
