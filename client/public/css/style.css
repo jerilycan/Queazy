@@ -2464,6 +2464,24 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   .nav-group { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
   .nav-group:last-child { justify-content: center; }
   .player-grid { grid-template-columns: repeat(2, 1fr); }
+  /* "Mes Quiz"/"Quiz publics" (voir select.html #list) : contrairement aux
+     tuiles joueur ci-dessus (nom court, 2 colonnes très bien), une carte
+     quiz porte un TITRE libre potentiellement long ("Culture générale
+     spéciale soirée entre amis") — forcée sur 2 colonnes de ~155px sur un
+     téléphone, chaque titre s'écrasait sur 6-7 lignes avec des cartes
+     d'hauteurs très inégales (retour utilisateur : "carnage"). Repasse à 1
+     seule colonne, pleine largeur, juste pour cette liste précise —
+     .player-grid seul (salon d'attente en jeu) reste inchangé. */
+  .player-grid.select-grid { grid-template-columns: 1fr; }
+  /* Rangée d'onglets + "Nouveau Quiz" (voir select.html #list, .select-
+     header) : les 3 boutons serrés sur une seule ligne étroite forçaient
+     chaque libellé à s'empiler sur 2 lignes (même retour utilisateur). Les
+     deux onglets se partagent la largeur à égalité, "Nouveau Quiz" passe
+     seul sur sa propre ligne pleine largeur. */
+  .select-header { flex-wrap: wrap; gap: 10px; }
+  .select-header-tabs { width: 100%; }
+  .select-header-tabs .btn { flex: 1; }
+  .select-header #newQuizBtn { width: 100%; }
   .options-grid { grid-template-columns: 1fr; }
   /* "Intrus" (tuiles photo) reste volontairement en 2 colonnes même ici,
      contrairement au reste (texte MCQ, illisible sur une seule longue
