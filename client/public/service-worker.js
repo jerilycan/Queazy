@@ -10,14 +10,15 @@
 // à jour, source de bugs de compatibilité difficiles à diagnostiquer. Le
 // cache ne sert donc que de secours si le réseau échoue (vraie coupure), pas
 // comme accélérateur de chargement.
-const CACHE_NAME = 'queazy-shell-v1'
+const CACHE_NAME = 'queazy-shell-v2'
 const PRECACHE_URLS = [
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
   '/icons/favicon-32.png',
-  '/icons/favicon-16.png'
+  '/icons/favicon-16.png',
+  '/icons/queazy-wordmark.png'
 ]
 
 self.addEventListener('install', (event) => {

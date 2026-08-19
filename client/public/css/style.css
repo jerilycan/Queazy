@@ -183,41 +183,38 @@ body {
 
 /* Typography */
 h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weight: 800; letter-spacing: -0.01em; }
-.brand { 
-  font-size: 32px; 
-  font-family: 'Baloo 2', sans-serif;
-  background: linear-gradient(
-    90deg,
-    var(--color-accent) 0%,
-    var(--color-accent-2) 30%,
-    var(--color-cyan) 50%,
-    var(--color-accent-2) 70%,
-    var(--color-accent) 100%
-  );
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 800;
+/* Logo officiel (image, voir .brand-logo) : le "Q" ne porte plus le dégradé
+   de texte animé (l'image l'intègre déjà elle-même) — .brand reste le lien
+   cliquable autour, juste sa mise en page + le retour visuel au clic/survol. */
+.brand {
   cursor: pointer;
-  filter: drop-shadow(0 0 10px rgba(var(--color-accent-rgb),0.35));
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
   transition: filter 0.3s ease;
-  background-position: 0% center;
   position: relative;
   z-index: 1;
 }
 .brand:hover {
   filter: drop-shadow(0 4px 8px var(--color-accent-soft));
 }
-.brand.animate-logo {
-  animation: logo-shimmer 1s ease-out forwards;
+.brand-logo {
+  height: 40px;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 0 10px rgba(var(--color-accent-rgb),0.35));
+}
+/* Retour visuel au clic (voir index.js/editor.js/select.js/profile.js,
+   classe posée puis retirée) : remplace l'ancien défilement de dégradé sur
+   le texte (logo-shimmer), impossible à reproduire sur une image — un petit
+   "pop" lumineux à la place, même intention (le logo réagit au clic). */
+.brand.animate-logo .brand-logo {
+  animation: logo-pop 0.6s ease-out;
 }
 
-@keyframes logo-shimmer {
-  0% { background-position: 200% center; }
-  100% { background-position: 0% center; }
+@keyframes logo-pop {
+  0% { transform: scale(1.08); filter: drop-shadow(0 0 18px rgba(var(--color-accent-rgb),0.8)) brightness(1.25); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(var(--color-accent-rgb),0.35)) brightness(1); }
 }
 
 /* Layout Elements */
@@ -2444,6 +2441,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 @media (max-width: 640px) {
   .container { padding: var(--space-md); }
   .navbar { display: flex; flex-direction: row; align-items: center; justify-content: space-between; border-radius: 24px; margin: 8px 12px 0; height: 64px; padding: 0 18px; }
+  .brand-logo { height: 34px; }
   .menu-toggle-btn { display: flex; }
   .nav-menu {
     display: none;
@@ -2524,6 +2522,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   body.game-active .navbar { margin: 6px 12px 0; height: 52px; padding: 0 16px; }
   body.game-active .menu-toggle-btn { display: none !important; }
   body.game-active .brand { pointer-events: none; cursor: default; }
+  body.game-active .brand-logo { height: 28px; }
   /* Navbar plus basse en mobile (voir .timer-container plus haut) : réajuste
      le point d'accroche pour rester juste sous elle, pas trop loin. */
   .timer-container { top: 76px; }
