@@ -4393,6 +4393,20 @@ socket.on('moderation:pbacGrouped', ({ answerIds }) => {
   updatePbacGroupBar()
 })
 
+// Insère une ligne pbac à sa place alphabétique parmi les lignes pbac déjà
+// présentes (voir dataset.content posé à la création de chacune) — plutôt
+// qu'un simple appendChild en fin de liste (ordre d'arrivée), demandé pour
+// que les réponses proches ("France"/"Frnce") se retrouvent voisines,
+// beaucoup plus rapide à repérer pour former une famille (voir
+// moderation:pbacGroup). Insensible à la casse/aux accents (localeCompare
+// 'fr'), comme le reste du tri alphabétique de l'appli.
+const insertPbacRowSorted = (item, content) => {
+  const rows = moderationDiv.querySelectorAll('[data-pbac="1"]')
+  const next = [...rows].find(r => (r.dataset.content || '').localeCompare(content, 'fr', { sensitivity: 'base' }) > 0)
+  if (next) moderationDiv.insertBefore(item, next)
+  else moderationDiv.appendChild(item)
+}
+
 let isModerationPending = false
 socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest, fields, pbac }) => {
   if (!isHost) {
@@ -4427,6 +4441,13 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
 
   if (pbac) {
     item.dataset.pbac = '1'
+    // Tri alphabétique (retour utilisateur) : les réponses regroupables
+    // (fautes de frappe comprises, ex. "France"/"Frnce") se retrouvent
+    // spontanément proches les unes des autres dans la liste, beaucoup plus
+    // rapide à repérer pour l'hôte qu'un simple ordre d'arrivée. Stocké sur
+    // la ligne (dataset.content) pour comparer les nouvelles arrivées sans
+    // dépendre de l'ordre du DOM.
+    item.dataset.content = content
     const row = document.createElement('div')
     row.style.display = 'flex'
     row.style.alignItems = 'center'
@@ -4464,7 +4485,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
     row.appendChild(left)
     row.appendChild(reject)
     item.appendChild(row)
-    moderationDiv.appendChild(item)
+    insertPbacRowSorted(item, content)
     updatePbacGroupBar()
     return
   }
