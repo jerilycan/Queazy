@@ -3577,6 +3577,18 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .leader-row:nth-child(3) .leader-rank { background: var(--tile-red); }
 .leader-name { flex: 1; font-weight: 700; color: var(--color-text); font-family: 'Nunito', sans-serif; }
 .leader-score { color: var(--color-accent); font-weight: 700; font-family: 'Baloo 2', sans-serif; }
+
+/* "Œil" du panneau de modération Petit Bac (voir index.js pbacEyeBtn,
+   retour utilisateur) : masque le TEXTE des réponses sans changer la mise
+   en page (aucun saut de largeur des lignes) — flou façon "spoiler" plutôt
+   qu'un remplacement par des points, qui aurait fixé une fausse longueur.
+   user-select:none : inutile de pouvoir sélectionner/copier un texte
+   volontairement illisible. */
+.moderation-answers-hidden .pbac-answer-text {
+  color: transparent;
+  text-shadow: 0 0 9px rgba(255,255,255,0.6);
+  user-select: none;
+}
 /* "+XXX" (voir index.js animateScoreGain, retour utilisateur) : apparaît à
    droite de la tuile (juste avant le score qu'il complète), avec un léger
    effet "pop" (rebond, cubic-bezier > 1), puis se fond dans le score au

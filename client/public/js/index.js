@@ -4340,16 +4340,46 @@ pbacGroupBar.style.alignItems = 'center'
 pbacGroupBar.style.justifyContent = 'space-between'
 pbacGroupBar.style.gap = '12px'
 pbacGroupBar.style.flexWrap = 'wrap'
+// "Œil" (retour utilisateur) : masque le TEXTE des réponses en attente,
+// utile quand l'écran de l'hôte est projeté/partagé aux joueurs — sans ça,
+// n'importe qui regardant l'écran lit les réponses avant même que l'hôte
+// ait fini de les regrouper. Un seul bouton pour toutes les lignes (classe
+// posée sur moderationDiv, voir CSS .moderation-answers-hidden) plutôt
+// qu'un bouton par ligne : les nouvelles réponses qui arrivent pendant que
+// c'est masqué le sont automatiquement, pas besoin de les re-masquer une à
+// une. Visible par défaut (comportement existant inchangé tant que l'hôte
+// ne clique pas).
+let pbacAnswersHidden = false
+const pbacEyeBtn = document.createElement('button')
+pbacEyeBtn.className = 'btn'
+pbacEyeBtn.style.padding = '8px 12px'
+pbacEyeBtn.style.flexShrink = '0'
+pbacEyeBtn.title = 'Afficher/masquer les réponses (utile si ton écran est partagé aux joueurs)'
+pbacEyeBtn.textContent = '👁️'
+pbacEyeBtn.onclick = () => {
+  pbacAnswersHidden = !pbacAnswersHidden
+  moderationDiv.classList.toggle('moderation-answers-hidden', pbacAnswersHidden)
+  pbacEyeBtn.textContent = pbacAnswersHidden ? '🙈' : '👁️'
+  pbacEyeBtn.title = pbacAnswersHidden
+    ? 'Réponses masquées — clique pour les réafficher'
+    : 'Afficher/masquer les réponses (utile si ton écran est partagé aux joueurs)'
+}
+const pbacBarLeft = document.createElement('div')
+pbacBarLeft.style.display = 'flex'
+pbacBarLeft.style.alignItems = 'center'
+pbacBarLeft.style.gap = '10px'
 const pbacGroupLabel = document.createElement('div')
 pbacGroupLabel.style.fontSize = '13px'
 pbacGroupLabel.style.opacity = '0.75'
 pbacGroupLabel.textContent = 'Coche les réponses identiques entre elles, puis valide la famille'
+pbacBarLeft.appendChild(pbacEyeBtn)
+pbacBarLeft.appendChild(pbacGroupLabel)
 const pbacGroupBtn = document.createElement('button')
 pbacGroupBtn.className = 'btn btn-primary'
 pbacGroupBtn.style.padding = '8px 16px'
 pbacGroupBtn.disabled = true
 pbacGroupBtn.textContent = 'Valider la famille'
-pbacGroupBar.appendChild(pbacGroupLabel)
+pbacGroupBar.appendChild(pbacBarLeft)
 pbacGroupBar.appendChild(pbacGroupBtn)
 document.querySelector('.container').appendChild(pbacGroupBar)
 
@@ -4465,6 +4495,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
     check.className = 'pbac-check'
     check.onchange = updatePbacGroupBar
     const answerLabel = document.createElement('span')
+    answerLabel.className = 'pbac-answer-text'
     answerLabel.style.fontWeight = '600'
     answerLabel.textContent = content
     left.appendChild(check)
