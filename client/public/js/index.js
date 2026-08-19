@@ -2967,6 +2967,11 @@ socket.on('game:mode', ({ mode }) => {
   gameMode = mode === 'remote' ? 'remote' : 'irl'
   if (gameModeRemoteToggle) gameModeRemoteToggle.checked = gameMode === 'remote'
   updateIrlPlayerUI()
+  // updatePbacEyeVisibility est défini plus bas dans ce fichier (const, pas
+  // hissée) — mais ce handler ne s'exécute qu'au premier game:mode reçu du
+  // serveur, largement après que tout le script ait fini de s'évaluer, donc
+  // déjà bien définie à ce moment-là.
+  updatePbacEyeVisibility?.()
 })
 
 if (gameModeRemoteToggle) {
@@ -4383,10 +4388,28 @@ pbacGroupBar.appendChild(pbacBarLeft)
 pbacGroupBar.appendChild(pbacGroupBtn)
 document.querySelector('.container').appendChild(pbacGroupBar)
 
+// L'œil n'a de sens qu'en session IRL (retour utilisateur) : à distance,
+// chaque joueur regarde son propre écran, jamais celui de l'hôte — rien à
+// cacher. Repose sur la même variable gameMode que le reste du mode IRL/à
+// distance (voir plus haut, socket.on('game:mode', ...)). Si le mode
+// bascule vers "à distance" pendant que les réponses étaient masquées, on
+// les réaffiche aussitôt : sinon elles resteraient illisibles sans aucun
+// bouton pour les rétablir (l'œil vient de disparaître).
+const updatePbacEyeVisibility = () => {
+  const showEye = gameMode === 'irl'
+  pbacEyeBtn.classList.toggle('d-none', !showEye)
+  if (!showEye && pbacAnswersHidden) {
+    pbacAnswersHidden = false
+    moderationDiv.classList.remove('moderation-answers-hidden')
+    pbacEyeBtn.textContent = '👁️'
+  }
+}
+
 // Rafraîchit le libellé/l'état du bandeau à partir des cases actuellement
 // cochées — appelée à chaque coche/décoche ainsi qu'après tout ajout/retrait
 // de ligne pbac (nouvelle réponse, famille validée, réponse refusée).
 const updatePbacGroupBar = () => {
+  updatePbacEyeVisibility()
   const anyPbacRow = moderationDiv.querySelector('[data-pbac="1"]')
   pbacGroupBar.style.display = anyPbacRow ? 'flex' : 'none'
   const n = moderationDiv.querySelectorAll('input.pbac-check:checked').length
