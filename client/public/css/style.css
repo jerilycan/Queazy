@@ -224,9 +224,9 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    du lockup complet (id="Queazy"). Le SVG est intégré tel quel dans le
    markup (voir .brand-logo-svg, index/editor/login/profile/result/select.html) :
    contrairement à l'ancienne version, ces éléments sont DÉJÀ visibles au
-   repos (ils font partie du dessin du logo) — au survol ils frétillent sur
-   place (bounce/spin/pulse/bob, chacun avec sa propre trajectoire et un
-   délai en cascade) puis reviennent pile à leur position d'origine. */
+   repos (ils font partie du dessin du logo) — au survol ils explosent vers
+   leur coin d'origine (loin, en tournant et en grossissant) puis reviennent
+   pile se reposer à leur position initiale. */
 .brand-logo-wrap {
   position: relative;
   display: inline-flex;
@@ -242,37 +242,44 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   transform-box: fill-box;
   transform-origin: center;
 }
-/* Décalage de départ (animation-delay) différent par élément : un vrai
-   frétillement en cascade plutôt que les 4 décorations qui bougent toutes
+/* Décalage de départ (animation-delay) différent par élément : une vraie
+   explosion en cascade plutôt que les 4 décorations qui bougent toutes
    pile au même instant (retour utilisateur : "un truc vraiment stylé"). */
 .brand:hover #brandPin      { animation: brand-pin-bounce    0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 .brand:hover #brandTriangle { animation: brand-triangle-spin 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 0.06s both; }
 .brand:hover #brandCercle   { animation: brand-cercle-pulse  0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s both; }
 .brand:hover #brandNote     { animation: brand-note-bob      0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 0.18s both; }
 
+/* "Explosion" (retour utilisateur : les icônes tournaient sur place au lieu
+   d'exploser comme prévu au départ) : chaque calque part de sa position de
+   repos, est projeté loin vers son coin d'origine (pin = haut-gauche,
+   triangle = bas-gauche, cercle = bas-droite, note = haut-droite) en
+   tournant sur lui-même et en grossissant, puis revient précisément se
+   reposer à sa place — jamais le même sens de rotation ni la même
+   trajectoire d'un élément à l'autre (pas une masse synchronisée). */
 @keyframes brand-pin-bounce {
-  0%   { transform: translateY(0) rotate(0deg); }
-  30%  { transform: translateY(-5px) rotate(-14deg); }
-  55%  { transform: translateY(1px) rotate(9deg); }
-  78%  { transform: translateY(-2px) rotate(-4deg); }
-  100% { transform: translateY(0) rotate(0deg); }
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
+  50%  { transform: translate(-46px, -34px) rotate(-260deg) scale(1.7); }
+  78%  { transform: translate(-16px, -12px) rotate(-330deg) scale(1.15); }
+  100% { transform: translate(0, 0) rotate(-360deg) scale(1); }
 }
 @keyframes brand-triangle-spin {
-  0%   { transform: rotate(0deg) scale(1); }
-  60%  { transform: rotate(300deg) scale(1.18); }
-  100% { transform: rotate(360deg) scale(1); }
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
+  50%  { transform: translate(-42px, 40px) rotate(240deg) scale(1.7); }
+  78%  { transform: translate(-14px, 14px) rotate(330deg) scale(1.15); }
+  100% { transform: translate(0, 0) rotate(360deg) scale(1); }
 }
 @keyframes brand-cercle-pulse {
-  0%, 100% { transform: scale(1); }
-  40% { transform: scale(1.4); }
-  70% { transform: scale(0.88); }
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(38px, 32px) scale(1.9); }
+  78%  { transform: translate(12px, 10px) scale(1.2); }
+  100% { transform: translate(0, 0) scale(1); }
 }
 @keyframes brand-note-bob {
-  0%   { transform: translateY(0) rotate(0deg); }
-  25%  { transform: translateY(-5px) rotate(11deg); }
-  50%  { transform: translateY(0) rotate(-7deg); }
-  75%  { transform: translateY(-3px) rotate(4deg); }
-  100% { transform: translateY(0) rotate(0deg); }
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
+  50%  { transform: translate(48px, -36px) rotate(-240deg) scale(1.7); }
+  78%  { transform: translate(16px, -12px) rotate(-330deg) scale(1.15); }
+  100% { transform: translate(0, 0) rotate(-360deg) scale(1); }
 }
 
 /* Confort visuel : personne ne demande une pirouette de 4 icônes à qui a
