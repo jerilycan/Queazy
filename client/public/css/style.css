@@ -3677,7 +3677,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 /* Démo par type de question — popup JOUEUR (voir index.js showTypeDemo).
    Réutilise .modal-overlay/.modal-content (déjà animé fadeInScale, voir
-   plus haut) : juste l'agencement du contenu ici. */
+   plus haut) pour l'habillage général, mais avec un z-index PROPRE plus
+   élevé (bug remonté : au même niveau que .leader-overlay, elle pouvait se
+   retrouver cachée dessous en enchaînant depuis le classement — l'ordre
+   DOM décidait alors du gagnant). Corrigé aussi côté JS (leaderOverlay
+   masqué avant d'afficher la démo, voir tuto:show/emitQuestionShow) ; ce
+   z-index reste un filet de sécurité en plus, pas le seul correctif. */
+#typeDemoOverlay { z-index: 1500; }
 .type-demo-card {
   display: flex;
   flex-direction: column;

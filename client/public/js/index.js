@@ -368,6 +368,12 @@ const forceCloseTypeDemo = () => {
 }
 socket.on('tuto:show', ({ type }) => {
   if (isHost) return
+  // Bug remonté : en enchaînant depuis le classement (leaderOverlay encore
+  // affiché à ce moment, seulement masqué d'habitude par question:show —
+  // qui n'arrive plus qu'APRÈS cette phase désormais, voir emitQuestionShow)
+  // la démo restait invisible, cachée dessous (même z-index, DOM plus tôt).
+  // Il faut la retirer ici, avant d'afficher la popup.
+  if (leaderOverlay) leaderOverlay.style.display = 'none'
   const roomCode = roomInput.value.trim()
   maybeShowTypeDemo(type).then(() => socket.emit('tuto:ready', { roomCode }))
 })
@@ -404,6 +410,10 @@ const emitQuestionShow = (payload) => {
     socket.emit('question:show', payload)
     return Promise.resolve(true)
   }
+  // Idem côté joueur (voir tuto:show plus haut) : en enchaînant depuis le
+  // classement, leaderOverlay reste affiché tant que question:show n'est
+  // pas arrivé — désormais après cette phase, pas avant.
+  if (leaderOverlay) leaderOverlay.style.display = 'none'
   tutoWaitOverlay.style.setProperty('--qt-color', meta.color)
   tutoWaitOverlay.style.setProperty('--qt-color-rgb', meta.rgb)
   if (tutoWaitIcon) tutoWaitIcon.textContent = meta.icon
