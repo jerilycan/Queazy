@@ -297,6 +297,18 @@
         Code salle: <span id="displayRoomCode" class="font-bold text-accent"></span>
       </div>
 
+      <!-- Badge permanent du type de question (retour utilisateur) : reste
+           affiché pendant toute la question, dans un coin — repère rapide du
+           type en cours, indépendant du fil (position fixe), même quand on a
+           scrollé. Couleur/icône par type définies dans index.js
+           (QUESTION_TYPE_META), réutilisent la même palette que la sidebar
+           de l'éditeur (voir style.css .question-item.type-*). Servira aussi
+           de bouton "revoir la démo" une fois ce chantier construit. -->
+      <button type="button" id="questionTypeBadge" class="question-type-badge d-none" title="Type de question">
+        <span id="questionTypeBadgeIcon" class="question-type-badge-icon"></span>
+        <span id="questionTypeBadgeLabel" class="question-type-badge-label"></span>
+      </button>
+
       <!-- Zone de jeu -->
       <div id="main" class="mt-40">
         <!-- Ordre volontaire (retour utilisateur) : le timer reste une barre

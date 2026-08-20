@@ -255,6 +255,46 @@ window.addEventListener('DOMContentLoaded', () => {
 const qDiv = document.getElementById('question')
 const timerBarFill = document.getElementById('timerBar')
 const timerLabel = document.getElementById('timerLabel')
+// Badge permanent du type de question (retour utilisateur, voir
+// question-type-badge dans style.css) : icône/libellé/couleur par type,
+// même palette que la sidebar de l'éditeur (voir .question-item.type-* dans
+// style.css) pour rester cohérent d'un écran à l'autre de l'appli. hex/rgb
+// dupliqués ici plutôt que lus depuis une variable CSS : tous les types
+// n'ont pas de variable --xxx-rgb dédiée (ex. --tile-bronze), plus simple
+// d'avoir une seule source de vérité pour ce badge.
+const QUESTION_TYPE_META = {
+  free: { icon: '📝', label: 'Texte libre', color: '#39ff88', rgb: '57,255,136' },
+  mcq: { icon: '🔘', label: 'Choix multiples', color: '#2f8bff', rgb: '47,139,255' },
+  truefalse: { icon: '✅', label: 'Vrai / Faux', color: '#ff3b5c', rgb: '255,59,92' },
+  graduation: { icon: '🎚️', label: 'Curseur numérique', color: '#ffd23f', rgb: '255,210,63' },
+  order: { icon: '↕️', label: 'Ordre / classement', color: '#ff2fb0', rgb: '255,47,176' },
+  image: { icon: '📍', label: 'Image', color: '#2fe3ff', rgb: '47,227,255' },
+  zoomguess: { icon: '🔍', label: 'ZoomOut Devinette', color: '#5865f2', rgb: '88,101,242' },
+  reveal: { icon: '🖼️', label: 'Révélation', color: '#cfd8ea', rgb: '207,216,234' },
+  blindtest: { icon: '🎵', label: 'Blind Test', color: '#7b2ff7', rgb: '123,47,247' },
+  association: { icon: '🔗', label: 'Association', color: '#ff9f5a', rgb: '255,159,90' },
+  timeline: { icon: '⏳', label: 'Timeline', color: '#14e0b8', rgb: '20,224,184' },
+  intrus: { icon: '🎯', label: 'Intrus', color: '#b34bf5', rgb: '179,75,245' },
+  pbac: { icon: '🎩', label: 'Petit Bac', color: '#c8f542', rgb: '200,245,66' }
+}
+const questionTypeBadge = document.getElementById('questionTypeBadge')
+const questionTypeBadgeIcon = document.getElementById('questionTypeBadgeIcon')
+const questionTypeBadgeLabel = document.getElementById('questionTypeBadgeLabel')
+// Appelée à chaque question:show (voir plus bas) — masque proprement si un
+// type inconnu arrivait (vieux client/nouveau type pas encore répertorié
+// ici) plutôt que d'afficher un badge vide ou cassé.
+const updateQuestionTypeBadge = (type) => {
+  if (!questionTypeBadge) return
+  const meta = QUESTION_TYPE_META[type]
+  if (!meta) { questionTypeBadge.classList.add('d-none'); return }
+  questionTypeBadge.style.setProperty('--qt-color', meta.color)
+  questionTypeBadge.style.setProperty('--qt-color-rgb', meta.rgb)
+  questionTypeBadge.setAttribute('aria-label', 'Type de question : ' + meta.label)
+  if (questionTypeBadgeIcon) questionTypeBadgeIcon.textContent = meta.icon
+  if (questionTypeBadgeLabel) questionTypeBadgeLabel.textContent = meta.label
+  questionTypeBadge.classList.remove('d-none')
+}
+const hideQuestionTypeBadge = () => { questionTypeBadge?.classList.add('d-none') }
 const inputArea = document.getElementById('inputArea')
 const answerInput = document.getElementById('answer')
 const sendBtn = document.getElementById('send')
@@ -2338,6 +2378,7 @@ const showJoinPanel = (showCreateRoomButton = true) => {
     timerContainer.classList.add('d-none')
     timerContainer.style.display = 'none'
   }
+  hideQuestionTypeBadge()
   nameInput.focus()
 }
 navCreate.onclick = async (e) => {
@@ -2613,6 +2654,7 @@ const showLobby = () => {
     timerContainer.classList.add('d-none')
     timerContainer.style.display = 'none'
   }
+  hideQuestionTypeBadge()
 }
 
 const iconButtons = () => Array.from(document.querySelectorAll('.icon-opt'))
@@ -3787,6 +3829,7 @@ socket.on('question:show', payload => {
     timerContainer.classList.remove('d-none')
     timerContainer.style.display = 'flex'
   }
+  updateQuestionTypeBadge(payload.type)
   qDiv.textContent = payload.prompt
   qDiv.style.animation = 'none'
   void qDiv.offsetWidth
