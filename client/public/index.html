@@ -92,6 +92,11 @@
         <div class="lobby-header">
           <h1>Salon d’attente</h1>
           <p class="text-muted mt-8">Préparez-vous pour le début de la partie</p>
+          <!-- Vidéos explicatives par type de question (retour utilisateur,
+               chantier v1.54) : accessible à tous (hôte + joueurs) UNIQUEMENT
+               depuis le lobby, avant que la partie ne démarre — voir
+               openTutoVideosModal côté index.js. -->
+          <button id="tutoVideosBtn" type="button" class="btn h-40 px-20 font-14 mt-12">🎬 Comment jouer ?</button>
         </div>
 
         <div id="lobbyHost" class="lobby-host-card"></div>
@@ -155,6 +160,32 @@
 
         <h3 class="mb-md opacity-80">Joueurs connectés</h3>
         <div id="lobbyGrid" class="player-grid"></div>
+      </div>
+
+      <!-- Vidéos explicatives par type de question (chantier v1.54, retour
+           utilisateur) : grille des 13 types à gauche, lecteur vidéo à
+           droite — voir openTutoVideosModal/selectTutoVideoType côté
+           index.js. Contenu (fichiers .mp4) géré à la main dans le bucket
+           Supabase Storage "tuto-videos" (voir supabase/schema.sql), pas
+           d'upload depuis l'appli : un type sans vidéo affiche juste un
+           message plutôt qu'un lecteur cassé. -->
+      <div id="tutoVideosModal" class="modal-overlay d-none">
+        <div class="modal-content card max-w-700 tuto-videos-card">
+          <div class="d-flex justify-between align-center mb-lg">
+            <h2 class="font-24">🎬 Comment jouer ?</h2>
+            <button id="closeTutoVideos" class="btn-close">&times;</button>
+          </div>
+          <div class="tuto-videos-layout">
+            <div id="tutoVideoTypeGrid" class="tuto-video-type-grid"></div>
+            <div class="tuto-video-player-area">
+              <video id="tutoVideoPlayer" class="tuto-video-player d-none" controls playsinline></video>
+              <div id="tutoVideoPlaceholder" class="tuto-video-placeholder">
+                <span class="tuto-video-placeholder-icon">🎬</span>
+                <span id="tutoVideoPlaceholderText">Choisis un type de question à gauche.</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Popup de personnalisation (cachée par défaut) -->

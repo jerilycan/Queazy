@@ -286,3 +286,29 @@ drop policy if exists "quiz-media: lecture publique" on storage.objects;
 create policy "quiz-media: lecture publique"
   on storage.objects for select
   using (bucket_id = 'quiz-media');
+
+-- ============================================================
+-- 6. STORAGE — bucket tuto-videos (vidéos explicatives par type de
+--    question, affichées dans le lobby — voir index.js TUTO_VIDEO_BUCKET/
+--    openTutoVideos, chantier v1.54). Contenu géré à la main par l'admin
+--    de l'appli (Dashboard Supabase, qui bypass RLS en tant que
+--    propriétaire du projet) : volontairement AUCUNE policy INSERT ici,
+--    contrairement à quiz-media plus haut — personne dans l'appli
+--    n'uploade de vidéo, uniquement la lecture publique est nécessaire
+--    pour que les joueurs (jamais connectés) les regardent. Convention de
+--    nommage stricte : un fichier par type, nommé exactement "<type>.mp4"
+--    à la racine du bucket (mêmes slugs que QUESTION_TYPE_META côté
+--    index.js — free, mcq, truefalse, graduation, order, image,
+--    zoomguess, reveal, blindtest, association, timeline, intrus, pbac).
+--    Un type sans fichier correspondant affiche juste "vidéo bientôt
+--    disponible" côté client (voir onerror du <video>) plutôt que de
+--    bloquer quoi que ce soit.
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('tuto-videos', 'tuto-videos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "tuto-videos: lecture publique" on storage.objects;
+create policy "tuto-videos: lecture publique"
+  on storage.objects for select
+  using (bucket_id = 'tuto-videos');
