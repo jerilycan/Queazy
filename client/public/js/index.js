@@ -311,6 +311,39 @@ const updateQuestionTypeBadge = (type) => {
 }
 const hideQuestionTypeBadge = () => { questionTypeBadge?.classList.add('d-none') }
 
+// Transition "sortie du lobby -> écran de jeu", extraite de question:show
+// pour être appelable AUSSI dès l'arrivée de tuto:show/l'écran d'attente
+// hôte (voir plus bas) — retour utilisateur : la démo d'un type de question
+// pouvait s'afficher alors que l'écran montrait encore le salon d'attente,
+// la vraie transition n'ayant lieu que dans question:show, désormais
+// RETARDÉ après la phase tuto pour les types concernés (voir
+// emitQuestionShow). Sans repère visuel clair que la partie a bien démarré,
+// le joueur mettait du temps à remarquer/fermer la démo — d'où la lenteur
+// perçue au lancement. Idempotente : question:show la rappelle juste après
+// sans effet de bord. timerContainer n'est PAS inclus ici volontairement :
+// il afficherait un chrono à l'arrêt pendant l'attente, signal trompeur
+// ("on dirait que ça a déjà commencé").
+const enterGameScreen = () => {
+  const lobby = document.getElementById('lobby')
+  if (lobby) {
+    lobby.classList.add('d-none')
+    lobby.style.display = 'none'
+  }
+  // Symétrique du masquage dans resetUI (voir son commentaire) : remet la
+  // zone de jeu au premier plan si un Créer/Rejoindre l'avait cachée entre
+  // deux parties dans le même onglet.
+  const mainEl = document.getElementById('main')
+  if (mainEl) {
+    mainEl.classList.remove('d-none')
+    mainEl.style.display = 'block'
+  }
+  // Sur mobile, la navbar (boutons Créer/Mes Quiz/etc.) prend trop de place
+  // pendant la partie : on la réduit au seul nom, non cliquable, pour éviter
+  // qu'un joueur ne quitte la partie par erreur (voir règle CSS associée).
+  document.body.classList.add('game-active')
+  updateIrlPlayerUI() // partie effectivement lancée : bascule navbar -> roue crantée si IRL (voir plus haut)
+}
+
 // --- Démo par type de question, popup JOUEUR (retour utilisateur) ---
 const typeDemoOverlay = document.getElementById('typeDemoOverlay')
 const typeDemoIcon = document.getElementById('typeDemoIcon')
@@ -374,6 +407,13 @@ socket.on('tuto:show', ({ type }) => {
   // la démo restait invisible, cachée dessous (même z-index, DOM plus tôt).
   // Il faut la retirer ici, avant d'afficher la popup.
   if (leaderOverlay) leaderOverlay.style.display = 'none'
+  // Idem pour le SALON D'ATTENTE (retour utilisateur : la démo de la toute
+  // première question s'affichait alors que l'écran montrait encore le
+  // lobby, question:show — qui fait normalement cette transition — n'arrivant
+  // plus qu'après cette phase). Sans repère visuel que la partie a démarré,
+  // le joueur mettait du temps à remarquer la démo, d'où la lenteur perçue.
+  enterGameScreen()
+  updateQuestionTypeBadge(type)
   const roomCode = roomInput.value.trim()
   maybeShowTypeDemo(type).then(() => socket.emit('tuto:ready', { roomCode }))
 })
@@ -412,8 +452,13 @@ const emitQuestionShow = (payload) => {
   }
   // Idem côté joueur (voir tuto:show plus haut) : en enchaînant depuis le
   // classement, leaderOverlay reste affiché tant que question:show n'est
-  // pas arrivé — désormais après cette phase, pas avant.
+  // pas arrivé — désormais après cette phase, pas avant. Même chose pour le
+  // salon d'attente côté hôte : sur la TOUTE PREMIÈRE question (bouton
+  // "LANCER"), sans ceci l'hôte voyait l'écran d'attente par-dessus son
+  // propre lobby encore affiché.
   if (leaderOverlay) leaderOverlay.style.display = 'none'
+  enterGameScreen()
+  updateQuestionTypeBadge(payload.type)
   tutoWaitOverlay.style.setProperty('--qt-color', meta.color)
   tutoWaitOverlay.style.setProperty('--qt-color-rgb', meta.rgb)
   if (tutoWaitIcon) tutoWaitIcon.textContent = meta.icon
@@ -3937,24 +3982,7 @@ socket.on('question:show', payload => {
   // joueur plutôt qu'un seul (myLastDelta, réservé à MON propre bandeau de
   // résultat).
   questionDeltas.clear()
-  const lobby = document.getElementById('lobby')
-  if (lobby) {
-    lobby.classList.add('d-none')
-    lobby.style.display = 'none'
-  }
-  // Symétrique du masquage dans resetUI (voir son commentaire) : remet la
-  // zone de jeu au premier plan si un Créer/Rejoindre l'avait cachée entre
-  // deux parties dans le même onglet.
-  const mainEl = document.getElementById('main')
-  if (mainEl) {
-    mainEl.classList.remove('d-none')
-    mainEl.style.display = 'block'
-  }
-  // Sur mobile, la navbar (boutons Créer/Mes Quiz/etc.) prend trop de place
-  // pendant la partie : on la réduit au seul nom, non cliquable, pour éviter
-  // qu'un joueur ne quitte la partie par erreur (voir règle CSS associée).
-  document.body.classList.add('game-active')
-  updateIrlPlayerUI() // partie effectivement lancée : bascule navbar -> roue crantée si IRL (voir plus haut)
+  enterGameScreen()
   const timerContainer = document.getElementById('timerContainer')
   if (timerContainer) {
     timerContainer.classList.remove('d-none')
@@ -4327,6 +4355,16 @@ socket.on('question:show', payload => {
       img.className = 'intrus-tile-img'
       img.alt = ''
       el.appendChild(img)
+      // Anneau de sélection (voir style.css .intrus-tile-ring, retour
+      // utilisateur persistant) : un VRAI élément, ajouté APRÈS l'image dans
+      // le DOM plutôt qu'un ::before avec z-index (essayé en premier,
+      // toujours recouvert par la photo en pratique malgré un z-index
+      // supérieur — vérifié via elementFromPoint). Toujours présent,
+      // simplement invisible (opacity:0) tant que la tuile n'est pas
+      // .selected.
+      const ring = document.createElement('div')
+      ring.className = 'intrus-tile-ring'
+      el.appendChild(ring)
       el.onclick = () => {
         if (currentSingleAttempt && sendBtn.disabled) return
         selectedMcqOptions = [id]

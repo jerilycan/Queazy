@@ -1335,34 +1335,39 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 /* Le contour blanc générique de .option-btn.selected (voir plus haut) se
    fond souvent dans les zones claires d'une photo, peu visible sur une tuile
    "intrus" (retour utilisateur, persistant : "la sélection n'a pas de
-   cadre, ça perturbe le joueur"). Un outline/box-shadow posé DIRECTEMENT
-   sur .intrus-tile ne suffit pas : .intrus-tile-img est positionnée en
-   absolu PAR-DESSUS (voir plus bas, cadrage/zoom appliqué en JS) et peut
-   entièrement le recouvrir visuellement — ni outline ni box-shadow ne
-   percent au-dessus d'un enfant positionné qui vient après dans le DOM.
-   Un ::before dédié, lui aussi en position absolue mais avec un z-index
-   explicite, s'affiche de manière fiable AU-DESSUS de la photo quel que
-   soit le cadrage choisi. */
+   cadre, ça perturbe le joueur"). Un outline/box-shadow posé DIRECTEMENT sur
+   .intrus-tile ne suffit pas : .intrus-tile-img (position absolue,
+   cadrage/zoom appliqué en JS) peut le recouvrir visuellement.
+   Un ::before AVEC z-index explicite a été essayé en premier (v1.50.1) :
+   toujours recouvert par la photo en pratique malgré un z-index supérieur
+   sur le papier (vérifié via elementFromPoint — un pseudo-élément se
+   comporte ici différemment d'un vrai enfant du DOM, comportement
+   navigateur pas totalement élucidé). Remplacé par un vrai élément
+   .intrus-tile-ring (voir index.js, ajouté APRÈS l'image dans le DOM), dont
+   la primauté au-dessus de la photo est, elle, fiable et vérifiée. */
 .option-btn.intrus-tile.selected {
   box-shadow: var(--shadow-md);
-}
-.option-btn.intrus-tile.selected::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  outline: 4px solid var(--color-accent);
-  outline-offset: -4px;
-  box-shadow: 0 0 0 4px var(--color-accent-soft);
-  pointer-events: none;
 }
 .intrus-tile-img {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 0;
   transform-origin: 0 0;
   display: block;
 }
+.intrus-tile-ring {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  outline: 4px solid var(--color-accent);
+  outline-offset: -4px;
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.option-btn.intrus-tile.selected .intrus-tile-ring { opacity: 1; }
 
 /* Interactions verrouillées après la fin du timer (la révélation reste visible) */
 .answers-locked .option-btn,
