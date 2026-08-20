@@ -28,7 +28,26 @@
   </head>
   <body>
     <div class="navbar">
-      <a href="/" class="brand"><img src="/icons/queazy-wordmark.png" alt="QuEazy" class="brand-logo" /></a>
+      <a href="/" class="brand">
+        <span class="brand-logo-wrap">
+          <img src="/icons/queazy-wordmark.png" alt="QuEazy" class="brand-logo" />
+          <svg class="brand-sprite brand-sprite-pin" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path class="brand-sprite-pin-fill" d="M12 2c-4.4 0-8 3.5-8 7.8 0 5.8 8 12.2 8 12.2s8-6.4 8-12.2C20 5.5 16.4 2 12 2z" />
+            <circle cx="12" cy="9.8" r="2.6" fill="#0a0a1f" />
+          </svg>
+          <svg class="brand-sprite brand-sprite-note" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect class="brand-sprite-note-fill" x="13.2" y="3" width="1.8" height="12" rx="0.9" />
+            <path class="brand-sprite-note-fill" d="M15 3l5 1.6v3L15 6.2z" />
+            <ellipse class="brand-sprite-note-fill" cx="10.5" cy="16.5" rx="3.5" ry="2.6" transform="rotate(-18 10.5 16.5)" />
+          </svg>
+          <svg class="brand-sprite brand-sprite-dot" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle class="brand-sprite-dot-fill" cx="12" cy="12" r="6" />
+          </svg>
+          <svg class="brand-sprite brand-sprite-tri" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path class="brand-sprite-tri-stroke" d="M12 3 L21 20 L3 20 Z" fill="none" stroke-width="2" stroke-linejoin="round" />
+          </svg>
+        </span>
+      </a>
       <div class="nav-group">
         <a href="/?create=true" id="navCreate" class="btn btn-nav-main">Créer</a>
         <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
