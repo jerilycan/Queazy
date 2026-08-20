@@ -245,16 +245,13 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 /* Décalage de départ (animation-delay) différent par élément : une vraie
    explosion en cascade plutôt que les 4 décorations qui bougent toutes
    pile au même instant (retour utilisateur : "un truc vraiment stylé").
-   Timing-function volontairement lisse (pas de courbe à rebond type
-   back-out) : appliquée par CSS à CHAQUE segment de keyframes séparément,
-   une courbe à rebond y créait un petit à-coup à chaque palier (retour
-   utilisateur : "encore un peu saccadé") — l'effet de rebond vient
-   maintenant uniquement des valeurs de position elles-mêmes (plus de
-   paliers, trajectoire progressive), pas de la fonction de temporisation. */
-.brand:hover #brandPin      { animation: brand-pin-bounce    1s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
-.brand:hover #brandTriangle { animation: brand-triangle-spin 1s cubic-bezier(0.22, 0.61, 0.36, 1) 0.06s both; }
-.brand:hover #brandCercle   { animation: brand-cercle-pulse  1s cubic-bezier(0.22, 0.61, 0.36, 1) 0.12s both; }
-.brand:hover #brandNote     { animation: brand-note-bob      1s cubic-bezier(0.22, 0.61, 0.36, 1) 0.18s both; }
+   La timing-function ci-dessous ne sert que de valeur par défaut : chaque
+   keyframe (voir plus bas) pose sa propre animation-timing-function pour
+   le segment qui la suit — c'est ce qui pilote vraiment le rythme. */
+.brand:hover #brandPin      { animation: brand-pin-bounce    0.9s ease both; }
+.brand:hover #brandTriangle { animation: brand-triangle-spin 0.9s ease 0.06s both; }
+.brand:hover #brandCercle   { animation: brand-cercle-pulse  0.9s ease 0.12s both; }
+.brand:hover #brandNote     { animation: brand-note-bob      0.9s ease 0.18s both; }
 
 /* "Explosion" (retour utilisateur : les icônes tournaient sur place au lieu
    d'exploser comme prévu au départ) : chaque calque part de sa position de
@@ -262,39 +259,33 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    triangle = bas-gauche, cercle = bas-droite, note = haut-droite) en
    tournant sur lui-même et en grossissant, puis revient précisément se
    reposer à sa place — jamais le même sens de rotation ni la même
-   trajectoire d'un élément à l'autre (pas une masse synchronisée). Chaque
-   trajet est découpé en plusieurs paliers rapprochés (pas juste
-   aller/retour) pour que l'arc lu à l'œil soit continu, pas à-coups. */
+   trajectoire d'un élément à l'autre (pas une masse synchronisée).
+   Seulement 2 segments (aller / retour, palier à 50%) : la version
+   précédente avec des paliers intermédiaires rapprochés (retour
+   utilisateur : "encore plus saccadé") créait des changements de vitesse
+   brusques d'un segment à l'autre (même distance parcourue sur des durées
+   différentes). Ici chaque segment porte sa propre courbe posée sur le
+   keyframe de départ : ease-out pour l'aller (départ franc, arrivée en
+   douceur au pic), ease-in pour le retour (départ doux, ré-atterrissage
+   précis) — un seul mouvement continu, pas de rebond superposé. */
 @keyframes brand-pin-bounce {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
-  22%  { transform: translate(-30px, -22px) rotate(-150deg) scale(1.55); }
-  45%  { transform: translate(-46px, -34px) rotate(-260deg) scale(1.7); }
-  68%  { transform: translate(-30px, -22px) rotate(-320deg) scale(1.35); }
-  86%  { transform: translate(-10px, -7px) rotate(-350deg) scale(1.08); }
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  50%  { transform: translate(-46px, -34px) rotate(-260deg) scale(1.7); animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0); }
   100% { transform: translate(0, 0) rotate(-360deg) scale(1); }
 }
 @keyframes brand-triangle-spin {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
-  22%  { transform: translate(-27px, 26px) rotate(140deg) scale(1.55); }
-  45%  { transform: translate(-42px, 40px) rotate(240deg) scale(1.7); }
-  68%  { transform: translate(-27px, 26px) rotate(305deg) scale(1.35); }
-  86%  { transform: translate(-9px, 9px) rotate(345deg) scale(1.08); }
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  50%  { transform: translate(-42px, 40px) rotate(240deg) scale(1.7); animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0); }
   100% { transform: translate(0, 0) rotate(360deg) scale(1); }
 }
 @keyframes brand-cercle-pulse {
-  0%   { transform: translate(0, 0) scale(1); }
-  22%  { transform: translate(24px, 20px) scale(1.75); }
-  45%  { transform: translate(38px, 32px) scale(1.9); }
-  68%  { transform: translate(24px, 20px) scale(1.5); }
-  86%  { transform: translate(8px, 7px) scale(1.12); }
+  0%   { transform: translate(0, 0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  50%  { transform: translate(38px, 32px) scale(1.9); animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0); }
   100% { transform: translate(0, 0) scale(1); }
 }
 @keyframes brand-note-bob {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
-  22%  { transform: translate(31px, -23px) rotate(-140deg) scale(1.55); }
-  45%  { transform: translate(48px, -36px) rotate(-240deg) scale(1.7); }
-  68%  { transform: translate(31px, -23px) rotate(-305deg) scale(1.35); }
-  86%  { transform: translate(10px, -8px) rotate(-345deg) scale(1.08); }
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  50%  { transform: translate(48px, -36px) rotate(-240deg) scale(1.7); animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0); }
   100% { transform: translate(0, 0) rotate(-360deg) scale(1); }
 }
 
