@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.50.0'
+const APP_VERSION = '1.50.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -183,6 +183,16 @@ app.get('/health', async () => ({ ok: true }))
 
 const quizzStore = new Map()
 const uid = () => Math.random().toString(36).slice(2, 10)
+// Code de salle : jamais de '0' (retour utilisateur : trop facilement
+// confondu avec la lettre "O" une fois lu/dicté à voix haute ou tapé à la
+// main) — remplace l'ancien Math.random().toString(36) qui pouvait en
+// produire. 5 caractères, comme avant.
+const ROOM_CODE_CHARS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const generateRoomCode = () => {
+  let code = ''
+  for (let i = 0; i < 5; i++) code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)]
+  return code
+}
 const MAX_NAME_LENGTH = 20
 // Délai de grâce avant de fermer la salle quand l'hôte se déconnecte — une
 // coupure wifi de quelques secondes ne doit pas tuer la partie pour tout le
@@ -893,7 +903,7 @@ const start = async () => {
 
   io.on('connection', socket => {
     socket.on('room:create', async payload => {
-      const code = Math.random().toString(36).slice(2, 7).toUpperCase()
+      const code = generateRoomCode()
       const hostToken = payload?.token || uid()
       rooms.set(code, {
         hostId: socket.id,
@@ -934,12 +944,31 @@ const start = async () => {
 
     socket.on('room:join', async payload => {
       const code = (payload?.roomCode || '').toUpperCase()
-      const name = (payload?.playerName || 'Player').slice(0, MAX_NAME_LENGTH)
-      const token = payload?.token || uid()
       const room = rooms.get(code)
       if (!room) return socket.emit('room:error', { message: 'room not found' })
-      socket.roomCode = code // Pour nettoyer proprement cette entrée au disconnect
       room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
+
+      // "Spectateur" (voir result.html/results.js) : rejoint UNIQUEMENT pour
+      // recevoir les diffusions de la salle (history:sync/team:list/
+      // lobby:list/score:update, utiles pour afficher des résultats à jour)
+      // — jamais comme un vrai participant. Retour utilisateur : la page
+      // résultats faisait apparaître un faux joueur "Spectateur" dans le
+      // salon/le classement (ajouté à room.players comme n'importe quel
+      // joueur, comptant même dans expectedPlayers). Se contente de
+      // rejoindre la room socket.io + un instantané immédiat, sans jamais
+      // toucher room.players/room.tokens ni diffuser player:joined.
+      if (payload?.viewer) {
+        socket.roomCode = code
+        await socket.join(code)
+        if (room.history.length > 0) socket.emit('history:sync', { history: buildHistorySync(room) })
+        socket.emit('team:list', { teamMode: room.teamMode, teams: buildTeamList(room) })
+        socket.emit('lobby:list', buildPlayerList(room))
+        return
+      }
+
+      const name = (payload?.playerName || 'Player').slice(0, MAX_NAME_LENGTH)
+      const token = payload?.token || uid()
+      socket.roomCode = code // Pour nettoyer proprement cette entrée au disconnect
 
       // Si c'est l'hôte qui se reconnecte
       if (token === room.hostToken) {

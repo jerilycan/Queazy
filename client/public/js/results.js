@@ -669,10 +669,15 @@ const hideHistoryTooltip = () => { historyTooltip.classList.add('d-none') }
   container.addEventListener('mouseleave', hideHistoryTooltip)
 })
 
+// viewer:true (voir server/index.js room:join) : cette page ne fait que
+// CONSULTER des résultats, jamais participer — sans ce marqueur, le
+// serveur nous ajoutait comme un vrai joueur ("Spectateur" en repli quand
+// aucun profil n'est enregistré), visible dans le salon/le classement de
+// tout le monde (retour utilisateur, bug remonté après une session de
+// test). On reçoit quand même les mêmes diffusions (history:sync/
+// team:list/lobby:list) pour rester à jour.
 socket.on('connect', () => {
-  const name = localStorage.getItem('queazy_profile_name') || 'Spectateur'
-  const avatar = localStorage.getItem('queazy_profile_avatar') || '🙂'
-  socket.emit('room:join', { roomCode, playerName: name, token: getToken(), avatar })
+  socket.emit('room:join', { roomCode, viewer: true })
 })
 
 socket.on('history:sync', (payload) => {
