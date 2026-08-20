@@ -479,14 +479,19 @@
          affichée à TOUT LE MONDE (hôte + joueurs, même écran) à CHAQUE
          question — nom du type + instruction + décompte, avant que la
          question n'apparaisse. Contenu (icône/titre/instruction) posé en JS
-         depuis QUESTION_TYPE_META, durée/décompte piloté par
-         showQuestionIntro — voir index.js. -->
+         depuis QUESTION_TYPE_META, durée/décompte/animation d'entrée-sortie
+         pilotés par showQuestionIntro — voir index.js. Bandeau néon en
+         biais qui traverse l'écran (retour utilisateur) : .question-intro-card
+         porte le biais + le glow, .question-intro-inner contre-biaise pour
+         que le texte reste bien droit à l'intérieur. -->
     <div id="questionIntroOverlay" class="d-none question-intro-overlay">
-      <div class="question-intro-card">
-        <div id="questionIntroIcon" class="question-intro-icon"></div>
-        <h2 id="questionIntroTitle" class="question-intro-title"></h2>
-        <p id="questionIntroHint" class="question-intro-hint"></p>
-        <div id="questionIntroCountdown" class="question-intro-countdown"></div>
+      <div id="questionIntroCard" class="question-intro-card">
+        <div class="question-intro-inner">
+          <div id="questionIntroIcon" class="question-intro-icon"></div>
+          <h2 id="questionIntroTitle" class="question-intro-title"></h2>
+          <p id="questionIntroHint" class="question-intro-hint"></p>
+          <div id="questionIntroCountdown" class="question-intro-countdown"></div>
+        </div>
       </div>
     </div>
 

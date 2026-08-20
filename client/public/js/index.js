@@ -351,15 +351,24 @@ const enterGameScreen = () => {
 // de latence ou d'arrivée tardive (voir room:join côté serveur).
 const INTRO_DURATION_MS = 3000
 const INTRO_DURATION_COMPLEX_MS = 5000
+// Durée de l'animation de sortie (voir @keyframes introBannerOut côté CSS)
+// — déclenchée CE délai avant la fin réelle (durationMs), pour que le
+// bandeau ait fini de glisser hors-écran au moment où tuto:done le masque
+// pour de vrai (voir hideQuestionIntro), plutôt que d'être coupé net.
+const INTRO_EXIT_MS = 450
 const questionIntroOverlay = document.getElementById('questionIntroOverlay')
+const questionIntroCard = document.getElementById('questionIntroCard')
 const questionIntroIcon = document.getElementById('questionIntroIcon')
 const questionIntroTitle = document.getElementById('questionIntroTitle')
 const questionIntroHint = document.getElementById('questionIntroHint')
 const questionIntroCountdown = document.getElementById('questionIntroCountdown')
 let questionIntroTimerId = null
+let questionIntroExitTimerId = null
 const hideQuestionIntro = () => {
   if (questionIntroTimerId) { clearInterval(questionIntroTimerId); questionIntroTimerId = null }
+  if (questionIntroExitTimerId) { clearTimeout(questionIntroExitTimerId); questionIntroExitTimerId = null }
   questionIntroOverlay?.classList.add('d-none')
+  questionIntroCard?.classList.remove('intro-anim-in', 'intro-anim-out')
 }
 const showQuestionIntro = (type, durationMs, startTs) => {
   const meta = QUESTION_TYPE_META[type]
@@ -370,7 +379,16 @@ const showQuestionIntro = (type, durationMs, startTs) => {
   if (questionIntroTitle) questionIntroTitle.textContent = meta.label
   if (questionIntroHint) questionIntroHint.textContent = meta.hint || ''
   questionIntroOverlay.classList.remove('d-none')
+  // Rejoue l'animation d'entrée depuis le début à chaque question : une
+  // classe déjà présente (ex. 'intro-anim-in' laissée par la question
+  // précédente si jamais hideQuestionIntro n'était pas passé entre les
+  // deux) ne redémarrerait pas son @keyframes en se recontentant d'un
+  // classList.add — on retire donc systématiquement 'intro-anim-out' AVANT
+  // de réappliquer 'intro-anim-in'.
+  questionIntroCard?.classList.remove('intro-anim-out')
+  questionIntroCard?.classList.add('intro-anim-in')
   if (questionIntroTimerId) clearInterval(questionIntroTimerId)
+  if (questionIntroExitTimerId) clearTimeout(questionIntroExitTimerId)
   // Décompte dérivé de startTs/durationMs (horodatage serveur), pas d'un
   // simple setTimeout local : reste juste même sur un client qui vient de
   // (re)rejoindre en pleine phase intro (voir room:join → tuto:show).
@@ -380,6 +398,11 @@ const showQuestionIntro = (type, durationMs, startTs) => {
   }
   tick()
   questionIntroTimerId = setInterval(tick, 200)
+  const exitDelay = Math.max(0, (startTs + durationMs) - Date.now() - INTRO_EXIT_MS)
+  questionIntroExitTimerId = setTimeout(() => {
+    questionIntroCard?.classList.remove('intro-anim-in')
+    questionIntroCard?.classList.add('intro-anim-out')
+  }, exitDelay)
 }
 // Résolu uniquement côté HÔTE (voir emitQuestionShow) une fois l'intro
 // terminée : c'est lui qui déclenche alors réellement question:show. Les
