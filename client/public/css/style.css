@@ -198,11 +198,17 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 .brand:hover {
   filter: drop-shadow(0 4px 8px var(--color-accent-soft));
 }
+/* Pas de drop-shadow permanent ici (retour utilisateur : "ombre disgracieuse
+   derrière") — le logo garde déjà tout son relief 3D intégré à l'image (bords
+   anti-crénelés semi-transparents sur ~13% des pixels, voir queazy-wordmark.png) ;
+   un flou CSS appliqué par-dessus toute cette silhouette translucide donnait un
+   halo flou/étalé plutôt qu'une ombre nette. Le léger relief au survol/clic
+   (.brand:hover, logo-pop) reste : bien plus discret (transitoire, pas
+   permanent), jamais signalé comme gênant. */
 .brand-logo {
   height: 40px;
   width: auto;
   display: block;
-  filter: drop-shadow(0 0 10px rgba(var(--color-accent-rgb),0.35));
 }
 /* Retour visuel au clic (voir index.js/editor.js/select.js/profile.js,
    classe posée puis retirée) : remplace l'ancien défilement de dégradé sur
