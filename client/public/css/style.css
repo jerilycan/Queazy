@@ -3680,86 +3680,18 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   100% { transform: translateY(-100vh) translateX(var(--drift, 0px)) rotate(var(--spin, 20deg)) scale(1.1); opacity: 0; }
 }
 
-/* Démo par type de question — popup JOUEUR (voir index.js showTypeDemo).
-   Réutilise .modal-overlay/.modal-content (déjà animé fadeInScale, voir
-   plus haut) pour l'habillage général, mais avec un z-index PROPRE plus
-   élevé (bug remonté : au même niveau que .leader-overlay, elle pouvait se
-   retrouver cachée dessous en enchaînant depuis le classement — l'ordre
-   DOM décidait alors du gagnant). Corrigé aussi côté JS (leaderOverlay
-   masqué avant d'afficher la démo, voir tuto:show/emitQuestionShow) ; ce
-   z-index reste un filet de sécurité en plus, pas le seul correctif. */
-#typeDemoOverlay { z-index: 1500; }
-.type-demo-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-}
-.type-demo-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  background: rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.18);
-  color: var(--qt-color, var(--color-accent));
-  margin-bottom: 4px;
-}
-.type-demo-title { margin: 0; color: var(--qt-color, var(--color-accent)); }
-
-/* Aperçu de la mécanique dans l'éditeur (retour utilisateur : réutiliser la
-   démo joueur ici aussi), voir editor.js updateQTypeHint/QTYPE_HINTS — même
-   contenu que .type-demo-hint ci-dessus, habillage différent (bandeau
-   discret sous le sélecteur plutôt qu'une popup) pour rester léger dans un
-   formulaire déjà chargé. */
-.qtype-hint {
-  margin: 6px 0 0;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm, 8px);
-  border-left: 3px solid var(--qt-color, var(--color-accent));
-  background: rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.1);
-  color: var(--color-text-muted);
-  font-size: 13px;
-  line-height: 1.4;
-}
-.type-demo-hint {
-  color: var(--color-text-muted);
-  font-size: 15px;
-  line-height: 1.5;
-  margin: 0 0 8px;
-}
-.type-demo-skip {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 4px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.type-demo-skip:hover { color: var(--color-text); }
-.type-demo-optout {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  margin-top: 6px;
-}
-
-/* Démo par type de question — écran d'attente HÔTE (voir index.js
-   tuto:progress, retour utilisateur : "occuper l'écran plutôt qu'une barre
-   de progression vide"). Même habillage que .moderation-wait-overlay/-card
-   juste au-dessus, réutilisé volontairement pour rester cohérent — même
-   moment de la partie (une attente entre deux temps forts), même langage
-   visuel. */
-.tuto-wait-overlay {
+/* Intro par type de question — écran PARTAGÉ hôte + joueurs (chantier
+   v1.53, retour utilisateur : "à chaque question, systématique, donc fini
+   la distinction popup joueur / écran d'attente hôte"). z-index PROPRE
+   plus élevé que .leader-overlay (bug remonté sur l'ancien système : en
+   enchaînant depuis le classement, elle pouvait se retrouver cachée
+   dessous, l'ordre DOM décidant alors du gagnant) — corrigé aussi côté JS
+   (leaderOverlay masqué avant d'afficher l'intro, voir tuto:show/
+   emitQuestionShow côté index.js), ce z-index reste un filet de sécurité
+   en plus. Habillage repris de l'ancien écran d'attente hôte (fond assombri
+   + carte, cohérent avec .moderation-wait-overlay/-card ailleurs dans
+   l'appli pour les autres temps d'attente de la partie). */
+.question-intro-overlay {
   position: fixed;
   inset: 0;
   z-index: 1500;
@@ -3770,7 +3702,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.tuto-wait-card {
+.question-intro-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3783,7 +3715,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   max-width: 90vw;
   animation: moderationCardIn 0.4s cubic-bezier(.34,1.56,.64,1) both;
 }
-.tuto-wait-icon {
+.question-intro-icon {
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -3793,23 +3725,45 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   font-size: 30px;
   background: rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.18);
   color: var(--qt-color, var(--color-accent));
-  animation: moderationIconBounce 1.4s ease-in-out infinite;
+  margin-bottom: 4px;
 }
-.tuto-wait-title {
-  color: var(--color-text);
+.question-intro-title {
+  margin: 0;
+  color: var(--qt-color, var(--color-accent));
   font-weight: 800;
   font-size: 20px;
   font-family: 'Baloo 2', sans-serif;
 }
-.tuto-wait-sub {
+.question-intro-hint {
   color: var(--color-text-muted);
-  font-size: 14px;
-}
-.tuto-wait-progress {
-  margin-top: 8px;
-  font-weight: 700;
   font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 360px;
+}
+.question-intro-countdown {
+  margin-top: 6px;
+  font-weight: 800;
+  font-size: 34px;
+  font-family: 'Baloo 2', sans-serif;
   color: var(--qt-color, var(--color-accent));
+  min-width: 1.4em;
+}
+
+/* Aperçu de la mécanique dans l'éditeur (retour utilisateur : réutiliser
+   cette instruction ici aussi), voir editor.js updateQTypeHint/QTYPE_HINTS
+   — même contenu que .question-intro-hint ci-dessus pour les types
+   concernés, habillage différent (bandeau discret sous le sélecteur plutôt
+   qu'une carte) pour rester léger dans un formulaire déjà chargé. */
+.qtype-hint {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 8px);
+  border-left: 3px solid var(--qt-color, var(--color-accent));
+  background: rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.1);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .leader-overlay {

@@ -1407,11 +1407,11 @@ const saveCurrentQuestionState = () => {
   }
 }
 
-// Aperçu de la mécanique (retour utilisateur : réutiliser la démo joueur
-// ici aussi, voir index.js QUESTION_TYPE_META/DEMO_ELIGIBLE_TYPES — même
-// contenu, dupliqué faute de module JS partagé entre les scripts de ce
-// projet, classiques et chargés séparément). Seuls les types dont la
-// mécanique n'est pas évidente rien qu'au nom ont un texte ici.
+// Aperçu de la mécanique (retour utilisateur : réutiliser l'intro en jeu
+// ici aussi, voir index.js QUESTION_TYPE_META/COMPLEX_TYPES — même contenu,
+// dupliqué faute de module JS partagé entre les scripts de ce projet,
+// classiques et chargés séparément). Seuls les types dont la mécanique
+// n'est pas évidente rien qu'au nom ont un texte ici.
 const QTYPE_HINTS = {
   order: { icon: '↕️', text: 'Les joueurs font glisser les éléments pour les remettre dans le bon ordre.', color: '#ff2fb0', rgb: '255,47,176' },
   image: { icon: '📍', text: 'Les joueurs touchent l\'endroit sur l\'image qui correspond à la réponse.', color: '#2fe3ff', rgb: '47,227,255' },

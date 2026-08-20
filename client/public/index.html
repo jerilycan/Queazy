@@ -475,35 +475,18 @@
          interactions réelles du jeu. -->
     <div id="reactionLayer" class="reaction-layer"></div>
 
-    <!-- Démo par type de question (retour utilisateur) : affichée aux
-         JOUEURS (jamais l'hôte, voir index.js) la première fois qu'un type
-         apparaît dans cette partie, sauf opt-out permanent (case ci-dessous,
-         localStorage). Contenu (icône/texte) posé en JS depuis
-         QUESTION_TYPE_META — voir showTypeDemo. -->
-    <div id="typeDemoOverlay" class="modal-overlay d-none">
-      <div class="modal-content card max-w-500 type-demo-card">
-        <div id="typeDemoIcon" class="type-demo-icon"></div>
-        <h2 id="typeDemoTitle" class="type-demo-title"></h2>
-        <p id="typeDemoHint" class="type-demo-hint"></p>
-        <button type="button" id="typeDemoOkBtn" class="btn btn-primary h-50 w-full">J'ai compris, c'est parti !</button>
-        <button type="button" id="typeDemoSkipBtn" class="type-demo-skip">Passer</button>
-        <label class="type-demo-optout">
-          <input type="checkbox" id="typeDemoOptOutCheck" />
-          Ne plus jamais afficher ces démos
-        </label>
-      </div>
-    </div>
-
-    <!-- Écran d'attente côté HÔTE (retour utilisateur : "occuper l'écran
-         plutôt qu'une barre de progression vide") pendant que les joueurs
-         terminent la démo ci-dessus — voir index.js tuto:progress. Jamais
-         affiché aux joueurs, qui ont déjà leur propre popup. -->
-    <div id="tutoWaitOverlay" class="d-none tuto-wait-overlay">
-      <div class="tuto-wait-card">
-        <div id="tutoWaitIcon" class="tuto-wait-icon"></div>
-        <div id="tutoWaitTitle" class="tuto-wait-title"></div>
-        <div id="tutoWaitSub" class="tuto-wait-sub">Vos joueurs découvrent comment jouer...</div>
-        <div id="tutoWaitProgress" class="tuto-wait-progress"></div>
+    <!-- Intro par type de question (retour utilisateur, chantier v1.53) :
+         affichée à TOUT LE MONDE (hôte + joueurs, même écran) à CHAQUE
+         question — nom du type + instruction + décompte, avant que la
+         question n'apparaisse. Contenu (icône/titre/instruction) posé en JS
+         depuis QUESTION_TYPE_META, durée/décompte piloté par
+         showQuestionIntro — voir index.js. -->
+    <div id="questionIntroOverlay" class="d-none question-intro-overlay">
+      <div class="question-intro-card">
+        <div id="questionIntroIcon" class="question-intro-icon"></div>
+        <h2 id="questionIntroTitle" class="question-intro-title"></h2>
+        <p id="questionIntroHint" class="question-intro-hint"></p>
+        <div id="questionIntroCountdown" class="question-intro-countdown"></div>
       </div>
     </div>
 

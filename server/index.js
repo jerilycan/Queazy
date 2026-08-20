@@ -1008,22 +1008,17 @@ const start = async () => {
         if (!isHostJoining && room.currentQuestion && !room.currentQuestion.ended) {
           room.currentQuestion.expectedPlayers = (room.currentQuestion.expectedPlayers || 0) + 1
         }
-        // Même principe pendant la phase "démo par type de question" (voir
-        // tuto:begin plus bas) : un vraiment nouveau joueur qui arrive
-        // pendant cette courte attente doit lui aussi être compté avant que
-        // la barrière ne se referme, sinon la question suivante pourrait
-        // démarrer sans qu'il ait jamais eu l'occasion de voir la démo.
-        if (!isHostJoining && room.pendingTuto) {
-          room.pendingTuto.expectedPlayers += 1
-        }
       }
       // Qu'il soit nouveau ou reconnectant, un joueur qui (re)rejoint EN
-      // PLEINE phase tuto doit recevoir tuto:show : sans ça, une simple
-      // coupure wifi de quelques secondes pendant cette fenêtre le laisserait
-      // sans jamais savoir qu'il doit répondre tuto:ready, bloquant la
-      // barrière jusqu'au délai de sécurité.
+      // PLEINE phase d'intro type de question doit recevoir tuto:show : sans
+      // ça, une simple coupure wifi de quelques secondes pendant cette
+      // fenêtre le laisserait sans jamais voir l'intro (juste la question
+      // qui apparaît d'un coup). startTs repassé tel quel (horodatage
+      // absolu, comme pour question:show) : son décompte local se recale
+      // automatiquement sur le temps réellement restant, pas de nouveau
+      // décompte complet pour un arrivant tardif.
       if (!isHostJoining && room.pendingTuto) {
-        socket.emit('tuto:show', { type: room.pendingTuto.type })
+        socket.emit('tuto:show', { type: room.pendingTuto.type, durationMs: room.pendingTuto.durationMs, startTs: room.pendingTuto.startTs })
       }
       // Un joueur (hors hôte) qui rejoint pendant que le mode équipe est déjà
       // actif — nouveau joueur ou reconnexion d'un joueur dont l'équipe
@@ -1248,47 +1243,34 @@ const start = async () => {
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
     })
 
-    // "Démo par type de question" (retour utilisateur) : courte phase
-    // AVANT question:show, pendant laquelle chaque joueur peut voir une
-    // démo de la mécanique s'il ne l'a jamais vue cette partie (décision
-    // entièrement côté client, voir index.js DEMO_ELIGIBLE_TYPES/
-    // localStorage) — le serveur se contente d'attendre que tout le monde
-    // soit prêt (ou un délai de sécurité) avant de laisser l'hôte
-    // réellement démarrer la question. Volontairement une phase À PART,
-    // AVANT toute création de question (voir emitQuestionShow côté
-    // index.js) plutôt qu'un champ de plus sur l'objet question : ça évite
-    // de toucher au minuteur/à startTs déjà en place, largement éprouvé et
-    // partagé par TOUS les types de question, pas seulement ceux avec une
-    // démo. room.pendingTuto n'existe que le temps de cette attente.
-    const TUTO_SAFETY_TIMEOUT_MS = 20000
+    // "Intro par type de question" (retour utilisateur, chantier v1.53) :
+    // courte phase AVANT question:show, affichée à TOUT LE MONDE (hôte +
+    // joueurs, plus de distinction entre popup joueur et écran d'attente
+    // hôte) — nom du type + instruction + décompte, DURÉE FIXE décidée côté
+    // hôte (voir index.js INTRO_DURATION_MS/INTRO_DURATION_COMPLEX_MS) et
+    // transmise ici. Remplace l'ancien système barrière "tout le monde
+    // prêt" + bouton Passer + opt-out permanent : l'affichage étant
+    // désormais bref (~3-5s) et systématique à CHAQUE question, plus besoin
+    // de pouvoir le sauter ni d'attendre les retardataires. Volontairement
+    // une phase À PART, AVANT toute création de question (voir
+    // emitQuestionShow côté index.js) plutôt qu'un champ de plus sur l'objet
+    // question : ça évite de toucher au minuteur/à startTs déjà en place,
+    // largement éprouvé et partagé par TOUS les types de question.
+    // room.pendingTuto n'existe que le temps de cette attente.
     socket.on('tuto:begin', payload => {
       const code = payload?.roomCode
       const room = rooms.get(code)
       if (!room || socket.id !== room.hostId) return
-      const expectedPlayers = activePlayers(room).length
-      const pending = { type: payload?.type, ready: new Set(), expectedPlayers, resolved: false }
+      const durationMs = Number.isFinite(Number(payload?.durationMs)) ? Math.max(500, Number(payload.durationMs)) : 3000
+      const pending = { type: payload?.type, durationMs, startTs: Date.now() }
       pending.finish = () => {
-        if (pending.resolved) return
-        pending.resolved = true
-        clearTimeout(pending.timeoutId)
-        if (room.pendingTuto === pending) room.pendingTuto = null
+        if (room.pendingTuto !== pending) return
+        room.pendingTuto = null
         io.to(code).emit('tuto:done')
       }
       room.pendingTuto = pending
-      pending.timeoutId = setTimeout(pending.finish, TUTO_SAFETY_TIMEOUT_MS)
-      io.to(code).emit('tuto:show', { type: pending.type })
-      io.to(code).emit('tuto:progress', { ready: 0, total: pending.expectedPlayers })
-      // Salle sans aucun joueur actif (hors hôte) : rien à attendre.
-      if (pending.expectedPlayers === 0) pending.finish()
-    })
-    socket.on('tuto:ready', payload => {
-      const code = payload?.roomCode
-      const room = rooms.get(code)
-      const pending = room?.pendingTuto
-      if (!pending || pending.ready.has(socket.id)) return
-      pending.ready.add(socket.id)
-      io.to(code).emit('tuto:progress', { ready: pending.ready.size, total: pending.expectedPlayers })
-      if (pending.ready.size >= pending.expectedPlayers) pending.finish()
+      pending.timeoutId = setTimeout(pending.finish, durationMs)
+      io.to(code).emit('tuto:show', { type: pending.type, durationMs, startTs: pending.startTs })
     })
 
     socket.on('question:show', payload => {

@@ -262,36 +262,31 @@ const timerLabel = document.getElementById('timerLabel')
 // dupliqués ici plutôt que lus depuis une variable CSS : tous les types
 // n'ont pas de variable --xxx-rgb dédiée (ex. --tile-bronze), plus simple
 // d'avoir une seule source de vérité pour ce badge.
-// hint : une phrase courte expliquant COMMENT répondre (retour utilisateur,
-// démo par type de question) — seuls les types listés dans
-// DEMO_ELIGIBLE_TYPES plus bas en ont besoin (mécanique pas évidente), les
-// autres restent undefined (jamais de démo les concernant).
+// hint : phrase courte expliquant COMMENT répondre — affichée à CHAQUE
+// question, pour TOUS les types (chantier v1.53, retour utilisateur), dans
+// l'intro avant le décompte (voir showQuestionIntro plus bas). Les 7 types
+// listés dans COMPLEX_TYPES (mécanique moins évidente) ont un hint plus
+// long et restent affichés un peu plus longtemps.
 const QUESTION_TYPE_META = {
-  free: { icon: '📝', label: 'Texte libre', color: '#39ff88', rgb: '57,255,136' },
-  mcq: { icon: '🔘', label: 'Choix multiples', color: '#2f8bff', rgb: '47,139,255' },
-  truefalse: { icon: '✅', label: 'Vrai / Faux', color: '#ff3b5c', rgb: '255,59,92' },
-  graduation: { icon: '🎚️', label: 'Curseur numérique', color: '#ffd23f', rgb: '255,210,63' },
+  free: { icon: '📝', label: 'Texte libre', color: '#39ff88', rgb: '57,255,136', hint: 'Tape ta réponse et valide.' },
+  mcq: { icon: '🔘', label: 'Choix multiples', color: '#2f8bff', rgb: '47,139,255', hint: 'Sélectionne la ou les réponses adéquates et valide.' },
+  truefalse: { icon: '✅', label: 'Vrai / Faux', color: '#ff3b5c', rgb: '255,59,92', hint: 'Choisis Vrai ou Faux et valide.' },
+  graduation: { icon: '🎚️', label: 'Curseur numérique', color: '#ffd23f', rgb: '255,210,63', hint: 'Positionne le curseur sur ta réponse et valide.' },
   order: { icon: '↕️', label: 'Ordre / classement', color: '#ff2fb0', rgb: '255,47,176', hint: 'Fais glisser les éléments pour les remettre dans le bon ordre.' },
   image: { icon: '📍', label: 'Image', color: '#2fe3ff', rgb: '47,227,255', hint: 'Touche l\'endroit sur l\'image qui correspond à la réponse.' },
   zoomguess: { icon: '🔍', label: 'ZoomOut Devinette', color: '#5865f2', rgb: '88,101,242', hint: 'Devine ce que montre l\'image avant qu\'elle ne se dézoome complètement.' },
-  reveal: { icon: '🖼️', label: 'Révélation', color: '#cfd8ea', rgb: '207,216,234' },
-  blindtest: { icon: '🎵', label: 'Blind Test', color: '#7b2ff7', rgb: '123,47,247' },
+  reveal: { icon: '🖼️', label: 'Révélation', color: '#cfd8ea', rgb: '207,216,234', hint: 'Observe l\'image qui se révèle petit à petit et devine de quoi il s\'agit.' },
+  blindtest: { icon: '🎵', label: 'Blind Test', color: '#7b2ff7', rgb: '123,47,247', hint: 'Écoute l\'extrait, puis trouve de quoi il s\'agit.' },
   association: { icon: '🔗', label: 'Association', color: '#ff9f5a', rgb: '255,159,90', hint: 'Relie chaque élément de gauche à son binôme à droite.' },
   timeline: { icon: '⏳', label: 'Timeline', color: '#14e0b8', rgb: '20,224,184', hint: 'Place les événements dans l\'ordre chronologique.' },
   intrus: { icon: '🎯', label: 'Intrus', color: '#b34bf5', rgb: '179,75,245', hint: 'Repère la photo qui n\'a rien à voir avec les autres.' },
   pbac: { icon: '🎩', label: 'Petit Bac', color: '#c8f542', rgb: '200,245,66', hint: 'Tape ta réponse — elle sera jugée par l\'hôte, comme au vrai Petit Bac !' }
 }
 // Types dont la mécanique n'est pas évidente au premier coup d'œil (retour
-// utilisateur) : seuls ceux-là déclenchent la démo avant question. Les
-// autres (QCM, Vrai/Faux, texte libre...) restent auto-explicites.
-const DEMO_ELIGIBLE_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac'])
-// Types déjà "démontrés" pendant CETTE partie (un par joueur, jamais
-// persisté au-delà du rechargement de page — une partie = une visite de
-// cette page, voir server/index.js room lifecycle : un salon ne redémarre
-// jamais un second quiz). Le VRAI opt-out permanent, lui, vit dans
-// localStorage (voir TYPE_DEMO_OPT_OUT_KEY plus bas).
-const demoedTypesThisQuiz = new Set()
-const TYPE_DEMO_OPT_OUT_KEY = 'queazy_skip_type_demos'
+// utilisateur) : l'intro reste affichée un peu plus longtemps pour ceux-là
+// avant de lancer le décompte (voir INTRO_DURATION_COMPLEX_MS). Les autres
+// (QCM, Vrai/Faux, texte libre...) sont auto-explicites, intro plus courte.
+const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac'])
 const questionTypeBadge = document.getElementById('questionTypeBadge')
 const questionTypeBadgeIcon = document.getElementById('questionTypeBadgeIcon')
 const questionTypeBadgeLabel = document.getElementById('questionTypeBadgeLabel')
@@ -344,128 +339,96 @@ const enterGameScreen = () => {
   updateIrlPlayerUI() // partie effectivement lancée : bascule navbar -> roue crantée si IRL (voir plus haut)
 }
 
-// --- Démo par type de question, popup JOUEUR (retour utilisateur) ---
-const typeDemoOverlay = document.getElementById('typeDemoOverlay')
-const typeDemoIcon = document.getElementById('typeDemoIcon')
-const typeDemoTitle = document.getElementById('typeDemoTitle')
-const typeDemoHint = document.getElementById('typeDemoHint')
-const typeDemoOkBtn = document.getElementById('typeDemoOkBtn')
-const typeDemoSkipBtn = document.getElementById('typeDemoSkipBtn')
-const typeDemoOptOutCheck = document.getElementById('typeDemoOptOutCheck')
-// Résolu (dismiss) par typeDemoOkBtn/typeDemoSkipBtn — voir maybeShowTypeDemo.
-// null tant qu'aucune démo n'est affichée (garde-fou contre un double dismiss).
-let resolveTypeDemo = null
-const dismissTypeDemo = () => {
-  if (typeDemoOptOutCheck?.checked) localStorage.setItem(TYPE_DEMO_OPT_OUT_KEY, '1')
-  typeDemoOverlay?.classList.add('d-none')
-  const resolve = resolveTypeDemo
-  resolveTypeDemo = null
-  resolve?.()
+// --- Intro par type de question (chantier v1.53, retour utilisateur) ---
+// Écran PARTAGÉ hôte + joueurs (même contenu pour tout le monde désormais),
+// affiché à CHAQUE question, TOUS les types : nom du type + instruction +
+// décompte, avant que la question n'apparaisse. Durée FIXE décidée par
+// l'hôte (voir INTRO_DURATION_MS/INTRO_DURATION_COMPLEX_MS ci-dessous) et
+// transmise au serveur (tuto:begin) plutôt qu'une barrière "tout le monde
+// prêt" : aucune action requise du joueur, juste une synchronisation sur
+// startTs (même principe que le minuteur de question, voir server/index.js
+// question.startTs) pour que le décompte affiché reste correct même en cas
+// de latence ou d'arrivée tardive (voir room:join côté serveur).
+const INTRO_DURATION_MS = 3000
+const INTRO_DURATION_COMPLEX_MS = 5000
+const questionIntroOverlay = document.getElementById('questionIntroOverlay')
+const questionIntroIcon = document.getElementById('questionIntroIcon')
+const questionIntroTitle = document.getElementById('questionIntroTitle')
+const questionIntroHint = document.getElementById('questionIntroHint')
+const questionIntroCountdown = document.getElementById('questionIntroCountdown')
+let questionIntroTimerId = null
+const hideQuestionIntro = () => {
+  if (questionIntroTimerId) { clearInterval(questionIntroTimerId); questionIntroTimerId = null }
+  questionIntroOverlay?.classList.add('d-none')
 }
-if (typeDemoOkBtn) typeDemoOkBtn.onclick = dismissTypeDemo
-if (typeDemoSkipBtn) typeDemoSkipBtn.onclick = dismissTypeDemo
-
-// Affiche la démo pour `type` si pertinent, et résout une fois CE joueur
-// prêt à répondre — soit après avoir refermé la popup, soit immédiatement
-// si elle n'a pas lieu d'être (type sans démo, déjà vue cette partie, ou
-// opt-out permanent coché une fois pour toutes). C'est le joueur qui
-// décide, jamais le serveur (voir server/index.js tuto:begin) — juste tenu
-// au courant via tuto:ready une fois prêt.
-const maybeShowTypeDemo = (type) => {
+const showQuestionIntro = (type, durationMs, startTs) => {
   const meta = QUESTION_TYPE_META[type]
-  const eligible = DEMO_ELIGIBLE_TYPES.has(type) && meta?.hint
-  const optedOut = localStorage.getItem(TYPE_DEMO_OPT_OUT_KEY) === '1'
-  if (!eligible || optedOut || demoedTypesThisQuiz.has(type) || !typeDemoOverlay) {
-    return Promise.resolve()
+  if (!meta || !questionIntroOverlay) return
+  questionIntroOverlay.style.setProperty('--qt-color', meta.color)
+  questionIntroOverlay.style.setProperty('--qt-color-rgb', meta.rgb)
+  if (questionIntroIcon) questionIntroIcon.textContent = meta.icon
+  if (questionIntroTitle) questionIntroTitle.textContent = meta.label
+  if (questionIntroHint) questionIntroHint.textContent = meta.hint || ''
+  questionIntroOverlay.classList.remove('d-none')
+  if (questionIntroTimerId) clearInterval(questionIntroTimerId)
+  // Décompte dérivé de startTs/durationMs (horodatage serveur), pas d'un
+  // simple setTimeout local : reste juste même sur un client qui vient de
+  // (re)rejoindre en pleine phase intro (voir room:join → tuto:show).
+  const tick = () => {
+    const remaining = (startTs + durationMs) - Date.now()
+    if (questionIntroCountdown) questionIntroCountdown.textContent = remaining > 0 ? String(Math.ceil(remaining / 1000)) : ''
   }
-  demoedTypesThisQuiz.add(type)
-  if (typeDemoOptOutCheck) typeDemoOptOutCheck.checked = false
-  typeDemoOverlay.style.setProperty('--qt-color', meta.color)
-  typeDemoOverlay.style.setProperty('--qt-color-rgb', meta.rgb)
-  if (typeDemoIcon) typeDemoIcon.textContent = meta.icon
-  if (typeDemoTitle) typeDemoTitle.textContent = meta.label
-  if (typeDemoHint) typeDemoHint.textContent = meta.hint
-  typeDemoOverlay.classList.remove('d-none')
-  return new Promise(resolve => { resolveTypeDemo = resolve })
+  tick()
+  questionIntroTimerId = setInterval(tick, 200)
 }
-// Filet de sécurité (voir server/index.js TUTO_SAFETY_TIMEOUT_MS) : si le
-// délai serveur s'écoule alors que la popup est encore ouverte (joueur
-// parti faire autre chose), on la referme sans attendre un clic — la
-// question va démarrer de toute façon, inutile de rester bloqué dessus.
-const forceCloseTypeDemo = () => {
-  if (!resolveTypeDemo) return
-  typeDemoOverlay?.classList.add('d-none')
-  const resolve = resolveTypeDemo
-  resolveTypeDemo = null
-  resolve?.()
-}
-socket.on('tuto:show', ({ type }) => {
-  if (isHost) return
-  // Bug remonté : en enchaînant depuis le classement (leaderOverlay encore
-  // affiché à ce moment, seulement masqué d'habitude par question:show —
-  // qui n'arrive plus qu'APRÈS cette phase désormais, voir emitQuestionShow)
-  // la démo restait invisible, cachée dessous (même z-index, DOM plus tôt).
-  // Il faut la retirer ici, avant d'afficher la popup.
+// Résolu uniquement côté HÔTE (voir emitQuestionShow) une fois l'intro
+// terminée : c'est lui qui déclenche alors réellement question:show. Les
+// joueurs n'ont rien à déclencher, ils se contentent d'attendre ce message.
+let resolveTutoWait = null
+socket.on('tuto:show', ({ type, durationMs, startTs }) => {
+  // Bug remonté sur l'ancien système : en enchaînant depuis le classement
+  // (leaderOverlay encore affiché à ce moment, seulement masqué d'habitude
+  // par question:show — qui n'arrive plus qu'APRÈS cette phase désormais,
+  // voir emitQuestionShow) l'intro restait invisible, cachée dessous (même
+  // z-index, DOM plus tôt). Il faut la retirer ici, avant d'afficher l'intro.
   if (leaderOverlay) leaderOverlay.style.display = 'none'
-  // Idem pour le SALON D'ATTENTE (retour utilisateur : la démo de la toute
+  // Idem pour le SALON D'ATTENTE (retour utilisateur : l'intro de la toute
   // première question s'affichait alors que l'écran montrait encore le
   // lobby, question:show — qui fait normalement cette transition — n'arrivant
   // plus qu'après cette phase). Sans repère visuel que la partie a démarré,
-  // le joueur mettait du temps à remarquer la démo, d'où la lenteur perçue.
+  // le joueur mettait du temps à remarquer l'intro, d'où la lenteur perçue.
   enterGameScreen()
   updateQuestionTypeBadge(type)
-  const roomCode = roomInput.value.trim()
-  maybeShowTypeDemo(type).then(() => socket.emit('tuto:ready', { roomCode }))
+  showQuestionIntro(type, durationMs, startTs)
 })
 socket.on('tuto:done', () => {
-  if (isHost) return
-  forceCloseTypeDemo()
-})
-
-// --- Démo par type de question, écran d'attente HÔTE (retour utilisateur :
-// "occuper l'écran plutôt qu'une barre de progression vide") ---
-const tutoWaitOverlay = document.getElementById('tutoWaitOverlay')
-const tutoWaitIcon = document.getElementById('tutoWaitIcon')
-const tutoWaitTitle = document.getElementById('tutoWaitTitle')
-const tutoWaitProgress = document.getElementById('tutoWaitProgress')
-let resolveTutoWait = null
-socket.on('tuto:progress', ({ ready, total }) => {
-  if (!isHost || !tutoWaitProgress) return
-  tutoWaitProgress.textContent = `${ready}/${total} prêt${total > 1 ? 's' : ''}`
-})
-socket.on('tuto:done', () => {
-  if (!isHost) return
-  tutoWaitOverlay?.classList.add('d-none')
+  hideQuestionIntro()
+  if (!isHost || !resolveTutoWait) return
   const resolve = resolveTutoWait
   resolveTutoWait = null
-  resolve?.()
+  resolve()
 })
 // Remplace les anciens appels directs à socket.emit('question:show', payload)
-// dans emitQuestion() : passe d'abord par la démo si le type le justifie
-// (voir DEMO_ELIGIBLE_TYPES), sinon démarre la question tout de suite, sans
-// aucun aller-retour réseau supplémentaire.
+// dans emitQuestion() : passe d'abord par l'intro pour tous les types connus
+// (voir QUESTION_TYPE_META), sinon démarre la question tout de suite —
+// filet de sécurité pour un type pas encore répertorié ici plutôt qu'un
+// écran d'intro vide.
 const emitQuestionShow = (payload) => {
   const meta = QUESTION_TYPE_META[payload.type]
-  if (!DEMO_ELIGIBLE_TYPES.has(payload.type) || !meta?.hint || !tutoWaitOverlay) {
+  if (!meta || !questionIntroOverlay) {
     socket.emit('question:show', payload)
     return Promise.resolve(true)
   }
   // Idem côté joueur (voir tuto:show plus haut) : en enchaînant depuis le
   // classement, leaderOverlay reste affiché tant que question:show n'est
-  // pas arrivé — désormais après cette phase, pas avant. Même chose pour le
-  // salon d'attente côté hôte : sur la TOUTE PREMIÈRE question (bouton
-  // "LANCER"), sans ceci l'hôte voyait l'écran d'attente par-dessus son
-  // propre lobby encore affiché.
+  // pas arrivé — désormais après cette phase, pas avant. Même chose pour la
+  // TOUTE PREMIÈRE question (bouton "LANCER") : sans ceci l'hôte voyait
+  // l'intro par-dessus son propre lobby encore affiché.
   if (leaderOverlay) leaderOverlay.style.display = 'none'
   enterGameScreen()
   updateQuestionTypeBadge(payload.type)
-  tutoWaitOverlay.style.setProperty('--qt-color', meta.color)
-  tutoWaitOverlay.style.setProperty('--qt-color-rgb', meta.rgb)
-  if (tutoWaitIcon) tutoWaitIcon.textContent = meta.icon
-  if (tutoWaitTitle) tutoWaitTitle.textContent = `Nouveau type : ${meta.label} !`
-  if (tutoWaitProgress) tutoWaitProgress.textContent = ''
-  tutoWaitOverlay.classList.remove('d-none')
-  socket.emit('tuto:begin', { roomCode: payload.roomCode, type: payload.type })
+  const durationMs = COMPLEX_TYPES.has(payload.type) ? INTRO_DURATION_COMPLEX_MS : INTRO_DURATION_MS
+  socket.emit('tuto:begin', { roomCode: payload.roomCode, type: payload.type, durationMs })
   return new Promise(resolve => {
     resolveTutoWait = () => {
       socket.emit('question:show', payload)
