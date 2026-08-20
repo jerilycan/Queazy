@@ -1407,7 +1407,33 @@ const saveCurrentQuestionState = () => {
   }
 }
 
+// Aperçu de la mécanique (retour utilisateur : réutiliser la démo joueur
+// ici aussi, voir index.js QUESTION_TYPE_META/DEMO_ELIGIBLE_TYPES — même
+// contenu, dupliqué faute de module JS partagé entre les scripts de ce
+// projet, classiques et chargés séparément). Seuls les types dont la
+// mécanique n'est pas évidente rien qu'au nom ont un texte ici.
+const QTYPE_HINTS = {
+  order: { icon: '↕️', text: 'Les joueurs font glisser les éléments pour les remettre dans le bon ordre.', color: '#ff2fb0', rgb: '255,47,176' },
+  image: { icon: '📍', text: 'Les joueurs touchent l\'endroit sur l\'image qui correspond à la réponse.', color: '#2fe3ff', rgb: '47,227,255' },
+  zoomguess: { icon: '🔍', text: 'Les joueurs devinent ce que montre l\'image avant qu\'elle ne se dézoome complètement.', color: '#5865f2', rgb: '88,101,242' },
+  association: { icon: '🔗', text: 'Les joueurs relient chaque élément de gauche à son binôme à droite.', color: '#ff9f5a', rgb: '255,159,90' },
+  timeline: { icon: '⏳', text: 'Les joueurs placent les événements dans l\'ordre chronologique.', color: '#14e0b8', rgb: '20,224,184' },
+  intrus: { icon: '🎯', text: 'Les joueurs repèrent la photo qui n\'a rien à voir avec les autres.', color: '#b34bf5', rgb: '179,75,245' },
+  pbac: { icon: '🎩', text: 'Les joueurs tapent une réponse libre, jugée par toi pendant la partie — pas de liste à préparer.', color: '#c8f542', rgb: '200,245,66' }
+}
+const qTypeHint = document.getElementById('qTypeHint')
+const updateQTypeHint = () => {
+  if (!qTypeHint) return
+  const meta = QTYPE_HINTS[qType.value]
+  if (!meta) { qTypeHint.classList.add('d-none'); return }
+  qTypeHint.textContent = `${meta.icon} ${meta.text}`
+  qTypeHint.style.setProperty('--qt-color', meta.color)
+  qTypeHint.style.setProperty('--qt-color-rgb', meta.rgb)
+  qTypeHint.classList.remove('d-none')
+}
+
 const toggleTypeSections = () => {
+  updateQTypeHint()
   mcqSection.classList.toggle('d-none', qType.value !== 'mcq')
   if (graduationSection) graduationSection.classList.toggle('d-none', qType.value !== 'graduation')
   if (trueFalseSection) trueFalseSection.classList.toggle('d-none', qType.value !== 'truefalse')

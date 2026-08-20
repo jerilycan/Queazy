@@ -145,6 +145,14 @@
                 <option value="intrus">🎯 Intrus</option>
                 <option value="pbac">🎩 Petit Bac (catégorie ouverte)</option>
               </select>
+              <!-- Aperçu de la mécanique (retour utilisateur : réutiliser la
+                   démo joueur ici aussi) — même texte que la popup montrée
+                   aux joueurs en jeu (voir client/public/js/index.js
+                   QUESTION_TYPE_META, dupliqué ici sous QTYPE_HINTS faute de
+                   module partagé entre les scripts de ce projet). Utile au
+                   créateur pour les types dont la mécanique n'est pas
+                   évidente rien qu'au nom — masqué pour les autres types. -->
+              <p id="qTypeHint" class="qtype-hint d-none"></p>
             </div>
             <div class="detail-section">
               <label>Temps imparti (secondes)</label>
