@@ -247,11 +247,18 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    pile au même instant (retour utilisateur : "un truc vraiment stylé").
    La timing-function ci-dessous ne sert que de valeur par défaut : chaque
    keyframe (voir plus bas) pose sa propre animation-timing-function pour
-   le segment qui la suit — c'est ce qui pilote vraiment le rythme. */
-.brand:hover #brandPin      { animation: brand-pin-bounce    0.9s ease both; }
-.brand:hover #brandTriangle { animation: brand-triangle-spin 0.9s ease 0.06s both; }
-.brand:hover #brandCercle   { animation: brand-cercle-pulse  0.9s ease 0.12s both; }
-.brand:hover #brandNote     { animation: brand-note-bob      0.9s ease 0.18s both; }
+   le segment qui la suit — c'est ce qui pilote vraiment le rythme.
+   Déclenché via .animate-logo (classe posée par JS au survol, voir
+   index/editor/select/profile/result/login.js) et non plus via :hover
+   directement (retour utilisateur : l'animation doit se terminer même si
+   la souris ne reste pas dessus) — un :hover retire la règle dès que la
+   souris quitte, ce qui coupait l'explosion en plein vol au lieu de la
+   laisser revenir se poser. Une classe posée par JS n'est pas liée à la
+   présence de la souris : l'animation joue jusqu'au bout une fois lancée. */
+.brand.animate-logo #brandPin      { animation: brand-pin-bounce    0.9s ease both; }
+.brand.animate-logo #brandTriangle { animation: brand-triangle-spin 0.9s ease 0.06s both; }
+.brand.animate-logo #brandCercle   { animation: brand-cercle-pulse  0.9s ease 0.12s both; }
+.brand.animate-logo #brandNote     { animation: brand-note-bob      0.9s ease 0.18s both; }
 
 /* "Explosion" (retour utilisateur : les icônes tournaient sur place au lieu
    d'exploser comme prévu au départ) : chaque calque part de sa position de

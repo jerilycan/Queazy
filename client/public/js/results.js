@@ -715,3 +715,16 @@ socket.on('score:update', ({ playerId, delta, total }) => {
   // Optionnel: attendre une prochaine lobby:list si nécessaire
 })
 
+// Logo animation trigger (voir index/editor/select/profile.js, même
+// mécanisme partout : classe posée par JS, pas par :hover, pour que
+// l'explosion des décorations du logo se termine même si la souris ne
+// reste pas dessus).
+const brand = document.querySelector('.brand')
+if (brand) {
+  brand.addEventListener('mouseenter', () => {
+    brand.classList.remove('animate-logo')
+    void brand.offsetWidth // Trigger reflow
+    brand.classList.add('animate-logo')
+  })
+}
+
