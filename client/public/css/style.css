@@ -254,13 +254,20 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    la souris ne reste pas dessus) — un :hover retire la règle dès que la
    souris quitte, ce qui coupait le mouvement en plein vol. Une classe
    posée par JS n'est pas liée à la présence de la souris : l'animation
-   joue jusqu'au bout une fois lancée. Durée allongée (1.3s) : le trajet a
+   joue jusqu'au bout une fois lancée. Durée de base 1.3s : le trajet a
    trois temps distincts (explosion / orbite / retour), il faut le temps
-   de les lire. */
-.brand.animate-logo #brandPin      { animation: brand-pin-orbit      1.3s ease both; }
-.brand.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.3s ease both; }
-.brand.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.3s ease both; }
-.brand.animate-logo #brandNote     { animation: brand-note-orbit     1.3s ease both; }
+   de les lire.
+   Durées légèrement différentes par élément (retour utilisateur :
+   "il faut qu'ils s'arrêtent un à un quand ils atteignent leur position
+   de départ") — même départ (0s de délai, toujours ensemble, équidistance
+   préservée pendant l'orbite), mais chacun boucle sa propre trajectoire
+   à une vitesse légèrement différente : pin se pose le premier, puis
+   triangle, puis cercle, puis note — un atterrissage en cascade plutôt
+   que les 4 qui claquent au repos exactement au même instant. */
+.brand.animate-logo #brandPin      { animation: brand-pin-orbit      1.2s ease both; }
+.brand.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.35s ease both; }
+.brand.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.5s ease both; }
+.brand.animate-logo #brandNote     { animation: brand-note-orbit     1.65s ease both; }
 
 /* Chorégraphie en 3 temps par calque (retour utilisateur : "explosion +
    rotation > tourne autour du logo > revient à sa place", effet "woaw"
