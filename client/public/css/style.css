@@ -187,10 +187,20 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    le lockup (wordmark + icône + décorations) est déjà entièrement dessiné
    dans le fichier — .brand reste le lien cliquable autour, juste sa mise en
    page + le retour visuel au clic/survol. */
+/* Retour utilisateur : "le hover s'active alors que je suis loin du
+   logo" — .brand est le 1er enfant direct de .navbar, qui est une grille
+   CSS (grid-template-columns: 1fr auto 1fr) : par défaut, un item de
+   grille s'étire pour remplir toute sa cellule (437px de large mesurés,
+   contre 140px pour le SVG du logo réellement visible) — la zone de
+   survol débordait donc largement dans le vide à droite du logo.
+   justify-self + width: fit-content ramènent la boîte du lien à la
+   taille exacte de son contenu. */
 .brand {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-self: start;
+  width: fit-content;
   text-decoration: none;
   transition: filter 0.3s ease;
   position: relative;
