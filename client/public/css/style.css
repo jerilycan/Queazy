@@ -243,57 +243,69 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   transform-origin: center;
 }
 /* Décalage de départ (animation-delay) différent par élément : une vraie
-   explosion en cascade plutôt que les 4 décorations qui bougent toutes
-   pile au même instant (retour utilisateur : "un truc vraiment stylé").
-   La timing-function ci-dessous ne sert que de valeur par défaut : chaque
-   keyframe (voir plus bas) pose sa propre animation-timing-function pour
-   le segment qui la suit — c'est ce qui pilote vraiment le rythme.
+   chorégraphie en cascade plutôt que les 4 décorations qui bougent toutes
+   pile au même instant (retour utilisateur : "un truc vraiment stylé" /
+   "effet woaw"). La timing-function ci-dessous ne sert que de valeur par
+   défaut : chaque keyframe (voir plus bas) pose sa propre
+   animation-timing-function pour le segment qui la suit.
    Déclenché via .animate-logo (classe posée par JS au survol, voir
-   index/editor/select/profile/result/login.js) et non plus via :hover
+   index/editor/select/profile/result/login.js) et non par :hover
    directement (retour utilisateur : l'animation doit se terminer même si
    la souris ne reste pas dessus) — un :hover retire la règle dès que la
-   souris quitte, ce qui coupait l'explosion en plein vol au lieu de la
-   laisser revenir se poser. Une classe posée par JS n'est pas liée à la
-   présence de la souris : l'animation joue jusqu'au bout une fois lancée. */
-.brand.animate-logo #brandPin      { animation: brand-pin-bounce    0.9s ease both; }
-.brand.animate-logo #brandTriangle { animation: brand-triangle-spin 0.9s ease 0.06s both; }
-.brand.animate-logo #brandCercle   { animation: brand-cercle-pulse  0.9s ease 0.12s both; }
-.brand.animate-logo #brandNote     { animation: brand-note-bob      0.9s ease 0.18s both; }
+   souris quitte, ce qui coupait le mouvement en plein vol. Une classe
+   posée par JS n'est pas liée à la présence de la souris : l'animation
+   joue jusqu'au bout une fois lancée. Durée allongée (1.3s) : le trajet a
+   trois temps distincts (explosion / orbite / retour), il faut le temps
+   de les lire. */
+.brand.animate-logo #brandPin      { animation: brand-pin-orbit      1.3s ease both; }
+.brand.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.3s ease 0.07s both; }
+.brand.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.3s ease 0.14s both; }
+.brand.animate-logo #brandNote     { animation: brand-note-orbit     1.3s ease 0.21s both; }
 
-/* "Explosion" (retour utilisateur : les icônes tournaient sur place au lieu
-   d'exploser comme prévu au départ) : chaque calque part de sa position de
-   repos, est projeté loin vers son coin d'origine (pin = haut-gauche,
-   triangle = bas-gauche, cercle = bas-droite, note = haut-droite) en
-   tournant sur lui-même et en grossissant, puis revient précisément se
-   reposer à sa place — jamais le même sens de rotation ni la même
-   trajectoire d'un élément à l'autre (pas une masse synchronisée).
-   Seulement 2 segments (aller / retour, palier à 50%) : la version
-   précédente avec des paliers intermédiaires rapprochés (retour
-   utilisateur : "encore plus saccadé") créait des changements de vitesse
-   brusques d'un segment à l'autre (même distance parcourue sur des durées
-   différentes). Ici chaque segment porte sa propre courbe posée sur le
-   keyframe de départ : ease-out pour l'aller (départ franc, arrivée en
-   douceur au pic), ease-in pour le retour (départ doux, ré-atterrissage
-   précis) — un seul mouvement continu, pas de rebond superposé. */
-@keyframes brand-pin-bounce {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  50%  { transform: translate(-46px, -34px) rotate(-260deg) scale(1.7); animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0); }
-  100% { transform: translate(0, 0) rotate(-360deg) scale(1); }
+/* Chorégraphie en 3 temps par calque (retour utilisateur : "explosion +
+   rotation > tourne autour du logo > revient à sa place", effet "woaw"
+   voulu) — pin/note balaient le HAUT du lockup en sens opposés,
+   triangle/cercle balaient le BAS, chacun partant de son coin d'origine :
+   1. Explosion (0→25%) : lancé loin de sa position au repos, en tournant
+      et en grossissant fort.
+   2. Orbite (25→75%) : traverse toute la largeur du logo par un grand arc
+      (deux paliers, 50% = point le plus lointain) en continuant de
+      tourner, avant d'amorcer le retour.
+   3. Atterrissage (75→100%) : revient précisément se reposer à sa place
+      d'origine, rotation et échelle qui se stabilisent pile à temps.
+   Vitesse : accélération franche au départ (repos → mouvement), un
+   \"plateau\" de vitesse quasi constante pendant l'orbite, décélération
+   franche à l'arrivée (mouvement → repos pile) — évite tout à-coup de
+   vitesse d'un palier à l'autre (retour utilisateur précédent : "saccadé").
+   Une lueur (drop-shadow) accompagne le pic pour appuyer l'effet, dans la
+   couleur de chaque décoration (mêmes teintes que l'ancienne version). */
+@keyframes brand-pin-orbit {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+  25%  { transform: translate(-38px, -42px) rotate(-150deg) scale(1.65); filter: drop-shadow(0 0 6px var(--color-accent)); animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  50%  { transform: translate(36px, -58px) rotate(-300deg) scale(1.35); filter: drop-shadow(0 0 6px var(--color-accent)); animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  75%  { transform: translate(14px, -18px) rotate(-450deg) scale(1.15); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  100% { transform: translate(0, 0) rotate(-570deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
-@keyframes brand-triangle-spin {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  50%  { transform: translate(-42px, 40px) rotate(240deg) scale(1.7); animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0); }
-  100% { transform: translate(0, 0) rotate(360deg) scale(1); }
+@keyframes brand-triangle-orbit {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+  25%  { transform: translate(-36px, 40px) rotate(150deg) scale(1.65); filter: drop-shadow(0 0 6px var(--color-cyan)); animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  50%  { transform: translate(46px, 54px) rotate(300deg) scale(1.35); filter: drop-shadow(0 0 6px var(--color-cyan)); animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  75%  { transform: translate(16px, 17px) rotate(450deg) scale(1.15); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  100% { transform: translate(0, 0) rotate(570deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
-@keyframes brand-cercle-pulse {
-  0%   { transform: translate(0, 0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  50%  { transform: translate(38px, 32px) scale(1.9); animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0); }
-  100% { transform: translate(0, 0) scale(1); }
+@keyframes brand-cercle-orbit {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+  25%  { transform: translate(32px, 40px) rotate(-150deg) scale(1.9); filter: drop-shadow(0 0 6px var(--color-accent-2)); animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  50%  { transform: translate(-40px, 54px) rotate(-300deg) scale(1.5); filter: drop-shadow(0 0 6px var(--color-accent-2)); animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  75%  { transform: translate(-14px, 17px) rotate(-450deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  100% { transform: translate(0, 0) rotate(-570deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
-@keyframes brand-note-bob {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  50%  { transform: translate(48px, -36px) rotate(-240deg) scale(1.7); animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0); }
-  100% { transform: translate(0, 0) rotate(-360deg) scale(1); }
+@keyframes brand-note-orbit {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+  25%  { transform: translate(34px, -42px) rotate(150deg) scale(1.65); filter: drop-shadow(0 0 6px var(--tile-bronze)); animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  50%  { transform: translate(-42px, -58px) rotate(300deg) scale(1.35); filter: drop-shadow(0 0 6px var(--tile-bronze)); animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
+  75%  { transform: translate(-15px, -18px) rotate(450deg) scale(1.15); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  100% { transform: translate(0, 0) rotate(570deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 
 /* Confort visuel : personne ne demande une pirouette de 4 icônes à qui a
