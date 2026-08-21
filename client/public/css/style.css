@@ -264,79 +264,78 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 
 /* Chorégraphie en 3 temps par calque (retour utilisateur : "explosion +
    rotation > tourne autour du logo > revient à sa place", effet "woaw"
-   voulu). Retour utilisateur sur les versions precedentes : le pivot
-   dorbite doit etre le mot "Queazy" lui-meme (un seul point central
-   partage par les 4 decorations, pas un point par decoration), et le
-   trace de lorbite doit correspondre a la LONGUEUR du mot — pas un petit
-   cercle local sans lien avec le logo.
-   - CENTER = centre du mot "Queazy" (calque #brandWordmark), commun aux
-     4 decorations.
-   - Ellipse dimensionnee sur la longueur reelle du mot (rx ~205, ry ~78)
-     : pin/note glissent le long du HAUT du mot, triangle/cercle le long
-     du BAS, chacun partant pres de son coin dorigine.
-   - Trajet aller-retour (fonction sinus sur langle) le long de cette
-     ellipse plutot quun sens unique : revient pres de son point de depart
-     avant latterrissage, pas de saut brusque en fin de course.
+   voulu). Historique des ajustements sur cette section (versions
+   precedentes) :
+   - Pivot unique = centre du mot "Queazy" (calque #brandWordmark), pas un
+     point par decoration.
+   - Ellipse dimensionnee sur la longueur reelle du mot (rx~205, ry~78).
+   - Dernier retour utilisateur (capture decran) : le trajet restait
+     "juste au-dessus" du mot, aller-retour sans jamais descendre — ce
+     nest pas un vrai tour. Corrige : chaque decoration parcourt
+     maintenant un tour presque complet (380deg, sens unique) autour du
+     pivot partage, ce qui la fait passer au-dessus PUIS sur le cote PUIS
+     EN DESSOUS du mot avant de revenir se poser — un vrai contournement,
+     pas un balayage plat.
    1. Explosion (0→15%) : lancé de sa position de repos vers lellipse.
-   2. Orbite (15→77%) : glisse le long du mot a vitesse constante
+   2. Orbite (15→77%) : parcourt lellipse a vitesse constante
       (timing-function lineaire dun point a lautre), en continuant de
       tourner sur lui-meme.
    3. Atterrissage (77→100%) : décélère et revient précisément se reposer
       à sa position dorigine, rotation totale = multiple exact de 360deg
-      (state final bien droit, pas de bascule residuelle).
+      (etat final bien droit, pas de bascule residuelle).
    pin/cercle tournent dans un sens, triangle/note dans lautre. Une lueur
    (drop-shadow) accompagne lorbite, dans la couleur propre a chaque
    décoration (mêmes teintes que lancienne version). */
 @keyframes brand-pin-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
   15%  { transform: translate(32.6px, 6.4px) rotate(-127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  24%  { transform: translate(120.5px, -27.2px) rotate(-203deg) scale(1.25); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  33%  { transform: translate(223.0px, -35.9px) rotate(-280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  42%  { transform: translate(289.9px, -30.6px) rotate(-356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  51%  { transform: translate(308.3px, -27.4px) rotate(-432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  59%  { transform: translate(284.9px, -31.3px) rotate(-500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  68%  { transform: translate(212.8px, -36.0px) rotate(-576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  77%  { transform: translate(108.8px, -24.7px) rotate(-652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
-  85%  { transform: translate(32.6px, 6.4px) rotate(-720deg) scale(1.05); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  24%  { transform: translate(165.5px, -33.7px) rotate(-203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  33%  { transform: translate(332.3px, -22.0px) rotate(-280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  42%  { transform: translate(418.8px, 33.5px) rotate(-356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  51%  { transform: translate(365.9px, 94.8px) rotate(-432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  59%  { transform: translate(229.2px, 119.8px) rotate(-500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  68%  { transform: translate(70.3px, 97.3px) rotate(-576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  77%  { transform: translate(10.4px, 36.9px) rotate(-652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  85%  { transform: translate(75.7px, -15.2px) rotate(-720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
   100% { transform: translate(0, 0) rotate(-720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-triangle-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
   15%  { transform: translate(31.9px, -8.0px) rotate(127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  24%  { transform: translate(-1.9px, -53.6px) rotate(203deg) scale(1.25); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  33%  { transform: translate(28.4px, -91.9px) rotate(280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  42%  { transform: translate(73.5px, -111.5px) rotate(356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  51%  { transform: translate(89.8px, -116.0px) rotate(432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  59%  { transform: translate(69.4px, -110.2px) rotate(500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  68%  { transform: translate(23.3px, -88.5px) rotate(576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  77%  { transform: translate(-1.9px, -48.5px) rotate(652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
-  85%  { transform: translate(31.9px, -8.0px) rotate(720deg) scale(1.05); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  24%  { transform: translate(5.4px, -71.7px) rotate(203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  33%  { transform: translate(114.0px, -121.3px) rotate(280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  42%  { transform: translate(283.5px, -122.7px) rotate(356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  51%  { transform: translate(398.0px, -75.1px) rotate(432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  59%  { transform: translate(388.2px, -17.5px) rotate(500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  68%  { transform: translate(258.5px, 24.1px) rotate(576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  77%  { transform: translate(90.9px, 14.3px) rotate(652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  85%  { transform: translate(3.6px, -32.9px) rotate(720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
   100% { transform: translate(0, 0) rotate(720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-cercle-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
   15%  { transform: translate(-32.8px, -9.8px) rotate(-127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  24%  { transform: translate(-135.9px, 16.8px) rotate(-203deg) scale(1.25); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  33%  { transform: translate(-240.8px, 17.9px) rotate(-280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  42%  { transform: translate(-303.9px, 7.8px) rotate(-356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  51%  { transform: translate(-320.4px, 3.4px) rotate(-432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  59%  { transform: translate(-299.3px, 8.9px) rotate(-500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  68%  { transform: translate(-230.8px, 18.7px) rotate(-576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  77%  { transform: translate(-123.2px, 15.2px) rotate(-652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
-  85%  { transform: translate(-32.8px, -9.8px) rotate(-720deg) scale(1.05); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  24%  { transform: translate(-183.3px, 19.9px) rotate(-203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  33%  { transform: translate(-341.1px, -3.7px) rotate(-280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  42%  { transform: translate(-398.3px, -64.4px) rotate(-356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  51%  { transform: translate(-315.7px, -120.8px) rotate(-432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  59%  { transform: translate(-169.0px, -135.4px) rotate(-500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  68%  { transform: translate(-24.3px, -101.8px) rotate(-576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  77%  { transform: translate(4.3px, -38.2px) rotate(-652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  85%  { transform: translate(-85.8px, 8.3px) rotate(-720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
   100% { transform: translate(0, 0) rotate(-720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-note-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
   15%  { transform: translate(-31.9px, 6.4px) rotate(127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  24%  { transform: translate(-9.7px, 53.1px) rotate(203deg) scale(1.25); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  33%  { transform: translate(-49.5px, 90.1px) rotate(280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  42%  { transform: translate(-99.3px, 107.9px) rotate(356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  51%  { transform: translate(-116.6px, 111.8px) rotate(432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  59%  { transform: translate(-94.9px, 106.7px) rotate(500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  68%  { transform: translate(-43.5px, 86.9px) rotate(576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  77%  { transform: translate(-8.4px, 48.0px) rotate(652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
-  85%  { transform: translate(-31.9px, 6.4px) rotate(720deg) scale(1.05); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  24%  { transform: translate(-21.5px, 70.8px) rotate(203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  33%  { transform: translate(-142.1px, 116.2px) rotate(280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  42%  { transform: translate(-311.2px, 111.5px) rotate(356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  51%  { transform: translate(-413.1px, 59.9px) rotate(432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  59%  { transform: translate(-388.9px, 2.9px) rotate(500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  68%  { transform: translate(-249.4px, -33.8px) rotate(576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  77%  { transform: translate(-85.0px, -17.9px) rotate(652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  85%  { transform: translate(-10.0px, 32.2px) rotate(720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
   100% { transform: translate(0, 0) rotate(720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 
