@@ -286,14 +286,28 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    amplitude retombe naturellement à zéro pile quand il revient à sa
    position de départ.
    Vitesse angulaire IDENTIQUE pour les 4 (équidistance garantie tant
-   qu'ils bougent) ; seule la durée totale differe par élément (1.2 à
-   1.65s), ce qui leur donne un nombre de degrés parcourus différent —
-   donc un atterrissage en cascade — sans jamais changer leur vitesse
-   relative les uns par rapport aux autres. */
-.brand.animate-logo #brandPin      { animation: brand-pin-orbit      1.2s linear both; }
-.brand.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.35s linear both; }
+   qu'ils bougent) ; seule la durée totale differe par élément, ce qui leur
+   donne un nombre de degrés parcourus différent — donc un atterrissage en
+   cascade — sans jamais changer leur vitesse relative les uns par rapport
+   aux autres.
+   Deux derniers ajustements (retour utilisateur : "trop proche du centre"
+   + "la note refait un tour sur elle-même pour aucune raison à la fin") :
+   - Ellipse d'orbite agrandie (rx 205→260, ry 78→100) : la boucle passait
+     trop près du centre du mot, elle s'en écarte davantage maintenant.
+   - Vitesse angulaire réduite (320→260deg/s) et durées resserrées, pour
+     que même l'élément le plus lent (note) ne dépasse plus qu'un peu plus
+     d'un tour complet (1.16 tour, contre 1.47 avant) au lieu de presque
+     un tour et demi — moins de "tour en trop" visible.
+   - Rotation sur soi-même réduite à un seul tour (360deg, était 720 = 2
+     tours) et calée pour se terminer à 92% de la durée totale plutôt qu'à
+     100% : elle ne continue plus à tourner sur place une fois que le
+     décalage de position est déjà quasiment retombé à zéro (c'est ce
+     "reste de rotation sans déplacement visible" qui donnait l'impression
+     d'un tour gratuit en fin de course). */
+.brand.animate-logo #brandPin      { animation: brand-pin-orbit      1.3s linear both; }
+.brand.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.4s linear both; }
 .brand.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.5s linear both; }
-.brand.animate-logo #brandNote     { animation: brand-note-orbit     1.65s linear both; }
+.brand.animate-logo #brandNote     { animation: brand-note-orbit     1.6s linear both; }
 
 /* Chorégraphie en 3 temps par calque (retour utilisateur : "explosion +
    rotation > tourne autour du logo > revient à sa place", effet "woaw"
@@ -323,71 +337,71 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    décoration. */
 @keyframes brand-pin-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: linear; }
-  7.14%  { transform: translate(34.1px, -7.2px) rotate(-51deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-accent)); animation-timing-function: linear; }
-  14.29%  { transform: translate(108.5px, -15.1px) rotate(-103deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-accent)); animation-timing-function: linear; }
-  21.43%  { transform: translate(211.5px, -12.5px) rotate(-154deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-accent)); animation-timing-function: linear; }
-  28.57%  { transform: translate(313.0px, 6.8px) rotate(-206deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-accent)); animation-timing-function: linear; }
-  35.71%  { transform: translate(378.3px, 40.5px) rotate(-257deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-accent)); animation-timing-function: linear; }
-  42.86%  { transform: translate(383.4px, 78.5px) rotate(-309deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-accent)); animation-timing-function: linear; }
-  50.00%  { transform: translate(326.7px, 107.4px) rotate(-360deg) scale(1.45); filter: drop-shadow(0 0 7.0px var(--color-accent)); animation-timing-function: linear; }
-  57.14%  { transform: translate(229.0px, 116.6px) rotate(-411deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-accent)); animation-timing-function: linear; }
-  64.29%  { transform: translate(124.9px, 103.1px) rotate(-463deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-accent)); animation-timing-function: linear; }
-  71.43%  { transform: translate(46.6px, 72.6px) rotate(-514deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-accent)); animation-timing-function: linear; }
-  78.57%  { transform: translate(9.7px, 37.4px) rotate(-566deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-accent)); animation-timing-function: linear; }
-  85.71%  { transform: translate(7.0px, 10.0px) rotate(-617deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-accent)); animation-timing-function: linear; }
-  92.86%  { transform: translate(13.7px, -2.2px) rotate(-669deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-accent)); animation-timing-function: linear; }
-  100% { transform: translate(0, 0) rotate(-720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
+  7.14%  { transform: translate(27.2px, -11.4px) rotate(-28deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-accent)); animation-timing-function: linear; }
+  14.29%  { transform: translate(99.8px, -25.1px) rotate(-56deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-accent)); animation-timing-function: linear; }
+  21.43%  { transform: translate(208.7px, -29.2px) rotate(-84deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-accent)); animation-timing-function: linear; }
+  28.57%  { transform: translate(327.3px, -15.8px) rotate(-112deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-accent)); animation-timing-function: linear; }
+  35.71%  { transform: translate(420.7px, 15.6px) rotate(-140deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-accent)); animation-timing-function: linear; }
+  42.86%  { transform: translate(459.3px, 57.6px) rotate(-168deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-accent)); animation-timing-function: linear; }
+  50.00%  { transform: translate(430.5px, 97.9px) rotate(-196deg) scale(1.45); filter: drop-shadow(0 0 7.0px var(--color-accent)); animation-timing-function: linear; }
+  57.14%  { transform: translate(343.4px, 123.8px) rotate(-224deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-accent)); animation-timing-function: linear; }
+  64.29%  { transform: translate(225.2px, 127.1px) rotate(-252deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-accent)); animation-timing-function: linear; }
+  71.43%  { transform: translate(110.6px, 107.8px) rotate(-280deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-accent)); animation-timing-function: linear; }
+  78.57%  { transform: translate(28.6px, 73.5px) rotate(-307deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-accent)); animation-timing-function: linear; }
+  85.71%  { transform: translate(-8.7px, 36.8px) rotate(-335deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-accent)); animation-timing-function: linear; }
+  92.86%  { transform: translate(-10.0px, 9.8px) rotate(-360deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-accent)); animation-timing-function: linear; }
+  100% { transform: translate(0, 0) rotate(-360deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-triangle-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: linear; }
-  7.14%  { transform: translate(0.9px, -7.1px) rotate(51deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-cyan)); animation-timing-function: linear; }
-  14.29%  { transform: translate(2.9px, -31.9px) rotate(103deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-cyan)); animation-timing-function: linear; }
-  21.43%  { transform: translate(40.3px, -67.7px) rotate(154deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-cyan)); animation-timing-function: linear; }
-  28.57%  { transform: translate(126.6px, -99.6px) rotate(206deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-cyan)); animation-timing-function: linear; }
-  35.71%  { transform: translate(243.9px, -112.3px) rotate(257deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-cyan)); animation-timing-function: linear; }
-  42.86%  { transform: translate(351.3px, -98.5px) rotate(309deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-cyan)); animation-timing-function: linear; }
-  50.00%  { transform: translate(405.5px, -63.2px) rotate(360deg) scale(1.45); filter: drop-shadow(0 0 7.0px var(--color-cyan)); animation-timing-function: linear; }
-  57.14%  { transform: translate(383.4px, -21.4px) rotate(411deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-cyan)); animation-timing-function: linear; }
-  64.29%  { transform: translate(294.8px, 10.0px) rotate(463deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-cyan)); animation-timing-function: linear; }
-  71.43%  { transform: translate(176.7px, 20.7px) rotate(514deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-cyan)); animation-timing-function: linear; }
-  78.57%  { transform: translate(73.7px, 12.5px) rotate(566deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-cyan)); animation-timing-function: linear; }
-  85.71%  { transform: translate(15.0px, -2.9px) rotate(617deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-cyan)); animation-timing-function: linear; }
-  92.86%  { transform: translate(-0.3px, -10.2px) rotate(669deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-cyan)); animation-timing-function: linear; }
-  100% { transform: translate(0, 0) rotate(720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
+  7.14%  { transform: translate(-9.5px, -4.1px) rotate(28deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-cyan)); animation-timing-function: linear; }
+  14.29%  { transform: translate(-23.9px, -27.4px) rotate(56deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-cyan)); animation-timing-function: linear; }
+  21.43%  { transform: translate(-9.4px, -65.8px) rotate(84deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-cyan)); animation-timing-function: linear; }
+  28.57%  { transform: translate(54.0px, -106.9px) rotate(112deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-cyan)); animation-timing-function: linear; }
+  35.71%  { transform: translate(162.5px, -135.7px) rotate(140deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-cyan)); animation-timing-function: linear; }
+  42.86%  { transform: translate(288.7px, -140.7px) rotate(168deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-cyan)); animation-timing-function: linear; }
+  50.00%  { transform: translate(393.2px, -119.2px) rotate(196deg) scale(1.45); filter: drop-shadow(0 0 7.0px var(--color-cyan)); animation-timing-function: linear; }
+  57.14%  { transform: translate(440.3px, -78.2px) rotate(224deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-cyan)); animation-timing-function: linear; }
+  64.29%  { transform: translate(414.3px, -31.9px) rotate(252deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-cyan)); animation-timing-function: linear; }
+  71.43%  { transform: translate(325.2px, 5.0px) rotate(280deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-cyan)); animation-timing-function: linear; }
+  78.57%  { transform: translate(205.2px, 22.7px) rotate(307deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-cyan)); animation-timing-function: linear; }
+  85.71%  { transform: translate(94.0px, 21.2px) rotate(335deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-cyan)); animation-timing-function: linear; }
+  92.86%  { transform: translate(22.6px, 9.1px) rotate(360deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-cyan)); animation-timing-function: linear; }
+  100% { transform: translate(0, 0) rotate(360deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-cercle-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: linear; }
-  7.14%  { transform: translate(-34.7px, 4.1px) rotate(-51deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-accent-2)); animation-timing-function: linear; }
-  14.29%  { transform: translate(-119.7px, 5.9px) rotate(-103deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-accent-2)); animation-timing-function: linear; }
-  21.43%  { transform: translate(-229.2px, -10.3px) rotate(-154deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-accent-2)); animation-timing-function: linear; }
-  28.57%  { transform: translate(-311.8px, -47.6px) rotate(-206deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-accent-2)); animation-timing-function: linear; }
-  35.71%  { transform: translate(-323.4px, -94.0px) rotate(-257deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-accent-2)); animation-timing-function: linear; }
-  42.86%  { transform: translate(-255.1px, -128.3px) rotate(-309deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-accent-2)); animation-timing-function: linear; }
-  50.00%  { transform: translate(-140.9px, -133.3px) rotate(-360deg) scale(1.45); filter: drop-shadow(0 0 7.0px var(--color-accent-2)); animation-timing-function: linear; }
-  57.14%  { transform: translate(-37.6px, -106.1px) rotate(-411deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-accent-2)); animation-timing-function: linear; }
-  64.29%  { transform: translate(8.7px, -60.1px) rotate(-463deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-accent-2)); animation-timing-function: linear; }
-  71.43%  { transform: translate(-10.0px, -16.9px) rotate(-514deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-accent-2)); animation-timing-function: linear; }
-  78.57%  { transform: translate(-61.2px, 6.8px) rotate(-566deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-accent-2)); animation-timing-function: linear; }
-  85.71%  { transform: translate(-94.1px, 8.5px) rotate(-617deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-accent-2)); animation-timing-function: linear; }
-  92.86%  { transform: translate(-72.9px, 0.2px) rotate(-669deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-accent-2)); animation-timing-function: linear; }
-  100% { transform: translate(0, 0) rotate(-720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
+  7.14%  { transform: translate(-26.1px, 8.4px) rotate(-28deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-accent-2)); animation-timing-function: linear; }
+  14.29%  { transform: translate(-105.1px, 17.5px) rotate(-56deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-accent-2)); animation-timing-function: linear; }
+  21.43%  { transform: translate(-222.0px, 12.6px) rotate(-84deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-accent-2)); animation-timing-function: linear; }
+  28.57%  { transform: translate(-338.0px, -14.1px) rotate(-112deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-accent-2)); animation-timing-function: linear; }
+  35.71%  { transform: translate(-408.4px, -59.0px) rotate(-140deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-accent-2)); animation-timing-function: linear; }
+  42.86%  { transform: translate(-403.8px, -108.4px) rotate(-168deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-accent-2)); animation-timing-function: linear; }
+  50.00%  { transform: translate(-324.0px, -144.6px) rotate(-196deg) scale(1.45); filter: drop-shadow(0 0 7.0px var(--color-accent-2)); animation-timing-function: linear; }
+  57.14%  { transform: translate(-198.6px, -154.0px) rotate(-224deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--color-accent-2)); animation-timing-function: linear; }
+  64.29%  { transform: translate(-73.1px, -133.4px) rotate(-252deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--color-accent-2)); animation-timing-function: linear; }
+  71.43%  { transform: translate(11.9px, -91.8px) rotate(-280deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--color-accent-2)); animation-timing-function: linear; }
+  78.57%  { transform: translate(39.3px, -45.5px) rotate(-307deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--color-accent-2)); animation-timing-function: linear; }
+  85.71%  { transform: translate(22.3px, -10.8px) rotate(-335deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--color-accent-2)); animation-timing-function: linear; }
+  92.86%  { transform: translate(-3.8px, 3.4px) rotate(-360deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--color-accent-2)); animation-timing-function: linear; }
+  100% { transform: translate(0, 0) rotate(-360deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-note-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: linear; }
-  7.14%  { transform: translate(-2.1px, 7.4px) rotate(51deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--tile-bronze)); animation-timing-function: linear; }
-  14.29%  { transform: translate(-15.7px, 35.8px) rotate(103deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--tile-bronze)); animation-timing-function: linear; }
-  21.43%  { transform: translate(-85.2px, 71.9px) rotate(154deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--tile-bronze)); animation-timing-function: linear; }
-  28.57%  { transform: translate(-210.3px, 92.3px) rotate(206deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--tile-bronze)); animation-timing-function: linear; }
-  35.71%  { transform: translate(-340.5px, 80.5px) rotate(257deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--tile-bronze)); animation-timing-function: linear; }
-  42.86%  { transform: translate(-407.5px, 40.2px) rotate(309deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--tile-bronze)); animation-timing-function: linear; }
-  50.00%  { transform: translate(-372.3px, -6.1px) rotate(360deg) scale(1.45); filter: drop-shadow(0 0 7.0px var(--tile-bronze)); animation-timing-function: linear; }
-  57.14%  { transform: translate(-253.6px, -32.1px) rotate(411deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--tile-bronze)); animation-timing-function: linear; }
-  64.29%  { transform: translate(-115.5px, -25.2px) rotate(463deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--tile-bronze)); animation-timing-function: linear; }
-  71.43%  { transform: translate(-24.8px, 5.1px) rotate(514deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--tile-bronze)); animation-timing-function: linear; }
-  78.57%  { transform: translate(-6.9px, 35.1px) rotate(566deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--tile-bronze)); animation-timing-function: linear; }
-  85.71%  { transform: translate(-32.4px, 43.6px) rotate(617deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--tile-bronze)); animation-timing-function: linear; }
-  92.86%  { transform: translate(-43.6px, 26.9px) rotate(669deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--tile-bronze)); animation-timing-function: linear; }
-  100% { transform: translate(0, 0) rotate(720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
+  7.14%  { transform: translate(8.4px, 3.7px) rotate(28deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--tile-bronze)); animation-timing-function: linear; }
+  14.29%  { transform: translate(16.8px, 29.5px) rotate(56deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--tile-bronze)); animation-timing-function: linear; }
+  21.43%  { transform: translate(-16.5px, 70.2px) rotate(84deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--tile-bronze)); animation-timing-function: linear; }
+  28.57%  { transform: translate(-110.0px, 108.7px) rotate(112deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--tile-bronze)); animation-timing-function: linear; }
+  35.71%  { transform: translate(-246.9px, 126.3px) rotate(140deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--tile-bronze)); animation-timing-function: linear; }
+  42.86%  { transform: translate(-381.5px, 112.9px) rotate(168deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--tile-bronze)); animation-timing-function: linear; }
+  50.00%  { transform: translate(-461.6px, 72.2px) rotate(196deg) scale(1.45); filter: drop-shadow(0 0 7.0px var(--tile-bronze)); animation-timing-function: linear; }
+  57.14%  { transform: translate(-454.9px, 20.5px) rotate(224deg) scale(1.44); filter: drop-shadow(0 0 6.8px var(--tile-bronze)); animation-timing-function: linear; }
+  64.29%  { transform: translate(-364.8px, -22.0px) rotate(252deg) scale(1.41); filter: drop-shadow(0 0 6.3px var(--tile-bronze)); animation-timing-function: linear; }
+  71.43%  { transform: translate(-228.9px, -40.8px) rotate(280deg) scale(1.35); filter: drop-shadow(0 0 5.5px var(--tile-bronze)); animation-timing-function: linear; }
+  78.57%  { transform: translate(-99.5px, -34.2px) rotate(307deg) scale(1.28); filter: drop-shadow(0 0 4.4px var(--tile-bronze)); animation-timing-function: linear; }
+  85.71%  { transform: translate(-17.6px, -13.8px) rotate(335deg) scale(1.20); filter: drop-shadow(0 0 3.0px var(--tile-bronze)); animation-timing-function: linear; }
+  92.86%  { transform: translate(7.4px, 2.4px) rotate(360deg) scale(1.10); filter: drop-shadow(0 0 1.6px var(--tile-bronze)); animation-timing-function: linear; }
+  100% { transform: translate(0, 0) rotate(360deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 
 /* Confort visuel : personne ne demande une pirouette de 4 icônes à qui a
