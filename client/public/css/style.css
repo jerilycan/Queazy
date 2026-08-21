@@ -254,102 +254,98 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    la souris ne reste pas dessus) — un :hover retire la règle dès que la
    souris quitte, ce qui coupait le mouvement en plein vol. Une classe
    posée par JS n'est pas liée à la présence de la souris : l'animation
-   joue jusqu'au bout une fois lancée. Durée de base 1.3s : le trajet a
-   trois temps distincts (explosion / orbite / retour), il faut le temps
-   de les lire.
-   Durées légèrement différentes par élément (retour utilisateur :
-   "il faut qu'ils s'arrêtent un à un quand ils atteignent leur position
-   de départ") — même départ (0s de délai, toujours ensemble, équidistance
-   préservée pendant l'orbite), mais chacun boucle sa propre trajectoire
-   à une vitesse légèrement différente : pin se pose le premier, puis
-   triangle, puis cercle, puis note — un atterrissage en cascade plutôt
-   que les 4 qui claquent au repos exactement au même instant. */
+   joue jusqu'au bout une fois lancée.
+   Retour utilisateur : "il faut qu'ils s'arrêtent un à un" — première
+   tentative (juste ralentir la durée totale de chacun) ratée : ralentir
+   TOUTE la trajectoire change aussi la vitesse angulaire pendant
+   l'orbite, donc l'écart entre les 4 ne reste plus constant (retour :
+   "moins bien qu'avant, deux items se recollent"). Le vrai fix est dans
+   les keyframes elles-mêmes (voir plus bas) : la phase orbite (0→1.1s)
+   est calée sur le MÊME temps absolu et la MÊME vitesse angulaire pour
+   les 4 (équidistance garantie), seule la queue d'atterrissage finale
+   (après 1.1s) dure plus ou moins longtemps selon l'élément — d'où des
+   durées totales différentes ici, mais l'orbite active reste identique. */
 .brand.animate-logo #brandPin      { animation: brand-pin-orbit      1.2s ease both; }
-.brand.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.35s ease both; }
-.brand.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.5s ease both; }
-.brand.animate-logo #brandNote     { animation: brand-note-orbit     1.65s ease both; }
+.brand.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.3s ease both; }
+.brand.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.4s ease both; }
+.brand.animate-logo #brandNote     { animation: brand-note-orbit     1.5s ease both; }
 
 /* Chorégraphie en 3 temps par calque (retour utilisateur : "explosion +
    rotation > tourne autour du logo > revient à sa place", effet "woaw"
    voulu). Historique des ajustements sur cette section (versions
    precedentes) :
-   - Pivot unique = centre du mot "Queazy" (calque #brandWordmark).
+   - Pivot unique = centre du mot "Queazy".
    - Ellipse dimensionnee sur la longueur reelle du mot (rx~205, ry~78).
    - Tour presque complet (380deg) : passe au-dessus, sur le cote, EN
-     DESSOUS du mot avant de revenir (pas un aller-retour plat).
-   Dernier retour utilisateur : le pin "colle au cul" de la note au lieu
-   detre equidistant des autres decorations comme prevu. Deux causes
-   combinees, corrigees :
-   - Les angles de depart etaient ceux, bruts, des coins reels du logo
-     (60.6 / 124.9 / 66.1 / 108.4deg decart entre voisins — pas du tout
-     equidistants). Fixes maintenant a exactement 90deg les uns des
-     autres (45/135/225/315deg), un saut de lancement legerement plus
-     grand mais un ecart parfaitement egal et constant entre les 4 tout
-     au long du trajet.
-   - Le decalage en cascade (animation-delay 0/0.07/0.14/0.21s) faisait
-     deriver cet ecart dans le temps (chacun avance a la meme vitesse
-     angulaire mais ne demarre pas au meme instant) — retire : les 4
-     partent maintenant exactement ensemble, l’ecart angulaire choisi
-     reste rigoureusement constant du debut a la fin.
-   1. Explosion (0→15%) : lancé de sa position de repos vers lellipse.
-   2. Orbite (15→77%) : parcourt lellipse a vitesse constante
-      (timing-function lineaire dun point a lautre), en continuant de
-      tourner sur lui-meme.
-   3. Atterrissage (77→100%) : décélère et revient précisément se reposer
-      à sa position dorigine, rotation totale = multiple exact de 360deg.
+     DESSOUS du mot avant de revenir.
+   - Angles de depart fixes a exactement 90deg les uns des autres
+     (equidistance garantie), memes duree et delai (0s) pour les 4
+     pendant toute la phase active — necessaire pour que lecart angulaire
+     entre les 4 reste rigoureusement constant (sinon deux items finissent
+     par se recoller, comme constate quand une tentative precedente avait
+     simplement ralenti la duree totale de certains elements).
+   Dernier retour utilisateur : chacun doit sarreter a un moment different
+   en revenant chez lui, pas tous pile au meme instant. Solution : la
+   phase active (explosion + orbite, 0 a 1.1s) reste identique en temps
+   ABSOLU et en vitesse angulaire pour les 4 (mêmes positions au même
+   instant, équidistance intacte) ; seule la queue datterrissage finale
+   (apres 1.1s, retour vers translate(0,0)) dure plus ou moins longtemps
+   selon lelement (voir les durees totales differentes sur les regles de
+   declenchement plus haut) — dou un arret en cascade sans jamais casser
+   lespacement pendant que les 4 sont encore activement en mouvement.
    pin/cercle tournent dans un sens, triangle/note dans lautre. Une lueur
    (drop-shadow) accompagne lorbite, dans la couleur propre a chaque
-   décoration (mêmes teintes que lancienne version). */
+   décoration. */
 @keyframes brand-pin-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
-  15%  { transform: translate(70.0px, -13.2px) rotate(-127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  24%  { transform: translate(228.8px, -35.8px) rotate(-203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  33%  { transform: translate(378.1px, -5.3px) rotate(-280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  42%  { transform: translate(415.8px, 57.6px) rotate(-356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  51%  { transform: translate(316.2px, 109.8px) rotate(-432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  59%  { transform: translate(165.9px, 117.7px) rotate(-500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  68%  { transform: translate(32.8px, 77.8px) rotate(-576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
-  77%  { transform: translate(24.4px, 13.3px) rotate(-652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
-  85%  { transform: translate(128.4px, -28.7px) rotate(-720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  16.18%  { transform: translate(292.0px, -30.3px) rotate(-127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  25.88%  { transform: translate(396.5px, 5.7px) rotate(-203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  35.59%  { transform: translate(415.1px, 58.9px) rotate(-280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  45.29%  { transform: translate(339.0px, 104.1px) rotate(-356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  55.00%  { transform: translate(204.3px, 119.9px) rotate(-432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  63.63%  { transform: translate(86.6px, 102.8px) rotate(-500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  73.33%  { transform: translate(13.8px, 56.9px) rotate(-576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent)); animation-timing-function: linear; }
+  83.04%  { transform: translate(36.1px, 3.9px) rotate(-652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  91.67%  { transform: translate(128.4px, -28.7px) rotate(-720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-accent)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
   100% { transform: translate(0, 0) rotate(-720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-triangle-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
-  15%  { transform: translate(58.0px, 4.2px) rotate(127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  24%  { transform: translate(-1.5px, -56.2px) rotate(203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  33%  { transform: translate(78.8px, -113.1px) rotate(280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  42%  { transform: translate(244.1px, -127.4px) rotate(356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  51%  { transform: translate(381.3px, -89.5px) rotate(432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  59%  { transform: translate(402.0px, -32.3px) rotate(500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  68%  { transform: translate(297.0px, 18.3px) rotate(576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
-  77%  { transform: translate(127.6px, 21.5px) rotate(652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
-  85%  { transform: translate(17.2px, -18.0px) rotate(720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  14.93%  { transform: translate(13.0px, -80.3px) rotate(127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  23.89%  { transform: translate(107.7px, -120.1px) rotate(203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  32.85%  { transform: translate(247.5px, -127.1px) rotate(280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  41.81%  { transform: translate(366.2px, -98.2px) rotate(356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  50.77%  { transform: translate(407.7px, -46.9px) rotate(432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  58.73%  { transform: translate(362.8px, -2.2px) rotate(500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  67.69%  { transform: translate(242.1px, 25.6px) rotate(576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-cyan)); animation-timing-function: linear; }
+  76.65%  { transform: translate(102.9px, 17.1px) rotate(652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  84.62%  { transform: translate(17.2px, -18.0px) rotate(720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-cyan)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
   100% { transform: translate(0, 0) rotate(720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-cercle-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
-  15%  { transform: translate(-49.0px, -2.8px) rotate(-127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  24%  { transform: translate(-207.8px, 19.8px) rotate(-203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  33%  { transform: translate(-357.1px, -10.7px) rotate(-280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  42%  { transform: translate(-394.8px, -73.6px) rotate(-356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  51%  { transform: translate(-295.2px, -125.8px) rotate(-432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  59%  { transform: translate(-144.9px, -133.7px) rotate(-500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  68%  { transform: translate(-11.8px, -93.8px) rotate(-576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
-  77%  { transform: translate(-3.4px, -29.3px) rotate(-652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
-  85%  { transform: translate(-107.4px, 12.7px) rotate(-720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  13.87%  { transform: translate(-271.0px, 14.3px) rotate(-127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  22.18%  { transform: translate(-375.5px, -21.7px) rotate(-203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  30.50%  { transform: translate(-394.1px, -74.9px) rotate(-280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  38.82%  { transform: translate(-318.0px, -120.1px) rotate(-356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  47.14%  { transform: translate(-183.3px, -135.9px) rotate(-432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  54.54%  { transform: translate(-65.6px, -118.8px) rotate(-500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  62.86%  { transform: translate(7.2px, -72.9px) rotate(-576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--color-accent-2)); animation-timing-function: linear; }
+  71.18%  { transform: translate(-15.1px, -19.9px) rotate(-652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  78.57%  { transform: translate(-107.4px, 12.7px) rotate(-720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--color-accent-2)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
   100% { transform: translate(0, 0) rotate(-720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 @keyframes brand-note-orbit {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); filter: drop-shadow(0 0 0 transparent); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
-  15%  { transform: translate(-68.0px, -12.2px) rotate(127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  24%  { transform: translate(-8.5px, 48.2px) rotate(203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  33%  { transform: translate(-88.8px, 105.1px) rotate(280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  42%  { transform: translate(-254.1px, 119.4px) rotate(356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  51%  { transform: translate(-391.3px, 81.5px) rotate(432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  59%  { transform: translate(-412.0px, 24.3px) rotate(500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  68%  { transform: translate(-307.0px, -26.3px) rotate(576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
-  77%  { transform: translate(-137.6px, -29.5px) rotate(652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
-  85%  { transform: translate(-27.2px, 10.0px) rotate(720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  12.94%  { transform: translate(-23.0px, 72.3px) rotate(127deg) scale(1.4); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  20.71%  { transform: translate(-117.7px, 112.1px) rotate(203deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  28.47%  { transform: translate(-257.5px, 119.1px) rotate(280deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  36.24%  { transform: translate(-376.2px, 90.2px) rotate(356deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  44.00%  { transform: translate(-417.7px, 38.9px) rotate(432deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  50.90%  { transform: translate(-372.8px, -5.8px) rotate(500deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  58.67%  { transform: translate(-252.1px, -33.6px) rotate(576deg) scale(1.3); filter: drop-shadow(0 0 7px var(--tile-bronze)); animation-timing-function: linear; }
+  66.43%  { transform: translate(-112.9px, -25.1px) rotate(652deg) scale(1.2); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  73.33%  { transform: translate(-27.2px, 10.0px) rotate(720deg) scale(1.1); filter: drop-shadow(0 0 3px var(--tile-bronze)); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
   100% { transform: translate(0, 0) rotate(720deg) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 
