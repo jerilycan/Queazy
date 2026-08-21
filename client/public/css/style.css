@@ -243,7 +243,7 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   align-items: center;
 }
 .brand-logo-svg {
-  height: 40px;
+  height: 46px;
   width: auto;
   display: block;
   overflow: visible;
@@ -431,33 +431,33 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 .brand-logo-svg .cls-3 { opacity: .5; }
 .brand-logo-svg .cls-4 { fill: #98155e; }
 .brand-logo-svg .cls-5 { fill: #5c4595; }
-.brand-logo-svg .cls-6 { fill: url(#Dégradé_sans_nom_133); }
-.brand-logo-svg .cls-7 { fill: url(#Dégradé_sans_nom_15); }
-.brand-logo-svg .cls-8 { fill: #f39898; }
-.brand-logo-svg .cls-9 { fill: url(#Dégradé_sans_nom_7-2); }
-.brand-logo-svg .cls-10 { fill: url(#Dégradé_sans_nom_70); }
-.brand-logo-svg .cls-11 { fill: url(#Dégradé_sans_nom_112); }
-.brand-logo-svg .cls-12 { fill: #f3997e; }
-.brand-logo-svg .cls-13 { fill: url(#Dégradé_sans_nom_36); }
-.brand-logo-svg .cls-14 { fill: url(#Dégradé_sans_nom_15-2); }
-.brand-logo-svg .cls-15 { fill: url(#Dégradé_sans_nom_137); }
-.brand-logo-svg .cls-16 { fill: #aa1735; }
-.brand-logo-svg .cls-17 { fill: url(#Dégradé_sans_nom_20-2); stroke: url(#Dégradé_sans_nom_20-3); }
-.brand-logo-svg .cls-17, .brand-logo-svg .cls-18 { stroke-linejoin: round; stroke-width: 3px; }
-.brand-logo-svg .cls-19 { fill: #f18a52; }
-.brand-logo-svg .cls-20 { fill: url(#Dégradé_sans_nom_7); }
-.brand-logo-svg .cls-21 { fill: #e8368c; }
-.brand-logo-svg .cls-22, .brand-logo-svg .cls-23 { opacity: .6; }
-.brand-logo-svg .cls-22, .brand-logo-svg .cls-24 { fill: none; stroke: #fff; stroke-linecap: round; stroke-miterlimit: 10; stroke-width: 2px; }
+.brand-logo-svg .cls-6, .brand-logo-svg .cls-7 { opacity: .6; }
+.brand-logo-svg .cls-8 { fill: url(#Dégradé_sans_nom_133); }
+.brand-logo-svg .cls-9 { fill: url(#Dégradé_sans_nom_15); }
+.brand-logo-svg .cls-10 { fill: #f39898; }
+.brand-logo-svg .cls-11 { fill: url(#Dégradé_sans_nom_7-2); }
+.brand-logo-svg .cls-12 { fill: url(#Dégradé_sans_nom_70); }
+.brand-logo-svg .cls-13 { fill: url(#Dégradé_sans_nom_112); }
+.brand-logo-svg .cls-14 { fill: #f3997e; }
+.brand-logo-svg .cls-15 { fill: url(#Dégradé_sans_nom_36); }
+.brand-logo-svg .cls-16 { fill: url(#Dégradé_sans_nom_15-2); }
+.brand-logo-svg .cls-17 { fill: #aa1735; }
+.brand-logo-svg .cls-18 { fill: url(#Dégradé_sans_nom_20-2); stroke: url(#Dégradé_sans_nom_20-3); }
+.brand-logo-svg .cls-18, .brand-logo-svg .cls-19 { stroke-linejoin: round; stroke-width: 3px; }
+.brand-logo-svg .cls-20 { fill: #f18a52; }
+.brand-logo-svg .cls-21 { fill: url(#Dégradé_sans_nom_7); }
+.brand-logo-svg .cls-22 { fill: url(#Dégradé_sans_nom_610); }
+.brand-logo-svg .cls-23 { fill: #e8368c; }
+.brand-logo-svg .cls-7, .brand-logo-svg .cls-24 { fill: none; stroke: #fff; stroke-linecap: round; stroke-miterlimit: 10; stroke-width: 2px; }
 .brand-logo-svg .cls-25 { fill: #feef8b; }
 .brand-logo-svg .cls-26 { fill: #744192; }
-.brand-logo-svg .cls-27 { fill: url(#Dégradé_sans_nom_121); }
-.brand-logo-svg .cls-28 { fill: #432856; }
-.brand-logo-svg .cls-29 { fill: url(#Dégradé_sans_nom_10-2); }
-.brand-logo-svg .cls-30 { fill: url(#Dégradé_sans_nom_28); }
-.brand-logo-svg .cls-31 { fill: url(#Dégradé_sans_nom_10); }
+.brand-logo-svg .cls-27 { fill: #432856; }
+.brand-logo-svg .cls-28 { fill: url(#Dégradé_sans_nom_10-2); }
+.brand-logo-svg .cls-29 { fill: url(#Dégradé_sans_nom_28); }
+.brand-logo-svg .cls-30 { fill: url(#Dégradé_sans_nom_10); }
+.brand-logo-svg .cls-31 { fill: url(#Dégradé_sans_nom_783); }
 .brand-logo-svg .cls-32 { fill: url(#Dégradé_sans_nom_32); }
-.brand-logo-svg .cls-18 { fill: url(#Dégradé_sans_nom_20-4); stroke: url(#Dégradé_sans_nom_20-5); }
+.brand-logo-svg .cls-19 { fill: url(#Dégradé_sans_nom_20-4); stroke: url(#Dégradé_sans_nom_20-5); }
 
 /* Layout Elements */
 .navbar {
@@ -2764,7 +2764,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 @media (max-width: 640px) {
   .container { padding: var(--space-md); }
   .navbar { display: flex; flex-direction: row; align-items: center; justify-content: space-between; border-radius: 24px; margin: 8px 12px 0; height: 64px; padding: 0 18px; }
-  .brand-logo-svg { height: 34px; }
+  .brand-logo-svg { height: 38px; }
   .menu-toggle-btn { display: flex; }
   .nav-menu {
     display: none;
@@ -2845,7 +2845,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   body.game-active .navbar { margin: 6px 12px 0; height: 52px; padding: 0 16px; }
   body.game-active .menu-toggle-btn { display: none !important; }
   body.game-active .brand { pointer-events: none; cursor: default; }
-  body.game-active .brand-logo-svg { height: 28px; }
+  body.game-active .brand-logo-svg { height: 31px; }
   /* Navbar plus basse en mobile (voir .timer-container plus haut) : réajuste
      le point d'accroche pour rester juste sous elle, pas trop loin. */
   .timer-container { top: 76px; }
