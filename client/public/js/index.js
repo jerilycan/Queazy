@@ -349,8 +349,20 @@ const enterGameScreen = () => {
 // startTs (même principe que le minuteur de question, voir server/index.js
 // question.startTs) pour que le décompte affiché reste correct même en cas
 // de latence ou d'arrivée tardive (voir room:join côté serveur).
-const INTRO_DURATION_MS = 3000
-const INTRO_DURATION_COMPLEX_MS = 5000
+// Retour utilisateur : "on n'a pas le temps de lire, le décompte doit
+// commencer après la lecture, et pas pendant" — avant, le chiffre du
+// décompte défilait (3,2,1) sur TOUTE la durée de l'intro, en même temps
+// que le joueur essayait de lire le nom du type + l'astuce, ce qui
+// pressait la lecture au lieu de la laisser tranquille. Découpé en deux
+// temps désormais : une phase de LECTURE pure (pas de chiffre affiché,
+// juste l'icône/titre/astuce) puis une phase de DÉCOMPTE fixe de 3s
+// juste avant le lancement — voir showQuestionIntro plus bas, le chiffre
+// ne s'affiche que durant les 3 dernières secondes (INTRO_COUNTDOWN_MS).
+const INTRO_READ_MS = 3000
+const INTRO_READ_COMPLEX_MS = 5000
+const INTRO_COUNTDOWN_MS = 3000
+const INTRO_DURATION_MS = INTRO_READ_MS + INTRO_COUNTDOWN_MS
+const INTRO_DURATION_COMPLEX_MS = INTRO_READ_COMPLEX_MS + INTRO_COUNTDOWN_MS
 // Durée de l'animation de sortie (voir @keyframes introBannerOut côté CSS)
 // — déclenchée CE délai avant la fin réelle (durationMs), pour que le
 // bandeau ait fini de glisser hors-écran au moment où tuto:done le masque
@@ -392,9 +404,17 @@ const showQuestionIntro = (type, durationMs, startTs) => {
   // Décompte dérivé de startTs/durationMs (horodatage serveur), pas d'un
   // simple setTimeout local : reste juste même sur un client qui vient de
   // (re)rejoindre en pleine phase intro (voir room:join → tuto:show).
+  // Le chiffre ne s'affiche que durant les INTRO_COUNTDOWN_MS dernières
+  // millisecondes (phase de décompte) : tant qu'on est avant, c'est la
+  // phase de lecture, aucun chiffre ne doit apparaître (retour utilisateur
+  // — voir INTRO_COUNTDOWN_MS plus haut).
   const tick = () => {
     const remaining = (startTs + durationMs) - Date.now()
-    if (questionIntroCountdown) questionIntroCountdown.textContent = remaining > 0 ? String(Math.ceil(remaining / 1000)) : ''
+    if (questionIntroCountdown) {
+      questionIntroCountdown.textContent = (remaining > 0 && remaining <= INTRO_COUNTDOWN_MS)
+        ? String(Math.ceil(remaining / 1000))
+        : ''
+    }
   }
   tick()
   questionIntroTimerId = setInterval(tick, 200)
