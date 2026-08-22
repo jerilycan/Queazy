@@ -562,7 +562,7 @@ const wireQuestionDrag = (item, idx) => {
 // une icône reconnaissable en un coup d'œil, indépendante de la couleur,
 // est un repère bien plus direct.
 const QTYPE_ICON = {
-  free: '📝', mcq: '🔘', truefalse: '✅', graduation: '🎚️', order: '↕️',
+  free: '📝', mcq: '🔘', truefalse: '✅', graduation: '↔️', order: '↕️',
   image: '📍', zoomguess: '🔍', reveal: '🖼️', blindtest: '🎵',
   association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩'
 }

@@ -299,7 +299,7 @@ const QUESTION_TYPE_META = {
   free: { icon: '📝', label: 'Texte libre', color: '#39ff88', rgb: '57,255,136', hint: 'Tape ta réponse et valide.' },
   mcq: { icon: '🔘', label: 'Choix multiples', color: '#2f8bff', rgb: '47,139,255', hint: 'Sélectionne la ou les réponses adéquates et valide.' },
   truefalse: { icon: '✅', label: 'Vrai / Faux', color: '#ff3b5c', rgb: '255,59,92', hint: 'Choisis Vrai ou Faux et valide.' },
-  graduation: { icon: '🎚️', label: 'Curseur numérique', color: '#ffd23f', rgb: '255,210,63', hint: 'Positionne le curseur sur ta réponse et valide.' },
+  graduation: { icon: '↔️', label: 'Curseur numérique', color: '#ffd23f', rgb: '255,210,63', hint: 'Positionne le curseur sur ta réponse et valide.' },
   order: { icon: '↕️', label: 'Ordre / classement', color: '#ff2fb0', rgb: '255,47,176', hint: 'Fais glisser les éléments pour les remettre dans le bon ordre.' },
   image: { icon: '📍', label: 'Image', color: '#2fe3ff', rgb: '47,227,255', hint: 'Touche l\'endroit sur l\'image qui correspond à la réponse.' },
   zoomguess: { icon: '🔍', label: 'ZoomOut Devinette', color: '#5865f2', rgb: '88,101,242', hint: 'Devine ce que montre l\'image avant qu\'elle ne se dézoome complètement.' },
