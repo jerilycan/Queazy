@@ -2340,8 +2340,24 @@ const MODERATION_WAIT_CAPTIONS = [
 ]
 let moderationWaitCaptionInt = null
 
+// Délai de grâce avant de refermer le popup (voir hideModerationWait) —
+// retour utilisateur : "je vois pas la modération". Cause réelle : quand
+// l'hôte tranche la DERNIÈRE réponse en attente, le serveur enchaîne
+// 'moderation:decision' PUIS 'question:reveal' dans le même instant (voir
+// server/index.js, revealQuestion appelé juste après l'émission de la
+// décision) — les deux arrivent quasi simultanément côté joueur, et
+// hideModerationWait() effaçait tout AVANT que le navigateur n'ait even eu
+// le temps de peindre la ligne du feed ajoutée une fraction de seconde plus
+// tôt. Avec un salon restreint (peu de réponses à juger), c'est alors
+// SYSTÉMATIQUEMENT vrai pour chaque décision (chacune est souvent "la
+// dernière"), d'où l'impression que le feed ne s'affiche jamais du tout.
+let moderationHideTimer = null
+const MODERATION_HIDE_GRACE_MS = 700
+
 const showModerationWait = () => {
   if (!moderationWaitOverlay) return
+  clearTimeout(moderationHideTimer)
+  moderationHideTimer = null
   moderationWaitOverlay.classList.remove('d-none')
   let idx = 0
   if (moderationWaitText) moderationWaitText.textContent = MODERATION_WAIT_CAPTIONS[idx]
@@ -2358,10 +2374,20 @@ const showModerationWait = () => {
   if (moderationFeed) moderationFeed.innerHTML = ''
 }
 const hideModerationWait = () => {
-  if (moderationWaitOverlay) moderationWaitOverlay.classList.add('d-none')
   clearInterval(moderationWaitCaptionInt)
   moderationWaitCaptionInt = null
-  if (moderationFeed) moderationFeed.innerHTML = ''
+  clearTimeout(moderationHideTimer)
+  const hasFeedItems = !!(moderationFeed && moderationFeed.children.length > 0)
+  const closeNow = () => {
+    if (moderationWaitOverlay) moderationWaitOverlay.classList.add('d-none')
+    if (moderationFeed) moderationFeed.innerHTML = ''
+    moderationHideTimer = null
+  }
+  if (hasFeedItems) {
+    moderationHideTimer = setTimeout(closeNow, MODERATION_HIDE_GRACE_MS)
+  } else {
+    closeNow()
+  }
 }
 
 // Feed en direct des décisions de l'hôte (retour utilisateur : voir ce qui
