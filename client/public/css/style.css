@@ -35,6 +35,15 @@
   /* "Petit Bac" (12e type) : citron/lime, encore libre dans la palette. */
   --color-lime: #c8f542;
   --color-lime-rgb: 200,245,66;
+  /* "order" et "blindtest" réutilisaient --color-accent/--color-accent-2
+     pour leur pastille de type (voir .question-item.type-*::before plus
+     bas) — exactement les couleurs du dégradé de fond appliqué à la
+     question SÉLECTIONNÉE (.question-item.active). Résultat (retour
+     utilisateur) : la pastille "Blind Test" devenait invisible dès qu'on
+     cliquait dessus, pile le moment où on veut confirmer son type. Ambre et
+     bleu ciel ne sont repris nulle part ailleurs dans la palette de type. */
+  --color-amber: #ffb020;
+  --color-sky: #38bdf8;
   --color-accent-soft: rgba(255,47,176,0.14);
   --color-accent-rgb: 255,47,176;
   --color-border: rgba(255,255,255,0.10);
@@ -2946,30 +2955,42 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   overflow: hidden;
 }
 
-/* Trait net sur les tout premiers pixels (garde l'identité "étiquette de
-   couleur" bien lisible), puis dégradé vers l'intérieur de la case jusqu'à
-   transparent — un halo qui s'éteint en douceur plutôt qu'un bloc plat qui
-   s'arrête net. */
+/* Pastille pleine (pas un dégradé qui s'évanouit) + liseré sombre pour
+   garder du contraste quel que soit le fond derrière (surface normale, survol
+   teinté accent, ou dégradé accent plein une fois la question sélectionnée —
+   voir .active plus bas). Chaque .type-* ci-dessous se contente de poser
+   --qt-color : une seule règle de forme/position à maintenir pour les 13
+   types (retour utilisateur : l'ancienne bande 3px en dégradé ne se
+   remarquait pas assez pour servir de repère fiable). */
 .question-item::before {
   content: '';
   position: absolute;
-  inset: 0;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 5px;
+  border-radius: 3px;
+  background: var(--qt-color, transparent);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
   pointer-events: none;
 }
 
-.question-item.type-mcq::before { background: linear-gradient(90deg, var(--tile-blue) 0, var(--tile-blue) 3px, transparent 60%); }
-.question-item.type-free::before { background: linear-gradient(90deg, var(--tile-green) 0, var(--tile-green) 3px, transparent 60%); }
-.question-item.type-graduation::before { background: linear-gradient(90deg, var(--tile-yellow) 0, var(--tile-yellow) 3px, transparent 60%); }
-.question-item.type-truefalse::before { background: linear-gradient(90deg, var(--tile-red) 0, var(--tile-red) 3px, transparent 60%); }
-.question-item.type-order::before { background: linear-gradient(90deg, var(--color-accent) 0, var(--color-accent) 3px, transparent 60%); }
-.question-item.type-image::before { background: linear-gradient(90deg, var(--color-cyan) 0, var(--color-cyan) 3px, transparent 60%); }
-.question-item.type-blindtest::before { background: linear-gradient(90deg, var(--color-accent-2) 0, var(--color-accent-2) 3px, transparent 60%); }
-.question-item.type-association::before { background: linear-gradient(90deg, var(--tile-bronze) 0, var(--tile-bronze) 3px, transparent 60%); }
-.question-item.type-timeline::before { background: linear-gradient(90deg, var(--color-teal) 0, var(--color-teal) 3px, transparent 60%); }
-.question-item.type-intrus::before { background: linear-gradient(90deg, var(--color-violet) 0, var(--color-violet) 3px, transparent 60%); }
-.question-item.type-zoomguess::before { background: linear-gradient(90deg, var(--color-indigo) 0, var(--color-indigo) 3px, transparent 60%); }
-.question-item.type-pbac::before { background: linear-gradient(90deg, var(--color-lime) 0, var(--color-lime) 3px, transparent 60%); }
-.question-item.type-reveal::before { background: linear-gradient(90deg, var(--tile-silver) 0, var(--tile-silver) 3px, transparent 60%); }
+.question-item.type-mcq { --qt-color: var(--tile-blue); }
+.question-item.type-free { --qt-color: var(--tile-green); }
+.question-item.type-graduation { --qt-color: var(--tile-yellow); }
+.question-item.type-truefalse { --qt-color: var(--tile-red); }
+/* order/blindtest : PAS --color-accent/--color-accent-2 (voir leur
+   définition dans :root) — ce sont pile les couleurs du dégradé de fond
+   .active ci-dessous, la pastille y disparaissait sinon. */
+.question-item.type-order { --qt-color: var(--color-amber); }
+.question-item.type-image { --qt-color: var(--color-cyan); }
+.question-item.type-blindtest { --qt-color: var(--color-sky); }
+.question-item.type-association { --qt-color: var(--tile-bronze); }
+.question-item.type-timeline { --qt-color: var(--color-teal); }
+.question-item.type-intrus { --qt-color: var(--color-violet); }
+.question-item.type-zoomguess { --qt-color: var(--color-indigo); }
+.question-item.type-pbac { --qt-color: var(--color-lime); }
+.question-item.type-reveal { --qt-color: var(--tile-silver); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
@@ -2983,13 +3004,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   box-shadow: 0 4px 12px rgba(var(--color-accent-rgb),0.35);
 }
 
-/* Avant : cette règle écrasait TOUJOURS la barre de couleur par un jaune
-   générique dès qu'une question était sélectionnée (même spécificité que les
-   règles .type-*::before ci-dessus, mais définie après donc prioritaire en
-   cascade) — la question active perdait alors l'identité de couleur de son
-   type. On ne garde plus qu'un léger renfort d'opacité/largeur au clic, la
-   couleur elle-même reste celle du type (voir .type-*::before plus haut). */
-.question-item.active::before { opacity: 0.9; }
+/* Le fond .active est déjà accent→accent-2 plein : le liseré sombre par
+   défaut (::before ci-dessus) suffit moins à détacher la pastille sur ce
+   fond plus chargé qu'une simple surface — anneau blanc translucide en plus
+   dans ce cas précis, pour que la couleur du type reste identifiable même
+   sur la question en cours d'édition. */
+.question-item.active::before { box-shadow: 0 0 0 1px rgba(255,255,255,0.7); }
 
 .question-item .q-num {
   font-weight: 800;

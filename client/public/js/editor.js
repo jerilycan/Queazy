@@ -554,13 +554,30 @@ const wireQuestionDrag = (item, idx) => {
   })
 }
 
+// Icône par type de question dans la liste latérale — reprend exactement les
+// mêmes émojis que les <option> de #qType (voir editor.html) pour ne pas
+// entretenir une deuxième source de vérité. Retour utilisateur : la seule
+// barre de couleur sur le bord gauche (.question-item.type-*::before,
+// style.css) ne suffisait pas à distinguer les types au premier coup d'œil —
+// une icône reconnaissable en un coup d'œil, indépendante de la couleur,
+// est un repère bien plus direct.
+const QTYPE_ICON = {
+  free: '📝', mcq: '🔘', truefalse: '✅', graduation: '🎚️', order: '↕️',
+  image: '📍', zoomguess: '🔍', reveal: '🖼️', blindtest: '🎵',
+  association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩'
+}
+
 const updateSidebar = () => {
   questionListEl.innerHTML = ''
   questions.forEach((q, idx) => {
     const item = document.createElement('div')
     item.className = `question-item type-${q.type || 'free'} ${idx === activeIndex ? 'active' : ''} ${q.draft ? 'is-draft' : ''}`.trim()
     item.dataset.index = idx
-    if (q.draft) item.title = 'Brouillon — ignorée en jeu'
+    // Le type est déjà lisible dans #qType (l'unique source de vérité pour
+    // son libellé, voir editor.html) — repris tel quel ici plutôt que
+    // dupliqué dans une deuxième liste qui pourrait diverger.
+    const typeLabel = qType.querySelector(`option[value="${q.type || 'free'}"]`)?.textContent || ''
+    item.title = typeLabel + (q.draft ? ' — Brouillon, ignorée en jeu' : '')
     wireQuestionDrag(item, idx)
 
     const handle = document.createElement('span')
@@ -574,9 +591,12 @@ const updateSidebar = () => {
 
     const text = document.createElement('span')
     text.className = 'q-text'
-    // 🚧 en préfixe plutôt qu'un badge à part : reste lisible même dans
-    // l'espace étroit de la sidebar, pas besoin de deviner via une couleur.
-    text.textContent = (q.draft ? '🚧 ' : '') + (q.prompt || '(Nouvelle question)')
+    // Icône de type + 🚧 en préfixe plutôt qu'un badge à part : reste lisible
+    // même dans l'espace étroit de la sidebar, pas besoin de deviner via une
+    // couleur (retour utilisateur : la barre de couleur seule ne se
+    // remarquait pas — voir QTYPE_ICON plus haut).
+    const icon = QTYPE_ICON[q.type] || QTYPE_ICON.free
+    text.textContent = `${icon} ${q.draft ? '🚧 ' : ''}${q.prompt || '(Nouvelle question)'}`
 
     if (!readOnly) item.appendChild(handle)
     item.appendChild(num)
@@ -2758,14 +2778,23 @@ qType.onchange = () => {
   renderAssociationPairs()
   renderTimelineEvents()
   renderIntrusOptions()
+  // Sans ça, la pastille de couleur/icône de type dans la sidebar (voir
+  // updateSidebar) restait sur l'ancien type jusqu'au prochain rendu complet
+  // (changement de question, sauvegarde...) — trompeur juste après avoir
+  // choisi "Blind Test" par exemple.
+  updateSidebar()
 }
 
 qPrompt.oninput = () => {
-  questions[activeIndex].prompt = qPrompt.value
-  // Mettre à jour seulement le texte dans la sidebar pour la fluidité
+  const q = questions[activeIndex]
+  q.prompt = qPrompt.value
+  // Mettre à jour seulement le texte dans la sidebar pour la fluidité — même
+  // préfixe icône/brouillon que updateSidebar() (voir QTYPE_ICON plus haut),
+  // sinon il disparaissait le temps de la frappe.
   const activeItem = questionListEl.children[activeIndex]
   if (activeItem) {
-    activeItem.querySelector('.q-text').textContent = qPrompt.value || '(Nouvelle question)'
+    const icon = QTYPE_ICON[q.type] || QTYPE_ICON.free
+    activeItem.querySelector('.q-text').textContent = `${icon} ${q.draft ? '🚧 ' : ''}${qPrompt.value || '(Nouvelle question)'}`
   }
 }
 if (qExplanation) {
