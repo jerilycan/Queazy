@@ -3153,7 +3153,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
      dans les clous, sans ce problème. Repli sans le calque radial avant,
      même raison que pour border/box-shadow plus bas (color-mix() non
      supporté = déclaration entière invalidée, pas de dégradation partielle). */
-  background: radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--qt-color) 32%, transparent) 0%, transparent 58%), var(--gradient-card);
+  background: radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--qt-color) 20%, transparent) 0%, transparent 50%), var(--gradient-card);
   border-radius: var(--radius-lg);
   /* Bordure + halo teintés par le type de la question en cours (voir
      [data-qtype] plus haut) — repris de la maquette "option C" (retour
