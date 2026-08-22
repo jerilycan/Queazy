@@ -1471,13 +1471,16 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    navigateur (peu contrasté sur certaines tuiles, ex. la jaune). */
 .option-btn:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--color-accent-soft), var(--shadow-md); }
 .option-btn.selected {
-  /* Anneau couleur accent (pas blanc) — retour utilisateur : "pas bien
-     compréhensible entre les réponses sélectionnées et les réponses
-     justes", cet anneau blanc était identique à celui de .correct-reveal
-     juste en dessous, ambigu dès que le choix du joueur était FAUX (anneau
-     "correct" + tuile grisée en même temps). Voir aussi
-     .selected.incorrect-reveal plus bas pour ce cas précis. */
-  outline: 4px solid var(--color-accent);
+  /* Anneau BLANC (repris tel quel — retour utilisateur, régression : passé
+     en couleur accent lors d'un précédent correctif pour distinguer
+     "sélectionné" de "bonne réponse" à la révélation, mais l'accent est un
+     rose/magenta trop proche de --tile-red : anneau quasi invisible sur la
+     tuile rouge. Le blanc, lui, contraste sur les 4 couleurs de tuile —
+     c'est .selected.incorrect-reveal plus bas (spécificité plus forte, pas
+     cette règle) qui gère déjà le cas ambigu "sélection fausse à la
+     révélation" en passant l'anneau au rouge, donc pas de régression sur ce
+     point en revenant au blanc ici. */
+  outline: 4px solid white;
   outline-offset: -4px;
   transform: translateY(2px);
   box-shadow: 0 2px 0 rgba(0,0,0,0.25);
