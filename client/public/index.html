@@ -442,18 +442,6 @@
         Code salle: <span id="displayRoomCode" class="font-bold text-accent"></span>
       </div>
 
-      <!-- Badge permanent du type de question (retour utilisateur) : reste
-           affiché pendant toute la question, dans un coin — repère rapide du
-           type en cours, indépendant du fil (position fixe), même quand on a
-           scrollé. Couleur/icône par type définies dans index.js
-           (QUESTION_TYPE_META), réutilisent la même palette que la sidebar
-           de l'éditeur (voir style.css .question-item.type-*). Servira aussi
-           de bouton "revoir la démo" une fois ce chantier construit. -->
-      <button type="button" id="questionTypeBadge" class="question-type-badge d-none" title="Type de question">
-        <span id="questionTypeBadgeIcon" class="question-type-badge-icon"></span>
-        <span id="questionTypeBadgeLabel" class="question-type-badge-label"></span>
-      </button>
-
       <!-- Zone de jeu -->
       <div id="main" class="mt-40">
         <!-- Ordre volontaire (retour utilisateur) : le timer reste une barre
@@ -461,6 +449,23 @@
              image, à l'identique de l'éditeur (voir editor.html) pour le
              reste. -->
         <div class="timer-container d-none" id="timerContainer">
+          <!-- Badge permanent du type de question (retour utilisateur) : reste
+               affiché pendant toute la question — repère rapide du type en
+               cours. Couleur/icône par type définies dans index.js
+               (QUESTION_TYPE_META), réutilisent la même palette que la sidebar
+               de l'éditeur (voir style.css .question-item.type-*). Servira
+               aussi de bouton "revoir la démo" une fois ce chantier construit.
+               Placé DANS la même rangée que la barre de temps (flex, voir
+               .timer-container) plutôt qu'en élément flottant séparé au même
+               top offset qu'elle — retour utilisateur : "caché derrière la
+               barre de temps" sur mobile, les deux se chevauchaient
+               (position:fixed pour le badge, position:sticky pour la barre,
+               calées sur le même repère vertical, sur un écran trop étroit
+               pour les séparer horizontalement comme sur desktop). -->
+          <button type="button" id="questionTypeBadge" class="question-type-badge d-none" title="Type de question">
+            <span id="questionTypeBadgeIcon" class="question-type-badge-icon"></span>
+            <span id="questionTypeBadgeLabel" class="question-type-badge-label"></span>
+          </button>
           <div class="timer-bar-wrapper">
             <div id="timerBar" class="timer-bar-fill"></div>
             <div id="timerLabel" class="timer-label">15</div>
