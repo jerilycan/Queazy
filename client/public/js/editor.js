@@ -1373,6 +1373,11 @@ const selectQuestion = (index) => {
   qPrompt.value = q.prompt || ''
   if (qExplanation) qExplanation.value = q.explanation || ''
   qType.value = q.type || 'free'
+  // Rappel de couleur sur la tuile elle-même (voir [data-qtype] et
+  // .question-detail dans style.css, option "C" retenue après maquette) —
+  // sinon la tuile gardait la couleur de la question précédente en changeant
+  // de sélection dans la sidebar.
+  if (questionDetailEl) questionDetailEl.dataset.qtype = q.type || 'free'
   qTimer.value = (q.timerMs || 15000) / 1000
   populateGradFields(q)
   populateTrueFalseFields(q)
@@ -2781,7 +2786,9 @@ qType.onchange = () => {
   // Sans ça, la pastille de couleur/icône de type dans la sidebar (voir
   // updateSidebar) restait sur l'ancien type jusqu'au prochain rendu complet
   // (changement de question, sauvegarde...) — trompeur juste après avoir
-  // choisi "Blind Test" par exemple.
+  // choisi "Blind Test" par exemple. Même chose pour le rappel de couleur
+  // sur la tuile elle-même (voir [data-qtype] dans style.css).
+  if (questionDetailEl) questionDetailEl.dataset.qtype = qType.value
   updateSidebar()
 }
 

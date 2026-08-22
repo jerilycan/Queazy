@@ -2995,6 +2995,28 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-item.type-pbac { --qt-color: var(--color-lime); }
 .question-item.type-reveal { --qt-color: var(--tile-silver); }
 
+/* Même rappel de couleur que la sidebar, mais sur la grande tuile d'édition
+   (.question-detail) — option "C" retenue après maquette (bordure teintée +
+   halo externe, voir style appliqué plus bas sur .question-detail) : reste
+   visible même en scrollant loin de l'en-tête, sur un formulaire long
+   (association, blind test...). [data-qtype] posé par editor.js à chaque
+   sélection de question ou changement de type (selectQuestion, qType.onchange)
+   plutôt qu'une classe, pour ne pas avoir à retirer l'ancienne à chaque fois. */
+.question-detail { --qt-color: transparent; }
+.question-detail[data-qtype="mcq"] { --qt-color: var(--tile-blue); }
+.question-detail[data-qtype="free"] { --qt-color: var(--tile-green); }
+.question-detail[data-qtype="graduation"] { --qt-color: var(--tile-yellow); }
+.question-detail[data-qtype="truefalse"] { --qt-color: var(--tile-red); }
+.question-detail[data-qtype="order"] { --qt-color: var(--color-amber); }
+.question-detail[data-qtype="image"] { --qt-color: var(--color-cyan); }
+.question-detail[data-qtype="blindtest"] { --qt-color: var(--color-sky); }
+.question-detail[data-qtype="association"] { --qt-color: var(--tile-bronze); }
+.question-detail[data-qtype="timeline"] { --qt-color: var(--color-teal); }
+.question-detail[data-qtype="intrus"] { --qt-color: var(--color-violet); }
+.question-detail[data-qtype="zoomguess"] { --qt-color: var(--color-indigo); }
+.question-detail[data-qtype="pbac"] { --qt-color: var(--color-lime); }
+.question-detail[data-qtype="reveal"] { --qt-color: var(--tile-silver); }
+
 .question-item:hover {
   background: var(--color-accent-soft);
   border-color: var(--color-accent);
@@ -3019,9 +3041,16 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .question-item .q-num {
   font-weight: 800;
-  opacity: 0.5;
+  /* Était à 0.5 : lisible sur le fond neutre d'origine, mais un chiffre à
+     moitié transparent posé sur la pastille de couleur (::before, juste en
+     dessous) se fond dedans plutôt que de rester net (retour utilisateur :
+     "caché derrière le dégradé"). 0.85 garde le chiffre secondaire par
+     rapport au texte de la question, sans redevenir illisible sur une
+     couleur vive. */
+  opacity: 0.85;
   font-size: 14px;
   width: 20px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
 }
 
 .question-item.active .q-num {
@@ -3116,12 +3145,20 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-detail {
   background: var(--gradient-card);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  /* Bordure + halo teintés par le type de la question en cours (voir
+     [data-qtype] plus haut) — repris de la maquette "option C" (retour
+     utilisateur) : contrairement à un simple liseré sur l'en-tête, ce
+     traitement reste visible même en bas d'un long formulaire, une fois
+     l'en-tête scrollée hors champ. --qt-color vaut transparent par défaut
+     (aucun data-qtype posé) : color-mix() avec "transparent" retombe alors
+     proprement sur le rendu neutre d'origine. */
+  border: 1px solid color-mix(in srgb, var(--qt-color) 55%, var(--color-border));
   padding: var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), 0 0 0 1px color-mix(in srgb, var(--qt-color) 30%, transparent) inset, 0 0 40px -8px color-mix(in srgb, var(--qt-color) 55%, transparent);
+  transition: border-color 0.25s, box-shadow 0.25s;
   overflow-y: auto;
   /* Marge de secours sous le dernier champ : #questionSaveBar (voir plus bas)
      est fixe par rapport à la FENÊTRE, donc reste au-dessus de ce panneau
