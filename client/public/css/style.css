@@ -1091,23 +1091,20 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
      le badge flotte en position fixe dans un coin, à côté de la barre
      centrée (assez de largeur pour les deux) ; sur un écran étroit, les
      deux étaient calés sur le MÊME top offset et se chevauchaient tout
-     court. Passe en élément normal du flux ici (voir .timer-container juste
-     en dessous), dans la même rangée que la barre plutôt qu'en superposition. */
-  .question-type-badge {
-    position: static;
-    flex-shrink: 0;
-    font-size: 12px;
-    padding: 4px 10px 4px 4px;
-    box-shadow: none;
-  }
+     court (pas assez de largeur pour les séparer horizontalement comme sur
+     desktop). Reste position:fixed (NE PAS le déplacer dans le DOM à
+     l'intérieur de .timer-container pour "simplifier" ça en flex row : elle
+     a un backdrop-filter, qui casse position:fixed pour tout descendant —
+     régression réelle déjà testée) — sa propre rangée, juste au-dessus de la
+     barre plutôt que superposé (voir body.game-active .timer-container plus
+     bas, top réajusté en conséquence pour laisser la place). */
+  .question-type-badge { top: 76px; left: 10px; font-size: 12px; padding: 4px 10px 4px 4px; }
   .question-type-badge-icon { width: 22px; height: 22px; font-size: 12px; }
   /* Le libellé prend trop de place sur un petit écran à côté du timer déjà
      présent — l'icône colorée suffit comme repère, le nom complet reste
      disponible au clic (aria-label, voir index.js) une fois le bouton
      transformé en accès "revoir la démo". */
   .question-type-badge-label { display: none; }
-  .timer-container { justify-content: flex-start; gap: 10px; }
-  .timer-bar-wrapper { flex: 1; min-width: 0; }
 }
 
 .timer-bar-wrapper {
@@ -2937,8 +2934,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   body.game-active .brand { pointer-events: none; cursor: default; }
   body.game-active .brand-logo-svg { height: 31px; }
   /* Navbar plus basse en mobile (voir .timer-container plus haut) : réajuste
-     le point d'accroche pour rester juste sous elle, pas trop loin. */
-  .timer-container { top: 76px; }
+     le point d'accroche pour rester juste sous elle, pas trop loin. Poussé
+     un peu plus bas que la navbar seule (76px) pour laisser sa propre
+     rangée au badge type de question juste au-dessus (top:76px lui aussi,
+     voir .question-type-badge plus haut) — retour utilisateur : "caché
+     derrière la barre de temps", les deux étaient calés au même niveau. */
+  .timer-container { top: 118px; }
 }
 
 /* Quiz Editor Rework */
