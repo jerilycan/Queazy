@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.62.2'
+const APP_VERSION = '1.63.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -50,8 +50,19 @@ const CONTENT_SECURITY_POLICY = [
   "script-src 'self' https://cdn.jsdelivr.net https://cdn.socket.io https://cdnjs.cloudflare.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob:",
-  "media-src 'self' data: blob:",
+  // Retour utilisateur : "les photos/le son disparaissent après la
+  // sauvegarde" — img-src/media-src n'autorisaient que 'self' data: blob:,
+  // pas le bucket Supabase Storage lui-même. Tant qu'une image/un son reste
+  // en base64 (avant le premier enregistrement, voir uploadMediaField dans
+  // editor.js), aucun souci : "data:" suffisait. Mais dès la sauvegarde,
+  // uploadQuestionMedia remplace ce base64 par une vraie URL
+  // https://${supabaseHost}/storage/... — bloquée en silence par la CSP,
+  // qui ne connaissait ce host que pour connect-src (les appels API), pas
+  // pour charger une <img>/<audio>. Message dans la console du navigateur
+  // ("Content-Security-Policy ... img-src") jamais vu côté app, d'où le
+  // diagnostic tardif.
+  `img-src 'self' data: blob: https://${supabaseHost}`,
+  `media-src 'self' data: blob: https://${supabaseHost}`,
   `connect-src 'self' data: https://${supabaseHost} wss://${supabaseHost}`,
   "object-src 'none'",
   "base-uri 'self'",
