@@ -4038,6 +4038,34 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   100% { transform: translateY(-100vh) translateX(var(--drift, 0px)) rotate(var(--spin, 20deg)) scale(1.1); opacity: 0; }
 }
 
+/* Réponse d'un joueur, jugée par l'hôte en direct (retour utilisateur : "la
+   réponse entourée en vert et voletterait avant de disparaître, ou en
+   rouge si mauvaise") — même montée/rotation que .floating-reaction
+   ci-dessus (reactionFloatUp, "comme lorsqu'on sélectionne une réaction"),
+   juste une carte texte bordée à la place d'un simple emoji. */
+.floating-answer {
+  position: absolute;
+  bottom: -60px;
+  max-width: 200px;
+  padding: 8px 16px;
+  border-radius: 14px;
+  background: rgba(10, 8, 20, 0.85);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+  word-break: break-word;
+  border: 2px solid var(--tile-green);
+  box-shadow: 0 0 16px rgba(var(--tile-green-rgb), 0.5);
+  animation: reactionFloatUp 2.6s ease-out forwards;
+}
+.floating-answer.is-incorrect {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 16px rgba(var(--color-danger-rgb), 0.5);
+}
+
 /* Intro par type de question — écran PARTAGÉ hôte + joueurs (chantier
    v1.53, retour utilisateur : "à chaque question, systématique, donc fini
    la distinction popup joueur / écran d'attente hôte"). z-index PROPRE

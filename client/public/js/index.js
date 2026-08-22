@@ -2414,7 +2414,7 @@ const hideModerationWait = () => {
 // grosse salle de modération. Purement informatif pour les joueurs — l'hôte
 // a déjà son propre récap détaillé dans moderationDiv.
 const MODERATION_FEED_MAX_LINES = 6
-socket.on('moderation:decision', ({ name, correct }) => {
+socket.on('moderation:decision', ({ name, correct, content }) => {
   if (!moderationFeed || typeof name !== 'string' || !name.trim()) return
   const line = document.createElement('div')
   line.className = `moderation-feed-line ${correct ? 'is-correct' : 'is-incorrect'}`
@@ -2424,6 +2424,11 @@ socket.on('moderation:decision', ({ name, correct }) => {
   while (moderationFeed.children.length > MODERATION_FEED_MAX_LINES) {
     moderationFeed.lastElementChild.remove()
   }
+  // Retour utilisateur : "la réponse entourée en vert et voletterait avant
+  // de disparaître, ou en rouge si mauvaise" — même traitement que les
+  // réactions (voir spawnFloatingReaction ci-dessous), avec le texte de la
+  // réponse à la place d'un emoji.
+  if (typeof content === 'string' && content.trim()) spawnFloatingAnswer(content.trim(), correct)
 })
 
 // Emoji qui monte à l'écran et se retire seul une fois l'animation finie —
@@ -2437,6 +2442,22 @@ const spawnFloatingReaction = (emoji) => {
   el.style.left = `${5 + Math.random() * 90}%`
   el.style.setProperty('--drift', `${Math.round((Math.random() - 0.5) * 160)}px`)
   el.style.setProperty('--spin', `${Math.round((Math.random() - 0.5) * 60)}deg`)
+  reactionLayer.appendChild(el)
+  el.addEventListener('animationend', () => el.remove(), { once: true })
+}
+
+// Réponse d'un joueur qui volette à l'écran au moment où l'hôte la juge
+// (retour utilisateur) — même mécanique que spawnFloatingReaction juste
+// au-dessus (couche partagée #reactionLayer, même animation de montée/
+// rotation), mais une carte texte bordée vert/rouge au lieu d'un emoji.
+const spawnFloatingAnswer = (text, correct) => {
+  if (!reactionLayer) return
+  const el = document.createElement('div')
+  el.className = `floating-answer ${correct ? 'is-correct' : 'is-incorrect'}`
+  el.textContent = text
+  el.style.left = `${10 + Math.random() * 55}%` // marge à droite pour la largeur de la carte (pas un simple point comme un emoji)
+  el.style.setProperty('--drift', `${Math.round((Math.random() - 0.5) * 100)}px`)
+  el.style.setProperty('--spin', `${Math.round((Math.random() - 0.5) * 24)}deg`)
   reactionLayer.appendChild(el)
   el.addEventListener('animationend', () => el.remove(), { once: true })
 }
