@@ -3365,8 +3365,48 @@ if (irlLeaveBtn) {
   }
 }
 
+// Pile d'avatars dans le panneau hôte (voir #hostPlayerStrip côté
+// index.html) — même liste que le reste du salon (arr), juste réduite à
+// quelques avatars qui se chevauchent + un badge "+N" pour le reste, comme
+// sur la maquette "plateau chaleureux". Appelée à chaque lobby:list, y
+// compris en pleine partie (reconnexions, exclusions...), pas seulement
+// avant le lancement.
+const HOST_PLAYER_STRIP_MAX = 5
+const renderHostPlayerStrip = (arr) => {
+  const strip = document.getElementById('hostPlayerStrip')
+  if (!strip) return
+  const players = (arr || []).filter(p => !p.isHost)
+  strip.innerHTML = ''
+  if (players.length === 0) { strip.classList.add('d-none'); return }
+  strip.classList.remove('d-none')
+  const shown = players.slice(0, HOST_PLAYER_STRIP_MAX)
+  shown.forEach(p => {
+    const av = document.createElement('div')
+    av.className = 'host-player-avatar'
+    av.title = p.name || 'Joueur'
+    if (isAvatarUrl(p.avatar)) {
+      av.style.backgroundImage = `url(${p.avatar})`
+    } else {
+      av.textContent = (p.avatar && p.avatar.trim()) || (p.name || '?').slice(0, 1).toUpperCase()
+    }
+    strip.appendChild(av)
+  })
+  const rest = players.length - shown.length
+  if (rest > 0) {
+    const more = document.createElement('div')
+    more.className = 'host-player-avatar host-player-avatar-more'
+    more.textContent = `+${rest}`
+    strip.appendChild(more)
+  }
+  const count = document.createElement('span')
+  count.className = 'host-player-strip-count'
+  count.textContent = `${players.length} joueur${players.length > 1 ? 's' : ''}`
+  strip.appendChild(count)
+}
+
 const renderLobbyGrid = (arr) => {
   lastLobbyArr = arr || []
+  renderHostPlayerStrip(arr)
   console.log('Lobby list received:', arr)
   const grid = document.getElementById('lobbyGrid')
   const hostArea = document.getElementById('lobbyHost')

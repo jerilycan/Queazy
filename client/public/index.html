@@ -373,6 +373,15 @@
             <span class="host-panel-icon">🎤</span>
             <h3 class="font-18">Contrôles de l'hôte</h3>
           </div>
+          <!-- Pile d'avatars des joueurs présents (chantier "plateau
+               chaleureux", branche dev) : reprend la donnée déjà tenue à
+               jour par lastLobbyArr (voir index.js renderLobbyGrid,
+               socket.on('lobby:list', ...)) — mêmes avatars que la maquette
+               validée, juste rendus ici plutôt que dans une barre du haut
+               dédiée (pas de place fiable pour ça sans risquer un nouveau
+               conflit position:fixed/backdrop-filter, voir le badge type de
+               question corrigé plus tôt cette session). -->
+          <div id="hostPlayerStrip" class="host-player-strip"></div>
           <div id="loadedInfo" class="font-14 text-accent font-bold">Aucun quiz sélectionné</div>
           <div class="host-volume-row align-center d-flex gap-xs font-bold font-14" title="Volume par défaut de la musique des Blind Tests — chaque joueur peut ensuite l'ajuster de son côté">
             🔊 Volume musique par défaut
