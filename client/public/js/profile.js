@@ -24,7 +24,9 @@ const AVATAR_CHOICES = [
   '/avatars/avatar18.png',
   '/avatars/avatar19.png',
   '/avatars/avatar20.png',
-  '/avatars/avatar21.png'
+  '/avatars/avatar21.png',
+  '/avatars/avatar22.png',
+  '/avatars/avatar23.png'
 ]
 let selectedAvatar = ''
 
