@@ -1533,7 +1533,14 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .option-btn.selected.incorrect-reveal {
   opacity: 0.8;
   filter: grayscale(0.15);
-  outline-color: var(--color-danger, #ef4444);
+  /* PAS de outline-color rouge ici (retour utilisateur, capture à l'appui :
+     "on ne remarque pas l'encart rouge sur la réponse 1") — --color-danger
+     et --tile-red sont EXACTEMENT la même couleur (#ff3b5c) : l'anneau
+     rouge devenait invisible sur la tuile rouge elle-même. Reste sur
+     l'anneau blanc hérité de .selected (contraste garanti sur les 4
+     couleurs de tuile) — le badge ✗ ci-dessous (fond blanc, icône rouge,
+     lui insensible à la couleur de la tuile) suffit à distinguer "choisi à
+     tort" de "bonne réponse" (badge ✓ vert plus bas).  */
 }
 .option-btn.selected.incorrect-reveal::after {
   content: '✗';
