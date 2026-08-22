@@ -3151,13 +3151,22 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
      traitement reste visible même en bas d'un long formulaire, une fois
      l'en-tête scrollée hors champ. --qt-color vaut transparent par défaut
      (aucun data-qtype posé) : color-mix() avec "transparent" retombe alors
-     proprement sur le rendu neutre d'origine. */
-  border: 1px solid color-mix(in srgb, var(--qt-color) 55%, var(--color-border));
+     proprement sur le rendu neutre d'origine.
+     Repli AVANT la version color-mix() (retour utilisateur : rien du tout
+     ne s'affichait) : un navigateur/webview qui ne connaît pas color-mix()
+     ignore une déclaration invalide entière plutôt que de l'appliquer
+     partiellement — sans repli, ça veut dire NI bordure NI ombre du tout,
+     pas juste "pas de teinte". Celui qui comprend color-mix() applique la
+     ligne suivante par-dessus (même propriété déclarée deux fois, la
+     dernière valide gagne). */
+  border: 1px solid var(--color-border);
+  border: 2px solid color-mix(in srgb, var(--qt-color) 75%, var(--color-border));
   padding: var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
-  box-shadow: var(--shadow-md), 0 0 0 1px color-mix(in srgb, var(--qt-color) 30%, transparent) inset, 0 0 40px -8px color-mix(in srgb, var(--qt-color) 55%, transparent);
+  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), 0 0 0 1px color-mix(in srgb, var(--qt-color) 45%, transparent) inset, 0 0 46px -6px color-mix(in srgb, var(--qt-color) 70%, transparent);
   transition: border-color 0.25s, box-shadow 0.25s;
   overflow-y: auto;
   /* Marge de secours sous le dernier champ : #questionSaveBar (voir plus bas)
