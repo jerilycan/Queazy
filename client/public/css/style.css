@@ -2383,8 +2383,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-recap-bar-fill.tier-mid { background: linear-gradient(90deg, var(--tile-yellow) 0%, var(--tile-yellow-deep) 100%); }
 .question-recap-bar-fill.tier-high { background: linear-gradient(90deg, var(--tile-green) 0%, var(--tile-green-deep) 100%); }
 .question-recap-pct {
-  font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums;
-  min-width: 3.5ch; text-align: right; color: var(--color-text);
+  /* Chiffre plus imposant (18px -> 26px, chantier "plateau chaleureux") :
+     c'est LA donnée qu'on regarde d'un coup d'œil dans ce panneau, mérite
+     d'être plus affirmée que le reste du texte autour. */
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums;
+  min-width: 3ch; text-align: right; color: var(--color-text);
 }
 .question-recap-caption { font-size: 13px; color: var(--color-text-muted); margin-top: 8px; }
 .question-recap-top {
@@ -2405,7 +2409,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   position: fixed; top: 100px; right: 0; z-index: 1100;
   display: flex; align-items: center; gap: 6px;
   padding: 10px 14px; border: none; border-radius: 10px 0 0 10px;
-  background: var(--color-card); color: var(--color-text);
+  background: var(--gradient-card); color: var(--color-text);
   border: 1px solid var(--color-border); border-right: none;
   box-shadow: var(--shadow-md); cursor: pointer;
   font-weight: 700; font-size: 13px;
@@ -2481,7 +2485,10 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .recap-sidebar {
   position: fixed; top: 0; right: 0; height: 100vh; width: 320px;
-  background: var(--color-card); border-left: 1px solid var(--color-border);
+  /* Dégradé de carte (chantier "plateau chaleureux") plutôt qu'un aplat —
+     cohérent avec .card/#hostPanel ailleurs dans l'appli, ce panneau
+     tranchait un peu trop plat comparé au reste. */
+  background: var(--gradient-card); border-left: 1px solid var(--color-border);
   box-shadow: -8px 0 24px rgba(0,0,0,0.25);
   z-index: 1099; display: flex; flex-direction: column;
   transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
@@ -2490,6 +2497,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .recap-sidebar-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 20px; font-weight: 800; font-size: 14px;
+  font-family: 'Baloo 2', sans-serif;
   border-bottom: 1px solid var(--color-border); flex-shrink: 0;
 }
 .recap-sidebar-close {
@@ -2694,8 +2702,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .persistent-code {
   position: fixed; bottom: 20px; right: 20px; background: var(--color-card); padding: 8px 16px;
-  border-radius: var(--radius-sm); box-shadow: var(--shadow-md); border: 1px solid var(--color-border);
-  z-index: 100; font-size: 14px; color: var(--color-text-muted);
+  /* Chantier "plateau chaleureux" : pastille pleine largeur (999px) + liseré
+     accent plutôt que le rectangle à coins légèrement arrondis d'origine —
+     même langage que les puces "salle"/"joueurs" de la maquette validée. */
+  border-radius: 999px; box-shadow: var(--shadow-md); border: 1px solid rgba(var(--color-accent-rgb), 0.35);
+  z-index: 100; font-size: 14px; color: var(--color-text-muted); font-weight: 700;
 }
 /* Sur mobile, ce badge fixe en bas-droite empiétait sur les contrôles de
    réponse (bouton Valider, options...) — eux aussi groupés en bas de l'écran
