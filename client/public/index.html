@@ -382,12 +382,12 @@
         </div>
       </div>
 
-      <!-- Récap des réponses (hôte uniquement) : panneau latéral fixe (l'hôte
-           est toujours sur PC), se remplit à chaque révélation (voir
+      <!-- Récap des réponses (hôte + joueurs, chacun sur son propre appareil) :
+           panneau latéral, se remplit à chaque révélation (voir
            socket.on('question:recap', ...) dans index.js). Le détail par
            joueur peut afficher des réponses individuelles pas forcément
            destinées aux yeux de tous en session IRL, d'où le bouton
-           Afficher/Cacher — état retenu d'une question à l'autre. -->
+           Afficher/Cacher — état retenu d'une question à l'autre, par appareil. -->
       <button id="recapSidebarToggle" class="recap-sidebar-toggle d-none" title="Afficher/cacher le récap des réponses">
         📊 <span id="recapSidebarToggleLabel">Récap</span>
       </button>

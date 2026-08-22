@@ -586,7 +586,7 @@ const logDiv = document.getElementById('log')
 const nextQuestionBtn = document.getElementById('nextQuestion')
 const leaderNextBtn = document.getElementById('leaderNextBtn')
 const startQuizBtn = document.getElementById('startQuiz')
-// Récap rapide de la question (hôte uniquement), voir socket.on('question:recap')
+// Récap rapide de la question (hôte + joueurs), voir socket.on('question:recap')
 const questionRecapCard = document.getElementById('questionRecapCard')
 const recapBarFill = document.getElementById('recapBarFill')
 const recapPctText = document.getElementById('recapPctText')
@@ -598,10 +598,12 @@ const recapSidebar = document.getElementById('recapSidebar')
 const recapSidebarToggle = document.getElementById('recapSidebarToggle')
 const recapSidebarClose = document.getElementById('recapSidebarClose')
 
-// Panneau latéral récap (hôte) : ouvert/fermé retenu d'une question — et
-// d'une partie — à l'autre (localStorage), pour ne pas avoir à rouvrir à
-// chaque fois en session IRL si l'hôte l'a volontairement caché (écran
-// projeté aux joueurs, réponses individuelles pas destinées à tous les yeux).
+// Panneau latéral récap (hôte + joueurs, chacun sur son propre appareil) :
+// ouvert/fermé retenu d'une question — et d'une partie — à l'autre
+// (localStorage, par appareil), pour ne pas avoir à rouvrir à chaque fois.
+// Pour l'hôte en particulier, utile de pouvoir le cacher en session IRL
+// (écran projeté aux joueurs, réponses individuelles pas destinées à tous
+// les yeux) sans que ça affecte le côté joueur, chacun ayant sa propre pref.
 const RECAP_SIDEBAR_PREF_KEY = 'queazy_recap_sidebar_open'
 const setRecapSidebarOpen = (open) => {
   if (recapSidebar) recapSidebar.classList.toggle('is-open', open)
@@ -4124,16 +4126,19 @@ startQuizBtn.onclick = () => {
 
 socket.on('question:show', payload => {
   inActiveGame = true
-  // Bouton du panneau récap (hôte) : re-synchronisé à CHAQUE question, pas
+  // Bouton du panneau récap : re-synchronisé à CHAQUE question, pas
   // seulement au clic sur "LANCER" (voir startQuizBtn.onclick) — sinon un
   // hôte qui rechargeait la page ou se reconnectait en pleine partie (courant
   // sur plusieurs questions) ne le revoyait plus jamais, question:show étant
   // le seul évènement qui resynchronise alors son écran (retour utilisateur :
   // "je vois pas de panneau récap" en pleine partie, version pourtant à jour).
-  if (isHost) {
-    showRecapSidebarUi()
-    setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
-  }
+  // Ouvert à TOUT LE MONDE désormais (retour utilisateur : "faudrait qu'on
+  // ait les réponses sur la page derrière la popup après aussi, pour pouvoir
+  // discuter des réponses apportées") — auparavant réservé à l'hôte alors que
+  // le serveur diffuse déjà ce récap à toute la salle (voir revealQuestion
+  // côté server/index.js), le panneau restait juste caché côté joueur.
+  showRecapSidebarUi()
+  setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
   clearRevealState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
@@ -5452,12 +5457,14 @@ socket.on('timer:end', (payload) => {
 })
 
 // Récap rapide de la question, diffusé à toute la salle juste avant
-// question:reveal (voir server/index.js endQuestion) mais affiché
-// uniquement côté hôte — même convention que les autres évènements
-// "hôte seulement" (ex. answer:queue). Utile pour rebondir à l'oral entre
-// deux questions sans avoir à deviner combien de monde a trouvé.
+// question:reveal (voir server/index.js endQuestion) — affiché à TOUT LE
+// MONDE (retour utilisateur : "faudrait qu'on ait les réponses sur la page
+// derrière la popup après aussi, pour pouvoir discuter des réponses
+// apportées"). Auparavant réservé à l'hôte (pour rebondir à l'oral), alors
+// que le serveur diffusait déjà cette donnée à toute la salle — seul le
+// filtre client empêchait les joueurs de la voir.
 socket.on('question:recap', payload => {
-  if (!isHost || !questionRecapCard) return
+  if (!questionRecapCard) return
   // clearRevealState() (appelée à chaque question:show) cache ce bloc via
   // .d-none — sans le retirer ici, tout son contenu reste display:none en
   // permanence : le panneau latéral s'affiche mais paraît vide en boucle.
