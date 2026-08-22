@@ -2447,17 +2447,22 @@ const spawnFloatingReaction = (emoji) => {
 }
 
 // Réponse d'un joueur qui volette à l'écran au moment où l'hôte la juge
-// (retour utilisateur) — même mécanique que spawnFloatingReaction juste
-// au-dessus (couche partagée #reactionLayer, même animation de montée/
-// rotation), mais une carte texte bordée vert/rouge au lieu d'un emoji.
+// (retour utilisateur) — sur la même couche partagée #reactionLayer que
+// spawnFloatingReaction juste au-dessus, mais SA PROPRE animation plus
+// lente en vrai zigzag (voir .floating-answer/answerFloatZigzag côté CSS,
+// retour utilisateur : "pas trop rapide... qu'on puisse un peu le lire") —
+// une carte texte bordée vert/rouge au lieu d'un simple emoji.
 const spawnFloatingAnswer = (text, correct) => {
   if (!reactionLayer) return
   const el = document.createElement('div')
   el.className = `floating-answer ${correct ? 'is-correct' : 'is-incorrect'}`
   el.textContent = text
   el.style.left = `${10 + Math.random() * 55}%` // marge à droite pour la largeur de la carte (pas un simple point comme un emoji)
-  el.style.setProperty('--drift', `${Math.round((Math.random() - 0.5) * 100)}px`)
-  el.style.setProperty('--spin', `${Math.round((Math.random() - 0.5) * 24)}deg`)
+  // Légère variation d'amplitude du zigzag d'une carte à l'autre (0.75-1.25),
+  // parfois inversée (gauche/droite) — évite que plusieurs cartes lancées en
+  // même temps suivent exactement la même trajectoire.
+  const zig = (0.75 + Math.random() * 0.5) * (Math.random() < 0.5 ? -1 : 1)
+  el.style.setProperty('--zig', zig.toFixed(2))
   reactionLayer.appendChild(el)
   el.addEventListener('animationend', () => el.remove(), { once: true })
 }
