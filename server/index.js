@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.63.0'
+const APP_VERSION = '1.64.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -846,7 +846,7 @@ const start = async () => {
   // arbitraire relayé à toute la salle) + cooldown par socket pour éviter
   // qu'un seul joueur ne spam la même réaction en boucle.
   const FUN_REACTION_EMOJIS = ['🎉', '👏', '🔥', '😂', '❤️']
-  const REACTION_COOLDOWN_MS = 500
+  const REACTION_COOLDOWN_MS = 150 // volontairement bas : les joueurs peuvent "spammer" les réactions pendant l'attente (retour utilisateur), juste assez pour éviter le flood pur
   // Question "image" : le joueur clique directement sur l'image (coordonnées
   // normalisées 0-1, pas de grille — voir index.js) ; le créateur définit une
   // ou plusieurs zones de forme libre tracées à main levée (idem, voir
@@ -2000,6 +2000,15 @@ const start = async () => {
       return item.playerId
     }
 
+    // Feed en direct pour les JOUEURS (voir #moderationFeed côté client, qui
+    // remplace le petit texte générique "le chef fignole son jugement..." par
+    // un vrai suivi visible de qui vient d'être validé/refusé) — diffusé à
+    // toute la salle à chaque décision de l'hôte, pas seulement à l'hôte lui-même.
+    const emitModerationDecision = (io, code, name, correct) => {
+      if (!name) return
+      io.to(code).emit('moderation:decision', { name, correct })
+    }
+
     // Résout un champ (titre OU artiste) d'un item de modération "blindtest" —
     // contrairement aux autres types, un même item peut avoir besoin de DEUX
     // passages en modération (un par champ) avant d'être retiré de la file :
@@ -2010,6 +2019,7 @@ const start = async () => {
       if (!entry || entry.status !== 'pending') return
       entry.status = correct ? 'correct' : 'incorrect'
       const currentId = resolvePendingId(room, item)
+      emitModerationDecision(io, code, room.players.get(currentId)?.name, correct)
       if (correct) {
         // Champ toujours "fuzzy" ici (seul cas qui passe par la modération,
         // voir evalField) : plein halfDelta (ou fullDelta en mode titre
@@ -2100,6 +2110,7 @@ const start = async () => {
         }
         if (q && q.historyEntry === historyEntry) q.answered?.add(item.token)
         if (delta > 0) io.to(code).emit('score:update', { playerId: currentId, delta, total })
+        emitModerationDecision(io, code, p?.name, delta > 0)
       }
       io.to(code).emit('moderation:pbacGrouped', { answerIds: group.map(([id]) => id), size: n, delta })
       if (room.pending.size === 0 && q && q.historyEntry === historyEntry && q.ended) {
@@ -2148,6 +2159,7 @@ const start = async () => {
       }
       q?.answered?.add(item.token)
       io.to(code).emit('score:update', { playerId: currentId, delta, total })
+      emitModerationDecision(io, code, p?.name, true)
 
       // Si plus aucune réponse en attente après approbation, on peut enfin
       // révéler la bonne réponse (voir revealQuestion).
@@ -2174,13 +2186,12 @@ const start = async () => {
       // 0 point, texte gardé pour le récap hôte.
       if (item.pbac) {
         room.pending.delete(payload?.answerId)
-        if (item.historyEntry) {
-          const p = room.players.get(resolvePendingId(room, item))
-          if (p?.token) {
-            item.historyEntry.results[p.token] = 'incorrect'
-            item.historyEntry.answers[p.token] = item.content || ''
-          }
+        const pPbac = room.players.get(resolvePendingId(room, item))
+        if (item.historyEntry && pPbac?.token) {
+          item.historyEntry.results[pPbac.token] = 'incorrect'
+          item.historyEntry.answers[pPbac.token] = item.content || ''
         }
+        emitModerationDecision(io, code, pPbac?.name, false)
         io.to(code).emit('moderation:rejected', { answerId: payload?.answerId })
         const q = room.currentQuestion
         if (room.pending.size === 0 && q && q.historyEntry === item.historyEntry && q.ended) {
@@ -2190,10 +2201,9 @@ const start = async () => {
       }
 
       room.pending.delete(payload?.answerId)
-      if (item?.historyEntry) {
-        const p = room.players.get(resolvePendingId(room, item))
-        if (p?.token) item.historyEntry.results[p.token] = 'incorrect'
-      }
+      const pReject = room.players.get(resolvePendingId(room, item))
+      if (item?.historyEntry && pReject?.token) item.historyEntry.results[pReject.token] = 'incorrect'
+      emitModerationDecision(io, code, pReject?.name, false)
       io.to(code).emit('moderation:rejected', { answerId: payload?.answerId })
 
       // Si plus aucune réponse en attente après rejet, on peut enfin révéler

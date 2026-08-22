@@ -2329,6 +2329,7 @@ const isAvatarUrl = (s) => typeof s === 'string' && /^(data:|https?:|blob:|\/)/.
 // direct (voir socket.on('fun:react', ...) plus bas).
 const moderationWaitOverlay = document.getElementById('moderationWaitOverlay')
 const moderationWaitText = document.getElementById('moderationWaitText')
+const moderationFeed = document.getElementById('moderationFeed')
 const reactionLayer = document.getElementById('reactionLayer')
 const MODERATION_WAIT_CAPTIONS = [
   'Le chef fignole son jugement...',
@@ -2354,12 +2355,32 @@ const showModerationWait = () => {
       moderationWaitText.classList.remove('is-fading')
     }, 250)
   }, 2600)
+  if (moderationFeed) moderationFeed.innerHTML = ''
 }
 const hideModerationWait = () => {
   if (moderationWaitOverlay) moderationWaitOverlay.classList.add('d-none')
   clearInterval(moderationWaitCaptionInt)
   moderationWaitCaptionInt = null
+  if (moderationFeed) moderationFeed.innerHTML = ''
 }
+
+// Feed en direct des décisions de l'hôte (retour utilisateur : voir ce qui
+// est validé/refusé au lieu d'un simple "waiting"). Chaque ligne est ajoutée
+// en haut, une limite de lignes affichées évite que ça déborde pendant une
+// grosse salle de modération. Purement informatif pour les joueurs — l'hôte
+// a déjà son propre récap détaillé dans moderationDiv.
+const MODERATION_FEED_MAX_LINES = 6
+socket.on('moderation:decision', ({ name, correct }) => {
+  if (!moderationFeed || typeof name !== 'string' || !name.trim()) return
+  const line = document.createElement('div')
+  line.className = `moderation-feed-line ${correct ? 'is-correct' : 'is-incorrect'}`
+  line.innerHTML = `<span class="moderation-feed-icon">${correct ? '✅' : '❌'}</span><span class="moderation-feed-name"></span>`
+  line.querySelector('.moderation-feed-name').textContent = name
+  moderationFeed.prepend(line)
+  while (moderationFeed.children.length > MODERATION_FEED_MAX_LINES) {
+    moderationFeed.lastElementChild.remove()
+  }
+})
 
 // Emoji qui monte à l'écran et se retire seul une fois l'animation finie —
 // léger cooldown CLIENT en plus de la limite serveur (voir server/index.js),
@@ -2377,7 +2398,7 @@ const spawnFloatingReaction = (emoji) => {
 }
 
 let lastReactionSentTs = 0
-const REACTION_CLIENT_COOLDOWN_MS = 600
+const REACTION_CLIENT_COOLDOWN_MS = 150 // aligné sur REACTION_COOLDOWN_MS serveur — le spam raisonnable est voulu, ce cooldown n'évite que le double-tap/tap-and-hold accidentel
 document.querySelectorAll('.reaction-btn').forEach(btn => {
   btn.onclick = () => {
     const now = Date.now()

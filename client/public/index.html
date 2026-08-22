@@ -605,6 +605,11 @@
       <div class="moderation-wait-card">
         <div class="moderation-wait-icon">⏳</div>
         <div id="moderationWaitText" class="moderation-wait-text">Le chef fignole son jugement...</div>
+        <!-- Feed en direct des décisions de l'hôte (voir index.js showModerationWait /
+             socket.on('moderation:decision', ...)) — remplace le silence total pendant
+             l'attente : chaque validation/refus apparaît ici au fur et à mesure, avec le
+             pseudo concerné, pour toute la salle (pas seulement l'hôte). -->
+        <div id="moderationFeed" class="moderation-feed"></div>
         <div class="moderation-wait-reactions">
           <button type="button" class="reaction-btn" data-emoji="🎉" title="Confettis">🎉</button>
           <button type="button" class="reaction-btn" data-emoji="👏" title="Applaudissements">👏</button>
