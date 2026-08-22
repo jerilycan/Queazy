@@ -2955,23 +2955,18 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   overflow: hidden;
 }
 
-/* Pastille pleine (pas un dégradé qui s'évanouit) + liseré sombre pour
-   garder du contraste quel que soit le fond derrière (surface normale, survol
-   teinté accent, ou dégradé accent plein une fois la question sélectionnée —
-   voir .active plus bas). Chaque .type-* ci-dessous se contente de poser
-   --qt-color : une seule règle de forme/position à maintenir pour les 13
-   types (retour utilisateur : l'ancienne bande 3px en dégradé ne se
-   remarquait pas assez pour servir de repère fiable). */
+/* Trait net sur les tout premiers pixels (garde l'identité "étiquette de
+   couleur" bien lisible), puis dégradé vers l'intérieur de la case jusqu'à
+   transparent — un halo qui s'éteint en douceur plutôt qu'un bloc plat qui
+   s'arrête net (retour utilisateur : préféré à une pastille pleine, tentée
+   un temps ici — voir git history). Chaque .type-* ci-dessous se contente
+   de poser --qt-color : une seule règle de forme/dégradé à maintenir pour
+   les 13 types. */
 .question-item::before {
   content: '';
   position: absolute;
-  left: 6px;
-  top: 8px;
-  bottom: 8px;
-  width: 5px;
-  border-radius: 3px;
-  background: var(--qt-color, transparent);
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+  inset: 0;
+  background: linear-gradient(90deg, var(--qt-color, transparent) 0, var(--qt-color, transparent) 3px, transparent 60%);
   pointer-events: none;
 }
 
@@ -3004,12 +2999,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   box-shadow: 0 4px 12px rgba(var(--color-accent-rgb),0.35);
 }
 
-/* Le fond .active est déjà accent→accent-2 plein : le liseré sombre par
-   défaut (::before ci-dessus) suffit moins à détacher la pastille sur ce
-   fond plus chargé qu'une simple surface — anneau blanc translucide en plus
-   dans ce cas précis, pour que la couleur du type reste identifiable même
-   sur la question en cours d'édition. */
-.question-item.active::before { box-shadow: 0 0 0 1px rgba(255,255,255,0.7); }
+/* Avant : cette règle écrasait TOUJOURS la barre de couleur par un jaune
+   générique dès qu'une question était sélectionnée (même spécificité que les
+   règles .type-* ci-dessus, mais définie après donc prioritaire en cascade)
+   — la question active perdait alors l'identité de couleur de son type. On
+   ne garde plus qu'un léger renfort d'opacité au clic, la couleur elle-même
+   reste celle du type (voir .type-* plus haut — order/blindtest ont
+   désormais leur propre couleur, distincte du dégradé de fond ci-dessus,
+   donc plus besoin d'un traitement de contraste spécial ici). */
+.question-item.active::before { opacity: 0.9; }
 
 .question-item .q-num {
   font-weight: 800;
