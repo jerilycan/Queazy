@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.58.1'
+const APP_VERSION = '1.59.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -902,6 +902,20 @@ const start = async () => {
   const ANSWER_WINDOW_BUFFER_MS = 900
 
   io.on('connection', socket => {
+    // Synchronisation d'horloge (retour utilisateur : "le téléphone a 2
+    // secondes d'avance sur le PC, même sur l'hôte") — tous les minuteurs
+    // client (barre de temps, intro de question, auto-envoi en fin de
+    // temps) comparent Date.now() côté client à un startTs émis par ce
+    // serveur ; si l'horloge système d'un appareil dérive par rapport aux
+    // autres (cas fréquent sur mobile), son décompte affiché — et le
+    // moment où il déclenche ses actions liées au temps — dérive d'autant.
+    // Handshake minimal (ping horodaté, le client mesure l'aller-retour et
+    // en déduit un décalage à appliquer localement) plutôt qu'un vrai NTP :
+    // suffisant ici, l'enjeu n'est qu'un affichage/déclenchement synchronisé
+    // entre appareils, pas une précision absolue.
+    socket.on('time:sync', (clientSentAt) => {
+      socket.emit('time:sync', { clientSentAt, serverTime: Date.now() })
+    })
     socket.on('room:create', async payload => {
       const code = generateRoomCode()
       const hostToken = payload?.token || uid()
@@ -1418,7 +1432,19 @@ const start = async () => {
       // le client bloque déjà l'UI, mais on ne fait jamais confiance qu'au
       // serveur pour l'ouverture réelle de la fenêtre de réponse.
       if (Date.now() < q.startTs) return
-      if (Date.now() - q.startTs > q.timerMs) return
+      // Marge de grâce = ANSWER_WINDOW_BUFFER_MS (retour utilisateur : "la
+      // réponse tapée ne se valide pas à la fin du temps si tu as pas
+      // validé toi-même") — l'auto-envoi côté client (voir index.js,
+      // attemptAutoSubmit) se déclenche tout près de la fin du chrono ;
+      // sans cette marge, la latence réseau du paquet lui-même suffisait à
+      // le faire arriver ici APRÈS q.timerMs et se faire rejeter en
+      // silence, alors que le joueur avait bel et bien répondu à temps de
+      // son point de vue. endQuestion() attend déjà ce même délai avant de
+      // clôturer la question (voir plus bas, setTimeout) : les deux
+      // bornes sont désormais cohérentes. pointsFor() clampe déjà elapsed
+      // à `duration`, donc une réponse acceptée dans cette marge se voit
+      // simplement noter au score plancher, jamais pénalisée au-delà.
+      if (Date.now() - q.startTs > q.timerMs + ANSWER_WINDOW_BUFFER_MS) return
       // q.answered/q.submissions sont indexés par TOKEN (stable), pas par
       // socket.id (qui change à chaque reconnexion) : un joueur qui répond,
       // subit une coupure réseau puis se reconnecte AVANT la fin du chrono

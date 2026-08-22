@@ -1,5 +1,33 @@
 const socket = io()
 
+// Décalage d'horloge client/serveur (retour utilisateur : "le téléphone a
+// 2 secondes d'avance sur le PC, même sur l'hôte") — tous les minuteurs
+// liés au temps (barre de la question, intro de type, auto-envoi en fin
+// de temps, déverrouillage à startTs...) comparent un Date.now() local à
+// un startTs émis par le serveur ; si l'horloge système d'un appareil
+// dérive par rapport aux autres (fréquent sur mobile), son décompte
+// affiché — et le moment où il déclenche ses actions liées au temps —
+// dérive d'autant, désynchronisé des autres écrans. syncedNow() doit
+// remplacer Date.now() partout où cette comparaison au temps serveur a
+// lieu (voir server/index.js socket.on('time:sync', ...)).
+let clockOffsetMs = 0
+const syncedNow = () => Date.now() + clockOffsetMs
+const syncClock = () => socket.emit('time:sync', Date.now())
+socket.on('time:sync', ({ clientSentAt, serverTime }) => {
+  const roundTripMs = Date.now() - clientSentAt
+  // L'instant serveur a été généré à peu près à mi-parcours de
+  // l'aller-retour — approximation standard pour ce genre de handshake,
+  // largement suffisante ici (l'enjeu est un affichage synchronisé entre
+  // écrans, pas une précision de type NTP).
+  const estimatedServerNow = serverTime + roundTripMs / 2
+  clockOffsetMs = estimatedServerNow - Date.now()
+})
+socket.on('connect', syncClock)
+// Re-synchronise périodiquement (voir setInterval plus bas) : une horloge
+// système peut dériver progressivement sur une session de jeu longue, pas
+// seulement être décalée une fois pour toutes à la connexion.
+setInterval(syncClock, 30000)
+
 // Bandeau persistant de statut de connexion (ma propre connexion perdue, ou
 // celle de l'hôte) — contrairement à showAnnounce (toast qui s'auto-masque),
 // reste affiché tant que la situation n'est pas résolue. Un seul élément
@@ -409,7 +437,7 @@ const showQuestionIntro = (type, durationMs, startTs) => {
   // phase de lecture, aucun chiffre ne doit apparaître (retour utilisateur
   // — voir INTRO_COUNTDOWN_MS plus haut).
   const tick = () => {
-    const remaining = (startTs + durationMs) - Date.now()
+    const remaining = (startTs + durationMs) - syncedNow()
     if (questionIntroCountdown) {
       questionIntroCountdown.textContent = (remaining > 0 && remaining <= INTRO_COUNTDOWN_MS)
         ? String(Math.ceil(remaining / 1000))
@@ -418,7 +446,7 @@ const showQuestionIntro = (type, durationMs, startTs) => {
   }
   tick()
   questionIntroTimerId = setInterval(tick, 200)
-  const exitDelay = Math.max(0, (startTs + durationMs) - Date.now() - INTRO_EXIT_MS)
+  const exitDelay = Math.max(0, (startTs + durationMs) - syncedNow() - INTRO_EXIT_MS)
   questionIntroExitTimerId = setTimeout(() => {
     questionIntroCard?.classList.remove('intro-anim-in')
     questionIntroCard?.classList.add('intro-anim-out')
@@ -4292,7 +4320,7 @@ socket.on('question:show', payload => {
       imageDisabled = false
       freeTextEl.classList.remove('d-none')
       applyTileReveal(freeTextEl, 0)
-    }, Math.max(0, start - Date.now()))
+    }, Math.max(0, start - syncedNow()))
   }
   // La musique démarre pile à startTs comme le reste (même rendez-vous que le
   // déverrouillage ci-dessus) — mais CÔTÉ HÔTE AUSSI (contrairement au bloc
@@ -4302,12 +4330,12 @@ socket.on('question:show', payload => {
     setTimeout(() => {
       if (revealToken !== myRevealToken) return
       playBlindTestAudio()
-    }, Math.max(0, start - Date.now()))
+    }, Math.max(0, start - syncedNow()))
   }
 
   let lastTickSecond = null
   timerInt = setInterval(() => {
-    const now = Date.now()
+    const now = syncedNow()
     if (now < start) {
       // Phase de révélation : la barre reste pleine, pas de décompte affiché.
       if (timerBarFill) {
@@ -4359,8 +4387,10 @@ socket.on('question:show', payload => {
     // pour arriver au serveur avant la fermeture de la fenêtre de réponse
     // (voir server/index.js answer:submit, `Date.now() - q.startTs > q.timerMs`).
     // submitCurrentAnswer() lui-même pose hasAnsweredThisQuestion = true,
-    // donc ce bloc ne se déclenche qu'une seule fois.
-    if (!isHost && !hasAnsweredThisQuestion && remaining > 0 && remaining <= 500) {
+    // donc attemptAutoSubmit() ne soumet jamais deux fois même appelé deux
+    // fois (voir plus bas, filet de sécurité en fin de chrono).
+    const attemptAutoSubmit = () => {
+      if (isHost || hasAnsweredThisQuestion) return
       if ((currentQuestionType === 'free' || currentQuestionType === 'pbac' || currentQuestionType === 'reveal') && answerInput.value.trim()) {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'blindtest' && ((blindtestTitleInput?.value || '').trim() || (blindtestArtistInput?.value || '').trim())) {
@@ -4388,8 +4418,20 @@ socket.on('question:show', payload => {
         submitCurrentAnswer()
       }
     }
+    if (remaining > 0 && remaining <= 500) attemptAutoSubmit()
 
     if (remaining <= 0) {
+      // Filet de sécurité (retour utilisateur : "la réponse tapée ne se
+      // valide pas à la fin du temps" — constaté sur mobile) : la fenêtre
+      // ci-dessus (remaining <= 500) suppose que ce setInterval(..., 100)
+      // tourne bien régulièrement, ce qui n'est pas garanti sur un
+      // navigateur mobile qui throttle fortement les timers d'un onglet en
+      // arrière-plan (écran verrouillé, appli changée) — un tick retardé
+      // peut sauter directement de "remaining > 500" à "remaining <= 0"
+      // sans jamais passer par cette fenêtre. Dernier essai garanti ici,
+      // juste avant d'arrêter le minuteur (sans effet si déjà envoyé,
+      // attemptAutoSubmit() vérifie hasAnsweredThisQuestion).
+      attemptAutoSubmit()
       clearInterval(timerInt)
     }
   }, 100)
