@@ -1109,9 +1109,14 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .timer-bar-wrapper {
   width: 100%;
-  height: 24px;
+  /* Chantier "plateau chaleureux" : barre plus épaisse (28px, était 24px) +
+     chiffre plus grand dedans (voir .timer-label plus bas) — plus lisible
+     depuis le fond d'une salle projetée, sans toucher au DOM (le chiffre
+     reste dans la barre, contrairement à la maquette qui le sortait à côté —
+     trop risqué à déplacer sans casser le JS qui le cible). */
+  height: 28px;
   background: rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
   position: relative;
   border: 2px solid rgba(255,255,255,0.5);
@@ -1122,7 +1127,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   height: 100%;
   width: 100%;
   background: linear-gradient(90deg, var(--color-cyan), var(--color-accent));
-  border-radius: 0 12px 12px 0;
+  border-radius: 0 14px 14px 0;
   /* scaleX plutôt que width : la barre se met à jour 10x/seconde pendant
      toute la durée de chaque question, sur tous les écrans connectés — animer
      width force un recalcul de layout + repaint à chaque tick, alors que
@@ -1140,7 +1145,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   z-index: 2;
   font-family: 'Baloo 2', sans-serif;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 17px;
   color: white;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   pointer-events: none;
@@ -1413,8 +1418,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   padding: var(--space-md) var(--space-md) var(--space-md) 56px;
   background: var(--tile-red);
   color: white;
-  border: none;
-  border-radius: var(--radius-md);
+  /* Chantier "plateau chaleureux" (branche dev, maquette validée) : liseré
+     blanc translucide + coins plus ronds + halo coloré (voir chaque
+     :nth-child ci-dessous pour la teinte du halo) — remplace le flat design
+     d'origine par un rendu plus "tuile de jeu télévisé", plus vivant. */
+  border: 3px solid rgba(255,255,255,0.22);
+  border-radius: 20px;
   box-shadow: 0 5px 0 rgba(0,0,0,0.25);
   cursor: pointer;
   font-weight: 800;
@@ -1450,18 +1459,23 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   .option-btn { min-height: 88px; font-size: 20px; padding: 26px 26px 26px 74px; }
   .option-btn::before { width: 34px; height: 34px; left: 24px; }
 }
-.option-btn:nth-child(4n+1) { background: var(--tile-red); }
+/* Halo coloré assorti à chaque tuile (chantier "plateau chaleureux") : même
+   box-shadow que la règle de base (arête basse "pressée") + un glow diffus
+   dans la teinte de la tuile, ajouté ici (une seule déclaration box-shadow
+   par règle, la 2e ne s'ajoute pas à la 1re) plutôt que dans .option-btn —
+   sinon les 4 tuiles partageraient un seul halo neutre au lieu du leur. */
+.option-btn:nth-child(4n+1) { background: var(--tile-red); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-red-rgb),0.35); }
 .option-btn:nth-child(4n+1)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
-.option-btn:nth-child(4n+2) { background: var(--tile-blue); }
+.option-btn:nth-child(4n+2) { background: var(--tile-blue); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-blue-rgb),0.35); }
 .option-btn:nth-child(4n+2)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
 /* color en plus du background (contrairement aux 3 autres tuiles) : le
    blanc par défaut de .option-btn tombe à ~1.5:1 sur ce jaune clair, bien
    sous le minimum WCAG AA (4.5:1) — illisible en plein soleil sur mobile.
    Même brun foncé déjà choisi ailleurs pour ce même fond (voir
    .my-result-banner.is-close), repris ici pour rester cohérent. */
-.option-btn:nth-child(4n+3) { background: var(--tile-yellow); color: #3a2e00; }
+.option-btn:nth-child(4n+3) { background: var(--tile-yellow); color: #3a2e00; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-yellow-rgb),0.35); }
 .option-btn:nth-child(4n+3)::before { border-radius: 50%; }
-.option-btn:nth-child(4n+4) { background: var(--tile-green); }
+.option-btn:nth-child(4n+4) { background: var(--tile-green); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-green-rgb),0.35); }
 .option-btn:nth-child(4n+4)::before { border-radius: 4px; }
 .option-btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
 /* Ces tuiles sont maintenant navigables au clavier (voir index.js
