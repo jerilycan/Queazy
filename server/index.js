@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.59.0'
+const APP_VERSION = '1.59.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -36,6 +36,14 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 // 'unsafe-inline' : le rendu génère massivement des style="" inline (voir
 // index.js/results.js/editor.js), les retirer serait un chantier séparé — un
 // style inline ne permet de toute façon pas d'exécuter du JS.
+// media-src (audio/vidéo) manquait alors que img-src autorisait déjà data:/
+// blob: — sans elle, un extrait blind test encodé en data: URI (voir
+// encodeWavMono dans editor.js) est silencieusement refusé par le <audio>,
+// qui reste bloqué à 0:00/0:00, tant côté éditeur qu'en partie. connect-src
+// avait le même trou pour data: : uploadMediaField (editor.js) tente de
+// fetch(dataUrl) pour migrer l'extrait vers le bucket Supabase Storage
+// "quiz-media" — ce fetch échouait toujours ("Failed to fetch"), forçant un
+// repli permanent sur le base64 en base plutôt que la migration prévue.
 const supabaseHost = new URL(SUPABASE_URL).host
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -43,7 +51,8 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
-  `connect-src 'self' https://${supabaseHost} wss://${supabaseHost}`,
+  "media-src 'self' data: blob:",
+  `connect-src 'self' data: https://${supabaseHost} wss://${supabaseHost}`,
   "object-src 'none'",
   "base-uri 'self'",
   "frame-ancestors 'self'"
