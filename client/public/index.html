@@ -364,7 +364,15 @@
       <!-- Panel de contrôle Hôte -->
       <div id="hostPanel" class="card d-none mt-20 border-accent-left d-flex align-center justify-between" style="padding: 20px 32px;">
         <div class="d-flex flex-column gap-xs">
-          <h3 class="font-18">Contrôles de l'hôte</h3>
+          <!-- Icône + h3 (chantier "plateau chaleureux", branche dev) : même
+               langage que la maquette validée ("carte du présentateur") —
+               un petit badge rond en dégradé accent plutôt qu'un simple
+               titre nu, pour que ce panneau se distingue davantage d'une
+               carte de contenu générique une fois en pleine partie. -->
+          <div class="host-panel-eyebrow d-flex align-center gap-xs">
+            <span class="host-panel-icon">🎤</span>
+            <h3 class="font-18">Contrôles de l'hôte</h3>
+          </div>
           <div id="loadedInfo" class="font-14 text-accent font-bold">Aucun quiz sélectionné</div>
           <div class="host-volume-row align-center d-flex gap-xs font-bold font-14" title="Volume par défaut de la musique des Blind Tests — chaque joueur peut ensuite l'ajuster de son côté">
             🔊 Volume musique par défaut
