@@ -485,6 +485,14 @@
               <div class="grad-slider-track">
                 <div id="gradSliderFill" class="grad-slider-fill"></div>
                 <div id="gradSliderThumb" class="grad-slider-thumb"></div>
+                <!-- Repère "ta réponse" à la révélation (voir index.js
+                     positionGradTargetMarker) — retour utilisateur : sans lui, le
+                     pouce principal saute directement sur la bonne réponse et la
+                     valeur qu'on avait vraiment choisie disparaît, impossible à
+                     retrouver. Caché tant qu'on n'est pas en révélation. -->
+                <div id="gradMyMarker" class="grad-slider-my-marker d-none">
+                  <span class="grad-my-marker-tag">Ta réponse</span>
+                </div>
               </div>
             </div>
             <div class="graduation-labels">

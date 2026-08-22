@@ -515,6 +515,7 @@ const graduationArea = document.getElementById('graduationArea')
 const gradSlider = document.getElementById('gradSlider')
 const gradSliderFill = document.getElementById('gradSliderFill')
 const gradSliderThumb = document.getElementById('gradSliderThumb')
+const gradMyMarker = document.getElementById('gradMyMarker')
 const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
@@ -780,6 +781,7 @@ const buildGradSlider = (min, max, value) => {
   gradState.max = max
   gradState.disabled = true
   gradSlider.classList.remove('reveal')
+  if (gradMyMarker) gradMyMarker.classList.add('d-none')
   gradSlider.setAttribute('aria-valuemin', min)
   gradSlider.setAttribute('aria-valuemax', max)
   setGradValue(value)
@@ -2204,6 +2206,7 @@ const clearRevealState = () => {
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
   if (revealExplanationText) { revealExplanationText.classList.add('d-none'); revealExplanationText.textContent = '' }
   if (gradSlider) gradSlider.classList.remove('reveal')
+  if (gradMyMarker) gradMyMarker.classList.add('d-none')
   if (orderCompare) orderCompare.classList.add('d-none')
   if (orderList) orderList.classList.remove('d-none')
   if (timelineList) {
@@ -2259,6 +2262,19 @@ const positionGradTargetMarker = (target) => {
   // bonne valeur, teinté en vert.
   gradState.disabled = true
   if (gradSlider) gradSlider.classList.add('reveal')
+  // "Ta réponse" (retour utilisateur) : capturée AVANT que setGradValue
+  // ci-dessous ne déplace le pouce (et le repère "myGradAnswerValue") sur la
+  // bonne réponse — sans ce marqueur séparé, la valeur qu'on avait vraiment
+  // choisie disparaissait sans laisser de trace.
+  if (gradMyMarker) {
+    if (myGradAnswerValue !== null && gradState.max > gradState.min) {
+      const pct = Math.min(100, Math.max(0, (myGradAnswerValue - gradState.min) / (gradState.max - gradState.min) * 100))
+      gradMyMarker.style.left = `${pct}%`
+      gradMyMarker.classList.remove('d-none')
+    } else {
+      gradMyMarker.classList.add('d-none')
+    }
+  }
   setGradValue(Number(target), true)
 }
 

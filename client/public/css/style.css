@@ -1257,6 +1257,37 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   box-shadow: 0 0 0 6px rgba(var(--tile-green-rgb), 0.35), 0 4px 10px rgba(0, 0, 0, 0.45);
 }
 
+/* Repère "ta réponse" affiché à la révélation à côté du pouce (devenu vert,
+   posé sur la bonne réponse) — retour utilisateur : "savoir ce qu'on avait
+   mis avant la validation", sinon la valeur choisie disparaît sans trace
+   dès que le pouce principal saute dessus. Petit trait vertical + pastille,
+   couleur accent pour bien le distinguer du vert "bonne réponse". */
+.grad-slider-my-marker {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 26px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  box-shadow: 0 0 8px rgba(var(--color-accent-rgb), 0.65), 0 2px 6px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+}
+.grad-my-marker-tag {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.72);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .graduation-labels {
   display: flex;
   justify-content: space-between;
@@ -1429,7 +1460,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    navigateur (peu contrasté sur certaines tuiles, ex. la jaune). */
 .option-btn:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--color-accent-soft), var(--shadow-md); }
 .option-btn.selected {
-  outline: 4px solid white;
+  /* Anneau couleur accent (pas blanc) — retour utilisateur : "pas bien
+     compréhensible entre les réponses sélectionnées et les réponses
+     justes", cet anneau blanc était identique à celui de .correct-reveal
+     juste en dessous, ambigu dès que le choix du joueur était FAUX (anneau
+     "correct" + tuile grisée en même temps). Voir aussi
+     .selected.incorrect-reveal plus bas pour ce cas précis. */
+  outline: 4px solid var(--color-accent);
   outline-offset: -4px;
   transform: translateY(2px);
   box-shadow: 0 2px 0 rgba(0,0,0,0.25);
@@ -1473,6 +1510,33 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .option-btn.incorrect-reveal {
   opacity: 0.35;
   filter: grayscale(0.6);
+}
+/* Le joueur avait choisi CETTE mauvaise réponse : reste bien visible (pas
+   noyée avec les autres tuiles fausses non choisies, qui s'effacent en
+   arrière-plan) + repère rouge dédié (anneau + ✗), pour qu'on distingue
+   d'un coup d'œil "la bonne réponse" (verte), "ce que j'ai choisi, à tort"
+   (rouge) et "les autres, jamais choisies" (grisées, secondaires). */
+.option-btn.selected.incorrect-reveal {
+  opacity: 0.8;
+  filter: grayscale(0.15);
+  outline-color: var(--color-danger, #ef4444);
+}
+.option-btn.selected.incorrect-reveal::after {
+  content: '✗';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: white;
+  color: var(--color-danger, #ef4444);
+  font-size: 20px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Question "intrus" (photos) : reprend .option-btn (bordure de sélection,
@@ -1878,9 +1942,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   transform: translateX(-50%);
   background: rgba(0,0,0,0.72);
   color: white;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 2px 7px;
+  /* Retour utilisateur : "fond noir trop fin comparé à la taille de la
+     typo" — la pastille collait presque au texte, surtout en hauteur.
+     Padding généreux pour un vrai espace autour du nom. */
+  padding: 5px 11px;
   border-radius: 999px;
   white-space: nowrap;
 }
