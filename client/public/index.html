@@ -547,7 +547,15 @@
             </div>
           </div>
           <div id="blindtestArea" class="blindtest-area d-none">
-            <audio id="blindtestAudio" preload="auto"></audio>
+            <!-- crossorigin obligatoire : sans ça, le navigateur ne fait pas une
+                 vraie requête CORS pour charger l'extrait (même si Supabase Storage
+                 renvoie Access-Control-Allow-Origin: *), et createMediaElementSource
+                 (voir index.js ensureBlindTestAnalyser) traite alors la ressource
+                 comme "tainted" cross-origin -> silence total, sans aucune erreur
+                 (retour utilisateur + confirmé par le message Firefox en F12 :
+                 "le nœud produira un silence"). Sans effet sur le relais /api/room-
+                 audio/:code, servi en same-origin. -->
+            <audio id="blindtestAudio" preload="auto" crossorigin="anonymous"></audio>
             <div class="blindtest-orb-wrap">
               <div id="blindtestOrb" class="blindtest-orb orb-idle">
                 <div class="blindtest-orb-core"></div>
