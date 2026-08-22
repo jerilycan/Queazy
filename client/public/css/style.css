@@ -4072,16 +4072,47 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   border: 2px solid var(--tile-green);
   box-shadow: 0 0 16px rgba(var(--tile-green-rgb), 0.5);
   --zig: 1;
-  animation: answerFloatZigzag 4.6s ease-in-out forwards;
+  animation: answerFloatZigzag 4.2s linear forwards;
 }
+/* Trajectoire choisie parmi 4 variantes proposées (aperçu comparatif) —
+   30 arrêts à intervalle régulier (générés, pas écrits à la main) pour une
+   vraie sinusoïde fluide plutôt que quelques points reliés en ligne droite
+   (retour utilisateur : "trop saccadé" avec seulement 7 arrêts). timing
+   "linear" sur l'animation elle-même : c'est la sinusoïde qui porte déjà
+   toute l'accélération/décélération voulue, un ease-in-out en plus aurait
+   déformé le rythme régulier de l'oscillation. */
 @keyframes answerFloatZigzag {
-  0%   { transform: translate(0, 0) rotate(0deg) scale(0.7); opacity: 0; }
-  8%   { transform: translate(0, -9vh) rotate(2deg) scale(1); opacity: 1; }
-  25%  { transform: translate(calc(var(--zig) * 38px), -26vh) rotate(6deg) scale(1); }
-  45%  { transform: translate(calc(var(--zig) * -38px), -46vh) rotate(-6deg) scale(1); }
-  65%  { transform: translate(calc(var(--zig) * 30px), -66vh) rotate(5deg) scale(1); }
-  85%  { transform: translate(calc(var(--zig) * -18px), -86vh) rotate(-3deg) scale(1); opacity: 0.9; }
-  100% { transform: translate(0, -106vh) rotate(1deg) scale(0.95); opacity: 0; }
+  0% { transform: translate(calc(var(--zig) * 0.000 * 34px), 0.0vh) rotate(1.95deg) scale(0.70); opacity: 0.00; }
+  3.33% { transform: translate(calc(var(--zig) * 0.167 * 34px), -5.0vh) rotate(2.69deg) scale(0.82); opacity: 0.42; }
+  6.67% { transform: translate(calc(var(--zig) * 0.329 * 34px), -9.3vh) rotate(3.35deg) scale(0.95); opacity: 0.83; }
+  10% { transform: translate(calc(var(--zig) * 0.482 * 34px), -13.3vh) rotate(3.92deg) scale(1); opacity: 1; }
+  13.33% { transform: translate(calc(var(--zig) * 0.621 * 34px), -17.3vh) rotate(4.39deg) scale(1); opacity: 1; }
+  16.67% { transform: translate(calc(var(--zig) * 0.743 * 34px), -21.1vh) rotate(4.73deg) scale(1); opacity: 1; }
+  20% { transform: translate(calc(var(--zig) * 0.844 * 34px), -24.9vh) rotate(4.93deg) scale(1); opacity: 1; }
+  23.33% { transform: translate(calc(var(--zig) * 0.922 * 34px), -28.6vh) rotate(5.00deg) scale(1); opacity: 1; }
+  26.67% { transform: translate(calc(var(--zig) * 0.974 * 34px), -32.3vh) rotate(4.93deg) scale(1); opacity: 1; }
+  30% { transform: translate(calc(var(--zig) * 0.998 * 34px), -35.9vh) rotate(4.72deg) scale(1); opacity: 1; }
+  33.33% { transform: translate(calc(var(--zig) * 0.995 * 34px), -39.4vh) rotate(4.38deg) scale(1); opacity: 1; }
+  36.67% { transform: translate(calc(var(--zig) * 0.963 * 34px), -43.0vh) rotate(3.91deg) scale(1); opacity: 1; }
+  40% { transform: translate(calc(var(--zig) * 0.905 * 34px), -46.5vh) rotate(3.34deg) scale(1); opacity: 1; }
+  43.33% { transform: translate(calc(var(--zig) * 0.821 * 34px), -49.9vh) rotate(2.67deg) scale(1); opacity: 1; }
+  46.67% { transform: translate(calc(var(--zig) * 0.714 * 34px), -53.4vh) rotate(1.93deg) scale(1); opacity: 1; }
+  50% { transform: translate(calc(var(--zig) * 0.588 * 34px), -56.8vh) rotate(1.13deg) scale(1); opacity: 1; }
+  53.33% { transform: translate(calc(var(--zig) * 0.445 * 34px), -60.2vh) rotate(0.30deg) scale(1); opacity: 1; }
+  56.67% { transform: translate(calc(var(--zig) * 0.289 * 34px), -63.6vh) rotate(-0.53deg) scale(1); opacity: 1; }
+  60% { transform: translate(calc(var(--zig) * 0.125 * 34px), -66.9vh) rotate(-1.35deg) scale(1); opacity: 1; }
+  63.33% { transform: translate(calc(var(--zig) * -0.042 * 34px), -70.3vh) rotate(-2.14deg) scale(1); opacity: 1; }
+  66.67% { transform: translate(calc(var(--zig) * -0.208 * 34px), -73.6vh) rotate(-2.86deg) scale(1); opacity: 1; }
+  70% { transform: translate(calc(var(--zig) * -0.368 * 34px), -76.9vh) rotate(-3.51deg) scale(1); opacity: 1; }
+  73.33% { transform: translate(calc(var(--zig) * -0.518 * 34px), -80.2vh) rotate(-4.05deg) scale(1); opacity: 1; }
+  76.67% { transform: translate(calc(var(--zig) * -0.653 * 34px), -83.5vh) rotate(-4.48deg) scale(1); opacity: 1; }
+  80% { transform: translate(calc(var(--zig) * -0.771 * 34px), -86.7vh) rotate(-4.79deg) scale(1); opacity: 0.91; }
+  83.33% { transform: translate(calc(var(--zig) * -0.821 * 34px), -90.0vh) rotate(-4.70deg) scale(1); opacity: 0.76; }
+  86.67% { transform: translate(calc(var(--zig) * -0.767 * 34px), -93.2vh) rotate(-4.09deg) scale(1); opacity: 0.61; }
+  90% { transform: translate(calc(var(--zig) * -0.677 * 34px), -96.4vh) rotate(-3.37deg) scale(1); opacity: 0.45; }
+  93.33% { transform: translate(calc(var(--zig) * -0.559 * 34px), -99.6vh) rotate(-2.60deg) scale(1); opacity: 0.30; }
+  96.67% { transform: translate(calc(var(--zig) * -0.425 * 34px), -102.8vh) rotate(-1.84deg) scale(1); opacity: 0.15; }
+  100% { transform: translate(calc(var(--zig) * -0.285 * 34px), -106.0vh) rotate(-1.13deg) scale(1); opacity: 0.00; }
 }
 .floating-answer.is-incorrect {
   border-color: var(--color-danger);
