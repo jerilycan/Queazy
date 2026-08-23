@@ -49,6 +49,41 @@ l'utilisateur._
    noir hardcodé qui s'affichait même en thème clair, un bug pré-existant,
    pas quelque chose que j'ai introduit) — cohérent avec `--color-card`
    blanc du reste du thème clair.
+3. **Cartes "Mes Quiz"** : j'ai repris l'avatar-initiales coloré + titre +
+   date de la maquette, mais **volontairement laissé de côté la rangée
+   d'actions rapides Éditer/Dupliquer/Supprimer** montrée dessus. Cliquer
+   la carte pour éditer existe déjà (inchangé) ; "Dupliquer" n'a aucune
+   logique existante côté site (le bouton "Dupliquer dans mes quiz" de
+   `editor.html` ne concerne que la copie du quiz d'un AUTRE créateur) —
+   ajouter cette action aurait été une vraie nouvelle fonctionnalité, pas
+   juste un habillage visuel, donc hors périmètre tant que ce n'est pas
+   demandé explicitement. *Question pour toi à la fin.*
+4. **Onglets "Podium"/"Détail"** (`result.html`) : juste alignés sur le
+   nouveau vocabulaire de bouton (poids 800, halo). Je n'ai pas touché aux
+   pistes de course elles-mêmes (`.race-lane*`) — c'est un système déjà
+   riche et soigné (animations couronne/streak/glitch), pas dans l'esprit
+   "pas de sur-ingénierie" d'y toucher sans un vrai écart identifié avec la
+   maquette. Sa mécanique réelle (barres VERTICALES qui montent, façon
+   course de chevaux) diffère d'ailleurs de la maquette (barres
+   horizontales) — la maquette avait pris une liberté que je n'ai pas
+   cherché à imposer au vrai code.
+5. **Sélection d'avatar** (`.icon-opt.selected`, partagé par `profile.html`
+   ET le sélecteur joueur d'`index.html`) : passé en dégradé plein + halo au
+   lieu du contour teinté — mais j'ai délibérément **laissé `.avatar-main`
+   (le rond blanc de base) inchangé** : c'est un composant partagé par tout
+   le jeu (lobby, classement...), le retoucher dépasse le périmètre "design
+   des pages" et aurait un rayon d'impact que je ne voulais pas prendre seul.
+6. **`editor.html`, `profile.html`, `login.html`** : après vérification,
+   ces pages héritent déjà l'essentiel de la nouvelle DA via les tokens et
+   classes globales déjà mis à jour (`.card`, `.btn*`, fond, navbar) — pas
+   d'écart flagrant identifié qui justifierait une réécriture de leur
+   structure propre. Je n'ai donc pas cherché à "inventer" du travail
+   supplémentaire dessus.
+7. **`index.html` (écran hôte en jeu)** : je n'ai pas touché aux éléments
+   encore ouverts de longue date (bannière "EN DIRECT", points de
+   progression, fond spotlight dédié) — plus gros chantier, mieux traité
+   dans une session dédiée avec plus de marge pour vérifier en profondeur
+   plutôt qu'en fin de session autonome.
 
 ## Fichiers concernés
 - `client/public/css/style.css`
@@ -66,16 +101,43 @@ l'utilisateur._
 7. Reste `index.html` si le temps le permet.
 
 ## Étapes réalisées
-_au fil de l'eau_
+- [x] Thème clair : navbar, menu mobile, profil, bouton "CRÉER"
+- [x] `select.html` : cartes Mes Quiz/publics (avatar-initiales)
+- [x] `result.html` : onglets Podium/Détail (habillage bouton uniquement)
+- [x] Sélecteur d'avatar partagé (`.icon-opt.selected`)
+- [ ] `profile.html`, `login.html`, `editor.html` : vérifiés conformes via
+  héritage global, pas de retouche dédiée jugée nécessaire (voir décision 6)
+- [ ] `index.html` (reste du chantier jeu) : non traité, voir décision 7
 
 ## Checks effectués
-_au fil de l'eau_
+- `node -e` équilibre des accolades CSS après chaque lot de modifs (dernier
+  résultat : 1152/1152, OK) + `node --check select.js` (OK).
+- Vérifié en Browser pane (onglets neufs à chaque fois, cache HTTP/PWA
+  oblige) : navbar + Créer en thème clair, cartes Mes Quiz (avatar/titre/
+  date via un rendu direct de `render()` avec données factices), onglets
+  résultats, absence d'erreur console sur `result.html`, `profile.html`,
+  `login.html`, `editor.html`.
 
 ## Tests manuels recommandés
-_à remplir en fin de session_
+- Se connecter pour de vrai (pas juste invité) et vérifier `select.html`
+  avec de vrais quiz en liste, `editor.html` avec un vrai quiz ouvert —
+  pas testé avec un compte réel dans cette session.
+- Thème clair sur `result.html`, `profile.html`, `login.html`, `editor.html`
+  — seuls `select.html` et la navbar ont été vérifiés en clair.
+- Repasser sur `index.html` en jeu réel (hôte + joueur) pour confirmer
+  qu'aucune régression n'est venue des changements globaux (boutons,
+  fond, `.icon-opt`).
 
 ## Risques restants
-_à remplir en fin de session_
+- Voir les décisions 1, 3, 5, 6, 7 ci-dessus : plusieurs renoncements
+  volontaires par prudence (périmètre), pas des oublis — mais à confirmer
+  que c'est bien ce que tu voulais.
+- Thème clair vérifié seulement sur `select.html`/navbar, pas sur le reste
+  des pages (probablement correct par héritage des tokens, mais pas
+  visuellement confirmé partout).
+- Toujours aucun outil de vérification automatique dans ce projet — tout
+  ce qui précède reste du contrôle manuel.
 
 ## Statut
-`en cours`
+`en review` (auto — l'utilisateur n'était pas disponible pour valider en
+direct, review à faire à son retour)
