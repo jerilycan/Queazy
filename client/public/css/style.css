@@ -2929,11 +2929,27 @@ body.game-active .navbar {
   border: none !important;
   box-shadow: none !important;
   border-radius: 0 !important;
+  /* Le logo agrandi ci-dessous (72px) dépasse la hauteur de barre pensée
+     pour une navbar dense (64px) — élargie pour le loger sans qu'il ne
+     déborde visuellement de sa rangée. */
+  height: auto;
+  padding: 10px 22px;
 }
 body.game-active .navbar .nav-group {
   display: none;
 }
 body.game-active .navbar > .brand { margin-right: 0; }
+/* Retour utilisateur : "logo un peu petit encore" — seul repère visuel du
+   haut de l'écran une fois la barre masquée, il mérite plus de présence
+   que la taille pensée pour une navbar dense (46px, voir .brand-logo-svg
+   plus haut). */
+body.game-active .navbar .brand-logo-svg { height: 72px; }
+/* Sur un petit écran (joueur sur téléphone), 72px prend une part trop
+   généreuse d'une hauteur déjà comptée — reste plus gros que la taille
+   navbar d'origine (46px) sans dominer tout le haut de l'écran. */
+@media (max-width: 640px) {
+  body.game-active .navbar .brand-logo-svg { height: 56px; }
+}
 /* Code de salle "EN DIRECT" : fixé en bas-droite partout ailleurs (voir
    .persistent-code plus bas) — remonté en HAUT-GAUCHE pendant une partie
    (retour utilisateur, référence maquette) : plus cohérent avec le logo
@@ -3112,9 +3128,42 @@ body.game-active .persistent-code {
     top: 20px;
     right: 20px;
     left: auto;
-    width: 200px;
-    max-width: 200px;
+    width: 220px;
+    max-width: 220px;
     margin: 0;
+  }
+  /* Retour utilisateur : "design des barres à revoir, prendre comme réf
+     la nouvelle DA" — la pastille épaisse (28px, chiffre superposé dedans)
+     ne collait plus au langage plus fin adopté pour .host-progress-track
+     juste à côté (voir plus bas dans ce fichier). Passée en fine barre
+     (8px) avec le temps restant écrit À CÔTÉ plutôt que dessus, comme sur
+     la maquette de référence. #timerBar/#timerLabel restent les mêmes
+     éléments (voir index.js) : seule leur mise en page change ici.
+     Cette barre n'accueille pas le compte à rebours "urgent" en pulsation
+     (voir .timer-urgent plus haut) via une taille dédiée — le dégradé
+     rouge s'applique tel quel, juste plus fin. */
+  body.is-host.game-active .container #timerContainer .timer-bar-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 8px;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    box-shadow: none;
+    border-radius: 999px;
+  }
+  body.is-host.game-active .container #timerContainer .timer-bar-fill {
+    flex: 1;
+    height: 100%;
+    border-radius: 999px;
+  }
+  body.is-host.game-active .container #timerContainer .timer-label {
+    position: static;
+    transform: none;
+    flex-shrink: 0;
+    font-size: 13px;
+    color: var(--color-text);
+    text-shadow: none;
   }
 }
 
@@ -3234,25 +3283,32 @@ body.game-active .persistent-code {
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 .persistent-code-sep { color: var(--color-text-muted); opacity: 0.5; margin: 0 1px; }
 
-/* Points de progression (voir #hostProgressDots, index.html + index.js
-   renderHostProgressDots) : la question en cours se distingue par une
-   pastille pleine accent, les déjà-jouées en vert, les à-venir en gris —
-   même trio de couleurs que le reste de l'appli (correct=vert,
-   accent=en cours). */
-.host-progress-dots { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
-.host-progress-dots .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.15);
-  flex-shrink: 0;
-  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+/* Barre de progression (voir #hostProgressBar, index.html + index.js
+   renderHostProgressBar) — retour utilisateur : remplace les points
+   d'origine par une vraie barre, comme sur la maquette de référence.
+   Même dégradé cyan->accent que la barre de temps (voir .timer-bar-fill
+   plus haut) : les 2 seules "barres" de tout l'écran de jeu partagent
+   maintenant le même langage. */
+.host-progress-bar { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.host-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
 }
-.host-progress-dots .dot.done { background: var(--tile-green); }
-.host-progress-dots .dot.current {
-  background: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb),0.3);
-  transform: scale(1.3);
+.host-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-cyan), var(--color-accent));
+  transition: width 0.3s ease;
+}
+.host-progress-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .question-text {

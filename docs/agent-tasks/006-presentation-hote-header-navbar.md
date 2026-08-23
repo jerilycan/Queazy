@@ -321,6 +321,40 @@ code de salle en haut-gauche (20,20) y compris à 390px ; `#gameProgressInfo`
 en haut-droite ; `#hostPanel` sans liseré, padding 18px, icône masquée ;
 hors partie, navbar entièrement revenue à la normale dans les deux thèmes.
 
+## Suite — retour utilisateur (7e passe) : bug code salle, logo, barres
+"Bug du code salle 'vide' / logo un peu petit encore / design des barres à
+revoir, prendre comme réf la nouvelle DA." Clarifié avec l'utilisateur :
+"les barres" = la barre de temps ET la barre de progression de l'hôte.
+
+- [x] **Bug corrigé** (`socket.on('room:created', ...)`, index.js) : ce
+  handler posait `persistentCode.style.display = 'block'` mais ne retirait
+  JAMAIS la classe `d-none` (`!important`, un style inline ne peut pas la
+  regagner) — contrairement à l'autre handler (`player:token`) qui le fait
+  correctement. L'hôte ne voyait donc jamais ce badge par ce chemin, ou le
+  voyait apparaître vide selon l'ordre d'arrivée des 2 événements. Corrigé
+  en ajoutant le `classList.remove('d-none')` manquant.
+- [x] Logo : `72px` pendant une partie (`46px` de base) — `56px` sur petit
+  écran (`≤640px`, joueur sur téléphone) pour ne pas dominer tout le haut
+  de l'écran.
+- [x] Barre de progression de l'hôte (panneau gauche) : **remplacée** —
+  points → vraie barre fine (`#hostProgressBar`, ex-`#hostProgressDots`,
+  renommé pour rester honnête sur ce qu'il affiche désormais), même
+  dégradé cyan→accent que la barre de temps. `renderHostProgressDots()`
+  renommée `renderHostProgressBar()`.
+- [x] Barre de temps (pastille coin haut-droit, tâche 006) : passée de 28px
+  (chiffre superposé dedans) à 8px fine, chiffre écrit À CÔTÉ plutôt que
+  dessus — même `#timerBar`/`#timerLabel`, juste repositionnés. Scopé à la
+  régie hôte desktop uniquement ; le bandeau plein-largeur classique
+  (mobile/joueur) est inchangé.
+
+Vérifié en Browser pane (feuille de style forcée fraîche, 1600px) :
+`renderHostProgressBar(3, 12)` produit bien une barre à 33% + label
+"4/12" ; barre de temps à 8px de haut, `#timerLabel` en `position:static`
+(sorti du chevauchement) ; logo à 72px. Revérifié à 390px : barre de temps
+repasse à 28px avec label superposé (`position:absolute`), logo à 56px —
+comportements mobile distincts confirmés, pas juste un `display:none`
+oublié.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.

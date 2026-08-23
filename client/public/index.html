@@ -383,12 +383,13 @@
                question corrigé plus tôt cette session). -->
           <div id="hostPlayerStrip" class="host-player-strip"></div>
           <div id="loadedInfo" class="font-14 text-accent font-bold">Aucun quiz sélectionné</div>
-          <!-- Points de progression (chantier "plateau chaleureux", suite) :
-               reprend visuellement la même info que #loadedInfo ("Question
-               X/Y"), déjà fiable — pas de nouvel état, juste un rendu
-               complémentaire posé au même endroit où hostQuestionLabel est
-               déjà calculé (voir index.js renderHostProgressDots). -->
-          <div id="hostProgressDots" class="host-progress-dots"></div>
+          <!-- Barre de progression : reprend visuellement la même info que
+               #loadedInfo ("Question X/Y"), déjà fiable — pas de nouvel
+               état, juste un rendu complémentaire posé au même endroit où
+               hostQuestionLabel est déjà calculé (voir index.js
+               renderHostProgressBar). Retour utilisateur : une vraie barre
+               plutôt que des points, comme sur la maquette de référence. -->
+          <div id="hostProgressBar" class="host-progress-bar"></div>
           <div class="host-volume-row align-center d-flex gap-xs font-bold font-14" title="Volume par défaut de la musique des Blind Tests — chaque joueur peut ensuite l'ajuster de son côté">
             🔊 Volume musique par défaut
             <div id="audioVolumeTrack" class="volume-track">

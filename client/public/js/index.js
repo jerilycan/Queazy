@@ -2744,7 +2744,7 @@ const resetUI = () => {
   roomInput.value = ''
   
   document.body.classList.remove('game-active', 'is-host', 'irl-player-mode')
-  if (hostProgressDotsEl) hostProgressDotsEl.innerHTML = ''
+  if (hostProgressBarEl) hostProgressBarEl.innerHTML = ''
   gameMode = 'irl'
   irlMenuDropdown?.classList.remove('is-open')
   // Hide all dynamic panels — 'main' (toute la zone de jeu : question,
@@ -2866,7 +2866,16 @@ socket.on('room:created', ({ roomCode, serverUrl, hostToken }) => {
   }
   qrDiv.innerHTML = ''
   const persistentCode = document.getElementById('persistentRoomCode')
-  if (persistentCode) persistentCode.style.display = 'block'
+  if (persistentCode) {
+    // Bug corrigé (retour utilisateur : "code salle vide") : ne retirait
+    // jamais la classe d-none ici (seul style.display='block' était posé),
+    // or .d-none utilise !important — un inline style ne peut pas le
+    // regagner. L'hôte ne voyait donc jamais ce badge du tout (pas "vide",
+    // carrément invisible) alors que le texte, lui, était bien posé juste
+    // en dessous.
+    persistentCode.classList.remove('d-none')
+    persistentCode.style.display = 'block'
+  }
   setDisplayRoomCode(roomCode);
   const base = serverUrl || baseUrl
   const joinUrl = `${base}/?room=${roomCode}`
@@ -3791,28 +3800,35 @@ socket.on('lobby:readyStatus', ({ allReady }) => {
 
 let hostQuestionLabel = ''
 
-// Points de progression du panneau hôte (chantier "plateau chaleureux",
-// suite) : reprend exactement les mêmes valeurs (index courant, nombre
-// total de questions) que hostQuestionLabel ci-dessus — pas de nouvel état
-// à tenir à jour, juste un rendu visuel en plus du texte "Question X/Y"
-// déjà affiché dans #loadedInfo. Défensif (élément peut être absent) et ne
-// fait rien si le nombre de questions n'a pas de sens (évite de générer
-// des centaines de points si jamais appelé avec des valeurs incohérentes).
-const hostProgressDotsEl = document.getElementById('hostProgressDots')
-const renderHostProgressDots = (currentIndex, total) => {
-  if (!hostProgressDotsEl) return
+// Barre de progression du panneau hôte : reprend exactement les mêmes
+// valeurs (index courant, nombre total de questions) que hostQuestionLabel
+// ci-dessus — pas de nouvel état à tenir à jour, juste un rendu visuel en
+// plus du texte "Question X/Y" déjà affiché dans #loadedInfo. Défensif
+// (élément peut être absent) et ne fait rien si le nombre de questions n'a
+// pas de sens. Remplace l'ancienne version en points (retour utilisateur :
+// une vraie barre, comme sur la maquette de référence — voir
+// .host-progress-track/-fill dans style.css, même dégradé que la barre de
+// temps).
+const hostProgressBarEl = document.getElementById('hostProgressBar')
+const renderHostProgressBar = (currentIndex, total) => {
+  if (!hostProgressBarEl) return
   if (!Number.isFinite(total) || total <= 0 || total > 200) {
-    hostProgressDotsEl.innerHTML = ''
+    hostProgressBarEl.innerHTML = ''
     return
   }
-  const frag = document.createDocumentFragment()
-  for (let i = 0; i < total; i++) {
-    const dot = document.createElement('span')
-    dot.className = 'dot' + (i < currentIndex ? ' done' : i === currentIndex ? ' current' : '')
-    frag.appendChild(dot)
-  }
-  hostProgressDotsEl.innerHTML = ''
-  hostProgressDotsEl.appendChild(frag)
+  const pct = Math.round(((currentIndex + 1) / total) * 100)
+  const track = document.createElement('div')
+  track.className = 'host-progress-track'
+  const fill = document.createElement('div')
+  fill.className = 'host-progress-fill'
+  fill.style.width = `${pct}%`
+  track.appendChild(fill)
+  const label = document.createElement('span')
+  label.className = 'host-progress-label'
+  label.textContent = `${currentIndex + 1}/${total}`
+  hostProgressBarEl.innerHTML = ''
+  hostProgressBarEl.appendChild(track)
+  hostProgressBarEl.appendChild(label)
 }
 
 // Upload générique d'une image vers /api/room-image/:code (voir server/index.js) :
@@ -3910,7 +3926,7 @@ const emitQuestion = (index) => {
   // de réponses reçu via answer:progress.
   hostQuestionLabel = `Question ${index + 1}/${loadedQuiz.questions.length}`
   if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · en attente des réponses…`
-  renderHostProgressDots(index, loadedQuiz.questions.length)
+  renderHostProgressBar(index, loadedQuiz.questions.length)
   const correctOrder = Array.isArray(q.correct) ? q.correct : []
   // "association" : un seul mélange d'index, réutilisé pour dériver à la
   // fois pairsB (textes mélangés) et pairsBKeys (index d'origine de chaque
