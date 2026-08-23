@@ -850,7 +850,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   background-size: cover;
   background-position: center;
   border-color: var(--color-accent);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb),0.35), 0 4px 12px rgba(var(--color-accent-rgb),0.35);
 }
 
 .icon-opt.custom-avatar {
@@ -2723,7 +2723,16 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .max-w-700 { max-width: 700px; }
 
 .avatar-lg { width: 120px; height: 120px; font-size: 48px; }
-.avatar-profile { border: 4px solid white; box-shadow: 0 0 0 4px white, 0 0 0 8px var(--color-accent-soft), var(--shadow-lg); }
+/* Carré arrondi + anneau accent (nouvelle DA, tâche 002) au lieu du rond
+   blanc cerclé blanc d'avant — scopé à .avatar-profile uniquement (pas
+   .avatar-main de base, réutilisé tel quel ailleurs dans le jeu : lobby,
+   classement... pas dans le périmètre de cette refonte). */
+.avatar-profile {
+  border-radius: 28px;
+  border: none;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  box-shadow: 0 12px 30px rgba(var(--color-accent-rgb),0.35);
+}
 
 .toast-container { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10000; }
 
@@ -3622,7 +3631,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   margin-bottom: 8px;
   background: var(--color-surface);
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   transition: all 0.2s ease;
 }
@@ -3630,6 +3639,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .option-row:focus-within {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb),0.15);
+}
+
+/* Case cochée = bonne réponse (QCM notamment, voir editor.js renderOptions)
+   : léger liseré vert au lieu d'un état visuellement identique à une
+   option non cochée (nouvelle DA, tâche 002 — cohérent avec le vert
+   "correct" déjà utilisé partout ailleurs dans l'appli). */
+.option-row:has(input[type="checkbox"]:checked) {
+  border-color: var(--tile-green);
+  background: rgba(var(--tile-green-rgb),0.06);
 }
 
 .option-row input[type="text"] {

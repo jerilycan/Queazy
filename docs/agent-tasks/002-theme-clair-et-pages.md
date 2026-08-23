@@ -84,6 +84,20 @@ l'utilisateur._
    progression, fond spotlight dédié) — plus gros chantier, mieux traité
    dans une session dédiée avec plus de marge pour vérifier en profondeur
    plutôt qu'en fin de session autonome.
+8. **Confirmation après inspection plus poussée de `style.css`** : l'écran
+   hôte réel (`#hostPanel`) est structuré très différemment de la maquette
+   OptionB — un panneau fixe qui se superpose au contenu existant (avec z-
+   index/overflow déjà finement réglés au fil de retours utilisateur
+   passés), pas la mise en page "régie" à deux rails de la maquette. La
+   "bannière EN DIRECT" et les "points de progression" impliquent du
+   nouvel état JS (savoir si une question est en cours, combien il y en a)
+   que je n'ai pas de moyen fiable de vérifier seul (pas de vraie partie
+   multijoueur en cours dans ce navigateur de test) — les construire à
+   l'aveugle sur un système déjà soigneusement ajusté est le genre de pari
+   que je préfère ne pas prendre sans validation. Le fond "spotlight" est en
+   revanche déjà en grande partie couvert : le halo de fond global (tâche
+   001) donne déjà cet effet partout, y compris sur l'écran de jeu.
+   **Sujet à remettre sur la table à ton retour plutôt que deviné seul.**
 
 ## Fichiers concernés
 - `client/public/css/style.css`
@@ -104,10 +118,20 @@ l'utilisateur._
 - [x] Thème clair : navbar, menu mobile, profil, bouton "CRÉER"
 - [x] `select.html` : cartes Mes Quiz/publics (avatar-initiales)
 - [x] `result.html` : onglets Podium/Détail (habillage bouton uniquement)
-- [x] Sélecteur d'avatar partagé (`.icon-opt.selected`)
-- [ ] `profile.html`, `login.html`, `editor.html` : vérifiés conformes via
-  héritage global, pas de retouche dédiée jugée nécessaire (voir décision 6)
-- [ ] `index.html` (reste du chantier jeu) : non traité, voir décision 7
+- [x] Sélecteur d'avatar partagé (`.icon-opt.selected` + `.avatar-tile.selected`)
+- [x] `profile.html` : avatar principal (`.avatar-profile`) passé en carré
+  arrondi + anneau accent, au lieu du rond blanc d'origine — scopé à cette
+  seule classe, `.avatar-main` de base (lobby, classement...) intact
+- [x] `editor.html` : lignes d'option (`.option-row`, QCM + réutilisé par
+  ordre/timeline/intrus/association) — radius aligné sur le reste de la DA,
+  + liseré vert quand la case "bonne réponse" est cochée (état invisible
+  avant, juste la case à cocher le signalait)
+- [ ] `login.html` : vérifié conforme via héritage global (cartes/boutons
+  déjà sur les bons tokens), pas d'écart identifié qui justifie une
+  retouche dédiée
+- [ ] `index.html` (bannière "EN DIRECT", points de progression, fond
+  spotlight dédié) : **volontairement pas construit** — voir décision 8
+  ci-dessous, ce n'est pas un oubli.
 
 ## Checks effectués
 - `node -e` équilibre des accolades CSS après chaque lot de modifs (dernier
@@ -140,4 +164,7 @@ l'utilisateur._
 
 ## Statut
 `en review` (auto — l'utilisateur n'était pas disponible pour valider en
-direct, review à faire à son retour)
+direct, review à faire à son retour). Toute la DA identifiée comme
+réalisable sans risque en autonome est posée ; ce qui reste ouvert (voir
+décisions 1, 3, 5, 8) demande soit une réponse à une question, soit une
+vraie session de vérification avec une partie en cours.
