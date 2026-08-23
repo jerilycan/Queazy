@@ -98,6 +98,21 @@ const formatUpdatedAt = (iso) => {
   } catch { return '' }
 }
 
+// Couleurs cycliques de l'avatar-initiales (nouvelle DA, voir maquette
+// "Mes Quiz — Refonte") : pas de couleur liée aux données du quiz (aucune
+// n'existe côté serveur), juste de quoi rendre la liste plus vivante qu'un
+// gris uniforme.
+const CARD_ACCENTS = [
+  ['var(--tile-blue)', 'var(--tile-blue-deep)'],
+  ['var(--color-accent)', 'var(--color-accent-2)'],
+  ['var(--tile-green)', 'var(--tile-green-deep)'],
+  ['var(--color-teal)', '#0a7d63'],
+  ['var(--tile-bronze)', 'var(--tile-bronze-deep)'],
+  ['var(--color-violet)', '#7a2fa8'],
+]
+const initialsOf = (title) =>
+  (title || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?'
+
 const render = (arr, isMineTab = true) => {
   list.innerHTML = ''
   if (!arr || arr.length === 0) {
@@ -110,7 +125,9 @@ const render = (arr, isMineTab = true) => {
       </div>`
     return
   }
-  arr.forEach(q => {
+  arr.forEach((q, i) => {
+    const [a, a2] = CARD_ACCENTS[i % CARD_ACCENTS.length]
+
     const card = document.createElement('div')
     card.className = 'card quiz-card'
     card.style.cursor = 'pointer'
@@ -118,24 +135,36 @@ const render = (arr, isMineTab = true) => {
     card.style.flexDirection = 'column'
     card.style.gap = '8px'
     card.style.transition = 'all 0.2s ease'
-    
+
     // Redirection vers l'éditeur au clic sur la carte
     card.onclick = () => {
       window.location.href = '/editor.html?id=' + encodeURIComponent(q.id)
     }
-    
+
+    const head = document.createElement('div')
+    head.className = 'quiz-card-head'
+
+    const avatar = document.createElement('div')
+    avatar.className = 'quiz-card-avatar'
+    avatar.style.background = `linear-gradient(135deg, ${a} 0%, ${a2} 100%)`
+    avatar.textContent = initialsOf(q.title)
+
+    const textWrap = document.createElement('div')
+    textWrap.style.minWidth = '0'
+
     const title = document.createElement('div')
-    title.style.fontWeight = '700'
-    title.style.fontSize = '18px'
+    title.className = 'quiz-card-title'
     title.textContent = q.title
-    
+
     const meta = document.createElement('div')
-    meta.style.fontSize = '14px'
-    meta.style.color = 'var(--color-text-muted)'
+    meta.className = 'quiz-card-meta'
     meta.textContent = formatUpdatedAt(q.updated_at)
-    
-    card.appendChild(title)
-    card.appendChild(meta)
+
+    textWrap.appendChild(title)
+    textWrap.appendChild(meta)
+    head.appendChild(avatar)
+    head.appendChild(textWrap)
+    card.appendChild(head)
     list.appendChild(card)
   })
 }

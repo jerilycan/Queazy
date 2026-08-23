@@ -129,15 +129,33 @@
   border-color: #d8d2e7;
   box-shadow: 0 20px 44px rgba(35,25,65,0.2);
 }
-/* Boutons Créer/Rejoindre : --tile-blue/--tile-red pilotent aussi les
-   tuiles QCM, badges d'équipe, barres du podium... — les redéfinir aurait
-   changé bien plus que ces deux boutons, et dans le thème sombre en plus
-   (tokens partagés, jamais scopés par thème). Override direct sur les
-   sélecteurs des boutons à la place, uniquement en thème clair. */
-:root[data-theme="light"] .btn.btn-nav-main {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-  box-shadow: 0 3px 0 #1d4ed8;
+/* Navbar : jusqu'ici toujours en verre sombre même en thème clair (bug
+   pré-existant, non introduit par la refonte 001 — juste jamais adapté).
+   Verre clair cohérent avec --color-card blanc du reste du thème, au lieu
+   d'une barre noire flottant sur un fond clair. */
+:root[data-theme="light"] .navbar {
+  background: linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.85) 100%);
+  border-color: rgba(35,25,65,0.08);
+  box-shadow: 0 10px 30px rgba(35,25,65,0.12), 0 0 0 1px rgba(247,37,168,0.05) inset;
 }
+:root[data-theme="light"] .nav-group + .nav-group::before { background: rgba(35,25,65,0.12); }
+:root[data-theme="light"] .theme-toggle-btn { background: rgba(35,25,65,0.06); border-color: rgba(35,25,65,0.12); color: var(--color-text); }
+:root[data-theme="light"] .theme-toggle-btn:hover { background: rgba(35,25,65,0.1); }
+:root[data-theme="light"] .profile-chip { background: rgba(35,25,65,0.05); border-color: rgba(35,25,65,0.1); }
+:root[data-theme="light"] .profile-chip:hover { background: rgba(35,25,65,0.09); }
+:root[data-theme="light"] .profile-name { color: var(--color-text); }
+:root[data-theme="light"] .menu-toggle-btn span { background: var(--color-text); }
+:root[data-theme="light"] .nav-menu { background: rgba(255,255,255,0.97); border-color: rgba(35,25,65,0.1); }
+/* Bouton "Rejoindre" : --tile-red pilote aussi les tuiles QCM, badges
+   d'équipe, barres du podium... — le redéfinir aurait changé bien plus que
+   ce bouton, et dans le thème sombre en plus (tokens partagés, jamais
+   scopés par thème). Override direct sur le sélecteur du bouton à la
+   place, uniquement en thème clair.
+   "CRÉER" n'a PLUS son propre override ici (nouvelle DA, tâche 002) :
+   il suit désormais --color-accent/--color-accent-2 comme en thème sombre
+   (voir .btn.btn-nav-main de base) — même identité de marque dans les deux
+   thèmes, au lieu du bleu isolé d'avant qui ne collait à rien d'autre dans
+   la palette claire. */
 :root[data-theme="light"] .btn.btn-nav-main:nth-child(even) {
   background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
   box-shadow: 0 3px 0 #be123c;
@@ -3971,6 +3989,40 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   border-color: var(--color-accent);
   box-shadow: var(--shadow-md);
   transform: translateY(-4px);
+}
+
+/* Carte "Mes Quiz"/"Quiz publics" (nouvelle DA, tâche 002) : avatar-
+   initiales colorée + titre + date, au lieu du simple titre+date sans
+   accroche visuelle d'avant (voir select.js render()). */
+.quiz-card-head { display: flex; align-items: center; gap: 14px; }
+.quiz-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+}
+.quiz-card-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quiz-card-meta {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  margin-top: 2px;
 }
 
 /* Quiz Item Styles */
