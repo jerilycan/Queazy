@@ -98,6 +98,23 @@ l'utilisateur._
    revanche déjà en grande partie couvert : le halo de fond global (tâche
    001) donne déjà cet effet partout, y compris sur l'écran de jeu.
    **Sujet à remettre sur la table à ton retour plutôt que deviné seul.**
+9. **Retour sur la décision 8, après inspection plus poussée** : en
+   cherchant où accrocher ces deux éléments, j'ai trouvé qu'ils pouvaient
+   s'appuyer sur de l'état déjà fiable et déjà là, sans rien inventer :
+   - "EN DIRECT" : posé dans `#persistentRoomCode`, déjà correctement
+     positionné/animé dans `body.game-active` — pas de nouvel élément
+     flottant, donc aucun risque de rouvrir la bataille de z-index déjà
+     documentée dans le CSS existant.
+   - Points de progression : `renderHostProgressDots(index, total)` est
+     appelée au MÊME endroit que `hostQuestionLabel` (déjà fiable, affiché
+     en texte depuis longtemps) — je n'ai ajouté aucune nouvelle source de
+     vérité, juste une deuxième façon de montrer la même donnée.
+   Vérifié en Browser pane en appelant `renderHostProgressDots(2, 7)` et en
+   affichant `#persistentRoomCode` à la main (pas de vraie partie en cours
+   dans ce navigateur de test) — rendu correct (7 points, celui en cours en
+   accent, point "EN DIRECT" animé). **Pas vérifié en conditions réelles
+   de jeu (vraie question qui avance, plusieurs joueurs)** — à confirmer à
+   ton retour.
 
 ## Fichiers concernés
 - `client/public/css/style.css`
@@ -129,9 +146,11 @@ l'utilisateur._
 - [ ] `login.html` : vérifié conforme via héritage global (cartes/boutons
   déjà sur les bons tokens), pas d'écart identifié qui justifie une
   retouche dédiée
-- [ ] `index.html` (bannière "EN DIRECT", points de progression, fond
-  spotlight dédié) : **volontairement pas construit** — voir décision 8
-  ci-dessous, ce n'est pas un oubli.
+- [x] `index.html` : bannière "EN DIRECT" (pastille + point pulsant, posée
+  DANS `#persistentRoomCode` déjà existant plutôt qu'un nouvel élément
+  flottant) + points de progression (`#hostProgressDots`, dans `#hostPanel`)
+  — voir décision 9, j'ai finalement trouvé un moyen sûr de les construire
+  sans deviner de nouvel état.
 
 ## Checks effectués
 - `node -e` équilibre des accolades CSS après chaque lot de modifs (dernier
@@ -148,9 +167,14 @@ l'utilisateur._
   pas testé avec un compte réel dans cette session.
 - Thème clair sur `result.html`, `profile.html`, `login.html`, `editor.html`
   — seuls `select.html` et la navbar ont été vérifiés en clair.
-- Repasser sur `index.html` en jeu réel (hôte + joueur) pour confirmer
-  qu'aucune régression n'est venue des changements globaux (boutons,
-  fond, `.icon-opt`).
+- **Priorité** : lancer une vraie partie en tant qu'hôte et vérifier que
+  `#hostProgressDots` avance bien question après question, et que "EN
+  DIRECT" s'affiche correctement dès le lancement — vérifié uniquement à
+  la main (appel direct de la fonction), jamais via le vrai flux de jeu.
+- QCM dans l'éditeur : cocher/décocher "bonne réponse" et vérifier le
+  liseré vert (`.option-row:has(checkbox:checked)`) — `:has()` est récent
+  (Chrome 105+/Safari 15.4+/Firefox 121+), à vérifier sur le navigateur
+  réellement utilisé si jamais un doute.
 
 ## Risques restants
 - Voir les décisions 1, 3, 5, 6, 7 ci-dessus : plusieurs renoncements

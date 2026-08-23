@@ -2729,6 +2729,7 @@ const resetUI = () => {
   roomInput.value = ''
   
   document.body.classList.remove('game-active', 'is-host', 'irl-player-mode')
+  if (hostProgressDotsEl) hostProgressDotsEl.innerHTML = ''
   gameMode = 'irl'
   irlMenuDropdown?.classList.remove('is-open')
   // Hide all dynamic panels — 'main' (toute la zone de jeu : question,
@@ -3777,6 +3778,30 @@ socket.on('lobby:readyStatus', ({ allReady }) => {
 
 let hostQuestionLabel = ''
 
+// Points de progression du panneau hôte (chantier "plateau chaleureux",
+// suite) : reprend exactement les mêmes valeurs (index courant, nombre
+// total de questions) que hostQuestionLabel ci-dessus — pas de nouvel état
+// à tenir à jour, juste un rendu visuel en plus du texte "Question X/Y"
+// déjà affiché dans #loadedInfo. Défensif (élément peut être absent) et ne
+// fait rien si le nombre de questions n'a pas de sens (évite de générer
+// des centaines de points si jamais appelé avec des valeurs incohérentes).
+const hostProgressDotsEl = document.getElementById('hostProgressDots')
+const renderHostProgressDots = (currentIndex, total) => {
+  if (!hostProgressDotsEl) return
+  if (!Number.isFinite(total) || total <= 0 || total > 200) {
+    hostProgressDotsEl.innerHTML = ''
+    return
+  }
+  const frag = document.createDocumentFragment()
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('span')
+    dot.className = 'dot' + (i < currentIndex ? ' done' : i === currentIndex ? ' current' : '')
+    frag.appendChild(dot)
+  }
+  hostProgressDotsEl.innerHTML = ''
+  hostProgressDotsEl.appendChild(frag)
+}
+
 // Upload générique d'une image vers /api/room-image/:code (voir server/index.js) :
 // utilisé aussi bien pour l'image cliquable du type "image" que pour
 // l'illustration optionnelle des autres types. Retourne l'URL à placer dans
@@ -3872,6 +3897,7 @@ const emitQuestion = (index) => {
   // de réponses reçu via answer:progress.
   hostQuestionLabel = `Question ${index + 1}/${loadedQuiz.questions.length}`
   if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · en attente des réponses…`
+  renderHostProgressDots(index, loadedQuiz.questions.length)
   const correctOrder = Array.isArray(q.correct) ? q.correct : []
   // "association" : un seul mélange d'index, réutilisé pour dériver à la
   // fois pairsB (textes mélangés) et pairsBKeys (index d'origine de chaque
