@@ -2500,8 +2500,21 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    de centrage déjà présente : marche donc dès un écran de laptop courant
    (1024px), pas seulement sur un très grand écran où la marge naturelle
    autour de .container (max-width 1100px, centré) suffirait par hasard à
-   loger le panneau sans y toucher. */
-@media (min-width: 1024px) {
+   loger le panneau sans y toucher.
+   Borné à max-width:1099.98px (tâche 006) : ce panneau fixe + décalage de
+   .container est l'ANCIENNE solution à ce même besoin ("place centrale
+   libre pour la présentation") — la tâche 005 l'a remplacé par une vraie
+   grille CSS à 3 colonnes (dock/carte/dock, + classement permanent) à
+   partir de 1100px. Les deux system  es ciblaient le même sélecteur
+   (body.is-host.game-active #hostPanel / .container) : sans cette borne,
+   #hostPanel repassait en position:fixed PAR-DESSUS la grille (qui l'y
+   place déjà via grid-column), et .container gardait un margin-left:280px
+   qui cassait le centrage de la grille — retour utilisateur avec capture
+   d'écran ("la tuile centrale devrait être vraiment au centre"). Gardée
+   intacte dans cette fourchette étroite (1024-1099px) plutôt que
+   supprimée : comportement connu, déjà réglé, pour cette poignée de
+   largeurs où la grille ne s'active pas encore. */
+@media (min-width: 1024px) and (max-width: 1099.98px) {
   body.is-host.game-active #hostPanel {
     position: fixed;
     left: 20px;
@@ -2888,13 +2901,36 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    tous les 3 enfants DIRECTS de .container (voir index.html) : la grille
    les place par id, aucun déplacement de nœud DOM nécessaire. */
 @media (min-width: 1100px) {
+  /* Navbar masquée (tâche 006, retour utilisateur : "ne devrait pas être
+     visible quand on lance la présentation") — remplacée visuellement par
+     #presentationHeader (logo + code de salle + joueurs, voir plus bas et
+     index.html), affiché uniquement dans ce même contexte. */
+  body.is-host.game-active .navbar { display: none; }
   body.is-host.game-active .container {
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr) 260px;
     align-items: start;
+    /* Centre la rangée (dock/carte/dock) verticalement dans l'espace
+       laissé par la navbar masquée ci-dessus (retour utilisateur : "la
+       tuile centrale devrait être vraiment au centre") — align-content, pas
+       align-items : c'est la position de la rangée elle-même dans la
+       hauteur du conteneur qui doit centrer, pas juste chaque cellule dans
+       sa propre rangée (une seule rangée ici de toute façon). */
+    align-content: center;
+    min-height: calc(100vh - 170px);
     gap: 20px;
   }
   body.is-host.game-active .container #hostPanel {
+    /* grid-column/-row explicites sur les 3 (voir #stageWrap/
+       #liveClassementDock plus bas) : sans ça, le placement automatique de
+       la grille dépend de l'ORDRE et de la VISIBILITÉ des autres enfants de
+       .container (joinCard, recapSidebar...) — repéré en testant l'état
+       forcé à la main (sans repasser par le vrai flux JS qui les masque),
+       où #hostPanel finissait dans la colonne du centre à la place de
+       #stageWrap. Explicite = déterministe, peu importe ce qui traîne
+       encore visible à côté. */
+    grid-column: 1;
+    grid-row: 1;
     margin-top: 0;
     display: flex;
     flex-direction: column;
@@ -2910,6 +2946,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   }
   body.is-host.game-active .container #stageWrap {
     grid-column: 2;
+    grid-row: 1;
     position: relative;
     /* Carte centrale de la maquette : #main (timer/question/options, déjà
        stylés indépendamment ailleurs dans ce fichier) posé À L'INTÉRIEUR,
@@ -2923,6 +2960,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   }
   body.is-host.game-active .container #liveClassementDock {
     grid-column: 3;
+    grid-row: 1;
     /* #recapSidebarToggle (bouton "Récap") est position:fixed; top:100px;
        right:0 — pensé pour l'ancien layout où rien n'occupait ce coin.
        Se retrouve maintenant pile sur le coin haut-droit du dock classement
@@ -2945,9 +2983,47 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     left: 50%;
     transform: translateX(-50%);
   }
+  body.is-host.game-active .presentation-header {
+    display: flex;
+  }
 }
 
 .border-danger-soft { border-color: rgba(255,59,92,0.2); }
+
+/* En-tête "présentation" (tâche 006) — remplace la navbar une fois masquée
+   ci-dessus, uniquement en layout régie hôte. Masqué par défaut (au lieu
+   d'un simple d-none côté HTML) : même raison que .live-classement-dock
+   plus bas — piloté entièrement par la media query, pas de risque qu'une
+   classe .d-none (!important) gagne sur elle. */
+.presentation-header {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 20px 0;
+}
+.presentation-logo { height: 44px; width: auto; }
+.presentation-room-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(5,5,12,0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--color-border);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+/* Réutilise .host-player-strip (voir renderHostPlayerStrip dans index.js,
+   même liste rendue aux 2 endroits) — juste des avatars plus petits ici,
+   pas de compteur texte (déjà "8 joueurs" en toutes lettres à côté, un 2e
+   texte ferait doublon dans une pastille aussi étroite). */
+.presentation-player-strip.host-player-strip { gap: 0; margin-left: 4px; }
+.presentation-player-strip .host-player-avatar { width: 22px; height: 22px; font-size: 9px; }
+.presentation-player-strip .host-player-strip-count { margin-left: 8px; }
 
 /* Classement permanent (tâche 005) — mini version de .leader-row/-rank/
    -name/-score (voir plus bas dans ce fichier), pensée pour un dock étroit

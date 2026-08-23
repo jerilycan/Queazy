@@ -2338,6 +2338,14 @@ const leaderboard = document.getElementById('leaderboard')
 // unique renderLeaderboard() que le classement plein écran ci-dessus.
 const liveClassementDock = document.getElementById('liveClassementDock')
 const liveClassementList = document.getElementById('liveClassementList')
+// Code de salle affiché à 2 endroits désormais (#displayRoomCode dans
+// #roomInfo pré-partie, #presentationRoomCode dans le nouvel en-tête
+// régie — tâche 006) : les deux portent la classe partagée
+// .display-room-code, mis à jour ensemble ici plutôt que dupliqué à chaque
+// appelant existant.
+const setDisplayRoomCode = (code) => {
+  document.querySelectorAll('.display-room-code').forEach(el => { el.textContent = code })
+}
 const navCreate = document.getElementById('navCreate')
 const navJoin = document.getElementById('navJoin')
 const navMyQuizzes = document.getElementById('navMyQuizzes')
@@ -2857,10 +2865,7 @@ socket.on('room:created', ({ roomCode, serverUrl, hostToken }) => {
   qrDiv.innerHTML = ''
   const persistentCode = document.getElementById('persistentRoomCode')
   if (persistentCode) persistentCode.style.display = 'block'
-  const displayRoomCode = document.getElementById('displayRoomCode');
-  if (displayRoomCode) {
-    displayRoomCode.textContent = roomCode;
-  }
+  setDisplayRoomCode(roomCode);
   const base = serverUrl || baseUrl
   const joinUrl = `${base}/?room=${roomCode}`
   new QRCode(qrDiv, joinUrl)
@@ -3073,10 +3078,7 @@ socket.on('player:token', ({ token }) => {
     persistentCode.classList.remove('d-none')
     persistentCode.style.display = 'block'
   }
-  const displayRoomCode = document.getElementById('displayRoomCode')
-  if (displayRoomCode && code) {
-    displayRoomCode.textContent = code
-  }
+  if (code) setDisplayRoomCode(code)
 })
 
 // Nécessaire pour se "rattacher" automatiquement à la même place après une
@@ -3371,43 +3373,48 @@ if (irlLeaveBtn) {
   }
 }
 
-// Pile d'avatars dans le panneau hôte (voir #hostPlayerStrip côté
-// index.html) — même liste que le reste du salon (arr), juste réduite à
+// Pile d'avatars — même liste que le reste du salon (arr), juste réduite à
 // quelques avatars qui se chevauchent + un badge "+N" pour le reste, comme
 // sur la maquette "plateau chaleureux". Appelée à chaque lobby:list, y
 // compris en pleine partie (reconnexions, exclusions...), pas seulement
 // avant le lancement.
+// Depuis la tâche 006 (en-tête régie), affichée à 2 endroits : #hostPlayerStrip
+// (panneau hôte, historique) ET #presentationPlayerStrip (nouvel en-tête,
+// voir index.html) — les deux partagent la classe .host-player-strip,
+// remplie identiquement plutôt que dupliquer cette fonction.
 const HOST_PLAYER_STRIP_MAX = 5
 const renderHostPlayerStrip = (arr) => {
-  const strip = document.getElementById('hostPlayerStrip')
-  if (!strip) return
+  const strips = document.querySelectorAll('.host-player-strip')
+  if (!strips.length) return
   const players = (arr || []).filter(p => !p.isHost)
-  strip.innerHTML = ''
-  if (players.length === 0) { strip.classList.add('d-none'); return }
-  strip.classList.remove('d-none')
-  const shown = players.slice(0, HOST_PLAYER_STRIP_MAX)
-  shown.forEach(p => {
-    const av = document.createElement('div')
-    av.className = 'host-player-avatar'
-    av.title = p.name || 'Joueur'
-    if (isAvatarUrl(p.avatar)) {
-      av.style.backgroundImage = `url(${p.avatar})`
-    } else {
-      av.textContent = (p.avatar && p.avatar.trim()) || (p.name || '?').slice(0, 1).toUpperCase()
+  strips.forEach(strip => {
+    strip.innerHTML = ''
+    if (players.length === 0) { strip.classList.add('d-none'); return }
+    strip.classList.remove('d-none')
+    const shown = players.slice(0, HOST_PLAYER_STRIP_MAX)
+    shown.forEach(p => {
+      const av = document.createElement('div')
+      av.className = 'host-player-avatar'
+      av.title = p.name || 'Joueur'
+      if (isAvatarUrl(p.avatar)) {
+        av.style.backgroundImage = `url(${p.avatar})`
+      } else {
+        av.textContent = (p.avatar && p.avatar.trim()) || (p.name || '?').slice(0, 1).toUpperCase()
+      }
+      strip.appendChild(av)
+    })
+    const rest = players.length - shown.length
+    if (rest > 0) {
+      const more = document.createElement('div')
+      more.className = 'host-player-avatar host-player-avatar-more'
+      more.textContent = `+${rest}`
+      strip.appendChild(more)
     }
-    strip.appendChild(av)
+    const count = document.createElement('span')
+    count.className = 'host-player-strip-count'
+    count.textContent = `${players.length} joueur${players.length > 1 ? 's' : ''}`
+    strip.appendChild(count)
   })
-  const rest = players.length - shown.length
-  if (rest > 0) {
-    const more = document.createElement('div')
-    more.className = 'host-player-avatar host-player-avatar-more'
-    more.textContent = `+${rest}`
-    strip.appendChild(more)
-  }
-  const count = document.createElement('span')
-  count.className = 'host-player-strip-count'
-  count.textContent = `${players.length} joueur${players.length > 1 ? 's' : ''}`
-  strip.appendChild(count)
 }
 
 const renderLobbyGrid = (arr) => {

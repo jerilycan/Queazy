@@ -199,6 +199,25 @@
       <button type="button" id="irlLeaveBtn" class="irl-menu-item">🚪 Quitter le salon</button>
     </div>
 
+    <!-- En-tête "présentation" (tâche 006, retour utilisateur avec capture
+         d'écran) : remplace visuellement la navbar (masquée, voir
+         body.is-host.game-active .navbar dans style.css) une fois la
+         partie lancée en layout régie — logo + code de salle + avatars des
+         joueurs, comme sur la maquette de référence. Logo en <img> (asset
+         déjà existant /icons/queazy-wordmark.png) plutôt qu'une 2e copie du
+         SVG de la navbar : dupliquer ce SVG (dégradés avec id répétés,
+         référencés en interne par xlink:href) aurait risqué des id en
+         double dans le document, comportement non garanti par la spec pour
+         les références SVG. -->
+    <header id="presentationHeader" class="presentation-header">
+      <img src="/icons/queazy-wordmark.png" alt="QuEazy" class="presentation-logo" />
+      <div class="presentation-room-pill">
+        <span>Salle</span>
+        <span id="presentationRoomCode" class="display-room-code font-bold text-accent"></span>
+        <span class="host-player-strip presentation-player-strip"></span>
+      </div>
+    </header>
+
     <div class="container mt-20">
 
       <!-- Salon d'attente -->
