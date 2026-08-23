@@ -481,6 +481,35 @@ sa boîte). Revérifié à 390px (navigation directe) : bouton 48px/ligne,
 fond du timer toujours sombre (nécessaire là), titre quiz caché — mobile
 intact.
 
+## Suite — capture d'écran (11e passe) : la VRAIE cause du code salle vide
+Capture d'écran fournie (panneau hôte en conditions réelles) : le code de
+salle est toujours vide ("EN DIRECT · Code salle:" sans rien après),
+malgré le correctif de la 6e passe.
+
+**Vraie cause trouvée** : ce correctif (6e passe) avait généralisé
+`setDisplayRoomCode()` pour cibler `document.querySelectorAll('.display-
+room-code')` au lieu d'un seul `getElementById('displayRoomCode')` — mais
+la classe `display-room-code` n'avait jamais été ajoutée à l'élément
+`#displayRoomCode` lui-même dans `index.html` ! Le sélecteur ne matchait
+donc RIEN, et `setDisplayRoomCode()` ne mettait plus jamais aucun texte à
+jour, nulle part, depuis cette généralisation — la classe `d-none`
+retirée à la 9e passe rendait la pastille bien VISIBLE, mais vide, ce qui
+correspond exactement à la capture. Corrigé en ajoutant la classe
+manquante sur `#displayRoomCode`.
+
+Vérifié en Browser pane : `setDisplayRoomCode('ABCD12')` puis lecture de
+`#displayRoomCode.textContent` → `"ABCD12"`, confirmé.
+
+**Bouton "Suivant" sans icône "shine" sur la capture** : le code source
+contient bien le nouveau texte "Question suivante" + `<span
+class="btn-shine-icon">✨</span>` séparé (vérifié dans `index.html`) — la
+capture montrant encore l'ancien "Suivant" plat est très probablement un
+cache navigateur non rafraîchi (gotcha déjà rencontré plusieurs fois cette
+session, cache HTTP `max-age=120` sur les assets statiques) plutôt qu'une
+régression. **Pas de changement de code fait sur ce point** — à confirmer
+après un rechargement forcé (ou un nouvel onglet) si l'icône manque
+toujours.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.
