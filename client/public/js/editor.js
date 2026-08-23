@@ -98,6 +98,7 @@ const addQuestionBtn = document.getElementById('addQuestion')
 const questionListEl = document.getElementById('questionList')
 const questionDetailEl = document.getElementById('questionDetail')
 const questionEmptyStateEl = document.getElementById('questionEmptyState')
+const typePickerCancelBtn = document.getElementById('typePickerCancelBtn')
 const typePickerGridEl = document.getElementById('typePickerGrid')
 const toastsEl = document.getElementById('toasts')
 
@@ -589,8 +590,9 @@ const QTYPE_COLOR = {
 // "Texte libre" vide par défaut) — #questionEmptyState remplace
 // #questionDetail tant que `questions` est vide. Une fois la 1ère question
 // ajoutée, deleteQuestionAt() empêche déjà de revenir à 0 (règle existante
-// "un quiz doit avoir au moins une question", inchangée) : cet écran ne
-// réapparaît donc plus après coup, uniquement au tout début.
+// "un quiz doit avoir au moins une question", inchangée), donc cette
+// fonction seule ne rouvre plus jamais l'écran après coup — voir
+// openTypePicker() ci-dessous pour le cas "+" avec des questions existantes.
 const updateEmptyState = () => {
   if (!questionEmptyStateEl || !questionDetailEl) return
   const isEmpty = questions.length === 0
@@ -602,13 +604,32 @@ const updateEmptyState = () => {
   // couvrait jusqu'ici.
   if (isEmpty && questionSaveBar) questionSaveBar.classList.add('d-none')
   qIndexLabel.textContent = isEmpty ? 'Aucune question' : `Question ${activeIndex + 1} / ${questions.length}`
+  // "Annuler" n'a de sens que pendant un openTypePicker() ouvert depuis le
+  // "+" (voir plus bas) — dans les deux cas gérés ici (écran vide au tout
+  // début, ou retour à l'éditeur normal), il n'y a rien à annuler.
+  if (typePickerCancelBtn) typePickerCancelBtn.classList.add('d-none')
+}
+
+// Rouvre l'écran de choix de type pour AJOUTER une question, que le quiz en
+// ait déjà ou non (cas du "+" de la sidebar, voir addQuestionBtn.onclick plus
+// bas) — contrairement à updateEmptyState() ci-dessus qui ne montre cet écran
+// que quand `questions` est réellement vide. "Annuler" n'apparaît que s'il y
+// a une question active vers laquelle revenir.
+const openTypePicker = () => {
+  renderTypePicker()
+  if (!questionEmptyStateEl || !questionDetailEl) return
+  questionEmptyStateEl.classList.remove('d-none')
+  questionDetailEl.classList.add('d-none')
+  if (questionSaveBar) questionSaveBar.classList.add('d-none')
+  qIndexLabel.textContent = 'Choix du type'
+  if (typePickerCancelBtn) typePickerCancelBtn.classList.toggle('d-none', questions.length === 0)
 }
 
 // Grille de choix de type (voir #typePickerGrid dans editor.html) — générée
 // depuis les <option> de #qType, seule source de vérité pour la liste des
 // 13 types et leurs libellés (même principe que updateSidebar plus bas pour
-// la sidebar). Choisir un type ici ajoute directement la 1ère question DANS
-// ce type plutôt que de forcer un passage par le type "Texte libre" par
+// la sidebar). Choisir un type ici ajoute directement la nouvelle question
+// DANS ce type plutôt que de forcer un passage par le type "Texte libre" par
 // défaut (createDefaultQuestion) puis un changement de type manuel.
 const renderTypePicker = () => {
   if (!typePickerGridEl || typePickerGridEl.childElementCount) return
@@ -633,15 +654,15 @@ const renderTypePicker = () => {
 
     tile.appendChild(icon)
     tile.appendChild(label)
-    tile.onclick = () => addFirstQuestion(type)
-    tile.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addFirstQuestion(type) } }
+    tile.onclick = () => addQuestionOfType(type)
+    tile.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addQuestionOfType(type) } }
     typePickerGridEl.appendChild(tile)
   })
 }
 
-const addFirstQuestion = (type) => {
+const addQuestionOfType = (type) => {
   questions.push({ ...createDefaultQuestion(), type })
-  selectQuestion(0)
+  selectQuestion(questions.length - 1)
 }
 
 const updateSidebar = () => {
@@ -2937,9 +2958,15 @@ if (qExplanation) {
   qExplanation.oninput = () => { questions[activeIndex].explanation = qExplanation.value }
 }
 
+// Le "+" rouvre désormais le choix du type (nouvelle DA, sur demande
+// explicite) au lieu d'ajouter directement un "Texte libre" par défaut —
+// même écran qu'au tout début du quiz (voir openTypePicker/addQuestionOfType
+// ci-dessus). "Annuler" ramène à la question qui était active.
 addQuestionBtn.onclick = () => {
-  questions.push(createDefaultQuestion())
-  selectQuestion(questions.length - 1)
+  openTypePicker()
+}
+if (typePickerCancelBtn) {
+  typePickerCancelBtn.onclick = () => selectQuestion(activeIndex)
 }
 
 // Extrait de l'ancien deleteQuestionBtn.onclick pour être appelable aussi
@@ -3742,7 +3769,7 @@ const resetToNew = () => {
   currentId = null
   // Démarre à 0 question (nouvelle DA, tâche 003, décision validée) au lieu
   // d'une question "Texte libre" vide par défaut — voir #questionEmptyState/
-  // renderTypePicker/addFirstQuestion. selectQuestion(0) n'a plus rien à
+  // renderTypePicker/addQuestionOfType. selectQuestion(0) n'a plus rien à
   // sélectionner ici (bail out déjà géré, voir plus haut) : updateEmptyState
   // s'en charge à la place.
   questions = []

@@ -110,5 +110,16 @@ rien à faire). Point d'attention sur l'item 5 : c'est un changement de
   Test et vérifier que la forme d'onde apparaît + que la portion en accent
   suit bien les champs Début/Durée.
 
+## Suivi post-clôture (demande explicite hors des 8 décisions initiales)
+- Le "+" de la sidebar (`#addQuestion`) rouvre maintenant l'écran de choix du
+  type (`#questionEmptyState`/`#typePickerGrid`) pour CHAQUE nouvelle
+  question, au lieu d'ajouter directement un "Texte libre" par défaut — même
+  écran qu'au tout début d'un quiz vide (item 5 ci-dessus), généralisé via
+  `openTypePicker()`/`addQuestionOfType()` dans `editor.js`. Un bouton
+  "Annuler" (`#typePickerCancelBtn`, visible seulement s'il y a une question
+  vers laquelle revenir) ramène à la question active sans rien ajouter.
+  **Pas vérifié en conditions réelles**, même contrainte que le reste de ce
+  fichier (`editor.html` exige une vraie session).
+
 ## Statut
 `en review`

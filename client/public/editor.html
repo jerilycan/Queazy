@@ -225,18 +225,22 @@
           </div>
         </div>
 
-        <!-- Écran "aucune question" (nouvelle DA, tâche 003, décision
-             validée) : un nouveau quiz démarre maintenant à 0 question — cet
-             écran remplace #questionDetail tant qu'aucune question n'existe
-             encore. Choisir un type ici équivaut à cliquer le "+" de la
-             sidebar puis changer le type (voir editor.js renderTypePicker/
-             addFirstQuestion) : mêmes 13 types que #qType, générés depuis
-             lui pour rester la seule source de vérité de leurs libellés. -->
+        <!-- Écran "choix du type" (nouvelle DA, tâche 003, décision validée) :
+             un nouveau quiz démarre à 0 question et affiche cet écran à la
+             place de #questionDetail tant qu'aucune question n'existe encore
+             — et le "+" de la sidebar (#addQuestion) rouvre ce même écran
+             pour CHAQUE nouvelle question, plutôt que d'ajouter directement
+             un "Texte libre" par défaut (voir editor.js openTypePicker/
+             addQuestionOfType). #typePickerGridCancelBtn ne sert que dans ce
+             second cas (rien à annuler tant que le quiz est vide). Mêmes 13
+             types que #qType, générés depuis lui pour rester la seule source
+             de vérité de leurs libellés. -->
         <div id="questionEmptyState" class="question-detail question-empty-state d-none">
           <div class="question-empty-icon">❓</div>
           <h3>Choisis un type de réponse</h3>
           <p class="text-muted">13 mécaniques disponibles — QCM, Vrai/Faux, Blind Test, Timeline, Petit Bac… Le formulaire s'adapte automatiquement une fois choisi.</p>
           <div id="typePickerGrid" class="type-picker-grid"><!-- Rempli par JS --></div>
+          <button type="button" id="typePickerCancelBtn" class="btn btn-nav-secondary font-13 d-none">Annuler</button>
         </div>
 
         <!-- Detail: Éditeur de la question sélectionnée -->
