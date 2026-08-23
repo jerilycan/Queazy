@@ -2853,6 +2853,10 @@ const loadQuizById = (id) => {
       const draftNote = draftCount > 0 ? ` (${draftCount} brouillon${draftCount > 1 ? 's' : ''} ignoré${draftCount > 1 ? 's' : ''})` : ''
       loadedInfo.textContent = 'Quiz chargé: ' + (loadedQuiz.title || id) + draftNote
       log('Quiz chargé: ' + (loadedQuiz.title || id) + draftNote)
+      // #hostQuizTitle (retour utilisateur, panneau régie) : simple reflet
+      // de loadedQuiz.title, pas de nouvel état.
+      const hostQuizTitleEl = document.getElementById('hostQuizTitle')
+      if (hostQuizTitleEl) hostQuizTitleEl.textContent = loadedQuiz.title || ''
     })
     .catch(() => {})
 }
@@ -4282,6 +4286,11 @@ startQuizBtn.onclick = () => {
 
 socket.on('question:show', payload => {
   inActiveGame = true
+  // Renfort (retour utilisateur : "il n'est plus visible") — déjà posé
+  // dans emitQuestion() (avant l'aller-retour serveur), reposé ICI au
+  // signal canonique "une question est affichée" reçu par l'hôte, pour ne
+  // plus dépendre uniquement du bon déroulé de la promesse emitQuestion.
+  if (isHost) updateGameProgressInfo(lastLobbyArr.filter(p => !p.isHost).length, 0)
   // Bouton du panneau récap : re-synchronisé à CHAQUE question, pas
   // seulement au clic sur "LANCER" (voir startQuizBtn.onclick) — sinon un
   // hôte qui rechargeait la page ou se reconnectait en pleine partie (courant

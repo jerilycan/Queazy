@@ -373,6 +373,12 @@
             <span class="host-panel-icon">🎤</span>
             <h3 class="font-18">Contrôles de l'hôte</h3>
           </div>
+          <!-- Nom du quiz en cours (retour utilisateur) — posé au chargement
+               du quiz (voir loadedQuiz plus bas dans index.js), jamais
+               recalculé nulle part ailleurs : simple affichage direct de
+               loadedQuiz.title. Caché par défaut (hors régie desktop, pas
+               de place fiable dans le bandeau horizontal d'origine). -->
+          <div id="hostQuizTitle" class="host-quiz-title"></div>
           <!-- Pile d'avatars des joueurs présents (chantier "plateau
                chaleureux", branche dev) : reprend la donnée déjà tenue à
                jour par lastLobbyArr (voir index.js renderLobbyGrid,
@@ -402,7 +408,16 @@
         <div class="d-flex gap-sm">
           <button id="selectQuizBtn" class="btn h-48 px-32">Sélectionner un Quiz</button>
           <button id="startQuiz" class="btn btn-primary h-48 px-32">LANCER</button>
-          <button id="nextQuestion" class="btn btn-primary h-48 px-32 d-none">Question suivante ✨</button>
+          <!-- "✨" isolé dans son propre <span> (retour utilisateur : une
+               petite icône "shine" à part, pas juste un emoji collé en fin
+               de texte) — permet de l'empiler SOUS le libellé en régie
+               desktop (voir style.css) sans toucher au texte affiché
+               partout ailleurs (mobile, desktop 1024-1099px), où ce bouton
+               reste une simple ligne "Question suivante ✨". -->
+          <button id="nextQuestion" class="btn btn-primary h-48 px-32 d-none">
+            <span class="btn-label">Question suivante</span>
+            <span class="btn-shine-icon" aria-hidden="true">✨</span>
+          </button>
         </div>
         <!-- Ambiance de la salle (sur place / à distance) — reprend
              purement l'affichage de `gameMode`, déjà suivi et diffusé par

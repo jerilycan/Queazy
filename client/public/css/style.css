@@ -2861,6 +2861,16 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    petit badge rond en dégradé accent, même langage que les icônes de type
    de question (.question-type-badge-icon) et de la maquette validée. */
 .host-panel-eyebrow { margin-bottom: 2px; }
+/* Nom du quiz en cours, sous "Contrôles de l'hôte" (retour utilisateur) —
+   affiché uniquement en régie desktop (voir #hostQuizTitle { order } dans
+   la media query plus bas) : pas de place fiable dans le bandeau
+   horizontal d'origine. */
+.host-quiz-title {
+  display: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
 .host-panel-icon {
   width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -3063,6 +3073,11 @@ body.game-active .persistent-code {
     display: contents;
   }
   body.is-host.game-active .container #hostPanel .host-panel-eyebrow { order: 1; }
+  /* Nom du quiz en cours (retour utilisateur), juste sous le titre. */
+  body.is-host.game-active .container #hostPanel #hostQuizTitle {
+    order: 2;
+    display: block;
+  }
   /* Pile d'avatars + texte "Question X/Y..." : redondants une fois la
      barre de progression + le compteur #gameProgressInfo (coin haut-droit
      de l'écran, tâche 006) en place — masqués ici plutôt que dupliqués. */
@@ -3070,25 +3085,36 @@ body.game-active .persistent-code {
   body.is-host.game-active .container #hostPanel #loadedInfo {
     display: none;
   }
-  body.is-host.game-active .container #hostPanel #hostProgressBar { order: 2; }
+  body.is-host.game-active .container #hostPanel #hostProgressBar { order: 3; }
   /* Groupe boutons (Sélectionner/LANCER/Suivant) : en ligne par défaut
      (voir #hostPanel dans index.html, pensé pour l'ancien bandeau
      horizontal) — empilés pleine largeur et remontés juste sous la barre
      de progression, comme sur la maquette ("Question suivante" en gros
      bouton, tout en haut du panneau). */
   body.is-host.game-active .container #hostPanel > .d-flex.gap-sm {
-    order: 3;
+    order: 4;
     flex-direction: column;
   }
   body.is-host.game-active .container #hostPanel > .d-flex.gap-sm .btn {
     /* Bouton "plein" comme sur la maquette : plus haut/généreux que le
-       h-48 par défaut (pensé pour l'ancien bandeau horizontal étroit). */
-    height: 64px;
+       h-48 par défaut (pensé pour l'ancien bandeau horizontal étroit).
+       Encore agrandi (retour utilisateur) + empilé en colonne pour loger
+       l'icône "shine" SOUS le libellé (voir .btn-label/.btn-shine-icon
+       dans index.html — <span> à part, pas juste un emoji collé au texte,
+       justement pour pouvoir l'empiler ici sans toucher au texte affiché
+       ailleurs). */
+    height: 76px;
     font-size: 16px;
     border-radius: var(--radius-md);
+    flex-direction: column;
+    gap: 2px;
+  }
+  body.is-host.game-active .container #hostPanel > .d-flex.gap-sm .btn .btn-shine-icon {
+    font-size: 15px;
+    line-height: 1;
   }
   body.is-host.game-active .container #hostPanel .host-volume-row {
-    order: 4;
+    order: 5;
     /* Reprend la maquette : carte à part (fond + radius), pas une simple
        ligne de texte posée à même le panneau — libellé + pourcentage sur
        une ligne, la barre juste en dessous sur toute la largeur (voir
@@ -3110,7 +3136,7 @@ body.game-active .persistent-code {
     margin-left: auto;
   }
   body.is-host.game-active .container #hostPanel #hostAmbiancePill {
-    order: 5;
+    order: 6;
     /* Pousse la pastille tout en bas du panneau (retour utilisateur :
        "sur place / à distance en bas") — #hostPanel est déjà étiré à toute
        la hauteur de la rangée (voir plus haut), donc une marge auto avant
@@ -3193,36 +3219,60 @@ body.game-active .persistent-code {
     width: 220px;
     max-width: 220px;
     margin: 0;
+    /* Retour utilisateur : "enlève le noir autour chez le MJ" — .timer-
+       container (voir plus haut dans ce fichier) porte un fond sombre +
+       flou pensé pour rester lisible par-dessus le CONTENU DE LA QUESTION
+       qui défile (image, illustration...) en mobile/joueur. Ici, la
+       pastille flotte sur la carte régie elle-même (déjà un fond uni,
+       jamais de contenu qui défile derrière) — ce fond n'a plus lieu
+       d'être, seule la barre en dessous garde un habillage. */
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding: 0;
   }
   /* Retour utilisateur : "design des barres à revoir, prendre comme réf
      la nouvelle DA" — la pastille épaisse (28px, chiffre superposé dedans)
      ne collait plus au langage plus fin adopté pour .host-progress-track
      juste à côté (voir plus bas dans ce fichier). Passée en fine barre
-     (8px) avec le temps restant écrit À CÔTÉ plutôt que dessus, comme sur
-     la maquette de référence. #timerBar/#timerLabel restent les mêmes
-     éléments (voir index.js) : seule leur mise en page change ici.
-     Cette barre n'accueille pas le compte à rebours "urgent" en pulsation
-     (voir .timer-urgent plus haut) via une taille dédiée — le dégradé
-     rouge s'applique tel quel, juste plus fin. */
+     (8px), le temps restant écrit À CÔTÉ (retour utilisateur : vraiment à
+     l'extérieur de la barre, pas juste "en bout de piste" en partageant
+     encore son fond) — #timer-bar-wrapper est réduit à la largeur de la
+     seule barre (calc(100% - 34px)) et #timerLabel positionné en absolu
+     dans l'espace ainsi laissé libre, DANS les 220px de #timerContainer
+     (jamais au-delà, pour ne jamais dépendre du comportement d'overflow de
+     #stageWrap — un ancêtre). #timerBar/#timerLabel restent les mêmes
+     éléments (voir index.js) : seule leur mise en page change ici. Cette
+     barre n'accueille pas le compte à rebours "urgent" en pulsation (voir
+     .timer-urgent plus haut) via une taille dédiée — le dégradé rouge
+     s'applique tel quel, juste plus fin. */
   body.is-host.game-active .container #timerContainer .timer-bar-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    position: relative;
+    width: calc(100% - 34px);
     height: 8px;
     background: rgba(255,255,255,0.15);
     border: none;
     box-shadow: none;
     border-radius: 999px;
+    /* overflow:hidden en base (voir .timer-bar-wrapper plus haut, sert à
+       clipper le remplissage) clipperait aussi #timerLabel ci-dessous,
+       maintenant positionné en dehors de cette boîte (left:100%) — sans
+       incidence sur le remplissage : .timer-bar-fill a son propre
+       border-radius:999px (juste en dessous), il n'a plus besoin d'être
+       clippé par son parent pour paraître arrondi. */
+    overflow: visible;
   }
   body.is-host.game-active .container #timerContainer .timer-bar-fill {
-    flex: 1;
     height: 100%;
     border-radius: 999px;
   }
   body.is-host.game-active .container #timerContainer .timer-label {
-    position: static;
-    transform: none;
-    flex-shrink: 0;
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    right: auto;
+    transform: translateY(-50%);
+    margin-left: 10px;
     font-size: 13px;
     color: var(--color-text);
     text-shadow: none;

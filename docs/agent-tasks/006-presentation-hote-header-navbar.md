@@ -438,6 +438,49 @@ répondu", `(1,1)` → "1 joueur · 1 a répondu", `(8,1)` → "8 joueurs · 1 a
 répondu", `(8,5)` → "8 joueurs · 5 ont répondu" — les 4 cas d'accord
 corrects.
 
+## Suite — retour utilisateur (10e passe)
+"Il n'est plus visible [confirmé après coup : le compteur joueurs/
+réponses] / indique le nom du quiz en cours en dessous de 'Contrôles de
+l'hôte' / agrandit un peu le bouton suivant pour mettre une petite icône
+'shine' comme sur l'exemple fourni plus tôt / sur la timebar, enlève le
+noir autour chez le MJ / met le temps sur la droite, à l'extérieur, de la
+barre et non collé à l'intérieur."
+
+- [x] `#hostQuizTitle` : nouveau, sous "Contrôles de l'hôte", posé au
+  chargement du quiz (`loadedQuiz.title`) — masqué hors régie desktop.
+- [x] Bouton "Question suivante" : 76px (au lieu de 64px), `✨` sorti dans
+  son propre `<span class="btn-shine-icon">` (au lieu d'un emoji collé en
+  fin de texte) — empilé SOUS le libellé en régie (`flex-direction:
+  column`), texte inchangé partout ailleurs.
+- [x] `#timerContainer` : fond sombre + flou retirés en régie (`background:
+  none`) — pensés pour rester lisibles par-dessus le contenu de question
+  qui défile en mobile/joueur, plus nécessaires posés sur la carte régie
+  elle-même (fond uni, jamais de contenu qui défile derrière).
+- [x] `#timerLabel` : vraiment sorti de la barre (`position:absolute;
+  left:100%`, wrapper réduit à `calc(100% - 34px)` pour lui laisser une
+  vraie place, toujours DANS les 220px de `#timerContainer` — jamais
+  au-delà, pour ne jamais dépendre du comportement d'overflow de
+  `#stageWrap`, un ancêtre).
+
+**Bug du compteur joueurs/réponses** : cause exacte non retrouvée avec
+certitude en relisant le code (la fonction `updateGameProgressInfo()`
+fonctionne correctement testée isolément, comme aux passes précédentes) —
+renforcé en l'appelant aussi depuis `socket.on('question:show')` (signal
+canonique "une question est affichée" reçu par l'hôte), en plus de
+`emitQuestion()` (appelée avant l'aller-retour serveur) où elle était déjà
+posée, pour ne plus dépendre uniquement du bon déroulé de cette 2e
+promesse. **Pas garanti résolu** — à confirmer par l'utilisateur sur le
+prochain test réel, avec plus de détail si le problème persiste (à quel
+moment exact ça disparaît : dès la 1ère question, après un "Suivant",
+etc.).
+
+Vérifié en Browser pane (feuille fraîche) à 1600px : quiz title affiché
+avec le bon texte, bouton 76px/colonne/2 spans distincts, fond du timer
+transparent, label positionné 10px à droite du bord de la barre (hors de
+sa boîte). Revérifié à 390px (navigation directe) : bouton 48px/ligne,
+fond du timer toujours sombre (nécessaire là), titre quiz caché — mobile
+intact.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.
