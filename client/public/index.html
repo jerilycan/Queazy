@@ -210,7 +210,18 @@
          double dans le document, comportement non garanti par la spec pour
          les références SVG. -->
     <header id="presentationHeader" class="presentation-header">
-      <img src="/icons/queazy-wordmark.png" alt="QuEazy" class="presentation-logo" />
+      <!-- Rempli en JS (voir clonePresentationLogo() dans index.js) par un
+           clone du VRAI logo SVG de la navbar (.brand-logo-svg), pas une
+           image à part : les couleurs du logo viennent d'une règle CSS
+           globale sur la classe .brand-logo-svg (voir style.css, les
+           dégradés référencés par les calques cls-*), donc un clone garde
+           exactement le même rendu sans dupliquer la moindre couleur à la
+           main. Les id des dégradés SVG se retrouvent dupliqués dans le
+           document (navbar + ce clone) — sans conséquence : ce sont des
+           COPIES IDENTIQUES du même dégradé, la résolution "premier id
+           trouvé" du navigateur pointe alors vers un dégradé rigoureusement
+           identique des deux côtés. -->
+      <span id="presentationLogo" class="presentation-logo"></span>
       <div class="presentation-room-pill">
         <span>Salle</span>
         <span id="presentationRoomCode" class="display-room-code font-bold text-accent"></span>

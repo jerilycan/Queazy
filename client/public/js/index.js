@@ -263,6 +263,18 @@ window.addEventListener('DOMContentLoaded', () => {
       brand.classList.add('animate-logo')
     })
   }
+  // En-tête "présentation" (tâche 006) : clone le VRAI logo SVG de la
+  // navbar (.brand-logo-svg) plutôt qu'une image à part — ses couleurs
+  // viennent d'une règle CSS globale sur cette classe (voir style.css,
+  // .brand-logo-svg .cls-N { fill: url(#...) }), donc le clone rend
+  // exactement pareil sans dupliquer la moindre couleur à la main. Les id
+  // de dégradés dupliqués (navbar + ce clone) sont sans conséquence : ce
+  // sont des copies identiques du même dégradé.
+  const presentationLogoSlot = document.getElementById('presentationLogo')
+  const sourceLogo = document.querySelector('.brand-logo-svg')
+  if (presentationLogoSlot && sourceLogo) {
+    presentationLogoSlot.appendChild(sourceLogo.cloneNode(true))
+  }
 })
 
 ;(async () => {

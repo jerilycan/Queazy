@@ -103,6 +103,32 @@ rendant le placement déterministe quel que soit l'état des autres enfants.
 - Les deux thèmes (clair/sombre) sur le nouvel en-tête — pas retesté
   visuellement, tokens déjà theme-aware réutilisés.
 
+## Suite — retour capture d'écran (2e passe)
+"Beaucoup trop centré [...] La tuile gauche doit être collée à gauche, la
+droite, à droite. Le logo doit être le SVG, et le centre le plus grand
+possible."
+
+- [x] `.container` en régie : `max-width: none; width: 100%; padding: 0
+  24px;` au lieu du `max-width: 1100px` centré habituel — les 2 docks
+  touchent quasiment les bords, la carte centrale (`minmax(0,1fr)`)
+  récupère tout l'espace restant (476px → 934px+ sur un écran 1600px).
+  Colonnes des docks élargies à 280px (260px paraissait perdu à pleine
+  largeur d'écran).
+- [x] Logo : remplacé le PNG par un **clone du vrai SVG de la navbar**
+  (`.brand-logo-svg`, cloné en JS via `cloneNode(true)`) plutôt qu'une
+  image à part — ses couleurs viennent d'une règle CSS globale sur cette
+  classe (`.brand-logo-svg .cls-N { fill: url(#...) }`), donc le clone
+  rend à l'identique sans dupliquer la moindre couleur à la main. Les id
+  de dégradés SVG dupliqués (navbar + clone) sont sans conséquence : ce
+  sont des copies identiques du même dégradé — vérifié en Browser pane que
+  `fill` résout bien vers l'URL du dégradé sur le clone.
+
+Vérifié en Browser pane (onglet neuf, cache+SW vidés) à 1600px : logo
+cloné (hauteur 64px), dock gauche à 24px du bord, dock droit à ~34px de
+l'autre bord (24px de marge + scrollbar), carte centrale à 934px de large.
+Revérifié à 390px : navbar reste visible, en-tête caché, `.container`
+reprend son `max-width: 1100px` habituel — layout mobile intact.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.

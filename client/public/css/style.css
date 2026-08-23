@@ -2908,7 +2908,19 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   body.is-host.game-active .navbar { display: none; }
   body.is-host.game-active .container {
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr) 260px;
+    /* Retour utilisateur (capture d'écran) : "beaucoup trop centré, la
+       tuile gauche doit être collée à gauche, la droite à droite" — le
+       conteneur reprend TOUTE la largeur de l'écran (max-width normalement
+       1100px, annulé ici) avec juste une petite marge de respiration
+       (24px), au lieu de rester capé à 1100px centré comme le reste du
+       site. Colonnes légèrement élargies (280px) : à pleine largeur d'écran
+       les docks 260px paraissaient perdus, la carte centrale (minmax(0,1fr))
+       récupère de toute façon tout l'espace restant. */
+    max-width: none;
+    width: 100%;
+    padding: 0 24px;
+    margin: 0;
+    grid-template-columns: 280px minmax(0, 1fr) 280px;
     align-items: start;
     /* Centre la rangée (dock/carte/dock) verticalement dans l'espace
        laissé par la navbar masquée ci-dessus (retour utilisateur : "la
@@ -2918,7 +2930,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
        sa propre rangée (une seule rangée ici de toute façon). */
     align-content: center;
     min-height: calc(100vh - 170px);
-    gap: 20px;
+    gap: 24px;
   }
   body.is-host.game-active .container #hostPanel {
     /* grid-column/-row explicites sur les 3 (voir #stageWrap/
@@ -3002,7 +3014,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   gap: 10px;
   padding: 20px 20px 0;
 }
-.presentation-logo { height: 44px; width: auto; }
+/* .presentation-logo ne porte plus l'image directement (voir index.html/
+   index.js clonePresentationLogo) : contient un clone de .brand-logo-svg,
+   dont la taille de base (46px, voir plus haut dans ce fichier) est
+   pensée pour la navbar — agrandie ici, seule règle spécifique à ce
+   contexte. */
+.presentation-logo { display: flex; }
+.presentation-logo .brand-logo-svg { height: 64px; }
 .presentation-room-pill {
   display: flex;
   align-items: center;
