@@ -173,6 +173,76 @@ carte — coins haut-gauche/haut-droit confirmés. Revérifié à 390px : badge
 repasse en `fixed`, timer repasse en `sticky` pleine largeur (350px vs
 200px en régie) — layout mobile intact.
 
+## Suite — retour utilisateur (4e passe) + référence design canvas
+"Y'a du mieux [...] rajoute des marges pour le type de question + le
+timer. Recentre un peu la tuile centrale qui n'est pas sensée prendre
+toute la hauteur (mais garde une taille convenable quand même). Et répare
+le logo qui est chelou et pas animé." — avec, en cours de route, un renvoi
+explicite vers l'artboard "Texte libre" de la page "Écran hôte" du canvas
+de design pour calibrer l'espacement.
+
+**Cause du logo cassé, trouvée en creusant** : la 2e/3e passe clonait le
+SVG du logo (`.brand-logo-svg`) dans un nouvel en-tête, pour contourner la
+navbar entièrement masquée. Ce clone dupliquait tous les `id` de dégradés
+du SVG dans le document — et l'ORIGINAL (dans la navbar, `display:none`)
+passait toujours en premier dans l'ordre du DOM. Un `display:none` retire
+tout son sous-arbre du rendu, **y compris ses `<defs>`** : les dégradés de
+l'original ne sont plus des sources de peinture valides une fois cachés,
+et `fill:url(#id)` résout vers ce premier `id` (l'original mort) plutôt que
+vers la copie du clone. Explique le rendu cassé ET l'absence d'animation
+(l'écouteur `mouseenter` déclenchant `.animate-logo` est branché sur le
+VRAI `.brand`, jamais recopié sur le clone).
+
+**Corrigé en repensant l'approche** plutôt qu'en rafistolant le clone
+(renommer tous les id + réécrire toutes les références aurait aussi cassé
+les règles CSS globales `.brand-logo-svg .cls-N { fill: url(#…) }`, qui
+ciblent ces id en dur) :
+- [x] Navbar **gardée** (plus jamais masquée entièrement) — seuls ses
+  `.nav-group` (Créer/Rejoindre/Mes Quiz/profil) sont masqués en régie ;
+  passée en grille 3 colonnes (`1fr auto 1fr`) : logo à gauche (inchangé,
+  c'est le VRAI `.brand`, animation intacte), `#presentationRoomPill`
+  centrée, `#presentationPlayerInfo` à droite.
+- [x] `#presentationHeader`/`#presentationLogo` et le clone JS
+  entièrement retirés (plus qu'un seul `.brand-logo-svg` dans tout le
+  document, vérifié en Browser pane).
+- [x] `#presentationRoomPill`/`#presentationPlayerInfo` : mêmes éléments
+  qu'avant (code de salle + avatars), déplacés dans la navbar au lieu d'un
+  `<header>` séparé — toujours masqués par défaut/pilotés par la media
+  query régie (même raison anti-`.d-none` que le reste).
+- [x] `#questionTypeBadge`/`#timerContainer` : `top/left`/`top/right` 0 →
+  20px (marge par rapport au bord de la carte).
+- [x] `#stageWrap` : `align-self: center` (au lieu d'hériter du `stretch`
+  de `.container`) + `min-height: 380px` — les 2 docks restent étirés
+  pleine hauteur, seule la carte se dimensionne sur son contenu et se
+  centre verticalement dedans.
+
+**Bug trouvé et corrigé EN VÉRIFIANT** (pas supposé) : la règle qui masque
+`.presentation-room-pill` par défaut (`display:none`) était immédiatement
+suivie de l'ANCIENNE règle d'habillage du même sélecteur, qui posait encore
+`display:flex` en dur — même spécificité, elle regagnait par simple ordre
+de cascade et affichait la pastille même hors contexte régie. Corrigé en
+retirant `display` de la règle d'habillage (la visibilité vient uniquement
+de la règle groupée + de la media query).
+
+**Piège d'outillage rencontré en vérifiant** : les résultats du premier
+passage de vérification semblaient montrer le bug encore présent même
+après correction — en fait le cache HTTP du navigateur (`max-age=120s` sur
+les assets statiques) servait une version de `style.css` vieille de
+quelques dizaines de secondes malgré un onglet neuf et un paramètre anti-
+cache sur l'URL de la PAGE (qui ne change pas la clé de cache de la feuille
+de style elle-même). Contourné en remplaçant dynamiquement le `<link
+rel="stylesheet">` par un lien avec `?bust=timestamp` avant de mesurer —
+technique à réutiliser si un correctif semble "ne pas s'appliquer" alors
+que le fichier source est confirmé correct.
+
+Vérifié en Browser pane (feuille de style forcée fraîche) à 1600px : navbar
+en `grid`, `.nav-group` masqué, pastille centrée (795 vs 800 attendu),
+badge/timer à 21px du bord (marge 20px + arrondi), carte centrale à 380px
+de haut (`min-height`, PAS 730px comme les docks), docks toujours à 730px/
+682px (pleine hauteur). Un seul `.brand-logo-svg` dans le document. Revérifié
+à 390px : navbar repasse en `flex` normal, pastille/joueurs repassent en
+`none` — mobile intact.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.

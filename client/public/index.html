@@ -176,6 +176,25 @@
           </svg>
         </span>
       </a>
+      <!-- Régie hôte (tâche 006, dernière passe) : code de salle + joueurs,
+           affichés directement DANS la navbar (masquée seulement pour ses
+           .nav-group ci-dessous, pas en entier) plutôt que dans un en-tête
+           séparé — corrige au passage le logo "cassé" de la tentative
+           précédente : cet en-tête clonait le SVG du logo (id de dégradés
+           dupliqués, potentiellement mal résolus une fois l'original dans un
+           ancêtre display:none) et n'avait pas l'animation au survol
+           (branchée en JS sur LE vrai `.brand`, jamais sur un clone). Ici,
+           c'est le VRAI logo de la navbar, juste réorganisé visuellement —
+           aucune duplication, animation intacte. Cachés par défaut (aucune
+           classe d-none : pilotés entièrement par la media query régie,
+           voir style.css — même raison que les autres panneaux régie). -->
+      <div id="presentationRoomPill" class="presentation-room-pill">
+        <span>Salle</span>
+        <span id="presentationRoomCode" class="display-room-code font-bold text-accent"></span>
+      </div>
+      <div id="presentationPlayerInfo" class="presentation-player-info">
+        <span class="host-player-strip presentation-player-strip"></span>
+      </div>
       <div class="nav-group">
         <a href="/?create=true" id="navCreate" class="btn btn-nav-main">Créer</a>
         <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
@@ -198,36 +217,6 @@
     <div id="irlMenuDropdown" class="irl-menu-dropdown">
       <button type="button" id="irlLeaveBtn" class="irl-menu-item">🚪 Quitter le salon</button>
     </div>
-
-    <!-- En-tête "présentation" (tâche 006, retour utilisateur avec capture
-         d'écran) : remplace visuellement la navbar (masquée, voir
-         body.is-host.game-active .navbar dans style.css) une fois la
-         partie lancée en layout régie — logo + code de salle + avatars des
-         joueurs, comme sur la maquette de référence. Logo en <img> (asset
-         déjà existant /icons/queazy-wordmark.png) plutôt qu'une 2e copie du
-         SVG de la navbar : dupliquer ce SVG (dégradés avec id répétés,
-         référencés en interne par xlink:href) aurait risqué des id en
-         double dans le document, comportement non garanti par la spec pour
-         les références SVG. -->
-    <header id="presentationHeader" class="presentation-header">
-      <!-- Rempli en JS (voir clonePresentationLogo() dans index.js) par un
-           clone du VRAI logo SVG de la navbar (.brand-logo-svg), pas une
-           image à part : les couleurs du logo viennent d'une règle CSS
-           globale sur la classe .brand-logo-svg (voir style.css, les
-           dégradés référencés par les calques cls-*), donc un clone garde
-           exactement le même rendu sans dupliquer la moindre couleur à la
-           main. Les id des dégradés SVG se retrouvent dupliqués dans le
-           document (navbar + ce clone) — sans conséquence : ce sont des
-           COPIES IDENTIQUES du même dégradé, la résolution "premier id
-           trouvé" du navigateur pointe alors vers un dégradé rigoureusement
-           identique des deux côtés. -->
-      <span id="presentationLogo" class="presentation-logo"></span>
-      <div class="presentation-room-pill">
-        <span>Salle</span>
-        <span id="presentationRoomCode" class="display-room-code font-bold text-accent"></span>
-        <span class="host-player-strip presentation-player-strip"></span>
-      </div>
-    </header>
 
     <div class="container mt-20">
 
