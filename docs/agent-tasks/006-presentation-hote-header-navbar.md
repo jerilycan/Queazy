@@ -417,6 +417,27 @@ bon texte. Revérifié à 390px (navigation directe) : wrapper texte repasse
 en `display:flex` normal, pastille ambiance cachée, bouton à 48px —
 mobile confirmé intact.
 
+## Suite — retour utilisateur (9e passe) : accord + toujours visible
+"Laisse toujours afficher l'info en haut à droite 'X joueurs, X ont
+répondu' et adapte s'il n'y a qu'un joueur le libellé (1 joueur a
+répondu)."
+
+- [x] `updateGameProgressInfo(total, answered)` (nouvelle fonction
+  partagée, index.js) : le verbe s'accorde avec `answered` (pas `total` —
+  on peut avoir 8 joueurs et 1 seule réponse), `a répondu` si
+  `answered <= 1`, `ont répondu` sinon. Appelée depuis `emitQuestion()`
+  (début de CHAQUE question, `answered=0`) ET depuis
+  `socket.on('answer:progress')` (mise à jour au fil des réponses) — donc
+  visible dès le tout début de la question, pas seulement à la 1ère
+  réponse reçue.
+- [x] Nombre de joueurs à l'initialisation : `lastLobbyArr` (déjà tenu à
+  jour par `lobby:list`, filtré hors hôte) — pas de nouvelle donnée.
+
+Vérifié en Browser pane : `updateGameProgressInfo(1,0)` → "1 joueur · 0 a
+répondu", `(1,1)` → "1 joueur · 1 a répondu", `(8,1)` → "8 joueurs · 1 a
+répondu", `(8,5)` → "8 joueurs · 5 ont répondu" — les 4 cas d'accord
+corrects.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.

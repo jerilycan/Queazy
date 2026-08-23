@@ -2341,6 +2341,17 @@ const liveClassementList = document.getElementById('liveClassementList')
 // Joueurs + réponses reçues, coin haut-droit pendant une partie (hôte
 // uniquement) — voir socket.on('answer:progress') plus bas.
 const gameProgressInfo = document.getElementById('gameProgressInfo')
+// Accord singulier/pluriel (retour utilisateur : "1 joueur A répondu", pas
+// "ont") — le verbe s'accorde avec `answered`, pas avec `total` (on peut
+// très bien avoir 8 joueurs et 1 seule réponse reçue). Affiché dès le
+// début de CHAQUE question (voir emitQuestion) plutôt qu'attendre le 1er
+// answer:progress — retour utilisateur : "laisse toujours afficher l'info".
+const updateGameProgressInfo = (total, answered) => {
+  if (!gameProgressInfo) return
+  const verb = answered > 1 ? 'ont répondu' : 'a répondu'
+  gameProgressInfo.textContent = `${total} joueur${total > 1 ? 's' : ''} · ${answered} ${verb}`
+  gameProgressInfo.classList.remove('d-none')
+}
 // Code de salle : centralise la mise à jour de tout ce qui porte
 // .display-room-code (aujourd'hui #displayRoomCode dans #roomInfo
 // pré-partie) plutôt que dupliqué à chaque appelant existant. Généralisé
@@ -3931,6 +3942,10 @@ const emitQuestion = (index) => {
   hostQuestionLabel = `Question ${index + 1}/${loadedQuiz.questions.length}`
   if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · en attente des réponses…`
   renderHostProgressBar(index, loadedQuiz.questions.length)
+  // Affiché dès le début de la question (pas seulement au 1er
+  // answer:progress reçu, voir socket.on plus bas qui la met ensuite à
+  // jour) — retour utilisateur : "laisse toujours afficher l'info".
+  updateGameProgressInfo(lastLobbyArr.filter(p => !p.isHost).length, 0)
   const correctOrder = Array.isArray(q.correct) ? q.correct : []
   // "association" : un seul mélange d'index, réutilisé pour dériver à la
   // fois pairsB (textes mélangés) et pairsBKeys (index d'origine de chaque
@@ -4857,10 +4872,7 @@ socket.on('answer:progress', ({ answered, total }) => {
   if (loadedInfo && hostQuestionLabel) {
     loadedInfo.textContent = `${hostQuestionLabel} · ${answered}/${total} réponse${answered > 1 ? 's' : ''}`
   }
-  if (gameProgressInfo) {
-    gameProgressInfo.textContent = `${total} joueur${total > 1 ? 's' : ''} · ${answered} ont répondu`
-    gameProgressInfo.classList.remove('d-none')
-  }
+  updateGameProgressInfo(total, answered)
 })
 
 // Gestion de la modération (Hôte)
