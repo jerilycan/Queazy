@@ -3035,14 +3035,19 @@ body.game-active .persistent-code {
     align-items: stretch;
     gap: 16px;
     /* Étiré à toute la hauteur de la rangée (voir .container ci-dessus).
-       overflow:hidden plutôt que auto (retour utilisateur : "tous les
-       angles doivent être arrondis, il ne doit pas y avoir de scrollbar")
-       — une scrollbar visible carre visuellement le coin qu'elle longe,
-       même avec border-radius posé sur la boîte. Le contenu a de toute
-       façon été allégé (pile joueurs + #loadedInfo masqués ci-dessous,
-       redondants avec le reste de l'écran) : plus de raison réaliste de
-       déborder. */
-    overflow: hidden;
+       Le contenu a été allégé (pile joueurs + #loadedInfo masqués
+       ci-dessous) mais reste réellement plus haut que la place dispo sur
+       un écran moins haut que large (mesuré : ~870px de contenu pour
+       ~580px de boîte sur un exemple 1600x750) — un simple overflow:hidden
+       (essayé d'abord, suite au retour "pas de scrollbar") coupait alors
+       du contenu SANS PRÉVENIR (dont, potentiellement, le bas du bouton
+       "Question suivante" et son icône — probable explication du retour
+       "l'icône n'apparaît toujours pas"). Remis scrollable, mais avec la
+       SCROLLBAR ELLE-MÊME masquée (voir ::-webkit-scrollbar plus bas) :
+       satisfait "pas de scrollbar visible" ET "coins arrondis" (plus rien
+       ne vient carrer le coin) SANS perdre silencieusement du contenu. */
+    overflow-y: auto;
+    scrollbar-width: none; /* Firefox */
     /* Retour utilisateur (capture d'écran) : "la tuile gauche devrait
        changer de design pour coller à celle de droite" (#liveClassementDock,
        plus bas) — liseré rose (.border-accent-left, posé en dur dans le
@@ -3053,6 +3058,9 @@ body.game-active .persistent-code {
        mobile un peu plus bas dans ce fichier). */
     border-left: none;
     padding: 18px !important;
+  }
+  body.is-host.game-active .container #hostPanel::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Edge */
   }
   /* Retour utilisateur (référence maquette détaillée) : "reprends les
      éléments de cette barre" — icône remise (elle n'aurait jamais dû

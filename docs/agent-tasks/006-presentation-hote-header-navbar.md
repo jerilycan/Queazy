@@ -510,6 +510,38 @@ régression. **Pas de changement de code fait sur ce point** — à confirmer
 après un rechargement forcé (ou un nouvel onglet) si l'icône manque
 toujours.
 
+## Suite — retour utilisateur (12e passe) : vraie cause de l'icône manquante
+"Le bouton suivant n'a toujours pas l'icône."
+
+Vérifié en Browser pane (élément par élément : `display`, `opacity`,
+police, rendu isolé du glyphe ✨ hors contexte) — le glyphe lui-même
+s'affiche bien (27×27px en isolation), et une fois `#hostPanel`
+correctement affiché dans le test, le bouton ET son icône se rendent
+parfaitement (243×76 le bouton, 20,6×15 l'icône, bien positionnée sous le
+libellé). Le code n'a donc pas de bug direct sur ce point précis — mais en
+poussant la vérification plus loin (hauteur de fenêtre plus réaliste,
+1600×750), **découverte d'un vrai bug introduit à la 8e passe** :
+`#hostPanel` mesure jusqu'à ~870px de contenu pour une boîte d'environ
+580px de haut sur un écran moins généreux en hauteur — l'`overflow:hidden`
+posé pour répondre au retour "pas de scrollbar" (8e passe) coupait donc
+SILENCIEUSEMENT une partie du contenu sans prévenir, sur tout écran où la
+fenêtre n'est pas assez haute. Explication la plus probable de "l'icône
+n'apparaît toujours pas" en conditions réelles : elle est la toute
+dernière ligne du bouton, donc la première chose coupée si le panneau
+déborde même très légèrement.
+
+- [x] `#hostPanel` : `overflow: hidden` → `overflow-y: auto` +
+  `scrollbar-width: none` (Firefox) + `::-webkit-scrollbar { display:
+  none }` (Chrome/Safari/Edge) — remet le contenu réellement accessible
+  (scrollable) tout en gardant AUCUNE scrollbar visible et les 4 coins
+  arrondis (plus rien ne vient les carrer) : satisfait les 2 exigences de
+  la 8e passe sans perdre de contenu.
+
+Vérifié en Browser pane (feuille fraîche, 1600×750) : `overflow-y: auto`,
+`scrollbar-width: none`, `scrollHeight` (867px) > `clientHeight` (578px)
+confirmé scrollable (`scrollTop` accepte une valeur > 0), `border-radius`
+toujours 24px sur les 4 coins.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.
