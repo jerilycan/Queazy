@@ -2923,6 +2923,14 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   }
   body.is-host.game-active .container #liveClassementDock {
     grid-column: 3;
+    /* #recapSidebarToggle (bouton "Récap") est position:fixed; top:100px;
+       right:0 — pensé pour l'ancien layout où rien n'occupait ce coin.
+       Se retrouve maintenant pile sur le coin haut-droit du dock classement
+       (retour utilisateur avec capture d'écran). Corrigé ICI plutôt que sur
+       le bouton Récap lui-même (fonctionnalité déjà ancienne et longuement
+       retouchée, voir son propre commentaire — préférence pour ne pas y
+       toucher) : on pousse simplement le dock sous lui. */
+    margin-top: 48px;
   }
   /* Badge de type de question : fixe à l'écran partout ailleurs (voir sa
      propre règle plus haut, IMPORTANT documenté sur le risque backdrop-

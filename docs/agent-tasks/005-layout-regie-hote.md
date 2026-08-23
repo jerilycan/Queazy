@@ -120,6 +120,21 @@ donnée serveur nécessaire.
   `--tile-*`) par cohérence avec `.leader-row`/`.card` déjà vérifiés
   ailleurs, mais pas un test direct.
 
+## Suite — retour capture d'écran en vraie partie
+Le layout régie tourne bien en conditions réelles (capture d'écran hôte
+fournie, question Petit Bac). Un seul bug visible : `#recapSidebarToggle`
+("Récap", `position:fixed; top:100px; right:0`, pensé pour l'ancien layout
+où ce coin était vide) se retrouvait pile sur le coin haut-droit du dock
+classement.
+
+- [x] `#liveClassementDock` : `margin-top: 48px` ajouté (régie uniquement)
+  pour passer sous le bouton Récap, plutôt que de toucher au bouton
+  lui-même (fonctionnalité plus ancienne, déjà longuement retouchée).
+
+Vérifié en Browser pane (état forcé à 1400px) : `getBoundingClientRect()`
+des deux éléments ne se chevauchent plus (`toggle.bottom` 139px,
+`dock.top` 180px).
+
 ## Risques restants
 - Premier lot d'un layout structurel jamais tenté sur cet écran — même en
   desktop, une vraie partie (plusieurs joueurs, tous types de question,
