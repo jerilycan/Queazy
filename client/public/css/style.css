@@ -2878,7 +2878,109 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .host-player-strip-count {
   margin-left: 13px; font-size: 12px; font-weight: 700; color: var(--color-text-muted);
 }
+
+/* Layout "régie 2 rails" (tâche 005, maquette validée : dock hôte à gauche,
+   carte question au centre, classement permanent à droite) — gardé DERRIÈRE
+   une media query desktop ET body.is-host.game-active : le layout mobile
+   existant (déjà longuement retouché, retours utilisateur documentés un peu
+   partout dans ce fichier) reste 100% inchangé, y compris pour un hôte qui
+   ouvrirait sur petit écran. #hostPanel/#stageWrap/#liveClassementDock sont
+   tous les 3 enfants DIRECTS de .container (voir index.html) : la grille
+   les place par id, aucun déplacement de nœud DOM nécessaire. */
+@media (min-width: 1100px) {
+  body.is-host.game-active .container {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr) 260px;
+    align-items: start;
+    gap: 20px;
+  }
+  body.is-host.game-active .container #hostPanel {
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  /* Groupe boutons (Sélectionner/LANCER/Suivant) : en ligne par défaut
+     (voir #hostPanel dans index.html, pensé pour l'ancien bandeau
+     horizontal) — empilés pleine largeur dans le dock vertical, comme sur
+     la maquette ("Question suivante" en gros bouton plein). */
+  body.is-host.game-active .container #hostPanel > .d-flex.gap-sm {
+    flex-direction: column;
+  }
+  body.is-host.game-active .container #stageWrap {
+    grid-column: 2;
+    position: relative;
+    /* Carte centrale de la maquette : #main (timer/question/options, déjà
+       stylés indépendamment ailleurs dans ce fichier) posé À L'INTÉRIEUR,
+       sur fond transparent — seul #stageWrap porte le fond/l'ombre, pour ne
+       pas empiler deux cartes visuellement. */
+    background: var(--gradient-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 48px 40px 32px;
+  }
+  body.is-host.game-active .container #liveClassementDock {
+    grid-column: 3;
+  }
+  /* Badge de type de question : fixe à l'écran partout ailleurs (voir sa
+     propre règle plus haut, IMPORTANT documenté sur le risque backdrop-
+     filter) — ICI il doit au contraire suivre la carte centrale comme sur
+     la maquette (petite pastille en haut de la carte, pas un repère
+     "coin d'écran" puisque l'écran n'a plus qu'une seule vraie zone de
+     contenu qui défile). #stageWrap est la SEULE ancre positionnée voulue
+     pour lui dans ce contexte (position:relative ci-dessus). */
+  body.is-host.game-active .container #questionTypeBadge {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
 .border-danger-soft { border-color: rgba(255,59,92,0.2); }
+
+/* Classement permanent (tâche 005) — mini version de .leader-row/-rank/
+   -name/-score (voir plus bas dans ce fichier), pensée pour un dock étroit
+   plutôt que la liste plein écran : mêmes tokens de couleur, pas de
+   duplication de palette. */
+.live-classement-dock {
+  display: none; /* affiché uniquement en layout régie, voir media query au-dessus */
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 18px;
+}
+@media (min-width: 1100px) {
+  body.is-host.game-active .live-classement-dock { display: block; }
+}
+.live-classement-title {
+  margin: 0 0 14px;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+.live-classement-list { display: flex; flex-direction: column; gap: 8px; }
+.live-classement-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+.live-classement-rank {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  background: var(--tile-blue); color: white;
+  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.live-classement-row:nth-child(1) .live-classement-rank { background: var(--tile-yellow); }
+.live-classement-row:nth-child(2) .live-classement-rank { background: var(--tile-green); }
+.live-classement-row:nth-child(3) .live-classement-rank { background: var(--tile-red); }
+.live-classement-name { flex: 1; font-weight: 700; font-size: 13px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-classement-score { font-weight: 700; font-size: 13px; color: var(--color-accent); font-family: 'Baloo 2', sans-serif; }
 
 .cursor-pointer { cursor: pointer; }
 .resize-v { resize: vertical; min-height: 80px; }

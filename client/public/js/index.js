@@ -2333,6 +2333,11 @@ let myGradAnswerValue = null
 let myOrderSubmission = null
 const leaderOverlay = document.getElementById('leaderOverlay')
 const leaderboard = document.getElementById('leaderboard')
+// Classement permanent du layout régie hôte (tâche 005) — voir
+// renderLiveClassementDock() plus bas, câblée sur le même point d'entrée
+// unique renderLeaderboard() que le classement plein écran ci-dessus.
+const liveClassementDock = document.getElementById('liveClassementDock')
+const liveClassementList = document.getElementById('liveClassementList')
 const navCreate = document.getElementById('navCreate')
 const navJoin = document.getElementById('navJoin')
 const navMyQuizzes = document.getElementById('navMyQuizzes')
@@ -5481,10 +5486,45 @@ const renderTeamBoard = () => {
   })
 }
 
+// Classement permanent du dock régie hôte (tâche 005, maquette validée) —
+// version compacte de renderBoard() ci-dessus (mêmes données déjà suivies
+// côté client, `scores`/computeOrder()), sans les animations FLIP/gain de
+// points : juste un instantané à jour à chaque appel. Masqué en mode équipe
+// (computeOrder()/s.total ne représentent pas les scores d'équipe, pas
+// encore traité ici — périmètre volontairement réduit à ce 1er lot).
+const LIVE_DOCK_MAX_ROWS = 5
+const renderLiveClassementDock = () => {
+  if (!liveClassementList) return
+  if (teamModeActive) { liveClassementList.textContent = ''; return }
+  const ordered = computeOrder().filter(([, s]) => !s.isHost).slice(0, LIVE_DOCK_MAX_ROWS)
+  liveClassementList.textContent = ''
+  ordered.forEach(([, s], idx) => {
+    const row = document.createElement('div')
+    row.className = 'live-classement-row'
+    const rank = document.createElement('span')
+    rank.className = 'live-classement-rank'
+    rank.textContent = idx + 1
+    const name = document.createElement('span')
+    name.className = 'live-classement-name'
+    name.textContent = s.name
+    const score = document.createElement('span')
+    score.className = 'live-classement-score'
+    score.textContent = `${s.total} pts`
+    row.appendChild(rank)
+    row.appendChild(name)
+    row.appendChild(score)
+    liveClassementList.appendChild(row)
+  })
+}
+
 // Point d'entrée unique appelé partout où l'ancien renderBoard() l'était :
 // bascule vers le classement par équipe si le mode équipe est actif pour
-// cette salle, sinon comportement inchangé.
-const renderLeaderboard = () => { teamModeActive ? renderTeamBoard() : renderBoard() }
+// cette salle, sinon comportement inchangé. Rappelle aussi le dock permanent
+// ci-dessus (tâche 005) — même point d'entrée pour les deux classements.
+const renderLeaderboard = () => {
+  teamModeActive ? renderTeamBoard() : renderBoard()
+  renderLiveClassementDock()
+}
 
 const showResults = () => {
   const roomCode = roomInput.value.trim()

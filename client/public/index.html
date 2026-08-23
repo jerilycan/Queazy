@@ -482,13 +482,22 @@
            n'importe où au lieu du coin voulu (régression réelle constatée
            sur desktop en tentant ça pour corriger un chevauchement mobile —
            voir plutôt les media queries dédiées dans style.css). -->
-      <button type="button" id="questionTypeBadge" class="question-type-badge d-none" title="Type de question">
-        <span id="questionTypeBadgeIcon" class="question-type-badge-icon"></span>
-        <span id="questionTypeBadgeLabel" class="question-type-badge-label"></span>
-      </button>
+      <!-- Regroupe le badge + la zone de jeu (tâche 005, maquette "régie 2
+           rails") : sert de carte centrale en layout régie desktop (voir
+           .stage-wrap/body.is-host.game-active .container plus bas dans
+           style.css) ET de point d'ancrage positionné pour que le badge
+           puisse passer en position:absolute (au lieu de fixed) UNIQUEMENT
+           dans ce contexte-là — en layout normal/mobile, rien ne change
+           (juste un wrapper transparent supplémentaire dans le flux, aucun
+           id déplacé/retiré donc aucun getElementById existant cassé). -->
+      <div id="stageWrap" class="stage-wrap">
+        <button type="button" id="questionTypeBadge" class="question-type-badge d-none" title="Type de question">
+          <span id="questionTypeBadgeIcon" class="question-type-badge-icon"></span>
+          <span id="questionTypeBadgeLabel" class="question-type-badge-label"></span>
+        </button>
 
-      <!-- Zone de jeu -->
-      <div id="main" class="mt-40">
+        <!-- Zone de jeu -->
+        <div id="main" class="mt-40">
         <!-- Ordre volontaire (retour utilisateur) : le timer reste une barre
              AU-DESSUS de la question quoi qu'il arrive, puis question ->
              image, à l'identique de l'éditeur (voir editor.html) pour le
@@ -643,6 +652,25 @@
         
         <div id="log" class="log-message"></div>
       </div>
+      </div>
+      <!-- Classement permanent, layout régie hôte uniquement (tâche 005) —
+           complète (ne remplace pas) le classement plein écran existant
+           (#leaderOverlay, entre les questions) : réutilise les MÊMES
+           données déjà suivies côté client (`scores`, `computeOrder()`,
+           voir index.js), juste un second point de rendu, câblé sur le
+           même point d'entrée unique `renderLeaderboard()` qui centralisait
+           déjà tous les appels à jour. Vide/masqué hors layout régie (voir
+           media query dédiée dans style.css) et en mode équipes (pas encore
+           traité ici, périmètre volontairement réduit à ce 1er lot). -->
+      <!-- Pas de classe d-none ici (contrairement aux autres panneaux du
+           fichier) : .live-classement-dock a déjà display:none par défaut
+           en CSS, seulement levé par la media query régie hôte — .d-none
+           utilise !important, qui aurait sinon gagné sur cette media query
+           quel que soit l'état de body.is-host.game-active. -->
+      <aside id="liveClassementDock" class="live-classement-dock">
+        <h4 class="live-classement-title">🏆 Le classement</h4>
+        <div id="liveClassementList" class="live-classement-list"></div>
+      </aside>
     </div>
 
     <!-- Popup "en attente de validation" (modération d'une réponse libre) —
