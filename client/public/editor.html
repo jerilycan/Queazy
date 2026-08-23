@@ -225,6 +225,20 @@
           </div>
         </div>
 
+        <!-- Écran "aucune question" (nouvelle DA, tâche 003, décision
+             validée) : un nouveau quiz démarre maintenant à 0 question — cet
+             écran remplace #questionDetail tant qu'aucune question n'existe
+             encore. Choisir un type ici équivaut à cliquer le "+" de la
+             sidebar puis changer le type (voir editor.js renderTypePicker/
+             addFirstQuestion) : mêmes 13 types que #qType, générés depuis
+             lui pour rester la seule source de vérité de leurs libellés. -->
+        <div id="questionEmptyState" class="question-detail question-empty-state d-none">
+          <div class="question-empty-icon">❓</div>
+          <h3>Choisis un type de réponse</h3>
+          <p class="text-muted">13 mécaniques disponibles — QCM, Vrai/Faux, Blind Test, Timeline, Petit Bac… Le formulaire s'adapte automatiquement une fois choisi.</p>
+          <div id="typePickerGrid" class="type-picker-grid"><!-- Rempli par JS --></div>
+        </div>
+
         <!-- Detail: Éditeur de la question sélectionnée -->
         <div id="questionDetail" class="question-detail">
           <div class="detail-section">

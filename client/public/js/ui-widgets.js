@@ -338,7 +338,14 @@
         }
         return { ...s, el }
       })
-      .filter(s => s.el)
+      // offsetParent === null exclut aussi tout élément dont un ANCÊTRE a
+      // display:none (ex. editor.js : #qPrompt etc. existent toujours dans
+      // le DOM même quand #questionDetail entier est masqué — voir
+      // #questionEmptyState, un nouveau quiz démarre maintenant à 0
+      // question) — même bug que le cas SELECT ci-dessus (spotlight calé en
+      // haut à gauche sur un rect vide), généralisé plutôt que corrigé au
+      // cas par cas à chaque nouvel appelant de qzTour.
+      .filter(s => s.el && s.el.offsetParent !== null)
     if (validSteps.length === 0) return
 
     const { backdrop, hole, popup } = ensureTour()

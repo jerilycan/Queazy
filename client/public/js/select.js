@@ -165,8 +165,96 @@ const render = (arr, isMineTab = true) => {
     head.appendChild(avatar)
     head.appendChild(textWrap)
     card.appendChild(head)
+
+    // Actions rapides (nouvelle DA) : seulement sur "Mes Quiz" — un quiz
+    // public n'appartient pas à qui le consulte, ni Dupliquer ni Supprimer
+    // n'aurait de sens ici (voir editor.js pour la seule action existante
+    // sur un quiz d'autrui : "Dupliquer dans mes quiz", différente).
+    if (isMineTab) {
+      const actions = document.createElement('div')
+      actions.className = 'quiz-card-actions'
+
+      const editBtn = document.createElement('button')
+      editBtn.className = 'quiz-card-action-btn is-primary'
+      editBtn.type = 'button'
+      editBtn.textContent = '✏️ Éditer'
+      editBtn.onclick = (e) => { e.stopPropagation(); card.onclick() }
+
+      const dupBtn = document.createElement('button')
+      dupBtn.className = 'quiz-card-action-btn'
+      dupBtn.type = 'button'
+      dupBtn.title = 'Dupliquer'
+      dupBtn.textContent = '⧉'
+      dupBtn.onclick = (e) => { e.stopPropagation(); duplicateQuiz(q.id, q.title, dupBtn) }
+
+      const delBtn = document.createElement('button')
+      delBtn.className = 'quiz-card-action-btn'
+      delBtn.type = 'button'
+      delBtn.title = 'Supprimer'
+      delBtn.textContent = '🗑️'
+      delBtn.onclick = (e) => { e.stopPropagation(); deleteQuiz(q.id, q.title) }
+
+      actions.appendChild(editBtn)
+      actions.appendChild(dupBtn)
+      actions.appendChild(delBtn)
+      card.appendChild(actions)
+    }
+
     list.appendChild(card)
   })
+}
+
+// Duplique un quiz DÉJÀ À MOI directement depuis la liste — même logique que
+// duplicateQuizBtn dans editor.js (voir "Dupliquer dans mes quiz", pour le
+// cas d'un quiz d'AUTRUI), mais on ne va chercher "questions" que pour CE
+// quiz précis, à la demande : `loadMine`/`loadPublic` l'excluent
+// volontairement de la liste pour la perf (voir leurs commentaires plus
+// haut), donc pas question de l'ajouter à la requête de liste pour ça.
+const duplicateQuiz = async (id, srcTitle, btn) => {
+  if (btn) btn.disabled = true
+  try {
+    const { data: src, error: fetchErr } = await sb.from('quizzes')
+      .select('title,questions,single_attempt')
+      .eq('id', id)
+      .single()
+    if (fetchErr) throw fetchErr
+    const { data: { session } } = await sb.auth.getSession()
+    if (!session) { window.location.href = '/login.html?reason=create'; return }
+    const { error: insertErr } = await sb.from('quizzes')
+      .insert([{
+        title: 'Copie de ' + (src.title || srcTitle || 'Quiz'),
+        questions: src.questions,
+        single_attempt: src.single_attempt,
+        is_public: false, // une copie est privée par défaut
+        owner_id: session.user.id
+      }])
+    if (insertErr) throw insertErr
+    window.QzUI ? window.QzUI.toast('Quiz dupliqué !') : null
+    await loadMine()
+  } catch (err) {
+    console.error('[quiz] duplication impossible :', err)
+    window.QzUI ? window.QzUI.toast('Erreur lors de la duplication du quiz', 'error') : alert('Erreur lors de la duplication du quiz')
+  } finally {
+    if (btn) btn.disabled = false
+  }
+}
+
+// Suppression directe depuis la liste — même requête que deleteQuizBtn dans
+// editor.js, juste déclenchée d'un autre endroit.
+const deleteQuiz = async (id, title) => {
+  const ok = window.QzUI
+    ? await window.QzUI.confirm({ title: 'Supprimer ce quiz ?', message: `« ${title} » sera supprimé définitivement.`, confirmLabel: 'Supprimer', danger: true })
+    : confirm(`Supprimer « ${title} » ? Cette action est définitive.`)
+  if (!ok) return
+  try {
+    const { error } = await sb.from('quizzes').delete().eq('id', id)
+    if (error) throw error
+    window.QzUI ? window.QzUI.toast('Quiz supprimé.') : null
+    await loadMine()
+  } catch (err) {
+    console.error('[quiz] suppression impossible :', err)
+    window.QzUI ? window.QzUI.toast('Erreur lors de la suppression du quiz', 'error') : alert('Erreur lors de la suppression du quiz')
+  }
 }
 
 const loadMine = async () => {

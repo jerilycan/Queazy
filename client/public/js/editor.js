@@ -97,6 +97,8 @@ const confirmReportBtn = document.getElementById('confirmReport')
 const addQuestionBtn = document.getElementById('addQuestion')
 const questionListEl = document.getElementById('questionList')
 const questionDetailEl = document.getElementById('questionDetail')
+const questionEmptyStateEl = document.getElementById('questionEmptyState')
+const typePickerGridEl = document.getElementById('typePickerGrid')
 const toastsEl = document.getElementById('toasts')
 
 // Champs de détail de question
@@ -565,6 +567,80 @@ const QTYPE_ICON = {
   free: '📝', mcq: '🔘', truefalse: '✅', graduation: '↔️', order: '↕️',
   image: '📍', zoomguess: '🔍', reveal: '🖼️', blindtest: '🎵',
   association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩'
+}
+
+// Miroir JS des règles .question-item.type-* de style.css (--qt-color) —
+// dupliqué plutôt que réutilisé en CSS pur : ces règles sont scopées à
+// .question-item, la tuile du sélecteur de type (#typePickerGrid, voir
+// renderTypePicker) n'en a pas besoin/n'est pas ce composant. Couleurs
+// identiques par construction (mêmes tokens), à tenir à jour ensemble si
+// jamais l'une des deux listes change.
+const QTYPE_COLOR = {
+  mcq: 'var(--tile-blue)', free: 'var(--tile-green)', graduation: 'var(--tile-yellow)',
+  truefalse: 'var(--tile-red)', order: 'var(--color-amber)', image: 'var(--color-cyan)',
+  blindtest: 'var(--color-sky)', association: 'var(--tile-bronze)', timeline: 'var(--color-teal)',
+  intrus: 'var(--color-violet)', zoomguess: 'var(--color-indigo)', pbac: 'var(--color-lime)',
+  reveal: 'var(--tile-silver)'
+}
+
+// Écran "aucune question" (nouvelle DA, tâche 003, décision validée) : un
+// nouveau quiz démarre à 0 question désormais (au lieu d'une question
+// "Texte libre" vide par défaut) — #questionEmptyState remplace
+// #questionDetail tant que `questions` est vide. Une fois la 1ère question
+// ajoutée, deleteQuestionAt() empêche déjà de revenir à 0 (règle existante
+// "un quiz doit avoir au moins une question", inchangée) : cet écran ne
+// réapparaît donc plus après coup, uniquement au tout début.
+const updateEmptyState = () => {
+  if (!questionEmptyStateEl || !questionDetailEl) return
+  const isEmpty = questions.length === 0
+  questionEmptyStateEl.classList.toggle('d-none', !isEmpty)
+  questionDetailEl.classList.toggle('d-none', isEmpty)
+  // Le bouton flottant "Sauvegarder" reste géré par selectQuestion/
+  // applyReadOnly comme avant (voir plus bas) — on se contente ici de le
+  // masquer quand il n'y a encore RIEN à éditer, cas qu'aucun des deux ne
+  // couvrait jusqu'ici.
+  if (isEmpty && questionSaveBar) questionSaveBar.classList.add('d-none')
+  qIndexLabel.textContent = isEmpty ? 'Aucune question' : `Question ${activeIndex + 1} / ${questions.length}`
+}
+
+// Grille de choix de type (voir #typePickerGrid dans editor.html) — générée
+// depuis les <option> de #qType, seule source de vérité pour la liste des
+// 13 types et leurs libellés (même principe que updateSidebar plus bas pour
+// la sidebar). Choisir un type ici ajoute directement la 1ère question DANS
+// ce type plutôt que de forcer un passage par le type "Texte libre" par
+// défaut (createDefaultQuestion) puis un changement de type manuel.
+const renderTypePicker = () => {
+  if (!typePickerGridEl || typePickerGridEl.childElementCount) return
+  ;[...qType.options].forEach(opt => {
+    const type = opt.value
+    const tile = document.createElement('div')
+    tile.className = 'type-picker-tile'
+    tile.setAttribute('role', 'button')
+    tile.tabIndex = 0
+
+    const icon = document.createElement('div')
+    icon.className = 'type-picker-tile-icon'
+    icon.style.background = QTYPE_COLOR[type] || 'var(--color-surface-2)'
+    icon.textContent = QTYPE_ICON[type] || '❓'
+
+    const label = document.createElement('span')
+    label.className = 'type-picker-tile-label'
+    // Libellé complet de l'option (ex. "🔘 Choix multiples (QCM)") avec son
+    // icône déjà répétée juste au-dessus — on ne garde que le texte après
+    // l'icône pour ne pas la doubler.
+    label.textContent = opt.textContent.replace(/^\S+\s*/, '')
+
+    tile.appendChild(icon)
+    tile.appendChild(label)
+    tile.onclick = () => addFirstQuestion(type)
+    tile.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addFirstQuestion(type) } }
+    typePickerGridEl.appendChild(tile)
+  })
+}
+
+const addFirstQuestion = (type) => {
+  questions.push({ ...createDefaultQuestion(), type })
+  selectQuestion(0)
 }
 
 const updateSidebar = () => {
@@ -1366,7 +1442,8 @@ const selectQuestion = (index) => {
   if (hasSelectedOnce) saveCurrentQuestionState()
   activeIndex = index
   const q = questions[activeIndex]
-  if (!q) return
+  if (!q) { updateEmptyState(); return }
+  updateEmptyState() // bascule #questionEmptyState -> #questionDetail au besoin
 
   // Mettre à jour les champs
   if (qDraftToggle) qDraftToggle.checked = !!q.draft
@@ -3394,6 +3471,13 @@ const persistQuiz = async (successMessage) => {
 
 saveQuizBtn.onclick = async () => {
   if (readOnly) return
+  // Un nouveau quiz démarre maintenant à 0 question (voir resetToNew) : même
+  // garde-fou que deleteQuestionAt/confirmDeleteQuestionAt pour ne jamais
+  // écrire un quiz injouable en base.
+  if (questions.length === 0) {
+    showToast('Ajoute au moins une question avant de sauvegarder', 'error')
+    return
+  }
   saveCurrentQuestionState()
   // Filet de sécurité : un onclick async dont la promesse rejette ne montre
   // RIEN à l'utilisateur (pas de .catch implicite pour un event handler) —
@@ -3604,11 +3688,17 @@ const init = () => {
 
 const resetToNew = () => {
   currentId = null
-  questions = [createDefaultQuestion()]
+  // Démarre à 0 question (nouvelle DA, tâche 003, décision validée) au lieu
+  // d'une question "Texte libre" vide par défaut — voir #questionEmptyState/
+  // renderTypePicker/addFirstQuestion. selectQuestion(0) n'a plus rien à
+  // sélectionner ici (bail out déjà géré, voir plus haut) : updateEmptyState
+  // s'en charge à la place.
+  questions = []
   activeIndex = 0
   titleEl.value = ''
   isPublicEl.checked = false
-  selectQuestion(0)
+  renderTypePicker()
+  updateEmptyState()
   updateSidebar()
   markSaved()
 }
