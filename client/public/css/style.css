@@ -2900,31 +2900,27 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    ouvrirait sur petit écran. #hostPanel/#stageWrap/#liveClassementDock sont
    tous les 3 enfants DIRECTS de .container (voir index.html) : la grille
    les place par id, aucun déplacement de nœud DOM nécessaire. */
+/* Navbar pendant une partie EN COURS (tâche 006, dernière passe, retour
+   utilisateur : "je ne veux pas de navbar quand une game est en cours, ni
+   côté MJ ni côté joueurs, seulement le logo en haut centré") — voulu ici
+   pour TOUT LE MONDE (pas juste l'hôte) et à TOUTE largeur d'écran
+   (contrairement au reste de cette section, réservé à la régie hôte
+   desktop) : `body.game-active` seul est déjà posé sur tous les clients
+   dès qu'une question s'affiche (voir index.js), donc pas besoin de
+   `.is-host` ni de media query ici. Ne fait QUE masquer les groupes de
+   boutons et centrer ce qu'il reste (le logo) — la navbar elle-même n'est
+   plus jamais entièrement masquée (tentative précédente : la remplacer par
+   un en-tête séparé qui clonait le logo a cassé son rendu, voir plus bas
+   dans ce fichier pour le détail). */
+body.game-active .navbar {
+  justify-content: center;
+}
+body.game-active .navbar .nav-group {
+  display: none;
+}
+body.game-active .navbar > .brand { margin-right: 0; }
+
 @media (min-width: 1100px) {
-  /* Navbar en layout régie (tâche 006, dernière passe) : gardée (pas
-     masquée entièrement comme dans une tentative précédente) mais réduite
-     à son logo — .nav-group (Créer/Rejoindre/Mes Quiz/profil) masqués, code
-     de salle + joueurs affichés à la place (voir #presentationRoomPill/
-     #presentationPlayerInfo dans index.html, insérés juste après .brand).
-     Grille à 3 colonnes (logo / pill centrée / joueurs à droite) plutôt que
-     le flex d'origine (qui pousse tout après .brand à droite via son
-     margin-right:auto — incompatible avec une pastille VRAIMENT centrée). */
-  body.is-host.game-active .navbar {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-  }
-  body.is-host.game-active .navbar > .brand { margin-right: 0; }
-  body.is-host.game-active .navbar .nav-group { display: none; }
-  body.is-host.game-active .navbar #presentationRoomPill {
-    grid-column: 2;
-    display: flex;
-  }
-  body.is-host.game-active .navbar #presentationPlayerInfo {
-    grid-column: 3;
-    display: flex;
-    justify-self: end;
-  }
   body.is-host.game-active .container {
     display: grid;
     /* Retour utilisateur (capture d'écran) : "beaucoup trop centré, la
@@ -3058,42 +3054,6 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 
 .border-danger-soft { border-color: rgba(255,59,92,0.2); }
-
-/* Code de salle + joueurs en layout régie (tâche 006, dernière passe) —
-   affichés DANS la navbar (voir la media query plus haut), masqués par
-   défaut (au lieu d'un simple d-none côté HTML) : pilotés entièrement par
-   cette media query, même raison que .live-classement-dock plus bas — pas
-   de risque qu'une classe .d-none (!important) gagne sur elle. */
-.presentation-room-pill,
-.presentation-player-info {
-  display: none;
-}
-.presentation-room-pill {
-  /* display:none par défaut (règle groupée ci-dessus, seule visibilité
-     pilotée par la media query régie) — cette règle ne pose QUE le reste
-     de l'habillage, jamais display, pour ne pas regagner sur le
-     display:none par simple ordre de cascade (même sélecteur, spécificité
-     identique). */
-  align-items: center;
-  gap: 10px;
-  padding: 8px 18px;
-  border-radius: 999px;
-  background: rgba(5,5,12,0.55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--color-border);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-text-muted);
-}
-/* Réutilise .host-player-strip (voir renderHostPlayerStrip dans index.js,
-   même liste rendue aux 2 endroits) — juste des avatars plus petits ici,
-   pas de compteur texte (déjà "8 joueurs" en toutes lettres à côté, un 2e
-   texte ferait doublon dans une pastille aussi étroite). */
-.presentation-player-info { align-items: center; }
-.presentation-player-strip.host-player-strip { gap: 0; margin-left: 4px; }
-.presentation-player-strip .host-player-avatar { width: 22px; height: 22px; font-size: 9px; }
-.presentation-player-strip .host-player-strip-count { margin-left: 8px; }
 
 /* Classement permanent (tâche 005) — mini version de .leader-row/-rank/
    -name/-score (voir plus bas dans ce fichier), pensée pour un dock étroit

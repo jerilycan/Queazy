@@ -243,6 +243,45 @@ de haut (`min-height`, PAS 730px comme les docks), docks toujours à 730px/
 à 390px : navbar repasse en `flex` normal, pastille/joueurs repassent en
 `none` — mobile intact.
 
+## Suite — retour utilisateur (5e passe)
+"Je ne veux pas de NAVBAR lorsqu'une game est en cours, ni côté MJ, ni côté
+joueurs. Seulement le logo en haut centré." — avec renvoi explicite vers
+l'artboard "Texte libre" du canvas de design pour vérifier la construction.
+Tentative de relire ce canvas directement (`WebFetch` sur l'URL de
+l'artifact) : n'a renvoyé que le code interne de l'éditeur, pas un résumé
+exploitable du contenu — retombé sur la capture d'écran déjà fournie par
+l'utilisateur dans l'échange précédent comme référence, qui montre
+exactement ce point (logo seul, sans boutons, en haut).
+
+**Changement de portée important** : jusqu'ici, masquer/réduire la navbar
+n'était fait que pour l'hôte en desktop (`body.is-host.game-active` + `min-
+width:1100px`). Cette fois la demande couvre TOUT LE MONDE (hôte ET
+joueurs) et TOUTE largeur d'écran — `body.game-active` seul (déjà posé sur
+tous les clients dès qu'une question s'affiche, hôte comme joueurs, voir
+index.js) suffit, sans condition de largeur.
+
+- [x] `body.game-active .navbar` : `.nav-group` (Créer/Rejoindre/Mes Quiz/
+  profil) masqués, `justify-content:center` + `margin-right:0` sur `.brand`
+  pour centrer ce qu'il reste (le logo, toujours le VRAI, jamais un clone)
+  — sorti de la media query desktop, s'applique à toute largeur et aux
+  deux rôles.
+- [x] `#presentationRoomPill`/`#presentationPlayerInfo` (code de salle +
+  joueurs dans la navbar, ajoutés en 4e passe) retirés entièrement — HTML,
+  CSS et le commentaire JS qui les documentait. "Seulement le logo" ne
+  laisse plus de place à un second contenu dans la navbar ; le nombre de
+  joueurs reste visible ailleurs (panneau hôte).
+- [x] Le layout régie hôte desktop (grille 3 colonnes, docks pleine
+  hauteur, carte centrée) reste scopé comme avant — inchangé, vérifié
+  toujours fonctionnel à côté de ce nouveau comportement de navbar.
+
+Vérifié en Browser pane (feuille de style forcée fraîche) : joueur mobile
+(390px, `game-active` sans `is-host`) — `nav-group` masqué, logo
+parfaitement centré (195px sur 390px de large) ; hôte desktop (1600px) —
+même centrage (795 vs 800 attendu) ET grille régie toujours intacte
+(docks 730px, carte 380px) ; hors partie (`game-active`/`is-host` retirés)
+— navbar entièrement revenue à la normale (`justify-content:normal`,
+`nav-group` en `flex`).
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.

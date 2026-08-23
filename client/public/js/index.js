@@ -2338,11 +2338,10 @@ const leaderboard = document.getElementById('leaderboard')
 // unique renderLeaderboard() que le classement plein écran ci-dessus.
 const liveClassementDock = document.getElementById('liveClassementDock')
 const liveClassementList = document.getElementById('liveClassementList')
-// Code de salle affiché à 2 endroits désormais (#displayRoomCode dans
-// #roomInfo pré-partie, #presentationRoomCode dans la navbar en layout
-// régie — tâche 006) : les deux portent la classe partagée
-// .display-room-code, mis à jour ensemble ici plutôt que dupliqué à chaque
-// appelant existant.
+// Code de salle : centralise la mise à jour de tout ce qui porte
+// .display-room-code (aujourd'hui #displayRoomCode dans #roomInfo
+// pré-partie) plutôt que dupliqué à chaque appelant existant. Généralisé
+// en prévision d'un futur 2e affichage plutôt que juste getElementById.
 const setDisplayRoomCode = (code) => {
   document.querySelectorAll('.display-room-code').forEach(el => { el.textContent = code })
 }
@@ -3378,10 +3377,9 @@ if (irlLeaveBtn) {
 // sur la maquette "plateau chaleureux". Appelée à chaque lobby:list, y
 // compris en pleine partie (reconnexions, exclusions...), pas seulement
 // avant le lancement.
-// Depuis la tâche 006 (en-tête régie), affichée à 2 endroits : #hostPlayerStrip
-// (panneau hôte, historique) ET #presentationPlayerStrip (nouvel en-tête,
-// voir index.html) — les deux partagent la classe .host-player-strip,
-// remplie identiquement plutôt que dupliquer cette fonction.
+// Généralisée à tout élément .host-player-strip (aujourd'hui seulement
+// #hostPlayerStrip dans le panneau hôte) plutôt que juste getElementById,
+// en prévision d'un futur 2e affichage.
 const HOST_PLAYER_STRIP_MAX = 5
 const renderHostPlayerStrip = (arr) => {
   const strips = document.querySelectorAll('.host-player-strip')

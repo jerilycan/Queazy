@@ -176,25 +176,6 @@
           </svg>
         </span>
       </a>
-      <!-- Régie hôte (tâche 006, dernière passe) : code de salle + joueurs,
-           affichés directement DANS la navbar (masquée seulement pour ses
-           .nav-group ci-dessous, pas en entier) plutôt que dans un en-tête
-           séparé — corrige au passage le logo "cassé" de la tentative
-           précédente : cet en-tête clonait le SVG du logo (id de dégradés
-           dupliqués, potentiellement mal résolus une fois l'original dans un
-           ancêtre display:none) et n'avait pas l'animation au survol
-           (branchée en JS sur LE vrai `.brand`, jamais sur un clone). Ici,
-           c'est le VRAI logo de la navbar, juste réorganisé visuellement —
-           aucune duplication, animation intacte. Cachés par défaut (aucune
-           classe d-none : pilotés entièrement par la media query régie,
-           voir style.css — même raison que les autres panneaux régie). -->
-      <div id="presentationRoomPill" class="presentation-room-pill">
-        <span>Salle</span>
-        <span id="presentationRoomCode" class="display-room-code font-bold text-accent"></span>
-      </div>
-      <div id="presentationPlayerInfo" class="presentation-player-info">
-        <span class="host-player-strip presentation-player-strip"></span>
-      </div>
       <div class="nav-group">
         <a href="/?create=true" id="navCreate" class="btn btn-nav-main">Créer</a>
         <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
