@@ -160,6 +160,17 @@
   background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
   box-shadow: 0 3px 0 #be123c;
 }
+/* Classement/podium (tâche 004) : même correctif que body ci-dessous — le
+   halo dur codé en dur (#3a1450/#200a38) est propre au thème sombre, sans
+   override il fond en un dégradé violet->quasi-blanc disgracieux une fois
+   var(--color-bg)/--color-bg-deep résolus en clair. Reprend la même recette
+   à deux halos discrets que :root[data-theme="light"] body. */
+:root[data-theme="light"] .leader-overlay {
+  background:
+    radial-gradient(circle at 12% 15%, rgba(var(--color-accent-rgb),0.07) 0%, transparent 40%),
+    radial-gradient(circle at 88% 85%, rgba(var(--color-accent-2-rgb),0.06) 0%, transparent 40%),
+    linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
+}
 
 * { box-sizing: border-box; }
 
@@ -4718,10 +4729,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .leader-overlay {
   position: fixed; inset: 0; z-index: 1000;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-  background: linear-gradient(180deg, var(--color-bg-deep), var(--color-bg));
+  /* Même halo que body (nouvelle DA, tâche 001) — cet overlay couvre tout le
+     viewport et masquait donc complètement l'ambiance violette derrière lui,
+     seul écran de la partie encore sur l'ancien dégradé plat à 2 tons. */
+  background: radial-gradient(2200px 1300px at 50% -10%, #3a1450 0%, #200a38 42%, var(--color-bg) 78%, var(--color-bg-deep) 100%);
   padding: 60px 20px 20px; overflow-y: auto;
 }
-.leader-title { color: white; font-family: 'Baloo 2', sans-serif; font-size: 32px; margin-bottom: 24px; text-align: center; }
+.leader-title { color: var(--color-text); font-family: 'Baloo 2', sans-serif; font-size: 32px; margin-bottom: 24px; text-align: center; }
 .leaderboard-list { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 10px; margin: 0 auto; }
 .leader-row {
   display: flex; align-items: center; gap: 14px;
@@ -4751,6 +4765,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    juste sous "15" ressemblerait à un bug plutôt qu'à une troncature
    volontaire. */
 .leader-row.is-detached { margin-top: 10px; padding-top: 22px; border-top: 2px dashed rgba(255,255,255,0.18); }
+/* Thème clair (tâche 004) : les rgba(255,255,255,…) ci-dessus/dessous sont
+   pensés pour un fond sombre — quasi invisibles sur les cartes blanches du
+   thème clair. Même encre que les autres overrides clairs de ce fichier
+   (rgba(35,25,65,…), voir .nav-group+.nav-group::before plus haut). */
+:root[data-theme="light"] .leader-row.is-detached { border-top-color: rgba(35,25,65,0.18); }
 /* Même logique que .player-tile.is-disconnected au lobby (voir plus haut
    dans ce fichier) — étendue au classement EN COURS de partie, où rien ne
    signalait jusqu'ici qu'un joueur avait décroché (visible seulement dans le
@@ -4761,6 +4780,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   background: rgba(255,255,255,0.12); color: var(--color-text-muted);
   border: 1px solid rgba(255,255,255,0.18); flex-shrink: 0;
 }
+:root[data-theme="light"] .leader-gone-badge { background: rgba(35,25,65,0.08); border-color: rgba(35,25,65,0.15); }
 .leader-row.row-enter { opacity: 0; transform: translateY(18px) scale(0.96); }
 .leader-row.row-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .55s, transform .55s cubic-bezier(0.22,1,0.36,1); }
 /* Effet "dépassement" pendant le glissement FLIP (voir renderBoard() dans
