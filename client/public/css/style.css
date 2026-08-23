@@ -2921,15 +2921,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     padding: 0 24px;
     margin: 0;
     grid-template-columns: 280px minmax(0, 1fr) 280px;
-    align-items: start;
-    /* Centre la rangée (dock/carte/dock) verticalement dans l'espace
-       laissé par la navbar masquée ci-dessus (retour utilisateur : "la
-       tuile centrale devrait être vraiment au centre") — align-content, pas
-       align-items : c'est la position de la rangée elle-même dans la
-       hauteur du conteneur qui doit centrer, pas juste chaque cellule dans
-       sa propre rangée (une seule rangée ici de toute façon). */
-    align-content: center;
-    min-height: calc(100vh - 170px);
+    /* Retour utilisateur (2e passe) : "les blocs gauche et droite doivent
+       prendre la hauteur, comme le design décidé ensemble" — une seule
+       rangée explicite (1fr) qui occupe TOUTE la hauteur disponible
+       (height, plus min-height comme avant) + stretch, au lieu de
+       align-items:start qui ne laissait chaque colonne haute que ce que
+       son propre contenu exigeait. */
+    grid-template-rows: 1fr;
+    align-items: stretch;
+    height: calc(100vh - 170px);
     gap: 24px;
   }
   body.is-host.game-active .container #hostPanel {
@@ -2948,6 +2948,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
+    /* Étiré à toute la hauteur de la rangée (voir .container ci-dessus) —
+       overflow:auto en filet de sécurité si jamais le contenu (beaucoup de
+       joueurs dans la pile d'avatars, etc.) dépassait la hauteur dispo,
+       plutôt que de déborder de la carte. */
+    overflow-y: auto;
   }
   /* Groupe boutons (Sélectionner/LANCER/Suivant) : en ligne par défaut
      (voir #hostPanel dans index.html, pensé pour l'ancien bandeau
@@ -2969,6 +2974,14 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     padding: 48px 40px 32px;
+    /* Étirée à toute la hauteur de la rangée comme les 2 docks (voir
+       .container ci-dessus) — #main (question/réponses) centré dedans
+       plutôt que collé en haut d'une carte devenue plus haute que son
+       contenu. */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow-y: auto;
   }
   body.is-host.game-active .container #liveClassementDock {
     grid-column: 3;
@@ -2981,6 +2994,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
        retouchée, voir son propre commentaire — préférence pour ne pas y
        toucher) : on pousse simplement le dock sous lui. */
     margin-top: 48px;
+    overflow-y: auto;
   }
   /* Badge de type de question : fixe à l'écran partout ailleurs (voir sa
      propre règle plus haut, IMPORTANT documenté sur le risque backdrop-
@@ -2988,12 +3002,29 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
      la maquette (petite pastille en haut de la carte, pas un repère
      "coin d'écran" puisque l'écran n'a plus qu'une seule vraie zone de
      contenu qui défile). #stageWrap est la SEULE ancre positionnée voulue
-     pour lui dans ce contexte (position:relative ci-dessus). */
+     pour lui dans ce contexte (position:relative ci-dessus).
+     Retour utilisateur (3e passe) : coin HAUT-GAUCHE de la carte (au lieu
+     de centré) — le timer (voir #timerContainer juste en dessous) prend le
+     coin haut-droit symétrique. */
   body.is-host.game-active .container #questionTypeBadge {
     position: absolute;
     top: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+  }
+  /* Timer : bandeau pleine largeur partout ailleurs (voir .timer-container
+     plus haut, sticky sous la navbar) — ICI transformé en petite pastille
+     ancrée en haut-droite de la carte, symétrique au badge de type
+     ci-dessus (retour utilisateur). Toujours le même #timerBar/#timerLabel
+     à l'intérieur (voir index.js), juste un contenant plus étroit et
+     positionné différemment. */
+  body.is-host.game-active .container #timerContainer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: auto;
+    width: 200px;
+    max-width: 200px;
+    margin: 0;
   }
   body.is-host.game-active .presentation-header {
     display: flex;

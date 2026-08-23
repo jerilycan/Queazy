@@ -129,6 +129,50 @@ l'autre bord (24px de marge + scrollbar), carte centrale à 934px de large.
 Revérifié à 390px : navbar reste visible, en-tête caché, `.container`
 reprend son `max-width: 1100px` habituel — layout mobile intact.
 
+## Suite — retour utilisateur (3e passe)
+"Je veux que les blocs gauche et droite aient une taille fixe selon la
+taille de l'écran. Ça doit prendre la hauteur, COMME le design décidé
+ensemble. Le type de question doit se retrouver en haut à gauche de la
+tuile centrale, et le temps en haut à droite."
+
+- [x] `.container` : `grid-template-rows: 1fr` + `height` (au lieu de
+  `min-height`) + `align-items: stretch` (au lieu de `start`) — les 3
+  colonnes (dock/carte/dock) s'étirent maintenant à la MÊME hauteur, celle
+  de toute la rangée disponible, plutôt que chacune haute seulement de son
+  propre contenu.
+- [x] `#hostPanel`/`#liveClassementDock`/`#stageWrap` : `overflow-y: auto`
+  en filet de sécurité (contenu qui dépasserait la hauteur disponible,
+  ex. beaucoup de joueurs).
+- [x] `#stageWrap` : passé en `display:flex; flex-direction:column;
+  justify-content:center` — la question reste centrée verticalement dans
+  la carte maintenant plus haute, au lieu de rester collée en haut.
+- [x] `#questionTypeBadge` : `left:50%; transform:translateX(-50%)` →
+  `left:0` (coin haut-gauche, au lieu de centré).
+- [x] `#timerContainer` : transformé en pastille compacte (`width:200px`)
+  ancrée `position:absolute; top:0; right:0` dans la carte (coin
+  haut-droit, symétrique au badge) — au lieu du bandeau pleine largeur
+  sticky habituel. Même `#timerBar`/`#timerLabel` à l'intérieur, aucun
+  changement JS.
+
+**Nouveau piège du même genre que les 2 précédents** (auto-placement CSS
+Grid pollué par un enfant de `.container` sans placement explicite) :
+`#joinCard`, laissé visible dans un test à la main (comme en tâche 006),
+créait cette fois une DEUXIÈME rangée implicite (grid-template-rows
+recalculé en `207.5px 498.5px` au lieu du seul `1fr` attendu), qui
+écrasait la hauteur voulue. Confirmé qu'en conditions réelles ce n'est PAS
+un bug : `#joinCard` est déjà `d-none` avant que `game-active` ne soit
+posé (voir le flux normal de démarrage de partie) — reproduit le test avec
+`#joinCard` correctement masqué (comme en vrai) pour valider le résultat
+final, plutôt que de complexifier encore la grille pour un état qui ne
+peut pas se produire.
+
+Vérifié en Browser pane (onglet neuf) à 1600px, `#joinCard` masqué comme en
+vrai jeu : les 3 colonnes font TOUTES 730px de haut (pleine hauteur de la
+rangée), badge en (top:1,left:1) et timer en (top:1,right:1) relatifs à la
+carte — coins haut-gauche/haut-droit confirmés. Revérifié à 390px : badge
+repasse en `fixed`, timer repasse en `sticky` pleine largeur (350px vs
+200px en régie) — layout mobile intact.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.
