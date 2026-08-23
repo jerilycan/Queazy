@@ -145,19 +145,14 @@
 
 * { box-sizing: border-box; }
 
+/* Fond "spot" repris de la nouvelle DA (canvas OptionB/Menu) : un seul halo
+   chaud en haut de page plutôt que les 3 halos animés (rose/cyan/violet,
+   voir git history) qu'il remplace — statique, pas d'animation. Thème sombre
+   uniquement : le thème clair (jamais maquetté dans cette refonte) garde son
+   propre fond ci-dessous, inchangé. */
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(255,47,176,0.28) 0%, transparent 45%),
-    radial-gradient(circle at 85% 15%, rgba(47,227,255,0.22) 0%, transparent 40%),
-    radial-gradient(circle at 50% 90%, rgba(123,47,247,0.24) 0%, transparent 50%),
-    linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
-  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
-  /* Pas de background-attachment: fixed : sur mobile (surtout iOS Safari),
-     un fond fixe combiné à une animation de background-position force des
-     repaints synchrones coûteux. Aucune différence visible ici (les pages
-     ne défilent quasiment jamais) mais nettement moins cher à faire tourner. */
-  animation: bg-drift 26s ease-in-out infinite alternate;
+  background: radial-gradient(2200px 1300px at 50% -10%, #3a1450 0%, #200a38 42%, var(--color-bg) 78%, var(--color-bg-deep) 100%);
   color: var(--color-text);
   font-family: 'Nunito', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
@@ -177,15 +172,6 @@ body {
     radial-gradient(circle at 12% 15%, rgba(var(--color-accent-rgb),0.07) 0%, transparent 40%),
     radial-gradient(circle at 88% 85%, rgba(var(--color-accent-2-rgb),0.06) 0%, transparent 40%),
     linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
-}
-
-@keyframes bg-drift {
-  0%   { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
-  100% { background-position: 20% 15%, 80% 20%, 55% 85%, 0 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body { animation: none; }
 }
 
 .container { max-width: 1100px; margin: 0 auto; padding: var(--space-lg); }
@@ -469,25 +455,49 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 .brand-logo-svg .cls-19 { fill: url(#Dégradé_sans_nom_20-4); stroke: url(#Dégradé_sans_nom_20-5); }
 
 /* Layout Elements */
+/* Barre pleine largeur (nouvelle DA, canvas Menu.dc.html) au lieu de la
+   pill centrée d'avant : logo à gauche, les .nav-group poussés ensemble à
+   droite (voir `.navbar > .brand` plus bas). theme.js regroupe les
+   .nav-group dans un <div class="nav-menu"> au runtime (display:contents en
+   desktop, donc transparent pour ce flex) — la structure DOM attendue par ce
+   script (exactement les .nav-group existants, ni plus ni moins) n'a pas
+   changé, seul l'habillage change ici. */
 .navbar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  padding: 0 24px;
-  height: 72px; /* Hauteur fixe pour la cohérence */
-  margin: 16px auto 0;
-  max-width: 1200px;
-  border-radius: 999px;
-  background: rgba(5,5,12,0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255,47,176,0.18);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 24px rgba(var(--color-accent-rgb),0.08), 0 0 0 1px rgba(255,255,255,0.03) inset;
+  padding: 0 22px;
+  height: 64px;
+  margin: 16px 16px 0;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(30,30,66,0.6) 0%, rgba(22,22,46,0.7) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,47,176,0.05) inset;
   position: sticky;
   top: 12px;
   z-index: 1000;
 }
+.navbar > .brand { margin-right: auto; }
 .nav-group { display: flex; gap: var(--space-sm); align-items: center; height: 100%; }
+/* Séparateur entre CRÉER/REJOINDRE et le groupe réglages/Mes Quiz/profil —
+   pseudo-élément plutôt qu'un <span> dans le HTML : pas besoin de toucher
+   au markup dupliqué sur les 6 pages pour ça. */
+.nav-group + .nav-group {
+  margin-left: 18px;
+  padding-left: 18px;
+  position: relative;
+}
+.nav-group + .nav-group::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 28px;
+  background: rgba(255,255,255,0.12);
+}
 .nav-group:last-child { justify-content: flex-end; }
 
 .profile-chip {
@@ -527,9 +537,6 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   background: rgba(255,255,255,0.16);
   transform: scale(1.08) rotate(-8deg);
 }
-/* Cas d'une navbar sans .nav-group (ex. page de connexion) : le bouton est
-   un enfant direct de la grille .navbar, on le pousse dans la 3e colonne. */
-.navbar > .theme-toggle-btn { grid-column: 3; justify-self: end; }
 .profile-name {
   color: #ffffff;
   font-weight: 700;
@@ -577,9 +584,9 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   border-radius: var(--radius-md);
   border: none;
   background: var(--gradient-card);
-  color: var(--color-text); 
+  color: var(--color-text);
   font-family: 'Baloo 2', sans-serif;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 14px;
   cursor: pointer;
   box-shadow: 0 4px 0 rgba(0,0,0,0.45), var(--shadow-sm);
@@ -592,12 +599,17 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 }
 .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 rgba(0,0,0,0.45), var(--shadow-md); }
 .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.45); }
-.btn-primary { background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%); color: white; box-shadow: 0 4px 0 var(--color-accent-deep), var(--shadow-sm); }
-.btn-primary:hover { box-shadow: 0 6px 0 var(--color-accent-deep), var(--shadow-md); }
-.btn-primary:active { box-shadow: 0 1px 0 var(--color-accent-deep); }
+/* Double ombre "3D + halo coloré" (nouvelle DA, voir OptionB/Menu.dc.html)
+   au lieu de la simple ombre + shadow-sm d'avant. */
+.btn-primary { background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%); color: white; box-shadow: 0 5px 0 var(--color-accent-deep), 0 10px 24px rgba(var(--color-accent-rgb),0.35); }
+.btn-primary:hover { box-shadow: 0 7px 0 var(--color-accent-deep), 0 14px 30px rgba(var(--color-accent-rgb),0.45); }
+.btn-primary:active { box-shadow: 0 1px 0 var(--color-accent-deep), 0 6px 16px rgba(var(--color-accent-rgb),0.3); }
 
+/* "CRÉER" en dégradé accent (rose/violet) au lieu de tile-blue (nouvelle DA,
+   Menu.dc.html) — "REJOINDRE" (:nth-child(even) ci-dessous) reste rouge,
+   inchangé. */
 .btn.btn-nav-main {
-  background: linear-gradient(135deg, var(--tile-blue) 0%, var(--tile-blue-deep) 100%) !important;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%) !important;
   color: white !important;
   padding: 12px 32px;
   border-radius: 14px;
@@ -605,7 +617,7 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   font-size: 16px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 3px 0 var(--tile-blue-deep);
+  box-shadow: 0 3px 0 var(--color-accent-deep), 0 8px 20px rgba(var(--color-accent-rgb),0.35);
   border: none;
   transform: none;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
@@ -615,7 +627,7 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   transform: none;
   border-radius: 14px;
   background: linear-gradient(135deg, var(--tile-red) 0%, var(--tile-red-deep) 100%) !important;
-  box-shadow: 0 3px 0 var(--tile-red-deep);
+  box-shadow: 0 3px 0 var(--tile-red-deep), 0 8px 20px rgba(var(--tile-red-rgb),0.35);
 }
 
 .btn.btn-nav-main:hover {
@@ -625,25 +637,37 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 
 .btn.btn-nav-main:active {
   transform: translateY(2px) !important;
-  box-shadow: 0 1px 0 var(--tile-blue-deep) !important;
+  box-shadow: 0 1px 0 var(--color-accent-deep) !important;
 }
 
 .btn.btn-nav-main:nth-child(even):active {
   box-shadow: 0 1px 0 var(--tile-red-deep) !important;
 }
 
+/* Pastille translucide (nouvelle DA, Menu.dc.html) au lieu du contour plein
+   2px d'avant. */
 .btn.btn-nav-secondary {
-  background: var(--gradient-card) !important;
+  background: rgba(var(--color-accent-rgb),0.10) !important;
   color: var(--color-accent) !important;
-  border: 2px solid var(--color-accent) !important;
-  border-radius: var(--radius-md);
+  border: 1px solid rgba(var(--color-accent-rgb),0.35) !important;
+  border-radius: 999px;
   font-weight: 800;
-  padding: 8px 20px;
+  padding: 9px 20px;
   transition: all 0.2s ease;
 }
 
+/* Page courante dans la navbar (ex. "Mes Quiz" posé directement dans le
+   HTML de select.html — pas de détection de route en JS, la navbar étant
+   déjà dupliquée par page). */
+.btn.btn-nav-secondary.btn-nav-active {
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: 0 3px 10px rgba(var(--color-accent-rgb),0.35);
+}
+
 .btn.btn-nav-secondary:hover {
-  box-shadow: 0 4px 0 rgba(123,47,247,0.2);
+  box-shadow: 0 4px 14px rgba(var(--color-accent-rgb),0.25);
 }
 
 .btn:disabled, .btn.is-disabled { 
@@ -2961,6 +2985,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   .navbar.nav-open .nav-menu { display: flex; }
   .nav-group { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
   .nav-group:last-child { justify-content: center; }
+  /* Le séparateur vertical entre .nav-group (voir plus haut) n'a de sens
+     qu'en ligne, sur le menu déroulant empilé en colonne il casserait la
+     mise en page — neutralisé ici. */
+  .nav-group + .nav-group { margin-left: 0; padding-left: 0; }
+  .nav-group + .nav-group::before { display: none; }
   .player-grid { grid-template-columns: repeat(2, 1fr); }
   /* "Mes Quiz"/"Quiz publics" (voir select.html #list) : contrairement aux
      tuiles joueur ci-dessus (nom court, 2 colonnes très bien), une carte
