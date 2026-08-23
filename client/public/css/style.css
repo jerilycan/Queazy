@@ -2914,11 +2914,56 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    dans ce fichier pour le détail). */
 body.game-active .navbar {
   justify-content: center;
+  /* Retour utilisateur (capture d'écran) : "toujours une navbar
+     disgracieuse" — masquer les boutons ne suffisait pas, la barre
+     elle-même (verre, bordure, ombre) restait visible derrière le logo.
+     Elle disparaît entièrement ici : ne reste plus qu'un logo flottant sur
+     le fond, sans aucune trace de "barre".
+     !important nécessaire : :root[data-theme="light"] .navbar (3 classes
+     de spécificité) l'emporterait sinon sur body.game-active .navbar
+     (2 classes + 1 type) et laissait passer son propre fond/ombre/bordure
+     clairs — repéré en vérifiant en thème clair, pas juste supposé bon. */
+  background: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 body.game-active .navbar .nav-group {
   display: none;
 }
 body.game-active .navbar > .brand { margin-right: 0; }
+/* Code de salle "EN DIRECT" : fixé en bas-droite partout ailleurs (voir
+   .persistent-code plus bas) — remonté en HAUT-GAUCHE pendant une partie
+   (retour utilisateur, référence maquette) : plus cohérent avec le logo
+   également remonté en haut, au lieu de deux repères à des hauteurs
+   opposées de l'écran. */
+body.game-active .persistent-code {
+  top: 20px;
+  bottom: auto;
+  left: 20px;
+  right: auto;
+}
+/* Joueurs + réponses reçues (retour utilisateur, référence maquette :
+   "8 joueurs · 5 ont répondu") — même recette de pastille que
+   .persistent-code juste au-dessus, coin haut-DROIT symétrique (le code de
+   salle est à gauche). Hôte uniquement : voir socket.on('answer:progress')
+   dans index.js, seul endroit où cette donnée existe côté client. */
+.game-progress-info {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+  background: var(--color-card);
+  padding: 8px 16px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.35);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
 
 @media (min-width: 1100px) {
   body.is-host.game-active .container {
@@ -2968,6 +3013,26 @@ body.game-active .navbar > .brand { margin-right: 0; }
        joueurs dans la pile d'avatars, etc.) dépassait la hauteur dispo,
        plutôt que de déborder de la carte. */
     overflow-y: auto;
+    /* Retour utilisateur (capture d'écran) : "la tuile gauche devrait
+       changer de design pour coller à celle de droite" (#liveClassementDock,
+       plus bas) — liseré rose (.border-accent-left, posé en dur dans le
+       HTML, réutilisé par d'autres cartes hors régie) retiré, padding
+       aligné sur celui du dock classement (18px, !important nécessaire :
+       le HTML pose un padding inline plus généreux pensé pour l'ancien
+       bandeau horizontal, précédent déjà en place pour ce même override en
+       mobile un peu plus bas dans ce fichier). */
+    border-left: none;
+    padding: 18px !important;
+  }
+  /* Icône badge + gros titre : langage visuel plus "chargé" que le dock
+     classement d'en face (juste un émoji + un petit label). Réduit ici
+     pour matcher, sans toucher au HTML partagé avec l'ancien système
+     desktop 1024-1099px (voir plus haut) ni le mobile. */
+  body.is-host.game-active .container #hostPanel .host-panel-icon {
+    display: none;
+  }
+  body.is-host.game-active .container #hostPanel .host-panel-eyebrow h3 {
+    font-size: 15px;
   }
   /* Groupe boutons (Sélectionner/LANCER/Suivant) : en ligne par défaut
      (voir #hostPanel dans index.html, pensé pour l'ancien bandeau

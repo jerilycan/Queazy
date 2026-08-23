@@ -282,6 +282,45 @@ même centrage (795 vs 800 attendu) ET grille régie toujours intacte
 — navbar entièrement revenue à la normale (`justify-content:normal`,
 `nav-group` en `flex`).
 
+## Suite — retour utilisateur (6e passe) : la barre elle-même, pas juste ses boutons
+Capture d'écran + capture de référence fournies : "toujours une navbar
+disgracieuse [...] un code salle qui devrait être en haut à droite [puis
+corrigé en cours de route : "en haut à gauche, pardon"] [...] et en haut à
+droite le nombre de joueurs + réponses reçues [...] la tuile gauche devrait
+changer de design pour coller à celle de droite."
+
+- [x] `body.game-active .navbar` : ne se contente plus de masquer les
+  boutons — `background/backdrop-filter/border/box-shadow/border-radius`
+  tous à `none`/`0` (`!important`, voir bug ci-dessous). La barre elle-même
+  disparaît, ne reste que le logo centré flottant sur le fond.
+- [x] `.persistent-code` ("EN DIRECT · Code salle") : `bottom-right` →
+  `top-left` pendant une partie.
+- [x] Nouveau `#gameProgressInfo` (coin haut-droit) : "N joueurs · M ont
+  répondu" — réutilise la donnée déjà envoyée par le serveur à l'hôte
+  (`socket.on('answer:progress')`, déjà utilisée pour `#loadedInfo` dans le
+  panneau hôte) plutôt qu'un nouvel événement. Hôte uniquement : c'est la
+  seule donnée disponible côté client.
+- [x] `#hostPanel` (tuile gauche) restylé pour "coller" à
+  `#liveClassementDock` (tuile droite) en régie desktop : liseré rose
+  (`.border-accent-left`) retiré, padding aligné (18px), icône-badge
+  masquée, titre réduit à la taille du titre du dock classement (15px).
+
+**Bug trouvé EN VÉRIFIANT** (pas supposé bon) : le premier essai de
+masquage de la navbar (`background:none` etc. sans `!important`) ne
+s'appliquait PAS en thème clair — `:root[data-theme="light"] .navbar`
+(3 sélecteurs de classe) l'emportait sur `body.game-active .navbar`
+(2 classes + 1 type), spécificité CSS plus élevée. Repéré en testant
+explicitement les deux thèmes plutôt qu'un seul. Corrigé avec
+`!important` sur ces propriétés précises (justifié : c'est une
+suppression volontaire et totale du style, pas un réglage fin qui
+mériterait une meilleure spécificité).
+
+Vérifié en Browser pane (feuille de style forcée fraîche) : navbar sans
+fond/ombre/bordure en thème clair ET sombre, boutons masqués, logo centré ;
+code de salle en haut-gauche (20,20) y compris à 390px ; `#gameProgressInfo`
+en haut-droite ; `#hostPanel` sans liseré, padding 18px, icône masquée ;
+hors partie, navbar entièrement revenue à la normale dans les deux thèmes.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.

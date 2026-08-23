@@ -467,6 +467,15 @@
         Code salle: <span id="displayRoomCode" class="font-bold text-accent"></span>
       </div>
 
+      <!-- Joueurs + réponses reçues, coin haut-droit pendant une partie
+           (retour utilisateur, référence maquette : "8 joueurs · 5 ont
+           répondu") — hôte uniquement : la donnée (compteur de réponses)
+           n'est de toute façon envoyée par le serveur qu'à l'hôte (voir
+           socket.on('answer:progress') dans index.js, déjà utilisé pour
+           #loadedInfo dans le panneau hôte — pas une nouvelle donnée,
+           juste un 2e endroit où l'afficher). -->
+      <div id="gameProgressInfo" class="game-progress-info d-none"></div>
+
       <!-- Badge permanent du type de question (retour utilisateur) : reste
            affiché pendant toute la question, dans un coin — repère rapide du
            type en cours, indépendant du fil (position fixe), même quand on a

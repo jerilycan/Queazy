@@ -2338,6 +2338,9 @@ const leaderboard = document.getElementById('leaderboard')
 // unique renderLeaderboard() que le classement plein écran ci-dessus.
 const liveClassementDock = document.getElementById('liveClassementDock')
 const liveClassementList = document.getElementById('liveClassementList')
+// Joueurs + réponses reçues, coin haut-droit pendant une partie (hôte
+// uniquement) — voir socket.on('answer:progress') plus bas.
+const gameProgressInfo = document.getElementById('gameProgressInfo')
 // Code de salle : centralise la mise à jour de tout ce qui porte
 // .display-room-code (aujourd'hui #displayRoomCode dans #roomInfo
 // pré-partie) plutôt que dupliqué à chaque appelant existant. Généralisé
@@ -2753,7 +2756,7 @@ const resetUI = () => {
   // utilisateur : "laisse des traces"). Réaffichée par le prochain
   // question:show reçu (voir son handler). 'leaderOverlay' : même raison,
   // pour l'écran de classement plein écran.
-  const panels = ['lobby', 'main', 'leaderOverlay', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle']
+  const panels = ['lobby', 'main', 'leaderOverlay', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle', 'gameProgressInfo']
   panels.forEach(id => {
     const el = document.getElementById(id)
     if (el) {
@@ -4826,10 +4829,18 @@ if (blindtestArtistInput) blindtestArtistInput.addEventListener('keydown', e => 
 
 socket.on('answer:ack', () => { showAnswerStatus() })
 
-// Compteur de réponses affiché dans la barre de contrôle de l'hôte
+// Compteur de réponses affiché dans la barre de contrôle de l'hôte + coin
+// haut-droit de l'écran (#gameProgressInfo, voir index.html) — même donnée,
+// affichée à un 2e endroit plutôt qu'un nouvel événement serveur.
 socket.on('answer:progress', ({ answered, total }) => {
-  if (!isHost || !loadedInfo || !hostQuestionLabel) return
-  loadedInfo.textContent = `${hostQuestionLabel} · ${answered}/${total} réponse${answered > 1 ? 's' : ''}`
+  if (!isHost) return
+  if (loadedInfo && hostQuestionLabel) {
+    loadedInfo.textContent = `${hostQuestionLabel} · ${answered}/${total} réponse${answered > 1 ? 's' : ''}`
+  }
+  if (gameProgressInfo) {
+    gameProgressInfo.textContent = `${total} joueur${total > 1 ? 's' : ''} · ${answered} ont répondu`
+    gameProgressInfo.classList.remove('d-none')
+  }
 })
 
 // Gestion de la modération (Hôte)
