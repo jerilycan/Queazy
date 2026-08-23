@@ -355,6 +355,68 @@ repasse à 28px avec label superposé (`position:absolute`), logo à 56px —
 comportements mobile distincts confirmés, pas juste un `display:none`
 oublié.
 
+## Suite — retour utilisateur (8e passe) : panneau hôte complet + forme
+Capture d'écran de référence (panneau "TU ANIMES / Capitales du monde")
+fournie : "reprends les éléments de cette barre, et rajoute les : un logo,
+un gros bouton question suivante en haut, la gestion du son par défaut
+pour les joueurs, et le 'sur place / à distance' en bas." Puis, en cours
+de route : "la forme de la tuile de gauche est toujours pas adéquate, tout
+les angles doivent être arrondis, il ne doit pas y avoir de scrollbar."
+
+- [x] Icône restaurée (masquée par erreur à la passe précédente en
+  interprétant trop littéralement "coller au dock classement").
+- [x] **Réordonnancement réel** du panneau (icône/titre → barre de
+  progression → gros bouton "Question suivante ✨" → carte musique →
+  pastille "Ambiance" tout en bas) : `#hostPanel` a 2 enfants directs en
+  HTML (bloc texte, groupe de boutons) — `order` seul ne peut pas
+  entrelacer les enfants de l'un avec ceux de l'autre. Résolu avec
+  `display: contents` sur le bloc texte (UNIQUEMENT en régie desktop) :
+  il s'efface du rendu sans toucher au DOM, ses enfants deviennent des
+  enfants directs de `#hostPanel`, tous réordonnables ensemble via `order`.
+  Le bandeau horizontal d'origine (mobile, desktop 1024-1099px) n'est
+  jamais dans ce contexte, donc jamais affecté.
+- [x] `#hostPlayerStrip`/`#loadedInfo` masqués (régie uniquement) :
+  redondants avec la barre de progression + `#gameProgressInfo` (coin
+  haut-droit, 6e passe) — évite de dupliquer la même info 3 fois.
+- [x] Bouton "Question suivante ✨" : 64px de haut (au lieu de 48px),
+  texte mis à jour (était "Suivant").
+- [x] Carte musique : restructurée en 2 lignes (libellé + pourcentage sur
+  une ligne, barre pleine largeur en dessous) au lieu d'une seule ligne
+  compacte — même éléments (`#audioVolumeTrack`/`#audioVolumeLabel`),
+  juste réordonnés via `order` + `flex-basis:100%` sur la barre.
+- [x] Nouvelle pastille `#hostAmbiancePill` ("🎉 Ambiance : Sur place / À
+  distance") — affiche `gameMode`, déjà suivi et diffusé par le serveur
+  (`socket.on('game:mode')`), aucun nouvel état. `margin-top:auto` la
+  pousse tout en bas du panneau (étiré pleine hauteur, voir tâche 005).
+- [x] **Bug de forme corrigé** : `overflow-y:auto` → `overflow:hidden` sur
+  `#hostPanel` — une scrollbar visible carre visuellement le coin qu'elle
+  longe, même avec `border-radius` posé sur la boîte (artefact de rendu
+  connu). Le contenu a aussi été allégé (2 éléments masqués ci-dessus),
+  donc plus de raison réaliste de déborder. `#stageWrap`/
+  `#liveClassementDock` gardent `overflow-y:auto` (contenu réellement
+  variable — question longue, beaucoup de joueurs — pas concernés par ce
+  retour, qui visait spécifiquement la tuile gauche).
+
+**Fausse alerte pendant la vérification** : un test à 390px obtenu en
+RESIZE depuis 1600px (au lieu d'une navigation directe à cette largeur)
+rapportait un bouton toujours à 64px alors que la media query
+`(min-width:1100px)` ne matchait plus (`matchMedia(...).matches === false`)
+— everything pointait vers un bug de cascade CSS. Repris en navigant
+DIRECTEMENT à 390px (au lieu de resize depuis un onglet large) : 48px
+correct, confirmant que c'était un artefact de l'outil de resize
+automatisé (la media query ne s'était pas ré-évaluée), pas un vrai bug.
+Noté ici pour la suite : préférer une navigation directe à la largeur
+voulue plutôt qu'un resize progressif quand un résultat semble incohérent.
+
+Vérifié en Browser pane (feuille de style forcée fraîche, 1600px) :
+`overflow:hidden` + `border-radius:24px` uniforme confirmés, icône
+visible, ordre réel des éléments confirmé par leurs positions verticales
+(eyebrow→127px, barre→177px, bouton→211px, musique→291px, ambiance→787px
+poussée en bas), bouton 64px avec le bon texte, pastille ambiance avec le
+bon texte. Revérifié à 390px (navigation directe) : wrapper texte repasse
+en `display:flex` normal, pastille ambiance cachée, bouton à 48px —
+mobile confirmé intact.
+
 ## Risques restants
 - Hauteur du wordmark (44px) pas comparée à l'échelle exacte de la
   maquette — ajustable si trop petit/grand à l'usage réel.

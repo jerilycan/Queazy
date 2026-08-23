@@ -3333,6 +3333,10 @@ socket.on('game:mode', ({ mode }) => {
   gameMode = mode === 'remote' ? 'remote' : 'irl'
   if (gameModeRemoteToggle) gameModeRemoteToggle.checked = gameMode === 'remote'
   updateIrlPlayerUI()
+  // Pastille "Ambiance" du panneau hôte régie (voir index.html) — même
+  // donnée que ci-dessus, juste un 2e affichage.
+  const ambianceValueEl = document.getElementById('hostAmbianceValue')
+  if (ambianceValueEl) ambianceValueEl.textContent = gameMode === 'remote' ? 'À distance' : 'Sur place'
   // updatePbacEyeVisibility est défini plus bas dans ce fichier (const, pas
   // hissée) — mais ce handler ne s'exécute qu'au premier game:mode reçu du
   // serveur, largement après que tout le script ait fini de s'évaluer, donc

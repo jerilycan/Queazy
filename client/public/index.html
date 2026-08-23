@@ -402,7 +402,19 @@
         <div class="d-flex gap-sm">
           <button id="selectQuizBtn" class="btn h-48 px-32">Sélectionner un Quiz</button>
           <button id="startQuiz" class="btn btn-primary h-48 px-32">LANCER</button>
-          <button id="nextQuestion" class="btn btn-primary h-48 px-32 d-none">Suivant</button>
+          <button id="nextQuestion" class="btn btn-primary h-48 px-32 d-none">Question suivante ✨</button>
+        </div>
+        <!-- Ambiance de la salle (sur place / à distance) — reprend
+             purement l'affichage de `gameMode`, déjà suivi et diffusé par
+             le serveur (voir socket.on('game:mode') dans index.js pour le
+             réglage complet, un cran au-dessus de l'écran de jeu) : aucun
+             nouvel état, juste un 2e endroit où le lire, visible pendant
+             la partie elle-même (retour utilisateur, référence maquette).
+             En dehors de la régie hôte desktop, cette pastille reste
+             cachée (display:none par défaut, voir style.css) — pas de
+             place fiable pour elle dans le bandeau horizontal d'origine. -->
+        <div id="hostAmbiancePill" class="host-ambiance-pill">
+          🎉 Ambiance : <span id="hostAmbianceValue">Sur place</span>
         </div>
       </div>
 

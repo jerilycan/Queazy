@@ -3024,11 +3024,15 @@ body.game-active .persistent-code {
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
-    /* Étiré à toute la hauteur de la rangée (voir .container ci-dessus) —
-       overflow:auto en filet de sécurité si jamais le contenu (beaucoup de
-       joueurs dans la pile d'avatars, etc.) dépassait la hauteur dispo,
-       plutôt que de déborder de la carte. */
-    overflow-y: auto;
+    /* Étiré à toute la hauteur de la rangée (voir .container ci-dessus).
+       overflow:hidden plutôt que auto (retour utilisateur : "tous les
+       angles doivent être arrondis, il ne doit pas y avoir de scrollbar")
+       — une scrollbar visible carre visuellement le coin qu'elle longe,
+       même avec border-radius posé sur la boîte. Le contenu a de toute
+       façon été allégé (pile joueurs + #loadedInfo masqués ci-dessous,
+       redondants avec le reste de l'écran) : plus de raison réaliste de
+       déborder. */
+    overflow: hidden;
     /* Retour utilisateur (capture d'écran) : "la tuile gauche devrait
        changer de design pour coller à celle de droite" (#liveClassementDock,
        plus bas) — liseré rose (.border-accent-left, posé en dur dans le
@@ -3040,22 +3044,80 @@ body.game-active .persistent-code {
     border-left: none;
     padding: 18px !important;
   }
-  /* Icône badge + gros titre : langage visuel plus "chargé" que le dock
-     classement d'en face (juste un émoji + un petit label). Réduit ici
-     pour matcher, sans toucher au HTML partagé avec l'ancien système
-     desktop 1024-1099px (voir plus haut) ni le mobile. */
-  body.is-host.game-active .container #hostPanel .host-panel-icon {
+  /* Retour utilisateur (référence maquette détaillée) : "reprends les
+     éléments de cette barre" — icône remise (elle n'aurait jamais dû
+     disparaître, cf. commentaire retiré ci-dessus), mais surtout un VRAI
+     réordonnancement demandé : gros bouton "Question suivante" en haut
+     (pas en bas), musique en dessous, pastille "Ambiance" tout en bas.
+     #hostPanel a 2 enfants directs en HTML (bloc texte .d-flex.flex-
+     column.gap-xs, groupe de boutons .d-flex.gap-sm) — `order` seul ne
+     peut PAS entrelacer les enfants de l'un avec ceux de l'autre. Solution :
+     display:contents sur le bloc texte, UNIQUEMENT ici (régie desktop) —
+     il "s'efface" du rendu sans rien changer au DOM, et tous ses enfants
+     (icône/titre, pile joueurs, infos, barre de progression, ligne
+     musique) deviennent des enfants DIRECTS de #hostPanel au même titre
+     que le groupe de boutons : tous réordonnables ensemble via `order`.
+     Le bandeau horizontal d'origine (mobile, desktop 1024-1099px) n'est
+     jamais dans ce contexte, donc jamais concerné. */
+  body.is-host.game-active .container #hostPanel > .d-flex.flex-column.gap-xs {
+    display: contents;
+  }
+  body.is-host.game-active .container #hostPanel .host-panel-eyebrow { order: 1; }
+  /* Pile d'avatars + texte "Question X/Y..." : redondants une fois la
+     barre de progression + le compteur #gameProgressInfo (coin haut-droit
+     de l'écran, tâche 006) en place — masqués ici plutôt que dupliqués. */
+  body.is-host.game-active .container #hostPanel #hostPlayerStrip,
+  body.is-host.game-active .container #hostPanel #loadedInfo {
     display: none;
   }
-  body.is-host.game-active .container #hostPanel .host-panel-eyebrow h3 {
-    font-size: 15px;
-  }
+  body.is-host.game-active .container #hostPanel #hostProgressBar { order: 2; }
   /* Groupe boutons (Sélectionner/LANCER/Suivant) : en ligne par défaut
      (voir #hostPanel dans index.html, pensé pour l'ancien bandeau
-     horizontal) — empilés pleine largeur dans le dock vertical, comme sur
-     la maquette ("Question suivante" en gros bouton plein). */
+     horizontal) — empilés pleine largeur et remontés juste sous la barre
+     de progression, comme sur la maquette ("Question suivante" en gros
+     bouton, tout en haut du panneau). */
   body.is-host.game-active .container #hostPanel > .d-flex.gap-sm {
+    order: 3;
     flex-direction: column;
+  }
+  body.is-host.game-active .container #hostPanel > .d-flex.gap-sm .btn {
+    /* Bouton "plein" comme sur la maquette : plus haut/généreux que le
+       h-48 par défaut (pensé pour l'ancien bandeau horizontal étroit). */
+    height: 64px;
+    font-size: 16px;
+    border-radius: var(--radius-md);
+  }
+  body.is-host.game-active .container #hostPanel .host-volume-row {
+    order: 4;
+    /* Reprend la maquette : carte à part (fond + radius), pas une simple
+       ligne de texte posée à même le panneau — libellé + pourcentage sur
+       une ligne, la barre juste en dessous sur toute la largeur (voir
+       flex-wrap ci-dessous, .volume-track prend déjà 100% en pratique
+       une fois seule sur sa ligne). */
+    flex-wrap: wrap;
+    background: var(--color-surface-2);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    justify-content: space-between;
+  }
+  body.is-host.game-active .container #hostPanel .host-volume-row .volume-track {
+    order: 3;
+    flex-basis: 100%;
+    height: 8px;
+  }
+  body.is-host.game-active .container #hostPanel .host-volume-row #audioVolumeLabel {
+    order: 2;
+    margin-left: auto;
+  }
+  body.is-host.game-active .container #hostPanel #hostAmbiancePill {
+    order: 5;
+    /* Pousse la pastille tout en bas du panneau (retour utilisateur :
+       "sur place / à distance en bas") — #hostPanel est déjà étiré à toute
+       la hauteur de la rangée (voir plus haut), donc une marge auto avant
+       le dernier élément colle bien celui-ci au bord bas plutôt que de le
+       laisser juste après la musique. */
+    margin-top: auto;
+    display: block;
   }
   body.is-host.game-active .container #stageWrap {
     grid-column: 2;
@@ -3310,6 +3372,25 @@ body.game-active .persistent-code {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
+
+/* Pastille "Ambiance : Sur place / À distance" du panneau hôte régie —
+   affiche gameMode (voir socket.on('game:mode') dans index.js), déjà
+   suivi côté client, jamais un nouvel état. Cachée par défaut (hors régie
+   desktop, pas de place fiable pour elle dans le bandeau horizontal
+   d'origine) — affichée uniquement via #hostAmbiancePill { order: 5 }
+   dans la media query régie plus haut. */
+.host-ambiance-pill {
+  display: none;
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--color-border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+.host-ambiance-pill #hostAmbianceValue { color: var(--color-text); }
 
 .question-text {
   font-family: 'Baloo 2', sans-serif;
