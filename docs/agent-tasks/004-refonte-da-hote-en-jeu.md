@@ -107,12 +107,46 @@ overlay de classement/podium, sidebar de récap, overlay de modération.
 - Pas de changement de comportement JS dans ce lot — rien d'autre à tester
   côté logique.
 
+## Suite — retour utilisateur avec capture d'écran en vraie partie
+Capture d'écran fournie (hôte, question Petit Bac en cours) : "ça ne
+ressemble pas du tout à la DA attendue". Diagnostic à partir de l'image —
+premier retour visuel réel sur `index.html` en jeu de toute cette série de
+tâches (001-004 précédents, jamais vérifiés qu'à l'aveugle ou à la main).
+
+**Constat** : `#hostPanel` (carte, icône dégradé, points de progression,
+bouton "Suivant" dégradé) est bien conforme. Le vrai décrochage visuel est
+`.timer-container`/`.timer-bar-wrapper` (barre de temps) : design hérité
+tel quel du chantier "plateau chaleureux" (pré-refonte 001-004), sans la
+moindre ombre — seul élément de tout l'écran de jeu à flotter à plat sur le
+halo de fond sans aucun relief, contrairement à `.card`/`.navbar`/
+`.question-type-badge` juste à côté qui en ont tous une.
+
+- [x] `.timer-container` : ajout `box-shadow: 0 4px 14px rgba(0,0,0,0.3)`
+  (même recette que `.question-type-badge`, son voisin direct sur le même
+  écran) — ne touche pas la couleur du verre (décision déjà actée plus
+  haut : rester en noir quasi-opaque).
+- [x] `.timer-bar-wrapper` : ombre portée externe ajoutée en plus de
+  l'ombre interne d'origine (`0 4px 12px rgba(0,0,0,0.25)`) — relief
+  "punchy" cohérent avec `.btn`/`.card` ailleurs dans l'appli.
+
+Vérifié en Browser pane (onglet neuf + cache-bust) : `getComputedStyle`
+confirme les deux `box-shadow` appliqués tels qu'écrits. Pas de capture
+d'écran possible dans cet outil (le rendu ne compose pas en tâche de fond)
+— **à confirmer visuellement par l'utilisateur**, changement purement
+additif (aucune couleur/mise en page touchée) donc risque de régression
+faible, mais l'appréciation "punchy ou pas" reste à l'œil.
+
 ## Risques restants
-- Audit terminé sur tout le périmètre listé plus haut — rien d'identifié
-  qui reste ouvert dans ce lot.
+- Le reste de l'audit (panneau hôte, classement, intro, orbe, récap,
+  modération) tient toujours — seule la barre de temps s'est révélée être
+  un vrai décrochage une fois vue en conditions réelles, pas détecté par la
+  seule lecture de code lors de l'audit précédent.
+- Cette passe reste additive (ombre uniquement) — si "pas du tout la DA
+  attendue" visait autre chose que le manque de relief (palette, forme,
+  taille de la barre...), remonter précisément quoi pour aller plus loin.
 - Priorité de test : lancer une vraie partie jusqu'au classement, dans les
   deux thèmes — seule vérification faite dans cette session est manuelle
-  (affichage forcé de `#leaderOverlay` hors partie réelle).
+  (affichage forcé hors partie réelle).
 
 ## Statut
 `en review`
