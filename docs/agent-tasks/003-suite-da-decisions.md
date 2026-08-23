@@ -53,9 +53,15 @@ rien à faire). Point d'attention sur l'item 5 : c'est un changement de
   test disponible dans ce navigateur sandboxé.
 - [x] Item 7 — Connexion/Inscription : vérifiées (dark + light), déjà
   conformes, aucun correctif nécessaire.
-- [x] Item 6 — Éditeur Blind Test : carte dédiée autour du lecteur audio +
-  icône pulsante décorative (pas une vraie forme d'onde — décoder l'audio
-  réel aurait été une fonctionnalité à part entière, hors périmètre visuel).
+- [x] Item 6 — Éditeur Blind Test, **repris et amélioré sur demande
+  explicite** : d'abord juste une carte + icône décorative (l'audio réel
+  n'était pas décodé, pensé hors périmètre visuel) — en y regardant de plus
+  près, l'app décode DÉJÀ l'audio importé en mémoire (`pendingAudioBuffer`,
+  utilisé pour l'export WAV, voir `encodeWavMono`). Construit une VRAIE
+  forme d'onde à partir de ces données déjà là (aucun nouveau décodage) :
+  90 barres = crête réelle de l'extrait, portion Début→Début+Durée
+  surlignée en direct à chaque changement des champs (voir
+  `renderWaveform`/`updateWaveformSelection` dans `editor.js`).
 - [x] Item 5 — Nouveau quiz à 0 question : **changement de comportement**,
   le plus sensible de cette liste. Voir détail ci-dessous.
 
@@ -94,6 +100,15 @@ rien à faire). Point d'attention sur l'item 5 : c'est un changement de
   suppression/sauvegarde), réutilisation de `#qType` comme seule source de
   vérité, syntaxe correcte. **Priorité n°1 à tester toi-même avant de
   considérer cet item terminé.**
+
+- **Forme d'onde Blind Test : pas vérifiée en conditions réelles**, même
+  contrainte que l'item 5 (`editor.html` exige une vraie session, pas de
+  compte de test disponible). Vérifiée par lecture de code uniquement :
+  logique cohérente (une seule barre en cours de sélection = un seul calcul,
+  pas de calque dupliqué), branchée sur `clampAudioTrimInputs` déjà central.
+  **À tester toi-même** : importer un fichier audio dans une question Blind
+  Test et vérifier que la forme d'onde apparaît + que la portion en accent
+  suit bien les champs Début/Durée.
 
 ## Statut
 `en review`

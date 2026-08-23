@@ -302,6 +302,7 @@ const blindtestSection = document.getElementById('blindtestSection')
 const audioUploadInput = document.getElementById('audioUpload')
 const audioTrimWrap = document.getElementById('audioTrimWrap')
 const audioTrimPlayer = document.getElementById('audioTrimPlayer')
+const audioWaveformEl = document.getElementById('audioWaveform')
 const audioStartInput = document.getElementById('audioStartInput')
 const audioDurationInput = document.getElementById('audioDurationInput')
 const audioStartFromEndBtn = document.getElementById('audioStartFromEndBtn')
@@ -1207,6 +1208,56 @@ const clampAudioTrimInputs = () => {
   let start = Math.max(0, Math.min(Number(audioStartInput.value) || 0, pendingAudioBuffer.duration - duration))
   audioDurationInput.value = Math.round(duration)
   audioStartInput.value = Math.round(start)
+  updateWaveformSelection()
+}
+
+// Forme d'onde (nouvelle DA, tâche 003) : VRAIE forme d'onde de l'extrait
+// importé, pas une décoration — calculée depuis pendingAudioBuffer, déjà
+// décodé en mémoire pour l'export WAV (voir encodeWavMono), aucun nouveau
+// décodage. 90 "seaux" fixes (assez pour un rendu lisible, indépendant de
+// la durée réelle du morceau) ; crête (max absolu, plus lisible qu'une
+// moyenne pour repérer les passages forts) du premier canal — un mixdown
+// stéréo précis n'apporterait rien de plus à cette échelle visuelle.
+const WAVEFORM_BARS = 90
+let waveformBucketDuration = 0 // secondes couvertes par CHAQUE barre, pour updateWaveformSelection
+const renderWaveform = (audioBuffer) => {
+  if (!audioWaveformEl) return
+  audioWaveformEl.innerHTML = ''
+  const data = audioBuffer.getChannelData(0)
+  const bucketSize = Math.max(1, Math.floor(data.length / WAVEFORM_BARS))
+  waveformBucketDuration = audioBuffer.duration / WAVEFORM_BARS
+  const frag = document.createDocumentFragment()
+  for (let i = 0; i < WAVEFORM_BARS; i++) {
+    let peak = 0
+    const start = i * bucketSize
+    const end = Math.min(data.length, start + bucketSize)
+    for (let j = start; j < end; j++) {
+      const abs = Math.abs(data[j])
+      if (abs > peak) peak = abs
+    }
+    const bar = document.createElement('span')
+    bar.className = 'bar'
+    // Plancher à 6% : une barre à 0% (silence) redevient un point invisible,
+    // perd toute lisibilité du rythme de la forme d'onde.
+    bar.style.setProperty('--h', `${Math.max(6, Math.round(peak * 100))}%`)
+    frag.appendChild(bar)
+  }
+  audioWaveformEl.appendChild(frag)
+  updateWaveformSelection()
+}
+
+// Marque en accent les barres couvertes par Début→Début+Durée (voir
+// clampAudioTrimInputs, seul appelant après le rendu initial) — c'est la
+// SEULE logique qui décide "quelle barre est dans l'extrait", pas de calque
+// séparé à garder synchronisé.
+const updateWaveformSelection = () => {
+  if (!audioWaveformEl || !waveformBucketDuration) return
+  const start = Number(audioStartInput.value) || 0
+  const end = start + (Number(audioDurationInput.value) || 0)
+  ;[...audioWaveformEl.children].forEach((bar, i) => {
+    const t = i * waveformBucketDuration
+    bar.classList.toggle('in-range', t >= start && t < end)
+  })
 }
 
 // "Depuis la fin" (retour utilisateur : viser la fin d'un morceau obligeait à
@@ -1304,6 +1355,7 @@ if (audioUploadInput) {
       pendingAudioBuffer = audioBuffer
       audioStartInput.value = 0
       audioDurationInput.value = Math.min(15, Math.floor(audioBuffer.duration))
+      renderWaveform(audioBuffer)
       clampAudioTrimInputs()
       if (audioTotalDurationEl) audioTotalDurationEl.textContent = `(morceau : ${formatAudioDuration(audioBuffer.duration)})`
       audioTrimWrap.classList.remove('d-none')

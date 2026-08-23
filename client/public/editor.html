@@ -490,6 +490,13 @@
             <label>Extrait audio</label>
             <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
             <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
+              <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
+                   pendingAudioBuffer, déjà décodé en mémoire pour l'export WAV
+                   (voir editor.js encodeWavMono) : pas de nouveau décodage,
+                   juste un rendu en plus de données déjà là. La portion Début→
+                   Début+Durée est surlignée en direct (voir
+                   editor.js renderWaveform/updateWaveformSelection). -->
+              <div id="audioWaveform" class="audio-waveform"></div>
               <audio id="audioTrimPlayer" controls></audio>
               <div class="d-grid grid-cols-split gap-lg mt-8">
                 <div class="detail-section">

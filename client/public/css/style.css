@@ -2641,10 +2641,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 /* Éditeur : recadreur audio (voir editor.js encodeWavMono) */
 /* Carte dédiée (nouvelle DA, tâche 003, décision validée) au lieu du simple
-   lecteur natif posé nu — même halo pulsant que la maquette "Blind Test"
-   (purement décoratif, ne représente pas la forme d'onde réelle de
-   l'extrait : construire une vraie visualisation demanderait de décoder
-   l'audio, hors périmètre d'une passe visuelle). */
+   lecteur natif posé nu. */
 .audio-trim-wrap, .audio-clip-wrap {
   max-width: 480px;
   background: var(--color-surface);
@@ -2655,7 +2652,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   flex-direction: column;
   gap: 14px;
 }
-.audio-trim-wrap::before, .audio-clip-wrap::before {
+/* .audio-trim-wrap (import en cours) a maintenant la vraie forme d'onde
+   (voir .audio-waveform plus bas) — le halo pulsant garde son sens
+   uniquement sur .audio-clip-wrap (l'extrait déjà validé, juste un lecteur
+   nu sans forme d'onde à côté). */
+.audio-clip-wrap::before {
   content: '🎵';
   align-self: center;
   width: 52px;
@@ -2669,6 +2670,39 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   box-shadow: 0 0 30px rgba(var(--color-accent-rgb),0.3);
 }
 .audio-trim-wrap audio, .audio-clip-wrap audio { width: 100%; }
+
+/* Vraie forme d'onde (nouvelle DA, tâche 003) — voir editor.js
+   renderWaveform : une barre par "seau" d'échantillons, hauteur = crête
+   réelle de l'extrait audio importé. La portion Début→Début+Durée ressort en
+   accent via .in-range sur les barres concernées (voir
+   updateWaveformSelection) — pas de calque séparé, une seule source de
+   vérité pour "quelle barre est dans l'extrait". */
+.audio-waveform {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 56px;
+  padding: 0 2px;
+}
+.audio-waveform .bar {
+  position: relative;
+  flex: 1;
+  min-width: 1px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.audio-waveform .bar::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: var(--h, 8%);
+  border-radius: 2px;
+  background: rgba(255,255,255,0.18);
+  transition: background 0.15s ease;
+}
+.audio-waveform .bar.in-range::after { background: var(--color-accent); }
 
 /* Badge de confirmation après l'envoi d'une réponse */
 .answer-status {
