@@ -203,6 +203,8 @@ const checkAuth = async () => {
     const user = session.user
     let avatarUrl = null
     let displayName = user.user_metadata.full_name || user.email.split('@')[0]
+    // Repli volontaire sur user_metadata/email (déjà posé juste au-dessus) en
+    // cas d'échec (RLS, réseau) — pas bloquant pour rejoindre/créer une salle.
     try {
       const { data: p } = await window.supabaseClient.from('profiles')
         .select('username, avatar_url')
@@ -242,6 +244,11 @@ const params = new URLSearchParams(location.search)
 const preRoom = params.get('room')
 const autoCreate = params.get('create')
 const autoJoin = params.get('join')
+// Bouton "▶ Jouer ce quiz" de l'onglet "Quiz publics" (select.js) : lance
+// une salle hôte directement avec ce quiz préchargé, sans repasser par la
+// popup "Sélectionner un Quiz" — voir plus bas, loadQuizById() fait déjà
+// tout le travail utilisé normalement par confirmQuizSelect.
+const preQuizId = params.get('quiz')
 
 if (preRoom) {
   roomInput.value = preRoom.toUpperCase()
@@ -275,6 +282,10 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     resetUI()
     createRoom()
+    // .catch() obligatoire depuis que loadQuizById relance l'erreur (voir sa
+    // définition plus bas) — sinon rejet de promesse non géré ici, ce chemin
+    // n'ayant pas de bouton à réactiver comme le popup "Sélectionner un Quiz".
+    if (preQuizId) loadQuizById(preQuizId).catch(() => { showAnnounce('Impossible de charger ce quiz.', 'error') })
   } else if (autoJoin === 'true') {
     resetUI()
     showJoinPanel(false)
@@ -292,7 +303,7 @@ const timerLabel = document.getElementById('timerLabel')
 // d'avoir une seule source de vérité pour ce badge.
 // hint : phrase courte expliquant COMMENT répondre — affichée à CHAQUE
 // question, pour TOUS les types (chantier v1.53, retour utilisateur), dans
-// l'intro avant le décompte (voir showQuestionIntro plus bas). Les 7 types
+// l'intro avant le décompte (voir showQuestionIntro plus bas). Les types
 // listés dans COMPLEX_TYPES (mécanique moins évidente) ont un hint plus
 // long et restent affichés un peu plus longtemps.
 const QUESTION_TYPE_META = {
@@ -308,13 +319,14 @@ const QUESTION_TYPE_META = {
   association: { icon: '🔗', label: 'Association', color: '#ff9f5a', rgb: '255,159,90', hint: 'Relie chaque élément de gauche à son binôme à droite.' },
   timeline: { icon: '⏳', label: 'Timeline', color: '#14e0b8', rgb: '20,224,184', hint: 'Place les événements dans l\'ordre chronologique.' },
   intrus: { icon: '🎯', label: 'Intrus', color: '#b34bf5', rgb: '179,75,245', hint: 'Repère la photo qui n\'a rien à voir avec les autres.' },
-  pbac: { icon: '🎩', label: 'Petit Bac', color: '#c8f542', rgb: '200,245,66', hint: 'Tape ta réponse — elle sera jugée par l\'hôte, comme au vrai Petit Bac !' }
+  pbac: { icon: '🎩', label: 'Petit Bac', color: '#c8f542', rgb: '200,245,66', hint: 'Tape ta réponse — elle sera jugée par l\'hôte, comme au vrai Petit Bac !' },
+  recherche: { icon: '🔦', label: 'Recherche', color: '#ff6a1a', rgb: '255,106,26', hint: 'Balaie l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, puis valide ta réponse.' }
 }
 // Types dont la mécanique n'est pas évidente au premier coup d'œil (retour
 // utilisateur) : l'intro reste affichée un peu plus longtemps pour ceux-là
 // avant de lancer le décompte (voir INTRO_DURATION_COMPLEX_MS). Les autres
 // (QCM, Vrai/Faux, texte libre...) sont auto-explicites, intro plus courte.
-const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac'])
+const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche'])
 const questionTypeBadge = document.getElementById('questionTypeBadge')
 const questionTypeBadgeIcon = document.getElementById('questionTypeBadgeIcon')
 const questionTypeBadgeLabel = document.getElementById('questionTypeBadgeLabel')
@@ -516,6 +528,7 @@ const gradSlider = document.getElementById('gradSlider')
 const gradSliderFill = document.getElementById('gradSliderFill')
 const gradSliderThumb = document.getElementById('gradSliderThumb')
 const gradMyMarker = document.getElementById('gradMyMarker')
+const gradMyMarkerTag = document.getElementById('gradMyMarkerTag')
 const gradValueReadout = document.getElementById('gradValueReadout')
 const gradMinLabel = document.getElementById('gradMinLabel')
 const gradMaxLabel = document.getElementById('gradMaxLabel')
@@ -574,6 +587,47 @@ const revealArea = document.getElementById('revealArea')
 const revealImgWrap = document.getElementById('revealImgWrap')
 const revealEnigmeImg = document.getElementById('revealEnigmeImg')
 const revealReponseImg = document.getElementById('revealReponseImg')
+// Question "recherche" (tâche 009) : image + calque noir troué façon lampe
+// torche à l'endroit du curseur/doigt (voir style.css .recherche-overlay).
+const rechercheArea = document.getElementById('rechercheArea')
+const rechercheWrap = document.getElementById('rechercheWrap')
+const rechercheImg = document.getElementById('rechercheImg')
+const rechercheOverlay = document.getElementById('rechercheOverlay')
+// Lampe torche (tâche 009, décidé avec l'utilisateur : jamais cumulatif) —
+// Pointer Events unifient souris/tactile (même convention que wireOrderDrag
+// plus bas) : pointermove suffit pour les deux (survol pour la souris,
+// glisser le doigt pour le tactile, qui n'a de toute façon aucune notion de
+// "survol" sans contact — pointermove n'y est émis QUE pendant un contact
+// actif). pointerdown en plus, pour révéler dès le premier contact tactile,
+// avant même un mouvement. Le trou se referme (--spot-r à 0) dès que le
+// pointeur quitte la zone (souris) ou se lève/s'annule (tactile) — voir
+// .recherche-wrap touch-action:none dans style.css, sans quoi le geste
+// déclenchait aussi le défilement de la page sur mobile.
+const RECHERCHE_SPOT_RADIUS_PX = 90
+// Décalage vertical du spot au-dessus du point de contact, tactile
+// UNIQUEMENT (audit UX — corrigé avant le premier test réel) : au doigt, le
+// spot était centré exactement sous le point de contact, donc caché par le
+// doigt lui-même — même piège que les apps de retouche photo, qui décalent
+// leur loupe au-dessus du doigt pour cette raison précise. La souris n'a pas
+// ce problème (le curseur ne recouvre pas la zone qu'il désigne), donc
+// aucun décalage n'est appliqué pour e.pointerType === 'mouse'.
+const RECHERCHE_TOUCH_OFFSET_Y_PX = 60
+const updateRechercheSpot = (clientX, clientY, pointerType) => {
+  if (!rechercheWrap || !rechercheOverlay) return
+  const rect = rechercheWrap.getBoundingClientRect()
+  const offsetY = pointerType === 'mouse' ? 0 : RECHERCHE_TOUCH_OFFSET_Y_PX
+  rechercheOverlay.style.setProperty('--spot-x', `${clientX - rect.left}px`)
+  rechercheOverlay.style.setProperty('--spot-y', `${clientY - rect.top - offsetY}px`)
+  rechercheOverlay.style.setProperty('--spot-r', `${RECHERCHE_SPOT_RADIUS_PX}px`)
+}
+const hideRechercheSpot = () => { if (rechercheOverlay) rechercheOverlay.style.setProperty('--spot-r', '0px') }
+if (rechercheWrap) {
+  rechercheWrap.addEventListener('pointerdown', (e) => updateRechercheSpot(e.clientX, e.clientY, e.pointerType))
+  rechercheWrap.addEventListener('pointermove', (e) => updateRechercheSpot(e.clientX, e.clientY, e.pointerType))
+  rechercheWrap.addEventListener('pointerleave', hideRechercheSpot)
+  rechercheWrap.addEventListener('pointerup', hideRechercheSpot)
+  rechercheWrap.addEventListener('pointercancel', hideRechercheSpot)
+}
 // Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
 // décorative au-dessus de l'énoncé.
@@ -650,6 +704,39 @@ const irlMenuDropdown = document.getElementById('irlMenuDropdown')
 const irlLeaveBtn = document.getElementById('irlLeaveBtn')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
+// Agrandissement du QR au clic (retour utilisateur, design décidé) : voir
+// openQrOverlay/closeQrOverlay plus bas, câblés une seule fois ici — pas
+// besoin de re-binder à chaque partie, currentJoinUrl est mis à jour à
+// chaque room:created et c'est lui que openQrOverlay relit au clic.
+const qrWrap = document.getElementById('qrWrap')
+const qrExpandOverlay = document.getElementById('qrExpandOverlay')
+const qrExpandContainer = document.getElementById('qrExpandContainer')
+const qrExpandCode = document.getElementById('qrExpandCode')
+let currentJoinUrl = null
+const openQrOverlay = () => {
+  if (!currentJoinUrl || !qrExpandOverlay || !qrExpandContainer) return
+  qrExpandContainer.innerHTML = ''
+  // Régénéré à une vraie plus grande taille par la lib (pas un
+  // agrandissement CSS d'un QR déjà petit, qui serait flou) — assez net
+  // pour être photographié depuis une distance de salle.
+  new QRCode(qrExpandContainer, { text: currentJoinUrl, width: 320, height: 320 })
+  if (qrExpandCode) qrExpandCode.textContent = roomInput.value.trim().toUpperCase()
+  qrExpandOverlay.classList.remove('d-none')
+  qrExpandOverlay.style.display = 'flex'
+}
+const closeQrOverlay = () => {
+  if (!qrExpandOverlay) return
+  qrExpandOverlay.classList.add('d-none')
+  qrExpandOverlay.style.display = 'none'
+}
+if (qrWrap) {
+  qrWrap.addEventListener('click', openQrOverlay)
+  // role="button" (voir index.html) : accessible aussi au clavier.
+  qrWrap.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openQrOverlay() }
+  })
+}
+if (qrExpandOverlay) qrExpandOverlay.addEventListener('click', closeQrOverlay)
 const AVATAR_CHOICES = [
   '/avatars/avatar1.png',
   '/avatars/avatar2.png',
@@ -699,6 +786,17 @@ let currentIllustrationZoom = null
 // zoom, proportionnel au niveau choisi, et retombe à 0 en même temps que le
 // dézoom atteint scale(1).
 const zoomGuessBlurPx = (startScale) => Math.min(24, Math.max(0, (startScale - 1) * 1.1))
+
+// Révélation progressive de l'énigme (type "reveal", design décidé — voir
+// QUESTION_TYPE_META.reveal.hint : "l'image qui se révèle petit à petit").
+// Même principe que le dézoom de "zoomguess" ci-dessus (flou qui retombe à 0
+// au même tick que la barre de temps), mais appliqué à revealEnigmeImg —
+// jamais à revealReponseImg : cette dernière n'arrive côté client qu'à
+// timer:end (voir server/index.js, anti-triche), impossible et non voulu de
+// l'animer pendant le décompte. true seulement pour une question "reveal"
+// avec une image d'énigme réellement chargée (voir emitQuestion plus bas).
+let revealEnigmeActive = false
+const REVEAL_ENIGME_BLUR_MAX_PX = 20
 let selectedMcqOptions = []
 let currentQuestionType = 'free'
 let isGameEnded = false
@@ -874,6 +972,47 @@ const getCurrentOrderTexts = () => Array.from(orderList.children).map(el => el.d
 // traversées pendant le glisser.
 const ORDER_LIST_GAP = 10
 
+// Défilement automatique pendant un glisser vertical (audit UX) : une liste
+// "order"/"timeline" plus haute que l'écran rendait impossible de faire
+// glisser une tuile au-delà du bord visible en un seul geste — il fallait
+// lâcher, laisser la page défiler à la main, puis reprendre. Partagé entre
+// wireOrderDrag et wireTimelineDrag (mécanique de défilement identique),
+// mais PAS la correction de dérive qu'il impose au calcul de créneau — trop
+// spécifique à chaque liste (orderList/timelineList, updateOrderRanks...)
+// pour être factorisée sans risquer d'entremêler les deux, voir ces deux
+// fonctions.
+// getPointerY() doit renvoyer la dernière position Y (viewport) connue du
+// pointeur ; onScrollTick() est rappelée à CHAQUE frame où un défilement a
+// réellement eu lieu, pour laisser l'appelant recalculer sa détection de
+// créneau (voir le commentaire détaillé dans wireOrderDrag sur la
+// correction de dérive nécessaire). Retourne une fonction stop() à appeler
+// impérativement au relâchement/annulation du geste (sinon la boucle
+// requestAnimationFrame tourne indéfiniment).
+const AUTO_SCROLL_EDGE_PX = 70
+const AUTO_SCROLL_MAX_SPEED_PX = 16
+const startAutoScrollOnDrag = (getPointerY, onScrollTick) => {
+  let rafId = requestAnimationFrame(tick)
+  function tick () {
+    const y = getPointerY()
+    const vh = window.innerHeight
+    let speed = 0
+    if (y < AUTO_SCROLL_EDGE_PX) {
+      speed = -AUTO_SCROLL_MAX_SPEED_PX * (1 - Math.max(0, y) / AUTO_SCROLL_EDGE_PX)
+    } else if (y > vh - AUTO_SCROLL_EDGE_PX) {
+      speed = AUTO_SCROLL_MAX_SPEED_PX * (1 - Math.max(0, vh - y) / AUTO_SCROLL_EDGE_PX)
+    }
+    if (speed !== 0) {
+      const before = window.scrollY
+      window.scrollBy(0, speed)
+      // window.scrollY peut ne pas bouger en butée haute/basse de la page —
+      // pas la peine de recalculer le créneau pour rien dans ce cas.
+      if (window.scrollY !== before) onScrollTick()
+    }
+    rafId = requestAnimationFrame(tick)
+  }
+  return () => cancelAnimationFrame(rafId)
+}
+
 const wireOrderDrag = (el) => {
   let dragActive = false // évite qu'un pointerdown ne démarre un 2e glisser
   // par-dessus un premier dont le pointerup/pointercancel n'aurait pas été
@@ -888,6 +1027,10 @@ const wireOrderDrag = (el) => {
     e.preventDefault()
     dragActive = true
     const startY = e.clientY
+    let lastPointerY = e.clientY
+    // Défilement auto (voir startAutoScrollOnDrag plus haut) : point de
+    // référence pour corriger la dérive qu'il introduit ci-dessous.
+    const scrollYAtStart = window.scrollY
     el.classList.add('dragging')
     el.style.zIndex = '10'
     try { el.setPointerCapture(e.pointerId) } catch {}
@@ -900,14 +1043,35 @@ const wireOrderDrag = (el) => {
     const itemHeight = el.getBoundingClientRect().height + ORDER_LIST_GAP
     let currentSlot = startSlot
 
-    const onMove = (ev) => {
-      const dy = ev.clientY - startY
+    // Repositionne la tuile saisie ET détecte le créneau — factorisé pour
+    // être appelable aussi bien depuis onMove (pointer réellement déplacé)
+    // que depuis le tick du défilement auto (page qui défile sous un
+    // pointeur resté immobile près du bord, voir startAutoScrollOnDrag).
+    //
+    // Défilement auto = 2 corrections symétriques, sinon la tuile dérive :
+    // 1) dy lui-même : sans le terme de scroll ci-dessous, dy resterait figé
+    //    tant que le pointeur ne bouge pas réellement, alors que la page,
+    //    elle, continue de défiler sous lui — la tuile suivrait alors le
+    //    flux normal de la page (comme n'importe quel élément statique) et
+    //    s'éloignerait du pointeur au lieu de rester "collée" dessous.
+    //    Ajouter (scrollY courant - scrollY au départ) annule exactement ce
+    //    que le défilement aurait fait subir à sa position de repos : le
+    //    déplacement affiché ne dépend plus alors QUE du geste réel du
+    //    pointeur depuis le début du glisser, jamais du scroll écoulé.
+    // 2) baseRects (figées, donc jamais rescrollées avec la page) : corrigées
+    //    du même delta AVANT comparaison avec la tuile saisie (elle,
+    //    toujours interrogée en direct via getBoundingClientRect, donc déjà
+    //    à jour) — sinon la comparaison se ferait entre deux référentiels
+    //    différents dès qu'un défilement a eu lieu pendant le geste.
+    const updateOrderTile = () => {
+      const scrollDelta = window.scrollY - scrollYAtStart
+      const dy = (lastPointerY - startY) + scrollDelta
       el.style.transform = `translateY(${dy}px) scale(1.03)`
 
       const rect = el.getBoundingClientRect()
       const center = rect.top + rect.height / 2
       let newSlot = 0
-      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      baseRects.forEach(r => { if (center > (r.top - scrollDelta) + r.height / 2) newSlot++ })
       if (newSlot === currentSlot) return
       currentSlot = newSlot
 
@@ -924,12 +1088,21 @@ const wireOrderDrag = (el) => {
       })
     }
 
+    const onMove = (ev) => {
+      lastPointerY = ev.clientY
+      updateOrderTile()
+    }
+
+    const stopAutoScroll = startAutoScrollOnDrag(() => lastPointerY, updateOrderTile)
+
     const cleanup = (applyReorder) => {
+      stopAutoScroll()
       el.removeEventListener('pointermove', onMove)
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointercancel', onCancel)
       if (applyReorder && currentSlot !== startSlot) {
         orderList.insertBefore(el, others[currentSlot] || null)
+        updateOrderRanks()
       }
       others.forEach(c => { c.style.transition = ''; c.style.transform = '' })
       el.classList.remove('dragging')
@@ -957,6 +1130,17 @@ const wireOrderDrag = (el) => {
   })
 }
 
+// Renumérote les pastilles .order-item-rank selon l'ordre RÉEL des enfants
+// dans le DOM (source de vérité après un glisser-déposer, voir wireOrderDrag
+// cleanup ci-dessous) — design décidé, voir .order-item-rank dans style.css.
+const updateOrderRanks = () => {
+  if (!orderList) return
+  Array.from(orderList.children).forEach((el, i) => {
+    const rank = el.querySelector('.order-item-rank')
+    if (rank) rank.textContent = i + 1
+  })
+}
+
 const buildOrderList = (items) => {
   if (!orderList) return
   orderList.innerHTML = ''
@@ -967,13 +1151,14 @@ const buildOrderList = (items) => {
     const el = document.createElement('div')
     el.className = 'order-item'
     el.dataset.text = text
-    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="order-item-text"></span>`
+    el.innerHTML = `<span class="order-item-rank"></span><span class="order-item-handle">⠿</span><span class="order-item-text"></span>`
     el.querySelector('.order-item-text').textContent = text
     orderList.appendChild(el)
     orderState.itemEls.push(el)
     wireOrderDrag(el)
     applyTileReveal(el, uid)
   })
+  updateOrderRanks()
   // Question fraîche : on repart sur la liste glissable, la comparaison
   // (peuplée seulement à la révélation, voir revealOrderList) redevient
   // cachée si elle traînait encore de la question précédente.
@@ -1045,6 +1230,11 @@ const wireTimelineDrag = (el) => {
     e.preventDefault()
     dragActive = true
     const startY = e.clientY
+    let lastPointerY = e.clientY
+    // Défilement auto (voir startAutoScrollOnDrag/wireOrderDrag, même
+    // correction de dérive appliquée ici) : point de référence pour la
+    // corriger.
+    const scrollYAtStart = window.scrollY
     el.classList.add('dragging')
     el.style.zIndex = '10'
     try { el.setPointerCapture(e.pointerId) } catch {}
@@ -1055,13 +1245,16 @@ const wireTimelineDrag = (el) => {
     const itemHeight = el.getBoundingClientRect().height + TIMELINE_LIST_GAP
     let currentSlot = startSlot
 
-    const onMove = (ev) => {
-      const dy = ev.clientY - startY
+    // Voir le commentaire détaillé de la fonction équivalente dans
+    // wireOrderDrag (updateOrderTile) — même double correction de dérive.
+    const updateTimelineTile = () => {
+      const scrollDelta = window.scrollY - scrollYAtStart
+      const dy = (lastPointerY - startY) + scrollDelta
       el.style.transform = `translateY(${dy}px) scale(1.02)`
       const rect = el.getBoundingClientRect()
       const center = rect.top + rect.height / 2
       let newSlot = 0
-      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      baseRects.forEach(r => { if (center > (r.top - scrollDelta) + r.height / 2) newSlot++ })
       if (newSlot === currentSlot) return
       currentSlot = newSlot
       others.forEach((c, i) => {
@@ -1073,7 +1266,15 @@ const wireTimelineDrag = (el) => {
       })
     }
 
+    const onMove = (ev) => {
+      lastPointerY = ev.clientY
+      updateTimelineTile()
+    }
+
+    const stopAutoScroll = startAutoScrollOnDrag(() => lastPointerY, updateTimelineTile)
+
     const cleanup = (applyReorder) => {
+      stopAutoScroll()
       el.removeEventListener('pointermove', onMove)
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointercancel', onCancel)
@@ -2271,6 +2472,10 @@ const positionGradTargetMarker = (target) => {
       const pct = Math.min(100, Math.max(0, (myGradAnswerValue - gradState.min) / (gradState.max - gradState.min) * 100))
       gradMyMarker.style.left = `${pct}%`
       gradMyMarker.classList.remove('d-none')
+      // Retour utilisateur : "on ne sait pas ce qu'on avait mis" — le
+      // repère ne disait que "Ta réponse" sans la valeur, illisible dès que
+      // le pouce principal (vert) avait sauté ailleurs dessus.
+      if (gradMyMarkerTag) gradMyMarkerTag.textContent = `Ta réponse : ${myGradAnswerValue}`
     } else {
       gradMyMarker.classList.add('d-none')
     }
@@ -2622,12 +2827,25 @@ if (cancelQuizSelect) {
 }
 
 if (confirmQuizSelect) {
-  confirmQuizSelect.onclick = () => {
-    if (selectedQuizId) {
-      loadQuizById(selectedQuizId) // Load the selected quiz
-      hideQuizSelectPopup()
-    } else {
+  confirmQuizSelect.onclick = async () => {
+    if (!selectedQuizId) {
       showAnnounce('Sélectionne un quiz.', 'error')
+      return
+    }
+    // Retour utilisateur : "ajouter un temps de chargement" — le popup se
+    // fermait jusqu'ici immédiatement, avant même que loadQuizById ait fini
+    // (voire échoué en silence, voir son ancien catch vide). Reste ouvert,
+    // bouton désactivé + libellé "Chargement...", jusqu'à la fin réelle du
+    // chargement — fermé seulement en cas de succès.
+    confirmQuizSelect.disabled = true
+    confirmQuizSelect.textContent = 'Chargement...'
+    try {
+      await loadQuizById(selectedQuizId)
+      hideQuizSelectPopup()
+    } catch (err) {
+      showAnnounce('Impossible de charger ce quiz — réessaie.', 'error')
+      confirmQuizSelect.disabled = false
+      confirmQuizSelect.textContent = 'Confirmer'
     }
   }
 }
@@ -2754,7 +2972,7 @@ const resetUI = () => {
   isHost = false
   roomInput.value = ''
   
-  document.body.classList.remove('game-active', 'is-host', 'irl-player-mode')
+  document.body.classList.remove('game-active', 'is-host', 'irl-player-mode', 'remote-player-mode')
   if (hostProgressBarEl) hostProgressBarEl.innerHTML = ''
   gameMode = 'irl'
   irlMenuDropdown?.classList.remove('is-open')
@@ -2801,8 +3019,17 @@ socket.on('player:kicked', ({ message }) => {
   resetUI()
 })
 
+// Retourne la Promise (retour utilisateur : "ajouter un temps de
+// chargement" à la sélection d'un quiz) — les deux appelants (popup
+// "Sélectionner un Quiz" et le lancement direct depuis "Quiz publics", voir
+// plus haut) peuvent ainsi attendre la fin réelle du chargement au lieu de
+// fermer le popup / considérer le quiz prêt avant que la requête n'ait
+// abouti. loadedInfo (déjà l'endroit où le statut "Aucun quiz sélectionné"/
+// "Quiz chargé: ..." s'affiche) sert aussi d'indicateur de chargement, visible
+// même après la fermeture du popup.
 const loadQuizById = (id) => {
-  window.supabaseClient
+  if (loadedInfo) loadedInfo.textContent = 'Chargement du quiz...'
+  return window.supabaseClient
     .from('quizzes')
     .select('id,title,questions,single_attempt')
     .eq('id', id)
@@ -2858,7 +3085,18 @@ const loadQuizById = (id) => {
       const hostQuizTitleEl = document.getElementById('hostQuizTitle')
       if (hostQuizTitleEl) hostQuizTitleEl.textContent = loadedQuiz.title || ''
     })
-    .catch(() => {})
+    .catch((err) => {
+      // Bug corrigé (audit UX) : catch vide sans commentaire, qui avalait
+      // silencieusement une vraie panne (RLS, réseau, quiz supprimé entre-
+      // temps) — le panneau hôte restait bloqué sur "Chargement du quiz..."
+      // pour toujours, sans aucun repli ni indication. Remis à l'état
+      // "aucun quiz" + relancé (re-throw) pour que les appelants (bouton
+      // "Confirmer" du popup, lancement direct depuis "Quiz publics")
+      // puissent réagir (réactiver leur bouton, afficher un toast).
+      console.error('[quiz] chargement impossible :', err)
+      if (loadedInfo) loadedInfo.textContent = 'Aucun quiz sélectionné'
+      throw err
+    })
 }
  
 socket.on('room:created', ({ roomCode, serverUrl, hostToken }) => {
@@ -2894,8 +3132,25 @@ socket.on('room:created', ({ roomCode, serverUrl, hostToken }) => {
   setDisplayRoomCode(roomCode);
   const base = serverUrl || baseUrl
   const joinUrl = `${base}/?room=${roomCode}`
-  new QRCode(qrDiv, joinUrl)
-  const infoEl = document.getElementById('serverInfo'); if (infoEl) { infoEl.textContent = 'Salle créée: ' + roomCode + ' • ' + joinUrl }
+  currentJoinUrl = joinUrl
+  // Retour utilisateur ("toujours trop grand le QR code") : la librairie
+  // qrcodejs dessine à une taille FIXE, 256×256 par défaut — bien trop
+  // grand pour les 40% de hauteur voulus dans la carte "Partager
+  // l'accès" (voir la répartition 40/60 en CSS/JS, syncLobbyColumnHeight).
+  // Réduit ici à la source plutôt que de le rétrécir ensuite en CSS
+  // (rétrécissement en pourcentage dans un parent flex essayé d'abord :
+  // bouclait sur une taille indéterminée et effondrait le QR à 0×0, voir
+  // style.css). Le QR agrandi en plein écran au clic (openQrOverlay,
+  // #qrExpandContainer) reste lui généré en grand (320×320) pour rester
+  // net à distance — seule cette version compacte, dans la carte, change.
+  new QRCode(qrDiv, { text: joinUrl, width: 130, height: 130 })
+  // Retour utilisateur ("vire le lien visible http...") : le lien complet
+  // ne sert à rien à l'écran (le QR + le bouton "Copier" couvrent déjà les
+  // 2 façons de rejoindre) — ne reste que le code de salle, mis en avant
+  // (police Baloo 2, dégradé, voir .room-info-code-value dans style.css).
+  // "Code Salle :" puis le code sur sa propre ligne (retour utilisateur) :
+  // 2 <div>, chacun en display:block par défaut, pas besoin d'un <br>.
+  const infoEl = document.getElementById('serverInfo'); if (infoEl) { infoEl.innerHTML = `<div class="room-info-code">Code Salle :</div><div class="room-info-code-value">${roomCode}</div>` }
   const copyBtn = document.getElementById('copyUrl')
   if (copyBtn) { 
     copyBtn.onclick = () => { 
@@ -2997,7 +3252,86 @@ const showLobby = () => {
     timerContainer.style.display = 'none'
   }
   hideQuestionTypeBadge()
+  syncLobbyColumnHeight()
 }
+
+// Salon d'attente, disposition 2 colonnes desktop (retour utilisateur) :
+// la colonne droite (#lobbyShareCol, "Partager l'accès" + "Joueurs
+// connectés") doit avoir la même hauteur totale que la colonne gauche
+// (#lobbySalon + #hostPanel empilés), pour que les 2 colonnes finissent
+// alignées et que le ratio 40/60 interne (CSS, voir style.css) ait une
+// vraie hauteur à se répartir. Une grille CSS pure (#lobbyShareCol en
+// grid-row: 1 / span 2 + align-self:stretch) ne suffit pas : les pistes
+// "auto" se dimensionnent aussi sur le contenu de l'item qui les
+// enjambe, ce qui gonflait les 2 lignes au-delà de la hauteur réelle de
+// la colonne gauche et laissait un vide sous "Contrôles de l'hôte".
+// ResizeObserver pour se resynchroniser automatiquement si la colonne
+// gauche change de hauteur ensuite (réglages qui se montrent/cachent,
+// panneau hôte qui change de contenu...), + quelques appels directs
+// juste après les endroits qui affichent #lobbySalon/#hostPanel pour la
+// toute première fois (showLobby, room:created) : le premier callback
+// du ResizeObserver n'est pas garanti assez tôt pour éviter un flash de
+// disposition cassée à l'ouverture du salon.
+const syncLobbyColumnHeight = () => {
+  const shareCol = document.getElementById('lobbyShareCol')
+  const salon = document.getElementById('lobbySalon')
+  const roomInfoEl = document.getElementById('roomInfo')
+  const playersCardEl = document.getElementById('lobbyPlayersCard')
+  if (!shareCol || !salon) return
+  if (window.innerWidth < 1100) {
+    shareCol.style.height = ''
+    if (roomInfoEl) roomInfoEl.style.height = ''
+    if (playersCardEl) playersCardEl.style.height = ''
+    return
+  }
+  const bottomEl = (hostPanel && !hostPanel.classList.contains('d-none')) ? hostPanel : salon
+  const total = bottomEl.getBoundingClientRect().bottom - salon.getBoundingClientRect().top
+  // "height" et pas "min-height" : un min-height ne plafonne rien, la
+  // grille CSS regonflait quand même (voir commentaire style.css) à
+  // cause du ratio flex-grow des 2 cartes à l'intérieur. Une hauteur
+  // définie force la grille à s'en tenir à cette valeur.
+  shareCol.style.height = total > 0 ? `${Math.round(total)}px` : ''
+  // Retour utilisateur répété : "40% partager l'accès / 60% joueurs"
+  // pris au pied de la lettre — le flex-grow essayé avant (proportionnel
+  // à l'espace EXTRA, pas au total) donnait un ratio qui dépendait du
+  // contenu et ne tombait jamais sur du 40/60 net. Hauteur figée en
+  // pixels sur les 2 cartes plutôt qu'un pourcentage CSS direct : le gap
+  // (--space-lg, 32px) entre elles doit être déduit du total AVANT de
+  // répartir, sinon les 2 cartes + le gap dépassent la hauteur réelle de
+  // la colonne.
+  if (total > 0 && roomInfoEl && playersCardEl) {
+    // Retour utilisateur ("adapte la tuile partage d'accès à son contenu,
+    // ça va la réduire et laisser de la place aux joueurs") : abandon du
+    // 40/60 fixe — #roomInfo garde sa taille NATURELLE (QR 130px + code +
+    // bouton, plus compacte que 40% de la colonne) et #lobbyPlayersCard
+    // récupère TOUT le reste. #roomInfo n'a donc plus de hauteur posée en
+    // JS (juste height:'' — laissé à son flex-basis:auto, voir style.css),
+    // seule sa hauteur RÉELLE (mesurée après ce reset) sert à calculer
+    // combien il reste pour #lobbyPlayersCard.
+    // shareColPaddingTop : garde de survol pour #roomInfo (voir style.css
+    // #lobbyShareCol, padding-top) — à déduire du budget disponible,
+    // sinon les 2 cartes dépasseraient ensemble la hauteur (fixe,
+    // shareCol.style.height ci-dessus) de leur parent.
+    const shareColPaddingTop = 5
+    const gap = 32
+    const roomInfoVisible = !roomInfoEl.classList.contains('d-none')
+    roomInfoEl.style.height = ''
+    const roomInfoNaturalHeight = roomInfoVisible ? roomInfoEl.getBoundingClientRect().height : 0
+    const reserved = roomInfoVisible ? (roomInfoNaturalHeight + gap) : 0
+    const usable = Math.max(0, total - shareColPaddingTop - reserved)
+    playersCardEl.style.height = `${Math.round(usable)}px`
+  }
+}
+if (typeof ResizeObserver !== 'undefined') {
+  const lobbyColumnObserver = new ResizeObserver(() => syncLobbyColumnHeight())
+  // Observés dès le chargement (existent dans le DOM, juste cachés par
+  // d-none) — pas besoin d'attendre showLobby() pour les enregistrer ;
+  // display:none->block déclenche déjà un callback du ResizeObserver.
+  const lobbySalonEl = document.getElementById('lobbySalon')
+  if (lobbySalonEl) lobbyColumnObserver.observe(lobbySalonEl)
+  if (hostPanel) lobbyColumnObserver.observe(hostPanel)
+}
+window.addEventListener('resize', syncLobbyColumnHeight)
 
 const iconButtons = () => Array.from(document.querySelectorAll('.icon-opt'))
 const updateSelectionVisual = (sel) => {
@@ -3327,10 +3661,13 @@ if (speedLevelSelect) {
 // aucune règle de jeu/scoring n'en dépend jamais côté serveur.
 let gameMode = 'irl'
 
-// N'affecte JAMAIS le mode "à distance" ni l'hôte (retour utilisateur
-// explicite : la disposition ne doit pas changer pour eux) — seul un joueur
-// non-hôte en salle IRL bascule la navbar contre la roue crantée et masque
-// l'image décorative de la question (voir CSS body.irl-player-mode).
+// N'affecte JAMAIS l'hôte (retour utilisateur explicite : sa disposition ne
+// doit pas changer) — un joueur non-hôte en partie bascule la navbar contre
+// la roue crantée, en IRL COMME à distance (design décidé,
+// PlayerRemote.dc.html — uniformise l'en-tête joueur entre les 2 modes,
+// voir CSS body.irl-player-mode/body.remote-player-mode). Seule l'image
+// décorative de la question reste masquée en IRL uniquement (le joueur à
+// distance voit déjà tout sur son propre écran, rien à cacher).
 // Restreint en plus à la partie EFFECTIVEMENT lancée (body.game-active) :
 // dans le salon d'attente, la navbar reste utile pour repartir/rejoindre un
 // autre salon si l'hôte a un souci (retour utilisateur explicite — masquer
@@ -3341,7 +3678,14 @@ let gameMode = 'irl'
 // garanti.
 const updateIrlPlayerUI = () => {
   const gameActive = document.body.classList.contains('game-active')
-  document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && !isHost && gameActive)
+  const isPlayerInGame = !isHost && gameActive
+  document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && isPlayerInGame)
+  document.body.classList.toggle('remote-player-mode', gameMode === 'remote' && isPlayerInGame)
+  // Ligne d'info du menu roue crantée (voir #irlMenuModeInfo, index.html) —
+  // affichée uniquement en remote, où le mode n'a rien d'évident visuellement
+  // une fois la navbar masquée (contrairement à IRL, déjà signalé ailleurs).
+  const modeInfoEl = document.getElementById('irlMenuModeInfo')
+  if (modeInfoEl) modeInfoEl.classList.toggle('d-none', !(gameMode === 'remote' && isPlayerInGame))
 }
 
 socket.on('game:mode', ({ mode }) => {
@@ -3564,9 +3908,27 @@ const renderLobbyGrid = (arr) => {
         roomInfo.classList.remove('d-none')
         roomInfo.style.display = 'block'
       }
+      syncLobbyColumnHeight()
     } else if (isMe && !p.isHost) {
       hostPanel.classList.add('d-none')
       hostPanel.style.display = 'none'
+      // Retour utilisateur ("tout pété pour les joueurs sur PC, ils ne
+      // devraient pas voir le 'partager l'accès'") : #roomInfo n'était
+      // caché nulle part dans cette branche — seul hostPanel l'était.
+      // Un client qui a un jour eu isHost=true dans cet onglet (ex. a créé
+      // sa propre salle par erreur avant de rejoindre la vraie, cause déjà
+      // documentée plus haut pour hostPanel) gardait #roomInfo affiché
+      // pour de bon, avec un contenu obsolète (QR/lien de l'ancienne
+      // salle) — cassait aussi la grille 2 colonnes du salon desktop
+      // (#lobbyShareCol, voir style.css), qui compte sur #roomInfo pour
+      // remplir sa moitié haute ; vide/caché, #lobbyPlayersCard doit
+      // prendre toute la colonne.
+      const roomInfo = document.getElementById('roomInfo')
+      if (roomInfo) {
+        roomInfo.classList.add('d-none')
+        roomInfo.style.display = 'none'
+      }
+      syncLobbyColumnHeight()
     }
 
     if (p.isHost) {
@@ -3579,7 +3941,7 @@ const renderLobbyGrid = (arr) => {
           ${isImg ? '' : avatarSrc}
         </div>
         <div style="font-weight:800; font-size:20px; margin-top:12px">${p.name || 'Hôte'}</div>
-        <div style="font-size:14px; color:var(--color-text-muted)">Organisateur</div>
+        <div class="host-organizer-badge">👑 Organisateur</div>
       `
     } else {
       const tile = document.createElement('div')
@@ -3673,7 +4035,7 @@ const renderLobbyGrid = (arr) => {
           ${isImg ? '' : hAv}
         </div>
         <div style="font-weight:800; font-size:20px; margin-top:12px">${hName}</div>
-        <div style="font-size:14px; color:var(--color-text-muted)">Organisateur (Local)</div>
+        <div class="host-organizer-badge">👑 Organisateur</div>
       `
     } else {
         hostArea.innerHTML = `
@@ -4041,7 +4403,7 @@ const emitQuestion = (index) => {
   // on les dépose d'abord via une requête HTTP classique, puis on démarre la
   // question avec juste leur URL. Si un upload échoue, on ne démarre pas la
   // question plutôt que de l'afficher sans média à personne.
-  const imageToUpload = (q.type === 'image' || q.type === 'zoomguess') ? q.image : (q.type === 'reveal' ? q.enigmeImage : q.illustration)
+  const imageToUpload = (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche') ? q.image : (q.type === 'reveal' ? q.enigmeImage : q.illustration)
   const audioToUpload = q.type === 'blindtest' ? q.audio : null
   // "révélation" : l'image réponse ne passe JAMAIS par uploadRoomImage (relais
   // à GET public) — voir uploadRoomRevealAnswer plus haut, qui la dépose sans
@@ -4055,12 +4417,12 @@ const emitQuestion = (index) => {
   // pour une simple URL). Un vieux quiz jamais resauvegardé garde son
   // base64 et passe toujours par le relais, inchangé.
   if (imageToUpload && /^https?:\/\//.test(imageToUpload)) {
-    if (q.type === 'image' || q.type === 'zoomguess') payload.imageUrl = imageToUpload
+    if (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche') payload.imageUrl = imageToUpload
     else if (q.type === 'reveal') payload.enigmeImageUrl = imageToUpload
     else payload.illustrationUrl = imageToUpload
   } else if (imageToUpload) {
     uploads.push(uploadRoomImage(roomCode, imageToUpload).then(url => {
-      if (q.type === 'image' || q.type === 'zoomguess') payload.imageUrl = url
+      if (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche') payload.imageUrl = url
       else if (q.type === 'reveal') payload.enigmeImageUrl = url
       else payload.illustrationUrl = url
     }))
@@ -4334,6 +4696,12 @@ socket.on('question:show', payload => {
   currentQuestionType = payload.type || 'free'
   if (optionsDiv) {
     const isMcqLike = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus'
+    // 'grid' ici même pour "intrus" : le passage en flex (nombre de
+    // colonnes adapté au nombre de photos, voir --intrus-cols plus bas) est
+    // scopé desktop ≥900px dans style.css — en dessous, "intrus" reste sur
+    // la grille 2 colonnes fixe (retour utilisateur mobile déjà tranché,
+    // voir .options-grid.intrus-grid en media query mobile). Un display
+    // inline aurait battu cette bascule CSS par breakpoint.
     optionsDiv.style.display = isMcqLike ? 'grid' : 'none'
     optionsDiv.classList.toggle('d-none', !isMcqLike)
     optionsDiv.classList.toggle('truefalse-grid', payload.type === 'truefalse')
@@ -4355,9 +4723,33 @@ socket.on('question:show', payload => {
   if (imageArea) {
     imageArea.classList.toggle('d-none', payload.type !== 'image')
   }
+  if (rechercheArea) {
+    rechercheArea.classList.toggle('d-none', payload.type !== 'recherche')
+    if (payload.type === 'recherche' && rechercheImg) {
+      rechercheImg.onerror = () => { rechercheImg.classList.add('d-none') }
+      rechercheImg.src = payload.imageUrl || ''
+      rechercheImg.classList.remove('d-none')
+      if (rechercheOverlay) {
+        // Calque remis plein ET visible à chaque nouvelle question : sinon
+        // une question "recherche" qui suit une AUTRE question "recherche"
+        // démarrerait soit avec le trou resté à sa dernière position (voir
+        // hideRechercheSpot, jamais appelé si le pointeur était déjà sorti
+        // de l'ancien écran au moment où le nouveau arrive), soit avec le
+        // calque encore caché par le .d-none posé à la révélation
+        // précédente (voir socket.on('question:reveal', ...) plus bas).
+        rechercheOverlay.classList.remove('d-none')
+        rechercheOverlay.style.setProperty('--spot-r', '0px')
+      }
+    }
+  }
   if (blindtestArea) {
     blindtestArea.classList.toggle('d-none', payload.type !== 'blindtest')
   }
+  // Réinitialisé pour CHAQUE question (comme currentIllustrationZoom plus
+  // haut) — sinon resterait vrai après une question "reveal" suivie d'un
+  // autre type, et le tick du chrono continuerait d'essayer de flouter
+  // revealEnigmeImg (masqué mais toujours dans le DOM) pour rien.
+  revealEnigmeActive = payload.type === 'reveal' && !!payload.enigmeImageUrl
   if (revealArea) {
     revealArea.classList.toggle('d-none', payload.type !== 'reveal')
     if (payload.type === 'reveal') {
@@ -4370,9 +4762,14 @@ socket.on('question:show', payload => {
         if (payload.enigmeImageUrl) {
           revealEnigmeImg.src = payload.enigmeImageUrl
           revealEnigmeImg.classList.remove('d-none')
+          // Flou maximal au départ (design décidé) — le tick du chrono
+          // (timerInt plus bas) le fait progressivement retomber à 0,
+          // atteint pile en même temps que le décompte affiche 0.
+          revealEnigmeImg.style.filter = `blur(${REVEAL_ENIGME_BLUR_MAX_PX}px)`
         } else {
           revealEnigmeImg.classList.add('d-none')
           revealEnigmeImg.removeAttribute('src')
+          revealEnigmeImg.style.filter = ''
         }
       }
       // La réponse n'arrive JAMAIS ici (voir server/index.js) — vidée pour
@@ -4413,6 +4810,14 @@ socket.on('question:show', payload => {
     // le tick de la barre de temps (voir timerInt plus bas).
     currentIllustrationZoom = isZoomGuess ? (payload.zoom || null) : null
     if (illustrationImgWrap) illustrationImgWrap.classList.toggle('is-zoomed', !!currentIllustrationZoom)
+    // Exception décidée pour "zoomguess" : contrairement aux autres types,
+    // où l'illustration est purement décorative (masquée en IRL, voir
+    // body.irl-player-mode #illustrationImgWrap dans style.css — le
+    // présentateur la montre sur l'écran commun), l'image EST le mécanisme
+    // du jeu pour zoomguess. La masquer sur le téléphone du joueur en IRL
+    // cassait la question. .zoomguess-visible contourne la règle générale
+    // uniquement pour ce type.
+    if (illustrationImgWrap) illustrationImgWrap.classList.toggle('zoomguess-visible', isZoomGuess)
     if (currentIllustrationZoom) {
       illustrationImg.style.transformOrigin = `${currentIllustrationZoom.x * 100}% ${currentIllustrationZoom.y * 100}%`
       illustrationImg.style.transform = `scale(${currentIllustrationZoom.startScale})`
@@ -4460,14 +4865,17 @@ socket.on('question:show', payload => {
     freeTextEl.classList.toggle('mcq-mode', isTileType)
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
     if (blindtestFields) blindtestFields.classList.toggle('d-none', !isBlindtest)
-    sendBtn.textContent = isTileType ? 'Valider' : 'Envoyer'
+    // "Valider" partout (design décidé) : les 5 types texte libre restants
+    // (free/zoomguess/pbac/reveal/blindtest) disaient encore "Envoyer" —
+    // couvrait en fait TOUS les types, "Envoyer" ne servait donc plus à rien.
+    sendBtn.textContent = 'Valider'
     // Curseur placé directement dans le champ de saisie sur PC (retour
     // utilisateur) : évite un clic superflu avant de pouvoir taper une
     // question à saisie libre ("free"/"zoomguess", seuls types affichant
     // answerInput). Uniquement sur pointeur fin (souris/trackpad) — sur
     // mobile, focus() ferait surgir le clavier virtuel par-dessus l'écran
     // avant même que le joueur ait vu la question.
-    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac' || payload.type === 'reveal') && window.matchMedia('(pointer: fine)').matches) {
+    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac' || payload.type === 'reveal' || payload.type === 'recherche') && window.matchMedia('(pointer: fine)').matches) {
       answerInput.focus()
     }
   }
@@ -4579,6 +4987,13 @@ socket.on('question:show', payload => {
       illustrationImg.style.filter = `blur(${zoomGuessBlurPx(currentIllustrationZoom.startScale) * (1 - progress)}px)`
     }
 
+    // Révélation progressive de l'énigme (type "reveal", design décidé) —
+    // même tick, même calcul de progress que le dézoom "zoomguess" ci-dessus.
+    if (revealEnigmeActive && revealEnigmeImg) {
+      const progress = Math.min(1, 1 - remaining / total)
+      revealEnigmeImg.style.filter = `blur(${REVEAL_ENIGME_BLUR_MAX_PX * (1 - progress)}px)`
+    }
+
     if (timerBarFill) {
       timerBarFill.style.transform = `scaleX(${pct / 100})`
       if (pct <= 20) {
@@ -4686,10 +5101,41 @@ socket.on('question:show', payload => {
     // Les tuiles existent tout de suite (nécessaire pour applyTileReveal,
     // l'animation d'entrée), les photos arrivent un instant après via une
     // requête HTTP à part.
+    // Découpage en rangées adapté au nombre de photos (retour utilisateur,
+    // affiné ensuite : "pour 7 images : 3, 2 et 2" plutôt que 3/3/1 qui
+    // laissait une tuile seule orpheline). Pas un simple "N colonnes
+    // uniformes" — chaque rangée peut avoir sa propre largeur de tuile
+    // (voir --intrus-row-cols posé PAR TUILE plus bas, pas sur le
+    // conteneur). Table figée plutôt qu'une formule générale : l'éditeur
+    // borne "intrus" à 3-8 photos (voir editor.js), donc les 6 cas
+    // possibles sont listés explicitement — plus lisible qu'un algorithme
+    // pour un si petit nombre de cas, et sans risque de mal généraliser à
+    // un compte qui ne peut de toute façon pas se produire ici.
+    const INTRUS_ROW_PATTERNS = {
+      3: [3],
+      4: [2, 2],
+      5: [3, 2],
+      6: [3, 3],
+      7: [3, 2, 2],
+      8: [2, 2, 2, 2]
+    }
+    const count = payload.options.length
+    // Repli défensif si jamais appelé hors de la plage 3-8 éditeur (ne
+    // devrait pas arriver) : mêmes règles que la table ci-dessus, en
+    // formule, pour rester cohérent sans lister tous les cas possibles.
+    const rowPattern = INTRUS_ROW_PATTERNS[count] ||
+      (count % 3 === 0 ? Array(count / 3).fill(3)
+        : count % 2 === 0 ? Array(count / 2).fill(2)
+          : [...Array(Math.floor(count / 3)).fill(3), count % 3])
+    optionsDiv.style.removeProperty('--intrus-cols')
+    // Aplati le motif de rangées en une largeur (nombre de tuiles sur SA
+    // rangée) par index de tuile — ex. [3,2,2] => [3,3,3,2,2,2,2].
+    const tileRowCols = rowPattern.flatMap(rowSize => Array(rowSize).fill(rowSize))
     const intrusTileElById = {}
     payload.options.forEach((id, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn intrus-tile'
+      el.style.setProperty('--intrus-row-cols', tileRowCols[i] || 3)
       el.dataset.optionId = id
       makeTileFocusable(el)
       // Pas de texte dans la tuile (juste une photo) : role="button" seul ne
@@ -4734,7 +5180,19 @@ socket.on('question:show', payload => {
           // Cadrage choisi à l'édition (voir editor.js renderIntrusOptions /
           // openImageCropModal) — {x, y, zoom}, absent = centré + zoom plein
           // (comportement d'origine).
-          const applyNow = () => applyCropTransform(el, img, item.pos)
+          // Retour utilisateur mobile ("tuiles pas réduites de façon
+          // homogène, tronquées") : applyCropTransform lit
+          // wrapEl.clientWidth/clientHeight (voir plus haut) pour calculer
+          // l'échelle — appelé en synchrone ici (cas img déjà en cache,
+          // img.complete vrai immédiatement après avoir posé src), la tuile
+          // n'a pas forcément encore sa taille finale (aspect-ratio calculé
+          // sur une largeur de grille pas encore posée) : certaines tuiles
+          // héritaient d'un cadrage calculé sur une boîte 0×0 ou pas encore
+          // stabilisée, d'autres (chargées plus tard, sur onload) tombaient
+          // après le layout — d'où l'incohérence entre tuiles. requestAnimationFrame
+          // attend que le navigateur ait terminé sa passe de mise en page
+          // avant de lire clientWidth/clientHeight, dans les 2 cas.
+          const applyNow = () => requestAnimationFrame(() => applyCropTransform(el, img, item.pos))
           if (img.complete && img.naturalWidth) applyNow()
           img.onload = applyNow
         })
@@ -4885,7 +5343,21 @@ socket.on('answer:progress', ({ answered, total }) => {
 })
 
 // Gestion de la modération (Hôte)
+// Retour utilisateur ("le placement de la tuile est très étrange, elle
+// apparaît sous les contrôles de l'hôte") : posée en enfant de .container
+// SANS placement de grille explicite, elle tombait dans une ligne de
+// grille IMPLICITE dans la régie desktop (body.is-host.game-active
+// .container, une seule ligne EXPLICITE — tout le reste doit être placé à
+// la main, voir le commentaire sur #hostPanel dans style.css), hors de la
+// hauteur fixe du conteneur, poussant le bas de page au lieu de
+// s'intégrer nulle part. 1er essai : rattachée à #hostPanel — retour
+// utilisateur suivant, "je veux une zone à part entière dédiée à la
+// validation des réponses, sous le bloc central" : reste un enfant de
+// .container, mais avec sa PROPRE cellule de grille explicite, sous
+// #stageWrap (voir #moderationPanel dans style.css, 2e ligne "auto" sur
+// .container).
 const moderationDiv = document.createElement('div')
+moderationDiv.id = 'moderationPanel'
 moderationDiv.className = 'card'
 moderationDiv.style.marginTop = '16px'
 moderationDiv.style.display = 'none' // Caché par défaut
@@ -5021,6 +5493,60 @@ const insertPbacRowSorted = (item, content) => {
   if (next) moderationDiv.insertBefore(item, next)
   else moderationDiv.appendChild(item)
 }
+
+// "Tout valider" (audit UX) : la modération une-par-une devenait un goulot
+// d'étranglement pour TOUTE la salle avec beaucoup de joueurs — tant qu'il
+// reste ne serait-ce qu'une réponse en attente, personne n'avance (voir
+// server/index.js revealQuestion, appelée seulement quand room.pending est
+// vide). Contrairement à "pbac" (regroupement en familles, la sélection
+// EST le jugement), ici chaque réponse garde son propre calcul de points —
+// "Tout valider" ne fait qu'enchaîner plusieurs approbations individuelles
+// d'un coup, jamais un partage de points entre joueurs.
+const approveAllBar = document.createElement('div')
+approveAllBar.className = 'card'
+approveAllBar.style.marginTop = '8px'
+approveAllBar.style.display = 'none'
+approveAllBar.style.alignItems = 'center'
+approveAllBar.style.justifyContent = 'space-between'
+approveAllBar.style.gap = '12px'
+const approveAllLabel = document.createElement('div')
+approveAllLabel.style.fontSize = '13px'
+approveAllLabel.style.opacity = '0.75'
+approveAllLabel.textContent = 'Plusieurs réponses en attente — valide-les toutes si elles te semblent correctes'
+const approveAllBtn = document.createElement('button')
+approveAllBtn.className = 'btn btn-primary'
+approveAllBtn.style.padding = '8px 16px'
+approveAllBar.appendChild(approveAllLabel)
+approveAllBar.appendChild(approveAllBtn)
+document.querySelector('.container').appendChild(approveAllBar)
+
+// N'affiche le bandeau qu'à partir de 2 réponses génériques en attente : à
+// 1 seule, le bouton "Valider" de la ligne elle-même suffit déjà, pas besoin
+// d'un 2e bouton redondant juste au-dessus.
+const updateApproveAllBar = () => {
+  const n = moderationDiv.querySelectorAll('[data-generic="1"]').length
+  approveAllBar.style.display = n >= 2 ? 'flex' : 'none'
+  approveAllBtn.textContent = `Tout valider (${n})`
+}
+approveAllBtn.onclick = () => {
+  const roomCode = roomInput.value.trim()
+  const answerIds = [...moderationDiv.querySelectorAll('[data-generic="1"]')]
+    .map(el => el.dataset.answerId)
+    .filter(Boolean)
+  if (answerIds.length === 0) return
+  socket.emit('moderation:approveAll', { roomCode, answerIds })
+  answerIds.forEach(id => moderationDiv.querySelector(`[data-answer-id="${id}"]`)?.remove())
+  if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
+  updateApproveAllBar()
+}
+// Confirmation serveur — même filet de sécurité que moderation:pbacGrouped
+// (plusieurs onglets hôte ouverts, retrait optimiste ci-dessus déjà fait
+// dans le cas normal).
+socket.on('moderation:allApproved', ({ answerIds }) => {
+  (answerIds || []).forEach(id => moderationDiv.querySelector(`[data-answer-id="${id}"]`)?.remove())
+  if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
+  updateApproveAllBar()
+})
 
 let isModerationPending = false
 socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest, fields, pbac }) => {
@@ -5184,6 +5710,14 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
     return
   }
 
+  // Marqueur pour le bandeau "Tout valider" (audit UX — goulot d'étranglement
+  // signalé quand plusieurs réponses ambiguës arrivent en même temps) : ce
+  // sont les seules lignes qu'il concerne, "pbac" (regroupement dédié
+  // ci-dessus) et "blindtest" (jugement par champ) restant hors de son
+  // périmètre — même approbation individuelle que le reste, juste
+  // déclenchée en lot.
+  item.dataset.generic = '1'
+
   const row = document.createElement('div')
   row.style.display = 'flex'
   row.style.alignItems = 'center'
@@ -5207,6 +5741,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
     socket.emit('moderation:approve', { roomCode, answerId })
     item.remove()
     if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
+    updateApproveAllBar()
   }
 
   const reject = document.createElement('button')
@@ -5218,6 +5753,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
     socket.emit('moderation:reject', { roomCode, answerId })
     item.remove()
     if (moderationDiv.children.length === 0) moderationDiv.style.display = 'none'
+    updateApproveAllBar()
   }
 
   btns.appendChild(approve)
@@ -5226,6 +5762,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
   row.appendChild(btns)
   item.appendChild(row)
   moderationDiv.appendChild(item)
+  updateApproveAllBar()
 })
 
 // Toast indépendant
@@ -5247,22 +5784,33 @@ toastContainer.style.transition = 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.2
 toastContainer.style.border = '2px solid var(--color-accent)'
 document.body.appendChild(toastContainer)
 
-const showAnnounce = (msg) => {
-  toastContainer.textContent = msg
+// Bug corrigé (audit UX) : ce 2e paramètre `type` était accepté par TOUS
+// les appels de ce fichier ('error'/'info') mais jamais lu ici — une erreur
+// (ex. "Tu as été exclu de la salle") avait donc exactement le même style
+// discret et la même durée (3s) qu'une notif anodine ("Lien copié !"), sur
+// l'écran le plus critique de l'appli (le jeu en direct). Repris du même
+// langage que window.QzUI.toast (ui-widgets.js, utilisé partout ailleurs) :
+// icône ⚠️ + liseré rouge + durée doublée pour une erreur — ce fichier a sa
+// propre implémentation (DOM créé à la main, jamais migré vers QzUI), pas
+// de raison de garder deux comportements différents pour la même notion.
+const showAnnounce = (msg, type) => {
+  const isError = type === 'error'
+  toastContainer.textContent = isError ? `⚠️ ${msg}` : msg
+  toastContainer.style.borderColor = isError ? 'var(--color-danger)' : 'var(--color-accent)'
   toastContainer.style.display = 'block'
   toastContainer.style.opacity = '0'
   toastContainer.style.transform = 'translateX(-50%) translateY(-20px)'
-  
+
   setTimeout(() => {
     toastContainer.style.opacity = '1'
     toastContainer.style.transform = 'translateX(-50%) translateY(0)'
   }, 10)
 
-  setTimeout(() => { 
+  setTimeout(() => {
     toastContainer.style.opacity = '0'
     toastContainer.style.transform = 'translateX(-50%) translateY(-20px)'
     setTimeout(() => { toastContainer.style.display = 'none' }, 300)
-  }, 3000)
+  }, isError ? 7000 : 3000)
 }
 
 const computeOrder = () => Array.from(scores.entries()).sort(([,a],[,b]) => (b.total - a.total))
@@ -5626,6 +6174,10 @@ socket.on('timer:end', (payload) => {
   // (tout le monde a répondu en avance) — on force l'image complète tout de
   // suite pour rester cohérent avec la révélation qui s'affiche en dessous.
   if (currentIllustrationZoom && illustrationImg) { illustrationImg.style.transform = 'scale(1)'; illustrationImg.style.filter = '' }
+  // Même filet de sécurité que juste au-dessus, pour le flou progressif de
+  // l'énigme "reveal" (voir revealEnigmeActive) — l'image doit être nette
+  // au moment précis où la réponse apparaît par-dessus juste en dessous.
+  if (revealEnigmeActive && revealEnigmeImg) { revealEnigmeImg.style.filter = '' }
   // "révélation" : timer:end est le SEUL moment où l'image réponse arrive
   // enfin du serveur (voir server/index.js, jamais transmise avant) — pour
   // TOUT LE MONDE, hôte compris (c'est souvent son écran qui est projeté en
@@ -5745,7 +6297,12 @@ socket.on('question:reveal', payload => {
       else el.classList.add('incorrect-reveal')
     })
     showMyResultBanner()
-  } else if (payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'reveal') {
+  } else if (payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'reveal' || payload.type === 'recherche') {
+    // "recherche" en plus : retire le calque noir en entier (pas juste un
+    // trou local) pour que le joueur voie enfin l'image complète — sinon la
+    // question se terminerait sans jamais montrer ce qu'il cherchait,
+    // contrairement à "zoomguess"/"reveal" qui finissent déjà nets.
+    if (payload.type === 'recherche' && rechercheOverlay) rechercheOverlay.classList.add('d-none')
     revealFreeAnswer((payload.correct || [])[0] || '')
     showMyResultBanner()
   } else if (payload.type === 'pbac') {

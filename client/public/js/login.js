@@ -116,6 +116,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return
       }
 
+      // Bug corrigé (audit UX) : aucun retour "en cours" pendant l'appel
+      // réseau — rien n'empêchait un double-clic (double tentative de
+      // connexion) sur réseau lent. Même pattern que resendEmailBtn plus
+      // bas dans ce fichier.
+      // .textContent aurait effacé le <span> interne du bouton (voir
+      // login.html) — .innerHTML pour restituer exactement le même balisage
+      // au reset, plutôt que de le laisser en texte nu ensuite.
+      signInBtn.disabled = true
+      signInBtn.innerHTML = 'Connexion...'
       try {
         // Supabase n'authentifie que par email : si l'utilisateur a tapé un
         // pseudo, on le résout d'abord côté base (voir resolve_login_email
@@ -146,6 +155,14 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         console.error("Erreur lors de la connexion:", err);
         showLoginError("Une erreur est survenue lors de la connexion.")
+      } finally {
+        // Réactivé dans TOUS les cas, y compris succès : la navigation via
+        // window.location.href ci-dessus n'est pas synchrone/bloquante, un
+        // très bref réaffichage avant le déchargement de la page est sans
+        // conséquence — plus simple/fiable qu'un reset dupliqué à chaque
+        // branche de sortie.
+        signInBtn.disabled = false
+        signInBtn.innerHTML = '<span>Se connecter</span>'
       }
     }
   }
@@ -184,6 +201,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       console.log("Tentative d'inscription pour:", email);
+      // Bug corrigé (audit UX) : même souci que signInBtn plus haut — aucun
+      // retour "en cours" pendant l'appel réseau. .innerHTML (pas
+      // .textContent) pour préserver le <span> interne du bouton (login.html).
+      signUpBtn.disabled = true
+      signUpBtn.innerHTML = 'Création...'
       try {
         const { data, error } = await sb.auth.signUp(signupOptions)
 
@@ -219,6 +241,12 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         console.error("Exception lors de l'inscription:", err);
         showSignupError("Une erreur technique est survenue.")
+      } finally {
+        // Réactivé dans TOUS les cas (voir signInBtn plus haut, même
+        // raisonnement) — y compris le chemin "carte masquée" (le bouton
+        // masqué avec elle n'en souffre pas) et le chemin navigation.
+        signUpBtn.disabled = false
+        signUpBtn.innerHTML = '<span>Créer mon compte</span>'
       }
     }
   }
