@@ -190,90 +190,162 @@
       </div>
     </div>
 
+    <!-- Logo centré, affiché UNIQUEMENT quand la navbar est masquée côté
+         joueur (body.irl-player-mode / .remote-player-mode, voir CSS) —
+         retour utilisateur : préférable à ne plus avoir aucun logo pendant
+         la partie. PAS un lien contrairement à .brand : aucun href, et
+         pointer-events:none en CSS (.irl-center-logo) pour ne jamais
+         pouvoir quitter la partie par erreur en cliquant dessus — seule la
+         roue crantée ci-dessous (toujours en haut à droite) le permet,
+         volontairement, via son menu. -->
+    <img class="irl-center-logo" src="/icons/queazy-logo-source.svg" alt="" aria-hidden="true">
+
     <!-- Remplace la navbar sur le téléphone des joueurs en mode IRL (voir
          body.irl-player-mode, index.js) : jamais bloquant (pas d'overlay
          plein écran), juste un petit bouton coin haut-droit avec un seul
          choix utile en pleine partie. -->
     <button id="irlMenuBtn" type="button" class="irl-menu-btn" aria-label="Menu" aria-haspopup="true" aria-expanded="false">⚙️</button>
     <div id="irlMenuDropdown" class="irl-menu-dropdown">
+      <!-- Ligne d'info non cliquable (design décidé, PlayerRemote.dc.html) :
+           affichée UNIQUEMENT en mode "à distance" (voir updateIrlPlayerUI
+           côté index.js) — absente en IRL, où ce menu n'a jamais eu besoin
+           de préciser le mode. -->
+      <div id="irlMenuModeInfo" class="irl-menu-info d-none">🌐 Connecté à distance</div>
       <button type="button" id="irlLeaveBtn" class="irl-menu-item">🚪 Quitter le salon</button>
     </div>
 
     <div class="container mt-20">
 
-      <!-- Salon d'attente -->
-      <div id="lobby" class="card d-none">
-        <div class="lobby-header">
-          <h1>Salon d’attente</h1>
-          <p class="text-muted mt-8">Préparez-vous pour le début de la partie</p>
-          <!-- Vidéos explicatives par type de question (retour utilisateur,
-               chantier v1.54) : accessible à tous (hôte + joueurs) UNIQUEMENT
-               depuis le lobby, avant que la partie ne démarre — voir
-               openTutoVideosModal côté index.js. -->
-          <button id="tutoVideosBtn" type="button" class="btn h-40 px-20 font-14 mt-12">🎬 Comment jouer ?</button>
-        </div>
-
-        <div id="lobbyHost" class="lobby-host-card"></div>
-
-        <!-- Mode équipe (hôte uniquement, verrouillé une fois la partie
-             lancée — voir index.js et server/index.js gameStarted). -->
-        <div id="teamModePanel" class="team-mode-panel d-none">
-          <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
-            <input id="teamModeToggle" type="checkbox" class="qz-toggle-input" />
-            <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
-            👥 Mode équipe (score cumulé par équipe)
-          </label>
-          <div id="teamModeControls" class="team-mode-controls d-none">
-            <label class="font-13 text-muted align-center d-flex gap-xs">
-              Nombre d'équipes
-              <input id="teamCountInput" type="number" min="2" max="6" value="2" class="team-count-input" />
-            </label>
-            <button id="teamAutoAssignBtn" type="button" class="btn h-36 px-16 font-13">🔀 Répartir automatiquement</button>
-            <span class="font-12 text-muted">Clique le badge d'un joueur pour changer son équipe à la main.</span>
+      <!-- Salon d'attente — retour utilisateur (revue visuelle, canvas de
+           design "Écran hôte QuEazy") : le salon et la liste des joueurs
+           sont désormais 2 cartes séparées (#lobbySalon/#lobbyPlayersCard)
+           au lieu d'une seule — nécessaire pour la disposition 2 colonnes
+           desktop ci-dessous (voir style.css : #lobbyPlayersCard rejoint
+           #roomInfo dans la colonne de droite, #lobbySalon reste avec
+           #hostPanel dans celle de gauche). #lobby lui-même ne porte plus
+           de style de carte, seulement le d-none qui bascule tout le
+           salon (voir showLobby dans index.js, inchangé). -->
+      <div id="lobby" class="d-none">
+        <div id="lobbySalon" class="card">
+          <div class="lobby-header">
+            <h1>Salon d’attente</h1>
+            <p class="text-muted mt-8">Préparez-vous pour le début de la partie</p>
+            <!-- Vidéos explicatives par type de question (retour utilisateur,
+                 chantier v1.54) : accessible à tous (hôte + joueurs) UNIQUEMENT
+                 depuis le lobby, avant que la partie ne démarre — voir
+                 openTutoVideosModal côté index.js. -->
+            <button id="tutoVideosBtn" type="button" class="btn h-40 px-20 font-14 mt-12">🎬 Comment jouer ?</button>
           </div>
-        </div>
 
-        <!-- Importance de la rapidité (score max toujours 1000, seul le
-             score minimum d'une bonne réponse tardive varie) — hôte
-             uniquement, verrouillé une fois la partie lancée comme le mode
-             équipe ci-dessus. Voir index.js et server/index.js
-             (room.speedLevel / game:setSpeedLevel / floorForSpeedLevel). -->
-        <div id="speedLevelPanel" class="team-mode-panel d-none">
-          <div class="align-center d-flex gap-xs" style="justify-content: space-between;">
-            <span class="align-center d-flex gap-xs font-bold font-14">
-              ⚡ Importance de la rapidité
+          <div id="lobbyHost" class="lobby-host-card"></div>
+
+          <!-- Mode équipe (hôte uniquement, verrouillé une fois la partie
+               lancée — voir index.js et server/index.js gameStarted). -->
+          <div id="teamModePanel" class="team-mode-panel d-none">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+              <input id="teamModeToggle" type="checkbox" class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+              👥 Mode équipe (score cumulé par équipe)
+            </label>
+            <div id="teamModeControls" class="team-mode-controls d-none">
+              <label class="font-13 text-muted align-center d-flex gap-xs">
+                Nombre d'équipes
+                <input id="teamCountInput" type="number" min="2" max="6" value="2" class="team-count-input" />
+              </label>
+              <button id="teamAutoAssignBtn" type="button" class="btn h-36 px-16 font-13">🔀 Répartir automatiquement</button>
+              <span class="font-12 text-muted">Clique le badge d'un joueur pour changer son équipe à la main.</span>
+            </div>
+          </div>
+
+          <!-- Importance de la rapidité (score max toujours 1000, seul le
+               score minimum d'une bonne réponse tardive varie) — hôte
+               uniquement, verrouillé une fois la partie lancée comme le mode
+               équipe ci-dessus. Voir index.js et server/index.js
+               (room.speedLevel / game:setSpeedLevel / floorForSpeedLevel). -->
+          <div id="speedLevelPanel" class="team-mode-panel d-none">
+            <div class="align-center d-flex gap-xs" style="justify-content: space-between;">
+              <span class="align-center d-flex gap-xs font-bold font-14">
+                ⚡ Importance de la rapidité
+                <span class="info-bubble">
+                  <span class="info-bubble-icon" tabindex="0" role="button" aria-label="Plus d'infos">i</span>
+                  <span class="info-bubble-text">Score max toujours 1000 pour une réponse quasi instantanée ; le score minimum d'une bonne réponse tardive dépend du niveau choisi.</span>
+                </span>
+              </span>
+              <select id="speedLevelSelect" class="speed-level-select">
+                <option value="low">Faible (1000 → 500)</option>
+                <option value="normal" selected>Normal (1000 → 300)</option>
+                <option value="high">Forte (1000 → 100)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Mode de partie (hôte uniquement, verrouillé une fois la partie
+               lancée comme les panneaux ci-dessus). Voir index.js et
+               server/index.js (room.gameMode / game:setMode). -->
+          <div id="gameModePanel" class="team-mode-panel d-none">
+            <div class="align-center d-flex gap-xs">
+              <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+                <input id="gameModeRemoteToggle" type="checkbox" class="qz-toggle-input" />
+                <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+                🖥️ Quiz à distance (chacun sur son écran)
+              </label>
               <span class="info-bubble">
                 <span class="info-bubble-icon" tabindex="0" role="button" aria-label="Plus d'infos">i</span>
-                <span class="info-bubble-text">Score max toujours 1000 pour une réponse quasi instantanée ; le score minimum d'une bonne réponse tardive dépend du niveau choisi.</span>
+                <span class="info-bubble-text">Décoché (par défaut) = IRL : sur le téléphone des joueurs, la navbar disparaît au profit d'une petite roue crantée, les images décoratives des questions sont masquées (un présentateur les montre sur l'écran commun), et la musique des Blind Tests ne joue que sur l'écran de l'hôte.</span>
               </span>
-            </span>
-            <select id="speedLevelSelect" class="speed-level-select">
-              <option value="low">Faible (1000 → 500)</option>
-              <option value="normal" selected>Normal (1000 → 300)</option>
-              <option value="high">Forte (1000 → 100)</option>
-            </select>
+            </div>
           </div>
         </div>
 
-        <!-- Mode de partie (hôte uniquement, verrouillé une fois la partie
-             lancée comme les panneaux ci-dessus). Voir index.js et
-             server/index.js (room.gameMode / game:setMode). -->
-        <div id="gameModePanel" class="team-mode-panel d-none">
-          <div class="align-center d-flex gap-xs">
-            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
-              <input id="gameModeRemoteToggle" type="checkbox" class="qz-toggle-input" />
-              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
-              🖥️ Quiz à distance (chacun sur son écran)
-            </label>
-            <span class="info-bubble">
-              <span class="info-bubble-icon" tabindex="0" role="button" aria-label="Plus d'infos">i</span>
-              <span class="info-bubble-text">Décoché (par défaut) = IRL : sur le téléphone des joueurs, la navbar disparaît au profit d'une petite roue crantée, les images décoratives des questions sont masquées (un présentateur les montre sur l'écran commun), et la musique des Blind Tests ne joue que sur l'écran de l'hôte.</span>
-            </span>
+        <!-- Retour utilisateur (revue visuelle) : "Partager l'accès" et
+             "Joueurs connectés" regroupés dans un même conteneur
+             (#lobbyShareCol) — nécessaire pour que la colonne droite du
+             salon d'attente (disposition desktop, voir style.css) se
+             répartisse en hauteur indépendamment de la colonne gauche
+             (#lobbySalon), au lieu de suivre la hauteur (variable) de
+             #lobbySalon comme quand les deux cartes étaient des items de
+             grille séparés sur des lignes partagées avec la gauche — ce qui
+             laissait un grand vide sous le QR quand #lobbySalon était plus
+             haut que les deux cartes de droite réunies. -->
+        <div id="lobbyShareCol">
+          <!-- Infos Salle (Hôte) -->
+          <div id="roomInfo" class="card d-none max-w-500 m-auto text-center">
+            <h3 class="font-14 uppercase text-muted mb-16 letter-spacing-1">Partager l'accès</h3>
+            <!-- Retour utilisateur (design décidé) : QR cliquable pour
+                 l'agrandir en plein écran (#qrExpandOverlay plus bas dans ce
+                 fichier) — pratique pour un joueur IRL qui photographie
+                 l'écran projeté. #qrWrap porte le style "carte blanche" +
+                 gère le clic ; #qr reste le point de montage exact que
+                 QRCode() cible (voir index.js) — jamais touché directement
+                 par du style, QRCode() remplace son contenu à chaque appel. -->
+            <!-- Retour utilisateur (design validé, option B du canvas
+                 "Partager l'accès") : disposition "billet" — QR à gauche,
+                 séparateur perforé, code + bouton empilés à droite. Tient
+                 sur moins de hauteur qu'un empilement vertical complet, pas
+                 besoin de scroller dans les 40% alloués à cette carte (voir
+                 la répartition 40/60 en CSS/JS, syncLobbyColumnHeight). -->
+            <div class="room-info-row room-info-ticket">
+              <div id="qrWrap" class="qr-container" role="button" tabindex="0" aria-label="Agrandir le QR code">
+                <div id="qr"></div>
+                <span class="qr-expand-badge" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                </span>
+              </div>
+              <!-- Décor perforé façon billet de spectacle — purement visuel,
+                   aucun contenu dedans. -->
+              <div class="room-info-perf" aria-hidden="true"></div>
+              <div class="room-info-text">
+                <div id="serverInfo"></div>
+                <button id="copyUrl" class="btn btn-primary h-44">Copier le lien</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="lobbyPlayersCard" class="card">
+            <h3 class="mb-md opacity-80">Joueurs connectés</h3>
+            <div id="lobbyGrid" class="player-grid"></div>
           </div>
         </div>
-
-        <h3 class="mb-md opacity-80">Joueurs connectés</h3>
-        <div id="lobbyGrid" class="player-grid"></div>
       </div>
 
       <!-- Vidéos explicatives par type de question (chantier v1.54, retour
@@ -364,8 +436,38 @@
       <!-- Panel de contrôle Hôte -->
       <div id="hostPanel" class="card d-none mt-20 border-accent-left d-flex align-center justify-between" style="padding: 20px 32px;">
         <div class="d-flex flex-column gap-xs">
-          <h3 class="font-18">Contrôles de l'hôte</h3>
+          <!-- Icône + h3 (chantier "plateau chaleureux", branche dev) : même
+               langage que la maquette validée ("carte du présentateur") —
+               un petit badge rond en dégradé accent plutôt qu'un simple
+               titre nu, pour que ce panneau se distingue davantage d'une
+               carte de contenu générique une fois en pleine partie. -->
+          <div class="host-panel-eyebrow d-flex align-center gap-xs">
+            <span class="host-panel-icon">🎤</span>
+            <h3 class="font-18">Contrôles de l'hôte</h3>
+          </div>
+          <!-- Nom du quiz en cours (retour utilisateur) — posé au chargement
+               du quiz (voir loadedQuiz plus bas dans index.js), jamais
+               recalculé nulle part ailleurs : simple affichage direct de
+               loadedQuiz.title. Caché par défaut (hors régie desktop, pas
+               de place fiable dans le bandeau horizontal d'origine). -->
+          <div id="hostQuizTitle" class="host-quiz-title"></div>
+          <!-- Pile d'avatars des joueurs présents (chantier "plateau
+               chaleureux", branche dev) : reprend la donnée déjà tenue à
+               jour par lastLobbyArr (voir index.js renderLobbyGrid,
+               socket.on('lobby:list', ...)) — mêmes avatars que la maquette
+               validée, juste rendus ici plutôt que dans une barre du haut
+               dédiée (pas de place fiable pour ça sans risquer un nouveau
+               conflit position:fixed/backdrop-filter, voir le badge type de
+               question corrigé plus tôt cette session). -->
+          <div id="hostPlayerStrip" class="host-player-strip"></div>
           <div id="loadedInfo" class="font-14 text-accent font-bold">Aucun quiz sélectionné</div>
+          <!-- Barre de progression : reprend visuellement la même info que
+               #loadedInfo ("Question X/Y"), déjà fiable — pas de nouvel
+               état, juste un rendu complémentaire posé au même endroit où
+               hostQuestionLabel est déjà calculé (voir index.js
+               renderHostProgressBar). Retour utilisateur : une vraie barre
+               plutôt que des points, comme sur la maquette de référence. -->
+          <div id="hostProgressBar" class="host-progress-bar"></div>
           <div class="host-volume-row align-center d-flex gap-xs font-bold font-14" title="Volume par défaut de la musique des Blind Tests — chaque joueur peut ensuite l'ajuster de son côté">
             🔊 Volume musique par défaut
             <div id="audioVolumeTrack" class="volume-track">
@@ -378,7 +480,28 @@
         <div class="d-flex gap-sm">
           <button id="selectQuizBtn" class="btn h-48 px-32">Sélectionner un Quiz</button>
           <button id="startQuiz" class="btn btn-primary h-48 px-32">LANCER</button>
-          <button id="nextQuestion" class="btn btn-primary h-48 px-32 d-none">Suivant</button>
+          <!-- "✨" isolé dans son propre <span> (retour utilisateur : une
+               petite icône "shine" à part, pas juste un emoji collé en fin
+               de texte) — permet de l'empiler SOUS le libellé en régie
+               desktop (voir style.css) sans toucher au texte affiché
+               partout ailleurs (mobile, desktop 1024-1099px), où ce bouton
+               reste une simple ligne "Question suivante ✨". -->
+          <button id="nextQuestion" class="btn btn-primary h-48 px-32 d-none">
+            <span class="btn-label">Question suivante</span>
+            <span class="btn-shine-icon" aria-hidden="true">✨</span>
+          </button>
+        </div>
+        <!-- Ambiance de la salle (sur place / à distance) — reprend
+             purement l'affichage de `gameMode`, déjà suivi et diffusé par
+             le serveur (voir socket.on('game:mode') dans index.js pour le
+             réglage complet, un cran au-dessus de l'écran de jeu) : aucun
+             nouvel état, juste un 2e endroit où le lire, visible pendant
+             la partie elle-même (retour utilisateur, référence maquette).
+             En dehors de la régie hôte desktop, cette pastille reste
+             cachée (display:none par défaut, voir style.css) — pas de
+             place fiable pour elle dans le bandeau horizontal d'origine. -->
+        <div id="hostAmbiancePill" class="host-ambiance-pill">
+          🎉 Ambiance : <span id="hostAmbianceValue">Sur place</span>
         </div>
       </div>
 
@@ -426,21 +549,31 @@
         </div>
       </div>
 
-      <!-- Infos Salle (Hôte) -->
-      <div id="roomInfo" class="card d-none mt-20 max-w-500 m-auto text-center border-accent-top">
-        <h3 class="font-14 uppercase text-muted mb-16 letter-spacing-1">Partager l'accès</h3>
-        <div id="qr" class="qr-container"></div>
-        <div class="info-box mb-16">
-          <div id="serverInfo" class="font-bold font-18 text-dark mb-12"></div>
-          <button id="copyUrl" class="btn btn-primary w-full h-44">Copier le lien d'invitation</button>
-        </div>
+      <!-- QR agrandi plein écran (retour utilisateur) — caché par défaut,
+           rempli/affiché par openQrOverlay (index.js), se ferme au clic
+           n'importe où sur le fond. -->
+      <div id="qrExpandOverlay" class="d-none">
+        <div id="qrExpandContainer" class="qr-container"></div>
+        <div id="qrExpandCode" class="qr-expand-code"></div>
+        <div class="qr-expand-hint">Cliquer n'importe où pour fermer</div>
       </div>
 
       
       <!-- Code de salle persistant pour tous -->
       <div id="persistentRoomCode" class="persistent-code d-none">
-        Code salle: <span id="displayRoomCode" class="font-bold text-accent"></span>
+        <span class="live-indicator"><span class="live-dot"></span>EN DIRECT</span>
+        <span class="persistent-code-sep">·</span>
+        Code salle: <span id="displayRoomCode" class="display-room-code font-bold text-accent"></span>
       </div>
+
+      <!-- Joueurs + réponses reçues, coin haut-droit pendant une partie
+           (retour utilisateur, référence maquette : "8 joueurs · 5 ont
+           répondu") — hôte uniquement : la donnée (compteur de réponses)
+           n'est de toute façon envoyée par le serveur qu'à l'hôte (voir
+           socket.on('answer:progress') dans index.js, déjà utilisé pour
+           #loadedInfo dans le panneau hôte — pas une nouvelle donnée,
+           juste un 2e endroit où l'afficher). -->
+      <div id="gameProgressInfo" class="game-progress-info d-none"></div>
 
       <!-- Badge permanent du type de question (retour utilisateur) : reste
            affiché pendant toute la question, dans un coin — repère rapide du
@@ -457,13 +590,28 @@
            n'importe où au lieu du coin voulu (régression réelle constatée
            sur desktop en tentant ça pour corriger un chevauchement mobile —
            voir plutôt les media queries dédiées dans style.css). -->
-      <button type="button" id="questionTypeBadge" class="question-type-badge d-none" title="Type de question">
-        <span id="questionTypeBadgeIcon" class="question-type-badge-icon"></span>
-        <span id="questionTypeBadgeLabel" class="question-type-badge-label"></span>
-      </button>
+      <!-- Regroupe le badge + la zone de jeu (tâche 005, maquette "régie 2
+           rails") : sert de carte centrale en layout régie desktop (voir
+           .stage-wrap/body.is-host.game-active .container plus bas dans
+           style.css) ET de point d'ancrage positionné pour que le badge
+           puisse passer en position:absolute (au lieu de fixed) UNIQUEMENT
+           dans ce contexte-là — en layout normal/mobile, rien ne change
+           (juste un wrapper transparent supplémentaire dans le flux, aucun
+           id déplacé/retiré donc aucun getElementById existant cassé). -->
+      <div id="stageWrap" class="stage-wrap">
+        <button type="button" id="questionTypeBadge" class="question-type-badge d-none" title="Type de question">
+          <span id="questionTypeBadgeIcon" class="question-type-badge-icon"></span>
+          <span id="questionTypeBadgeLabel" class="question-type-badge-label"></span>
+        </button>
 
-      <!-- Zone de jeu -->
-      <div id="main" class="mt-40">
+        <!-- Zone de jeu — d-none par défaut (audit UX, bug corrigé) : sans
+             ça, un visiteur arrivant sur "/" sans ?create=/?join= (les
+             seuls chemins qui appelaient resetUI(), qui masque cette zone)
+             voyait un champ "Ta réponse..." + bouton "Valider" fantôme
+             sous la carte Rejoindre/Créer, sans aucune question ni salle
+             active. Retirée explicitement par showLobby()/le lancement de
+             partie, comme #lobby/#timerContainer ci-dessus/ci-dessous. -->
+        <div id="main" class="mt-40 d-none">
         <!-- Ordre volontaire (retour utilisateur) : le timer reste une barre
              AU-DESSUS de la question quoi qu'il arrive, puis question ->
              image, à l'identique de l'éditeur (voir editor.html) pour le
@@ -499,7 +647,11 @@
                      valeur qu'on avait vraiment choisie disparaît, impossible à
                      retrouver. Caché tant qu'on n'est pas en révélation. -->
                 <div id="gradMyMarker" class="grad-slider-my-marker d-none">
-                  <span class="grad-my-marker-tag">Ta réponse</span>
+                  <!-- Texte rempli en JS (voir positionGradTargetMarker) : "Ta
+                       réponse" seul ne disait pas QUELLE valeur avait été
+                       choisie (retour utilisateur), le pouce principal ayant
+                       déjà sauté sur la bonne réponse à cet endroit. -->
+                  <span id="gradMyMarkerTag" class="grad-my-marker-tag">Ta réponse</span>
                 </div>
               </div>
             </div>
@@ -603,13 +755,26 @@
               <img id="revealReponseImg" class="reveal-img reveal-img-reponse" alt="" draggable="false" />
             </div>
           </div>
+          <!-- Question "recherche" (tâche 009) : image entièrement cachée
+               sous un calque noir opaque, révélée façon "lampe torche" au
+               passage du curseur/doigt (voir style.css .recherche-overlay,
+               index.js pour les écouteurs pointer/touch) — jamais
+               cumulatif, la zone se recache dès que le pointeur s'éloigne/
+               le doigt se lève. Pas encore interactif à ce stade (étape 3
+               du plan, DOM+CSS seuls). -->
+          <div id="rechercheArea" class="recherche-area d-none">
+            <div id="rechercheWrap" class="recherche-wrap">
+              <img id="rechercheImg" class="recherche-img" alt="" draggable="false" />
+              <div id="rechercheOverlay" class="recherche-overlay"></div>
+            </div>
+          </div>
           <div id="freeText" class="free-text-input">
             <input id="answer" placeholder="Ta réponse..." class="h-60 border-none bg-transparent font-18" maxlength="150" />
             <div id="blindtestFields" class="blindtest-fields d-none">
               <input id="blindtestTitleInput" placeholder="Titre du morceau..." class="h-56 border-none bg-transparent font-16" maxlength="100" />
               <input id="blindtestArtistInput" placeholder="Artiste..." class="h-56 border-none bg-transparent font-16" maxlength="100" />
             </div>
-            <button id="send" class="btn btn-primary w-140 h-60 font-16">Envoyer</button>
+            <button id="send" class="btn btn-primary w-140 h-60 font-16">Valider</button>
           </div>
           <div id="revealAnswerText" class="reveal-answer d-none"></div>
           <div id="myResultBanner" class="my-result-banner d-none"></div>
@@ -618,6 +783,25 @@
         
         <div id="log" class="log-message"></div>
       </div>
+      </div>
+      <!-- Classement permanent, layout régie hôte uniquement (tâche 005) —
+           complète (ne remplace pas) le classement plein écran existant
+           (#leaderOverlay, entre les questions) : réutilise les MÊMES
+           données déjà suivies côté client (`scores`, `computeOrder()`,
+           voir index.js), juste un second point de rendu, câblé sur le
+           même point d'entrée unique `renderLeaderboard()` qui centralisait
+           déjà tous les appels à jour. Vide/masqué hors layout régie (voir
+           media query dédiée dans style.css) et en mode équipes (pas encore
+           traité ici, périmètre volontairement réduit à ce 1er lot). -->
+      <!-- Pas de classe d-none ici (contrairement aux autres panneaux du
+           fichier) : .live-classement-dock a déjà display:none par défaut
+           en CSS, seulement levé par la media query régie hôte — .d-none
+           utilise !important, qui aurait sinon gagné sur cette media query
+           quel que soit l'état de body.is-host.game-active. -->
+      <aside id="liveClassementDock" class="live-classement-dock">
+        <h4 class="live-classement-title">🏆 Le classement</h4>
+        <div id="liveClassementList" class="live-classement-list"></div>
+      </aside>
     </div>
 
     <!-- Popup "en attente de validation" (modération d'une réponse libre) —

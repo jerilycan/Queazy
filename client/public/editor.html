@@ -225,6 +225,24 @@
           </div>
         </div>
 
+        <!-- Écran "choix du type" (nouvelle DA, tâche 003, décision validée) :
+             un nouveau quiz démarre à 0 question et affiche cet écran à la
+             place de #questionDetail tant qu'aucune question n'existe encore
+             — et le "+" de la sidebar (#addQuestion) rouvre ce même écran
+             pour CHAQUE nouvelle question, plutôt que d'ajouter directement
+             un "Texte libre" par défaut (voir editor.js openTypePicker/
+             addQuestionOfType). #typePickerGridCancelBtn ne sert que dans ce
+             second cas (rien à annuler tant que le quiz est vide). Mêmes 13
+             types que #qType, générés depuis lui pour rester la seule source
+             de vérité de leurs libellés. -->
+        <div id="questionEmptyState" class="question-detail question-empty-state d-none">
+          <div class="question-empty-icon">❓</div>
+          <h3>Choisis un type de réponse</h3>
+          <p class="text-muted">13 mécaniques disponibles — QCM, Vrai/Faux, Blind Test, Timeline, Petit Bac… Le formulaire s'adapte automatiquement une fois choisi.</p>
+          <div id="typePickerGrid" class="type-picker-grid"><!-- Rempli par JS --></div>
+          <button type="button" id="typePickerCancelBtn" class="btn btn-nav-secondary font-13 d-none">Annuler</button>
+        </div>
+
         <!-- Detail: Éditeur de la question sélectionnée -->
         <div id="questionDetail" class="question-detail">
           <div class="detail-section">
@@ -243,7 +261,7 @@
                avant même de rédiger l'énoncé. -->
           <div class="d-grid grid-cols-split gap-lg">
             <div class="detail-section">
-              <label>Type de réponse</label>
+              <label for="qType">Type de réponse</label>
               <select id="qType">
                 <option value="free">📝 Texte libre</option>
                 <option value="mcq">🔘 Choix multiples (QCM)</option>
@@ -258,6 +276,7 @@
                 <option value="timeline">⏳ Timeline</option>
                 <option value="intrus">🎯 Intrus</option>
                 <option value="pbac">🎩 Petit Bac (catégorie ouverte)</option>
+                <option value="recherche">🔦 Recherche</option>
               </select>
               <!-- Aperçu de la mécanique (retour utilisateur : réutiliser la
                    démo joueur ici aussi) — même texte que la popup montrée
@@ -269,7 +288,7 @@
               <p id="qTypeHint" class="qtype-hint d-none"></p>
             </div>
             <div class="detail-section">
-              <label>Temps imparti (secondes)</label>
+              <label for="qTimer">Temps imparti (secondes)</label>
               <div class="timer-controls">
                 <button id="timerMinus" class="btn-timer">-</button>
                 <input type="number" id="qTimer" value="15" min="5" max="120" />
@@ -279,7 +298,7 @@
           </div>
 
           <div class="detail-section">
-            <label>Énoncé de la question</label>
+            <label for="qPrompt">Énoncé de la question</label>
             <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..." maxlength="400"></textarea>
           </div>
 
@@ -291,7 +310,7 @@
                ici, spécifiques à l'édition (ils cadrent le reste du formulaire,
                jamais montrés tels quels au joueur). -->
           <div id="illustrationSection" class="detail-section">
-            <label>Image d'illustration (optionnelle)</label>
+            <label for="illustrationUpload">Image d'illustration (optionnelle)</label>
             <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
             <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
               <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
@@ -301,12 +320,12 @@
           </div>
 
           <div class="detail-section">
-            <label>Explication (optionnelle, affichée après la révélation)</label>
+            <label for="qExplanation">Explication (optionnelle, affichée après la révélation)</label>
             <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986." maxlength="400"></textarea>
           </div>
 
           <div id="zoomGuessSection" class="detail-section d-none">
-            <label>Image à deviner</label>
+            <label for="zoomGuessUpload">Image à deviner</label>
             <input type="file" id="zoomGuessUpload" accept="image/*" class="cursor-pointer" />
             <div id="zoomGuessPreviewWrap" class="illustration-preview-wrap d-none mt-8">
               <img id="zoomGuessPreviewImg" class="illustration-preview-img is-zoom-pickable" alt="" />
@@ -315,7 +334,7 @@
             </div>
             <p class="text-muted font-13 mt-8">Clique sur l'image ci-dessus pour choisir le point de zoom (ex. le visage du personnage à deviner).</p>
             <div class="detail-section mt-8">
-              <label>Niveau de zoom initial</label>
+              <label for="zoomGuessZoomInput">Niveau de zoom initial</label>
               <div class="timer-controls">
                 <button id="zoomGuessZoomMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="zoomGuessZoomInput" class="stepper-input" value="4" min="2" max="25" />
@@ -323,6 +342,22 @@
               </div>
             </div>
             <p class="text-muted font-13 mt-8">L'image démarre zoomée à ce niveau et se dézoome progressivement jusqu'à l'image complète, au rythme du chronomètre de la question. Les joueurs devinent avant le dézoom complet.</p>
+          </div>
+
+          <!-- "Recherche" (tâche 009) : une seule image, entièrement cachée
+               sous un calque noir côté jeu — révélée au passage du
+               curseur/doigt du joueur (façon lampe torche), pas de point ni
+               de niveau de zoom à choisir ici contrairement à "ZoomOut
+               Devinette" juste au-dessus (rayon de révélation fixe, voir
+               style.css côté jeu). -->
+          <div id="rechercheSection" class="detail-section d-none">
+            <label for="rechercheUpload">Image à faire chercher</label>
+            <input type="file" id="rechercheUpload" accept="image/*" class="cursor-pointer" />
+            <div id="recherchePreviewWrap" class="illustration-preview-wrap d-none mt-8">
+              <img id="recherchePreviewImg" class="illustration-preview-img" alt="" />
+              <button type="button" id="removeRechercheBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+            </div>
+            <p class="text-muted font-13 mt-8">Les joueurs devinent en balayant l'image avec le curseur (ou le doigt) pour la révéler zone par zone.</p>
           </div>
 
           <!-- "Révélation" : deux images DISTINCTES (contrairement à
@@ -334,7 +369,7 @@
                (voir server/index.js /api/room-reveal-answer, sans endpoint
                de lecture public contrairement aux autres images du projet). -->
           <div id="revealSection" class="detail-section d-none">
-            <label>Image "énigme" (affichée pendant que les joueurs répondent)</label>
+            <label for="revealEnigmeUpload">Image "énigme" (affichée pendant que les joueurs répondent)</label>
             <input type="file" id="revealEnigmeUpload" accept="image/*" class="cursor-pointer" />
             <div id="revealEnigmePreviewWrap" class="illustration-preview-wrap d-none mt-8">
               <img id="revealEnigmePreviewImg" class="illustration-preview-img" alt="" />
@@ -342,7 +377,7 @@
             </div>
             <p class="text-muted font-13 mt-8">Ex. une affiche de film retouchée (titre/logo masqués).</p>
             <div class="detail-section mt-16">
-              <label>Image "réponse" (révélée en fondu à la fin du chrono)</label>
+              <label for="revealReponseUpload">Image "réponse" (révélée en fondu à la fin du chrono)</label>
               <input type="file" id="revealReponseUpload" accept="image/*" class="cursor-pointer" />
               <div id="revealReponsePreviewWrap" class="illustration-preview-wrap d-none mt-8">
                 <img id="revealReponsePreviewImg" class="illustration-preview-img" alt="" />
@@ -369,7 +404,7 @@
 
           <div id="graduationSection" class="d-flex gap-lg d-none">
             <div class="detail-section flex-1">
-              <label>Minimum</label>
+              <label for="qGradMin">Minimum</label>
               <div class="timer-controls">
                 <button id="gradMinMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="qGradMin" class="stepper-input" value="0" />
@@ -377,7 +412,7 @@
               </div>
             </div>
             <div class="detail-section flex-1">
-              <label>Maximum</label>
+              <label for="qGradMax">Maximum</label>
               <div class="timer-controls">
                 <button id="gradMaxMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="qGradMax" class="stepper-input" value="100" />
@@ -385,7 +420,7 @@
               </div>
             </div>
             <div class="detail-section flex-1">
-              <label>Valeur correcte</label>
+              <label for="qGradTarget">Valeur correcte</label>
               <div class="timer-controls">
                 <button id="gradTargetMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="qGradTarget" class="stepper-input" value="50" />
@@ -393,7 +428,7 @@
               </div>
             </div>
             <div class="detail-section flex-1">
-              <label>Tolérance</label>
+              <label for="qGradTolerance">Tolérance</label>
               <div class="timer-controls">
                 <button id="gradToleranceMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="qGradTolerance" class="stepper-input" value="0" min="0" />
@@ -447,7 +482,7 @@
           </div>
 
           <div id="imageSection" class="detail-section d-none">
-            <label>Image</label>
+            <label for="imageUpload">Image</label>
             <input type="file" id="imageUpload" accept="image/*" class="cursor-pointer" />
             <div id="imageEditViewport" class="image-zoom-viewport">
               <div id="imageEditWrap" class="image-wrap image-zone-wrap d-none">
@@ -473,22 +508,37 @@
           </div>
 
           <div id="blindtestSection" class="detail-section d-none">
-            <label>Extrait audio</label>
+            <label for="audioUpload">Extrait audio</label>
             <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
             <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
+              <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
+                   pendingAudioBuffer, déjà décodé en mémoire pour l'export WAV
+                   (voir editor.js encodeWavMono) : pas de nouveau décodage,
+                   juste un rendu en plus de données déjà là. La portion Début→
+                   Début+Durée est surlignée en direct (voir
+                   editor.js renderWaveform/updateWaveformSelection). Les
+                   barres vivent dans #audioWaveformBars (recréées à chaque
+                   import) ; les deux poignées de bord sont des éléments fixes
+                   à part, positionnées en % par updateWaveformSelection, pour
+                   pouvoir "étirer" la sélection (retour utilisateur) sans les
+                   recréer avec les barres. -->
+              <div id="audioWaveform" class="audio-waveform">
+                <div id="audioWaveformBars" class="audio-waveform-bars"></div>
+                <div id="audioWaveformHandleStart" class="waveform-handle" role="slider" tabindex="0" aria-label="Début de l'extrait"></div>
+                <div id="audioWaveformHandleEnd" class="waveform-handle" role="slider" tabindex="0" aria-label="Fin de l'extrait"></div>
+              </div>
               <audio id="audioTrimPlayer" controls></audio>
               <div class="d-grid grid-cols-split gap-lg mt-8">
                 <div class="detail-section">
-                  <label>Début (secondes) <span id="audioTotalDuration" class="text-muted font-13"></span></label>
+                  <label for="audioStartInput">Début (secondes) <span id="audioTotalDuration" class="text-muted font-13"></span></label>
                   <div class="timer-controls">
                     <button id="audioStartMinus" class="btn-timer" type="button">-</button>
                     <input type="number" id="audioStartInput" class="stepper-input" value="0" min="0" />
                     <button id="audioStartPlus" class="btn-timer" type="button">+</button>
                   </div>
-                  <button type="button" id="audioStartFromEndBtn" class="btn btn-nav-secondary font-13 mt-8">Depuis la fin</button>
                 </div>
                 <div class="detail-section">
-                  <label>Durée (secondes)</label>
+                  <label for="audioDurationInput">Durée (secondes)</label>
                   <div class="timer-controls">
                     <button id="audioDurationMinus" class="btn-timer" type="button">-</button>
                     <input type="number" id="audioDurationInput" class="stepper-input" value="15" min="5" max="30" />

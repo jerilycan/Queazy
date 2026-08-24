@@ -167,12 +167,12 @@
 
         <div class="d-flex flex-column gap-md">
           <div class="form-group text-left">
-            <label class="d-block mb-8 font-bold text-muted">Email ou pseudo</label>
+            <label for="loginIdentifier" class="d-block mb-8 font-bold text-muted">Email ou pseudo</label>
             <input id="loginIdentifier" type="text" placeholder="ton@email.com ou ton pseudo" class="w-full" autocomplete="username" />
           </div>
 
           <div class="form-group text-left">
-            <label class="d-block mb-8 font-bold text-muted">Mot de passe</label>
+            <label for="loginPassword" class="d-block mb-8 font-bold text-muted">Mot de passe</label>
             <input id="loginPassword" type="password" placeholder="••••••••" class="w-full" autocomplete="current-password" />
           </div>
 
@@ -204,7 +204,11 @@
             <div class="divider-line"></div>
           </div>
 
-          <button id="guestPlay" class="btn h-56 w-full border-accent bg-accent-light text-accent font-bold">
+          <!-- border-accent (classe inexistante dans style.css) corrigé en
+               .btn-nav-secondary — pastille pilule accent translucide déjà
+               existante (navbar "Mes Quiz"), même recette que celle du
+               design décidé (Connexion.dc.html) pour ce bouton. -->
+          <button id="guestPlay" class="btn h-56 w-full btn-nav-secondary">
             <span>Jouer en tant qu'invité</span>
           </button>
 
@@ -222,17 +226,17 @@
 
         <div class="d-flex flex-column gap-md">
           <div class="form-group text-left">
-            <label class="d-block mb-8 font-bold text-muted">Email</label>
+            <label for="signupEmail" class="d-block mb-8 font-bold text-muted">Email</label>
             <input id="signupEmail" type="email" placeholder="ton@email.com" class="w-full" autocomplete="email" />
           </div>
 
           <div class="form-group text-left">
-            <label class="d-block mb-8 font-bold text-muted">Pseudo (optionnel)</label>
+            <label for="signupPseudo" class="d-block mb-8 font-bold text-muted">Pseudo (optionnel)</label>
             <input id="signupPseudo" type="text" placeholder="Ton pseudo" class="w-full" maxlength="20" />
           </div>
 
           <div class="form-group text-left">
-            <label class="d-block mb-8 font-bold text-muted">Mot de passe</label>
+            <label for="signupPassword" class="d-block mb-8 font-bold text-muted">Mot de passe</label>
             <input id="signupPassword" type="password" placeholder="••••••••" class="w-full" autocomplete="new-password" />
           </div>
 

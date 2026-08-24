@@ -40,6 +40,22 @@ create policy "Profiles: mise a jour de son propre profil"
   on public.profiles for update
   using (auth.uid() = id);
 
+-- Lecture restreinte du pseudo (et non des autres colonnes, RLS ne filtre
+-- pas par colonne mais select.js ne demande que "username" — voir loadPublic)
+-- pour les auteurs de quiz PUBLICS uniquement : nécessaire pour afficher
+-- "par <auteur>" sur l'onglet "Quiz publics" (select.js). Volontairement
+-- scopée (pas un accès général à tous les profils) : la policy "lecture de
+-- son propre profil" ci-dessus reste la seule voie pour tout le reste.
+drop policy if exists "Profiles: lecture publique du pseudo pour les quiz publics" on public.profiles;
+create policy "Profiles: lecture publique du pseudo pour les quiz publics"
+  on public.profiles for select
+  using (
+    exists (
+      select 1 from public.quizzes q
+      where q.owner_id = profiles.id and q.is_public = true
+    )
+  );
+
 -- Création automatique d'une ligne profiles à l'inscription
 -- (évite les erreurs si le client lit le profil avant le premier
 -- passage sur la page /profile.html)

@@ -103,6 +103,13 @@ const checkAuth = async () => {
   if (navCreateEl) {
     navCreateEl.classList.toggle('is-disabled', !canCreate)
     navCreateEl.title = canCreate ? '' : 'Connecte-toi pour créer'
+    // Bug corrigé (audit UX) : .is-disabled n'est qu'un style (voir style.css
+    // .btn:disabled/.is-disabled, pointer-events:auto volontaire) — sans
+    // cette garde, le lien restait cliquable en dessous. Même garde que
+    // navCreate.onclick dans index.js.
+    if (!canCreate) {
+      navCreateEl.onclick = (e) => { e.preventDefault(); window.location.href = '/login.html?reason=create' }
+    }
   }
 
   const firstNameOf = (name) => (name || '').trim().split(/\s+/)[0] || 'Profil'
@@ -149,6 +156,9 @@ const checkAuth = async () => {
     const user = session.user
     let displayName = user.user_metadata.full_name || user.email.split('@')[0]
     let avatarUrl = null
+    // Repli volontaire sur user_metadata/email (déjà posé juste au-dessus) en
+    // cas d'échec (RLS, réseau) — pas bloquant, juste un nom/avatar affiché
+    // provisoirement moins à jour qu'attendu.
     try {
       const { data: p } = await sb.from('profiles').select('username, avatar_url').eq('id', user.id).single()
       if (p?.username) displayName = p.username
@@ -204,6 +214,12 @@ saveBtn.onclick = async () => {
 
   const { data: { session } } = await sb.auth.getSession()
   if (session) {
+    // Bug corrigé (audit UX) : ni état de chargement (double-clic possible
+    // sur réseau lent), ni message générique — une violation RLS/erreur
+    // Postgres brute (e.message) atterrissait telle quelle devant
+    // l'utilisateur. Même pattern que persistQuiz dans editor.js.
+    saveBtn.disabled = true
+    saveBtn.textContent = 'Sauvegarde...'
     try {
       const { error: metaErr } = await sb.auth.updateUser({ data: { full_name: nm } })
       if (metaErr) throw metaErr
@@ -214,8 +230,12 @@ saveBtn.onclick = async () => {
         if (insErr) throw insErr
       }
     } catch (e) {
-      showToast('Erreur lors de la sauvegarde : ' + (e.message || e), 'error')
+      console.error('[profile] sauvegarde impossible :', e)
+      showToast('Erreur lors de la sauvegarde du profil', 'error')
       return
+    } finally {
+      saveBtn.disabled = false
+      saveBtn.textContent = 'Sauvegarder le profil'
     }
   }
 

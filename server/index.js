@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '1.66.3'
+const APP_VERSION = '2.0.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1394,8 +1394,12 @@ const start = async () => {
       // des champs séparés, voir emitQuestion côté client, eux non filtrés).
       // 'reveal' : reponseImageUrl retiré aussi (voir juste au-dessus, déjà
       // copiée sur question.reponseImage) — jamais diffusée avant timer:end.
+      // 'recherche' (tâche 009) : même raison que 'zoomguess' — la réponse se
+      // devine visuellement (ici en balayant l'image cachée), q.correct ne
+      // doit jamais être lisible en devtools avant même d'avoir commencé à
+      // explorer l'image.
       const { correct, explanation, reponseImageUrl, ...payloadWithoutCorrectOrExplanation } = payload || {}
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal')
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal' || payload?.type === 'recherche')
         ? payloadWithoutCorrectOrExplanation
         : { ...payloadWithoutCorrectOrExplanation, correct }
 
@@ -2167,6 +2171,58 @@ const start = async () => {
       // Si plus aucune réponse en attente après approbation, on peut enfin
       // révéler la bonne réponse (voir revealQuestion).
       if (room.pending.size === 0 && q && q.historyEntry === item.historyEntry && q.ended) {
+        revealQuestion(io, code, room, q)
+      }
+    })
+
+    // "Tout valider" (audit UX) : la modération une-par-une devenait un
+    // goulot d'étranglement pour TOUTE la salle avec beaucoup de joueurs et
+    // plusieurs réponses ambiguës en même temps (voir room.pending.size===0
+    // plus haut, condition unique qui débloque revealQuestion pour tout le
+    // monde). Enchaîne simplement plusieurs approbations individuelles
+    // (même calcul de points que moderation:approve, chacune séparément —
+    // contrairement à moderation:pbacGroup, jamais de partage de points
+    // entre joueurs ici). N'accepte que des IDs envoyés par le client
+    // (comme pbacGroup) plutôt que "tout room.pending sans distinction" :
+    // évite d'approuver par erreur un item arrivé après le rendu de la
+    // liste côté hôte, et exclut explicitement "pbac"/"blindtest" qui ont
+    // leurs propres chemins de modération (regroupement / jugement par
+    // champ), jamais un simple "correct".
+    socket.on('moderation:approveAll', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room) return
+      const rawIds = Array.isArray(payload?.answerIds) ? payload.answerIds : []
+      const entries = [...new Set(rawIds)]
+        .map(id => [id, room.pending.get(id)])
+        .filter(([, item]) => item && !item.pbac && !item.fields)
+      if (entries.length === 0) return
+      const q = room.currentQuestion
+      const historyEntry = entries[0][1].historyEntry
+      const approvedIds = []
+      for (const [answerId, item] of entries) {
+        if (item.historyEntry !== historyEntry) continue
+        room.pending.delete(answerId)
+        approvedIds.push(answerId)
+        const currentId = resolvePendingId(room, item)
+        if (q?.answered?.has(item.token)) continue
+        const delta = item.delta || pointsFor(q.startTs, item.ts, item.timerMs ?? q?.timerMs, item.pointsFloor ?? q?.pointsFloor)
+        const total = (room.scores.get(currentId) || 0) + delta
+        room.scores.set(currentId, total)
+        const p = room.players.get(currentId)
+        if (p?.token) {
+          room.tokens.set(p.token, { id: currentId, name: p.name, score: total, teamId: p.teamId || null })
+          if (item.historyEntry) {
+            item.historyEntry.results[p.token] = 'correct'
+            item.historyEntry.deltas[p.token] = delta
+          }
+        }
+        q?.answered?.add(item.token)
+        io.to(code).emit('score:update', { playerId: currentId, delta, total })
+        emitModerationDecision(io, code, p?.name, true, item.content)
+      }
+      io.to(code).emit('moderation:allApproved', { answerIds: approvedIds })
+      if (room.pending.size === 0 && q && q.historyEntry === historyEntry && q.ended) {
         revealQuestion(io, code, room, q)
       }
     })

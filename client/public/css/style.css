@@ -44,6 +44,11 @@
      bleu ciel ne sont repris nulle part ailleurs dans la palette de type. */
   --color-amber: #ffb020;
   --color-sky: #38bdf8;
+  /* "recherche" (tâche 009) : 14e type, tous les tokens de couleur ci-dessus
+     étaient déjà pris par un des 13 précédents — nouveau token dédié plutôt
+     que d'en réutiliser un (même logique que le reste de cette liste, un
+     token par type). Orange "flamme", cohérent avec le thème lampe torche. */
+  --color-flame: #ff6a1a;
   --color-accent-soft: rgba(255,47,176,0.14);
   --color-accent-rgb: 255,47,176;
   --color-border: rgba(255,255,255,0.10);
@@ -118,46 +123,59 @@
   --shadow-md: 0 16px 40px rgba(35,25,65,0.16);
   --shadow-lg: 0 20px 48px rgba(35,25,65,0.22);
 }
-/* Carte organisateur : seul endroit où "carte" doit visiblement trancher
-   sur le grand conteneur blanc (--color-card) qui l'entoure ailleurs dans
-   l'appli — d'où un override scopé plutôt qu'un token partagé. Ligne
-   supérieure déjà en --color-accent (pas besoin d'override, suit la
-   valeur ci-dessus automatiquement). Ombre plus présente que le
-   --shadow-md par défaut des autres cartes, sur demande explicite. */
-:root[data-theme="light"] .lobby-host-card {
-  background: #f9f7fd;
-  border-color: #d8d2e7;
-  box-shadow: 0 20px 44px rgba(35,25,65,0.2);
+/* Navbar : jusqu'ici toujours en verre sombre même en thème clair (bug
+   pré-existant, non introduit par la refonte 001 — juste jamais adapté).
+   Verre clair cohérent avec --color-card blanc du reste du thème, au lieu
+   d'une barre noire flottant sur un fond clair. */
+:root[data-theme="light"] .navbar {
+  background: linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.85) 100%);
+  border-color: rgba(35,25,65,0.08);
+  box-shadow: 0 10px 30px rgba(35,25,65,0.12), 0 0 0 1px rgba(247,37,168,0.05) inset;
 }
-/* Boutons Créer/Rejoindre : --tile-blue/--tile-red pilotent aussi les
-   tuiles QCM, badges d'équipe, barres du podium... — les redéfinir aurait
-   changé bien plus que ces deux boutons, et dans le thème sombre en plus
-   (tokens partagés, jamais scopés par thème). Override direct sur les
-   sélecteurs des boutons à la place, uniquement en thème clair. */
-:root[data-theme="light"] .btn.btn-nav-main {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-  box-shadow: 0 3px 0 #1d4ed8;
-}
+:root[data-theme="light"] .nav-group + .nav-group::before { background: rgba(35,25,65,0.12); }
+:root[data-theme="light"] .theme-toggle-btn { background: rgba(35,25,65,0.06); border-color: rgba(35,25,65,0.12); color: var(--color-text); }
+:root[data-theme="light"] .theme-toggle-btn:hover { background: rgba(35,25,65,0.1); }
+:root[data-theme="light"] .profile-chip { background: rgba(35,25,65,0.05); border-color: rgba(35,25,65,0.1); }
+:root[data-theme="light"] .profile-chip:hover { background: rgba(35,25,65,0.09); }
+:root[data-theme="light"] .profile-name { color: var(--color-text); }
+:root[data-theme="light"] .menu-toggle-btn span { background: var(--color-text); }
+:root[data-theme="light"] .nav-menu { background: rgba(255,255,255,0.97); border-color: rgba(35,25,65,0.1); }
+/* Bouton "Rejoindre" : --tile-red pilote aussi les tuiles QCM, badges
+   d'équipe, barres du podium... — le redéfinir aurait changé bien plus que
+   ce bouton, et dans le thème sombre en plus (tokens partagés, jamais
+   scopés par thème). Override direct sur le sélecteur du bouton à la
+   place, uniquement en thème clair.
+   "CRÉER" n'a PLUS son propre override ici (nouvelle DA, tâche 002) :
+   il suit désormais --color-accent/--color-accent-2 comme en thème sombre
+   (voir .btn.btn-nav-main de base) — même identité de marque dans les deux
+   thèmes, au lieu du bleu isolé d'avant qui ne collait à rien d'autre dans
+   la palette claire. */
 :root[data-theme="light"] .btn.btn-nav-main:nth-child(even) {
   background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
   box-shadow: 0 3px 0 #be123c;
 }
+/* Classement/podium (tâche 004) : même correctif que body ci-dessous — le
+   halo dur codé en dur (#3a1450/#200a38) est propre au thème sombre, sans
+   override il fond en un dégradé violet->quasi-blanc disgracieux une fois
+   var(--color-bg)/--color-bg-deep résolus en clair. Reprend la même recette
+   à deux halos discrets que :root[data-theme="light"] body. */
+:root[data-theme="light"] .leader-overlay {
+  background:
+    radial-gradient(circle at 12% 15%, rgba(var(--color-accent-rgb),0.07) 0%, transparent 40%),
+    radial-gradient(circle at 88% 85%, rgba(var(--color-accent-2-rgb),0.06) 0%, transparent 40%),
+    linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
+}
 
 * { box-sizing: border-box; }
 
+/* Fond "spot" repris de la nouvelle DA (canvas OptionB/Menu) : un seul halo
+   chaud en haut de page plutôt que les 3 halos animés (rose/cyan/violet,
+   voir git history) qu'il remplace — statique, pas d'animation. Thème sombre
+   uniquement : le thème clair (jamais maquetté dans cette refonte) garde son
+   propre fond ci-dessous, inchangé. */
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(255,47,176,0.28) 0%, transparent 45%),
-    radial-gradient(circle at 85% 15%, rgba(47,227,255,0.22) 0%, transparent 40%),
-    radial-gradient(circle at 50% 90%, rgba(123,47,247,0.24) 0%, transparent 50%),
-    linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
-  background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
-  /* Pas de background-attachment: fixed : sur mobile (surtout iOS Safari),
-     un fond fixe combiné à une animation de background-position force des
-     repaints synchrones coûteux. Aucune différence visible ici (les pages
-     ne défilent quasiment jamais) mais nettement moins cher à faire tourner. */
-  animation: bg-drift 26s ease-in-out infinite alternate;
+  background: radial-gradient(2200px 1300px at 50% -10%, #3a1450 0%, #200a38 42%, var(--color-bg) 78%, var(--color-bg-deep) 100%);
   color: var(--color-text);
   font-family: 'Nunito', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
@@ -177,15 +195,6 @@ body {
     radial-gradient(circle at 12% 15%, rgba(var(--color-accent-rgb),0.07) 0%, transparent 40%),
     radial-gradient(circle at 88% 85%, rgba(var(--color-accent-2-rgb),0.06) 0%, transparent 40%),
     linear-gradient(160deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
-}
-
-@keyframes bg-drift {
-  0%   { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
-  100% { background-position: 20% 15%, 80% 20%, 55% 85%, 0 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body { animation: none; }
 }
 
 .container { max-width: 1100px; margin: 0 auto; padding: var(--space-lg); }
@@ -469,25 +478,49 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 .brand-logo-svg .cls-19 { fill: url(#Dégradé_sans_nom_20-4); stroke: url(#Dégradé_sans_nom_20-5); }
 
 /* Layout Elements */
+/* Barre pleine largeur (nouvelle DA, canvas Menu.dc.html) au lieu de la
+   pill centrée d'avant : logo à gauche, les .nav-group poussés ensemble à
+   droite (voir `.navbar > .brand` plus bas). theme.js regroupe les
+   .nav-group dans un <div class="nav-menu"> au runtime (display:contents en
+   desktop, donc transparent pour ce flex) — la structure DOM attendue par ce
+   script (exactement les .nav-group existants, ni plus ni moins) n'a pas
+   changé, seul l'habillage change ici. */
 .navbar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  padding: 0 24px;
-  height: 72px; /* Hauteur fixe pour la cohérence */
-  margin: 16px auto 0;
-  max-width: 1200px;
-  border-radius: 999px;
-  background: rgba(5,5,12,0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255,47,176,0.18);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 24px rgba(var(--color-accent-rgb),0.08), 0 0 0 1px rgba(255,255,255,0.03) inset;
+  padding: 0 22px;
+  height: 64px;
+  margin: 16px 16px 0;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(30,30,66,0.6) 0%, rgba(22,22,46,0.7) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,47,176,0.05) inset;
   position: sticky;
   top: 12px;
   z-index: 1000;
 }
+.navbar > .brand { margin-right: auto; }
 .nav-group { display: flex; gap: var(--space-sm); align-items: center; height: 100%; }
+/* Séparateur entre CRÉER/REJOINDRE et le groupe réglages/Mes Quiz/profil —
+   pseudo-élément plutôt qu'un <span> dans le HTML : pas besoin de toucher
+   au markup dupliqué sur les 6 pages pour ça. */
+.nav-group + .nav-group {
+  margin-left: 18px;
+  padding-left: 18px;
+  position: relative;
+}
+.nav-group + .nav-group::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 28px;
+  background: rgba(255,255,255,0.12);
+}
 .nav-group:last-child { justify-content: flex-end; }
 
 .profile-chip {
@@ -527,9 +560,6 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   background: rgba(255,255,255,0.16);
   transform: scale(1.08) rotate(-8deg);
 }
-/* Cas d'une navbar sans .nav-group (ex. page de connexion) : le bouton est
-   un enfant direct de la grille .navbar, on le pousse dans la 3e colonne. */
-.navbar > .theme-toggle-btn { grid-column: 3; justify-self: end; }
 .profile-name {
   color: #ffffff;
   font-weight: 700;
@@ -546,7 +576,18 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   padding: var(--space-lg);
   box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, var(--shadow-md);
   border: 1px solid var(--color-border);
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  /* Retour utilisateur : "la popup devient transparente parfois à
+     l'ouverture" — .modal-content (voir plus bas) cumule .card ET une
+     animation d'entrée (fadeInScale, opacity/transform) sur les MÊMES
+     propriétés que ce `transition: all`. Une transition et une animation
+     qui portent sur la même propriété du même élément se disputent la
+     valeur ; si le popup est refermé/rouvert vite (double-clic, re-rendu),
+     la transition peut reprendre une valeur d'opacité intermédiaire au
+     lieu de laisser l'animation retomber proprement sur 1 — d'où un flash
+     transparent aléatoire. Propriétés listées explicitement (au lieu de
+     `all`) pour ne plus jamais toucher opacity/transform, qui restent
+     uniquement pilotées par l'éventuelle animation d'entrée. */
+  transition: box-shadow 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative;
   overflow: hidden;
 }
@@ -577,9 +618,9 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   border-radius: var(--radius-md);
   border: none;
   background: var(--gradient-card);
-  color: var(--color-text); 
+  color: var(--color-text);
   font-family: 'Baloo 2', sans-serif;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 14px;
   cursor: pointer;
   box-shadow: 0 4px 0 rgba(0,0,0,0.45), var(--shadow-sm);
@@ -592,12 +633,17 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 }
 .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 rgba(0,0,0,0.45), var(--shadow-md); }
 .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.45); }
-.btn-primary { background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%); color: white; box-shadow: 0 4px 0 var(--color-accent-deep), var(--shadow-sm); }
-.btn-primary:hover { box-shadow: 0 6px 0 var(--color-accent-deep), var(--shadow-md); }
-.btn-primary:active { box-shadow: 0 1px 0 var(--color-accent-deep); }
+/* Double ombre "3D + halo coloré" (nouvelle DA, voir OptionB/Menu.dc.html)
+   au lieu de la simple ombre + shadow-sm d'avant. */
+.btn-primary { background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%); color: white; box-shadow: 0 5px 0 var(--color-accent-deep), 0 10px 24px rgba(var(--color-accent-rgb),0.35); }
+.btn-primary:hover { box-shadow: 0 7px 0 var(--color-accent-deep), 0 14px 30px rgba(var(--color-accent-rgb),0.45); }
+.btn-primary:active { box-shadow: 0 1px 0 var(--color-accent-deep), 0 6px 16px rgba(var(--color-accent-rgb),0.3); }
 
+/* "CRÉER" en dégradé accent (rose/violet) au lieu de tile-blue (nouvelle DA,
+   Menu.dc.html) — "REJOINDRE" (:nth-child(even) ci-dessous) reste rouge,
+   inchangé. */
 .btn.btn-nav-main {
-  background: linear-gradient(135deg, var(--tile-blue) 0%, var(--tile-blue-deep) 100%) !important;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%) !important;
   color: white !important;
   padding: 12px 32px;
   border-radius: 14px;
@@ -605,7 +651,7 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   font-size: 16px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 3px 0 var(--tile-blue-deep);
+  box-shadow: 0 3px 0 var(--color-accent-deep), 0 8px 20px rgba(var(--color-accent-rgb),0.35);
   border: none;
   transform: none;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
@@ -615,7 +661,7 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   transform: none;
   border-radius: 14px;
   background: linear-gradient(135deg, var(--tile-red) 0%, var(--tile-red-deep) 100%) !important;
-  box-shadow: 0 3px 0 var(--tile-red-deep);
+  box-shadow: 0 3px 0 var(--tile-red-deep), 0 8px 20px rgba(var(--tile-red-rgb),0.35);
 }
 
 .btn.btn-nav-main:hover {
@@ -625,25 +671,37 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 
 .btn.btn-nav-main:active {
   transform: translateY(2px) !important;
-  box-shadow: 0 1px 0 var(--tile-blue-deep) !important;
+  box-shadow: 0 1px 0 var(--color-accent-deep) !important;
 }
 
 .btn.btn-nav-main:nth-child(even):active {
   box-shadow: 0 1px 0 var(--tile-red-deep) !important;
 }
 
+/* Pastille translucide (nouvelle DA, Menu.dc.html) au lieu du contour plein
+   2px d'avant. */
 .btn.btn-nav-secondary {
-  background: var(--gradient-card) !important;
+  background: rgba(var(--color-accent-rgb),0.10) !important;
   color: var(--color-accent) !important;
-  border: 2px solid var(--color-accent) !important;
-  border-radius: var(--radius-md);
+  border: 1px solid rgba(var(--color-accent-rgb),0.35) !important;
+  border-radius: 999px;
   font-weight: 800;
-  padding: 8px 20px;
+  padding: 9px 20px;
   transition: all 0.2s ease;
 }
 
+/* Page courante dans la navbar (ex. "Mes Quiz" posé directement dans le
+   HTML de select.html — pas de détection de route en JS, la navbar étant
+   déjà dupliquée par page). */
+.btn.btn-nav-secondary.btn-nav-active {
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%) !important;
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: 0 3px 10px rgba(var(--color-accent-rgb),0.35);
+}
+
 .btn.btn-nav-secondary:hover {
-  box-shadow: 0 4px 0 rgba(123,47,247,0.2);
+  box-shadow: 0 4px 14px rgba(var(--color-accent-rgb),0.25);
 }
 
 .btn:disabled, .btn.is-disabled { 
@@ -672,21 +730,41 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 /* Lobby Specifics */
 .lobby-header { text-align: center; margin-bottom: var(--space-lg); }
-.lobby-host-card { 
-  display: flex; 
-  flex-direction: column; 
-  align-items: center; 
-  padding: var(--space-lg); 
-  background: var(--gradient-card);
+/* Carte organisateur (design décidé, canvas "Écran hôte" — artboard
+   Lobby.dc.html) : panneau discret imbriqué DANS la carte #lobby (déjà
+   cadrée elle-même) — même token --color-surface que .team-mode-panel
+   juste en dessous, plutôt qu'une 2e carte pleine (gradient-card + barre
+   d'accent + ombre marquée, ancienne recette) qui faisait "carte dans la
+   carte". --color-surface est déjà theme-aware (voir .team-mode-panel,
+   aucun override thème clair nécessaire), donc plus besoin de l'override
+   dédié qu'avait l'ancienne recette. */
+.lobby-host-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-lg);
+  background: var(--color-surface);
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-lg);
   position: relative;
-  overflow: hidden;
   border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-md);
 }
-.lobby-host-card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--color-accent);
+/* Pastille "ORGANISATEUR" (remplace le 👑 qui flottait au-dessus de
+   l'avatar, voir .avatar-main plus bas) — même recette que les autres
+   pastilles teintées accent de l'appli (.btn-nav-secondary, .team-badge). */
+.host-organizer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(var(--color-accent-rgb),0.12);
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 .avatar-main {
@@ -705,18 +783,35 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   cursor: default;
   user-select: none;
 }
-.avatar-main.is-host::after {
-  content: '👑';
-  position: absolute;
-  top: -12px;
-  font-size: 24px;
-}
+/* Le 👑 flottant au-dessus de l'avatar est parti — remplacé par la
+   pastille .host-organizer-badge sous le nom (design décidé, voir
+   .lobby-host-card plus haut). */
 
-.player-grid { 
-  display: grid; 
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
-  gap: var(--space-md); 
+.player-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-md);
   margin-top: var(--space-md);
+  /* Retour utilisateur ("au survol, la tuile monte et fait disparaître
+     son liseré en haut") : .player-tile:hover translate vers le haut de
+     4px (voir plus bas) — sans marge de manœuvre AU-DESSUS de la
+     1ère rangée à l'intérieur de cette grille (le margin-top ci-dessus
+     est EXTÉRIEUR à la grille, entre elle et le titre, ne compte pas),
+     ce décalage sortait de la boîte et se faisait rogner par le premier
+     ancêtre overflow (#lobbyGrid, overflow-y:auto dans le salon 2
+     colonnes — voir style.css plus bas). padding-top absorbe ces 4px. */
+  padding-top: 6px;
+  /* Retour utilisateur ("le joueur doit rester une tuile carrée") : dans
+     un conteneur plus haut que nécessaire (#lobbyPlayersCard occupe
+     maintenant 60% fixes de la colonne, voir plus bas — souvent plus
+     haut qu'une seule rangée de tuiles), align-content:normal se comporte
+     comme "stretch" en grid (contrairement à flexbox) — la rangée unique
+     s'étirait sur toute la hauteur dispo, et .player-tile avec elle
+     (align-items:stretch par défaut), donnant une tuile tout en hauteur
+     au lieu d'une tuile carrée compacte. start + start : les tuiles
+     restent packées en haut, à leur taille naturelle. */
+  align-content: start;
+  align-items: start;
 }
 
 .player-tile {
@@ -808,7 +903,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   background-size: cover;
   background-position: center;
   border-color: var(--color-accent);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb),0.35), 0 4px 12px rgba(var(--color-accent-rgb),0.35);
 }
 
 .icon-opt.custom-avatar {
@@ -1007,7 +1102,14 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   user-select: none;
 }
 .icon-opt:hover { border-color: var(--color-accent); transform: scale(1.05); }
-.icon-opt.selected { border-color: var(--color-accent); background: var(--color-accent-soft); box-shadow: var(--shadow-sm); }
+/* Sélection en dégradé plein + halo (nouvelle DA, tâche 002) au lieu du
+   simple contour + fond teinté d'avant — même traitement que les pastilles
+   "actives" ailleurs dans l'appli (navbar, onglets résultats). */
+.icon-opt.selected {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  box-shadow: 0 4px 12px rgba(var(--color-accent-rgb),0.35);
+}
 
 /* Quiz View */
 /* Sticky comme .navbar (voir plus bas, position:sticky top:12px z-index:1000)
@@ -1028,11 +1130,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(5,5,12,0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Tâche 011 (retour utilisateur, capture vue joueur) : remplace l'ancien
+     verre noir quasi-opaque + blur par le même langage "carte" que
+     .card/#stageWrap côté hôte (tokens --gradient-card/--shadow-md),
+     jamais retouché depuis la refonte DA 001-006 qui ne portait que sur
+     l'écran hôte. */
+  background: var(--gradient-card);
   border-radius: 16px;
   padding: 8px;
+  box-shadow: var(--shadow-md);
 }
 
 /* Badge permanent du type de question (retour utilisateur : "un coin",
@@ -1053,15 +1159,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   padding: 5px 14px 5px 5px;
   border-radius: 999px;
   border: 1px solid rgba(var(--qt-color-rgb), 0.5);
-  background: rgba(5,5,12,0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Tâche 011 : même bascule verre noir → carte que .timer-container
+     juste au-dessus (retour utilisateur, vue joueur). */
+  background: var(--gradient-card);
   color: var(--qt-color);
   font-weight: 700;
   font-size: 13px;
   font-family: 'Nunito', sans-serif;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+  box-shadow: var(--shadow-md);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .question-type-badge:hover {
@@ -1109,20 +1215,29 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .timer-bar-wrapper {
   width: 100%;
-  height: 24px;
+  /* Chantier "plateau chaleureux" : barre plus épaisse (28px, était 24px) +
+     chiffre plus grand dedans (voir .timer-label plus bas) — plus lisible
+     depuis le fond d'une salle projetée, sans toucher au DOM (le chiffre
+     reste dans la barre, contrairement à la maquette qui le sortait à côté —
+     trop risqué à déplacer sans casser le JS qui le cible). */
+  height: 28px;
   background: rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
   position: relative;
-  border: 2px solid rgba(255,255,255,0.5);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+  /* Tâche 011 : bordure blanche épaisse "à l'ancienne" retirée (retour
+     utilisateur) — la carte .timer-container qui l'entoure porte
+     maintenant sa propre ombre (--shadow-md), plus besoin d'un liseré dur
+     ici pour détacher la barre du fond. Même choix déjà fait côté hôte
+     (voir body.is-host.game-active .container #timerContainer). */
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0,0,0,0.25);
 }
 
 .timer-bar-fill {
   height: 100%;
   width: 100%;
   background: linear-gradient(90deg, var(--color-cyan), var(--color-accent));
-  border-radius: 0 12px 12px 0;
+  border-radius: 0 14px 14px 0;
   /* scaleX plutôt que width : la barre se met à jour 10x/seconde pendant
      toute la durée de chaque question, sur tous les écrans connectés — animer
      width force un recalcul de layout + repaint à chaque tick, alors que
@@ -1140,7 +1255,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   z-index: 2;
   font-family: 'Baloo 2', sans-serif;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 17px;
   color: white;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   pointer-events: none;
@@ -1340,6 +1455,47 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-md); margin-top: var(--space-lg); }
 
+/* Intrus (retour utilisateur) : rangées adaptées au nombre de photos plutôt
+   qu'une grille figée à 3 colonnes qui laissait une dernière ligne à trous
+   mal centrée (ex. 7 photos = 3+3+1, une tuile seule orpheline). Passé de
+   grid à flex + wrap : --intrus-row-cols posé en JS PAR TUILE (pas sur le
+   conteneur, voir le rendu de la question "intrus" dans index.js —
+   ex. 7 photos = rangées [3,2,2], chaque tuile connaît la taille de SA
+   propre rangée) pilote la largeur de chaque tuile ; flex-wrap +
+   justify-content:center centre naturellement chaque rangée incomplète
+   SANS qu'il faille calculer combien de tuiles vides ajouter. --space-md
+   revient dans le calc() pour que le gap soit bien déduit de la largeur
+   disponible (sinon N tuiles + (N-1) gaps dépasseraient 100%).
+   display:flex en !important : nécessaire pour battre le display:grid
+   posé en inline par JS sur #options (commun à mcq/truefalse/intrus, voir
+   index.js) — jamais appliqué en dessous de 900px, où la surcharge mobile
+   dédiée (.options-grid.intrus-grid, plus bas dans ce fichier) garde
+   volontairement une grille 2 colonnes figée (retour utilisateur
+   documenté, pas concerné par ce changement). */
+@media (min-width: 900px) {
+  .options-grid.intrus-grid {
+    display: flex !important;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .options-grid.intrus-grid .option-btn.intrus-tile {
+    flex: 0 0 calc((100% - (var(--intrus-row-cols, 3) - 1) * var(--space-md)) / var(--intrus-row-cols, 3));
+    max-width: calc((100% - (var(--intrus-row-cols, 3) - 1) * var(--space-md)) / var(--intrus-row-cols, 3));
+    /* Retour utilisateur ("les images débordent en hauteur sur le
+       timer") : pour un petit nombre de photos (ex. 4 = 2 par rangée,
+       voir INTRUS_ROW_PATTERNS dans index.js), chaque tuile est bien
+       plus LARGE — et donc, aspect-ratio 4/3 oblige, bien plus HAUTE —
+       sur un écran large. La grille entière pouvait alors dépasser la
+       hauteur de la fenêtre et chevaucher .timer-container (sticky,
+       au-dessus en z-index). Plafond en vh : quel que soit le nombre de
+       colonnes, une tuile ne grandit plus au point de faire déborder la
+       page verticalement. Sans risque pour le cadrage (voir
+       applyCropTransform, index.js) : il lit la taille RÉELLE de la
+       tuile au moment de l'appliquer, aspect-ratio 4/3 ou pas. */
+    max-height: min(320px, 36vh);
+  }
+}
+
 /* Zone de réponse (#inputArea, mcq/truefalse/ordre/graduation/image...) :
    la classe utilitaire .max-w-700 la plafonne à 700px en base — pensé pour
    un téléphone/petite tablette, mais laissé tel quel sur un écran de PC ça
@@ -1413,8 +1569,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   padding: var(--space-md) var(--space-md) var(--space-md) 56px;
   background: var(--tile-red);
   color: white;
-  border: none;
-  border-radius: var(--radius-md);
+  /* Chantier "plateau chaleureux" (branche dev, maquette validée) : liseré
+     blanc translucide + coins plus ronds + halo coloré (voir chaque
+     :nth-child ci-dessous pour la teinte du halo) — remplace le flat design
+     d'origine par un rendu plus "tuile de jeu télévisé", plus vivant. */
+  border: 3px solid rgba(255,255,255,0.22);
+  border-radius: var(--radius-lg);
   box-shadow: 0 5px 0 rgba(0,0,0,0.25);
   cursor: pointer;
   font-weight: 800;
@@ -1450,18 +1610,23 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   .option-btn { min-height: 88px; font-size: 20px; padding: 26px 26px 26px 74px; }
   .option-btn::before { width: 34px; height: 34px; left: 24px; }
 }
-.option-btn:nth-child(4n+1) { background: var(--tile-red); }
+/* Halo coloré assorti à chaque tuile (chantier "plateau chaleureux") : même
+   box-shadow que la règle de base (arête basse "pressée") + un glow diffus
+   dans la teinte de la tuile, ajouté ici (une seule déclaration box-shadow
+   par règle, la 2e ne s'ajoute pas à la 1re) plutôt que dans .option-btn —
+   sinon les 4 tuiles partageraient un seul halo neutre au lieu du leur. */
+.option-btn:nth-child(4n+1) { background: var(--tile-red); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-red-rgb),0.35); }
 .option-btn:nth-child(4n+1)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
-.option-btn:nth-child(4n+2) { background: var(--tile-blue); }
+.option-btn:nth-child(4n+2) { background: var(--tile-blue); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-blue-rgb),0.35); }
 .option-btn:nth-child(4n+2)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
 /* color en plus du background (contrairement aux 3 autres tuiles) : le
    blanc par défaut de .option-btn tombe à ~1.5:1 sur ce jaune clair, bien
    sous le minimum WCAG AA (4.5:1) — illisible en plein soleil sur mobile.
    Même brun foncé déjà choisi ailleurs pour ce même fond (voir
    .my-result-banner.is-close), repris ici pour rester cohérent. */
-.option-btn:nth-child(4n+3) { background: var(--tile-yellow); color: #3a2e00; }
+.option-btn:nth-child(4n+3) { background: var(--tile-yellow); color: #3a2e00; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-yellow-rgb),0.35); }
 .option-btn:nth-child(4n+3)::before { border-radius: 50%; }
-.option-btn:nth-child(4n+4) { background: var(--tile-green); }
+.option-btn:nth-child(4n+4) { background: var(--tile-green); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-green-rgb),0.35); }
 .option-btn:nth-child(4n+4)::before { border-radius: 4px; }
 .option-btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
 /* Ces tuiles sont maintenant navigables au clavier (voir index.js
@@ -1627,6 +1792,14 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .answers-locked .image-click-layer {
   pointer-events: none;
 }
+/* .recherche-wrap n'est PAS dans cette liste, volontairement : contrairement
+   aux autres types, l'hôte garde une lampe torche interactive (outil de
+   présentation en IRL, voir index.js) — l'appliquer ici l'aurait bloquée en
+   permanence, .answers-locked ne se retirant jamais côté hôte (voir
+   emitQuestion, "if (!isHost)"). Explorer l'image un peu avant startTs est
+   un effet de bord mineur assumé (pure exploration visuelle, aucun impact
+   sur le score) plutôt que de complexifier la choreographie de verrouillage
+   existante pour un cas à faible enjeu. */
 /* Grisage après un envoi en mode "une seule tentative" (voir index.js
    submitCurrentAnswer/is-locked) — AVANT la fin du chrono (.answers-locked
    ci-dessus ne s'applique qu'APRÈS). Seuls mcq/truefalse/intrus grisaient
@@ -1776,6 +1949,25 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 .order-item-handle { opacity: 0.35; font-size: 18px; cursor: grab; }
 .order-item-text { flex: 1; }
+/* Pastille numérotée (design décidé, Host_Order.dc.html/Player_Order.dc.html)
+   — repère de position, mise à jour après chaque glisser-déposer (voir
+   updateOrderRanks côté index.js). Absente du type "timeline", qui partage
+   le même balisage .order-item mais n'a jamais eu de numéro dans le design
+   décidé (l'ordre chronologique s'y déduit du contenu, pas d'une position
+   figée) — .order-item-rank n'est donc injectée que côté "order". */
+.order-item-rank {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* Question "timeline" : même liste glissable que "order" (voir .order-item
    ci-dessus, .timeline-item en reprend le style de base) mais chaque carte a
@@ -2236,6 +2428,53 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 .reveal-img-wrap.is-revealed .reveal-img-reponse { opacity: 1; }
 
+/* Question "recherche" (tâche 009) : même gabarit de boîte fixe que
+   .reveal-img-wrap juste au-dessus (cohérence visuelle entre les types
+   "image à deviner"), mais l'image est cachée par un calque noir plutôt
+   qu'empilée avec une 2e image. Le calque est troué façon "lampe torche" à
+   l'endroit du curseur/doigt via un masque CSS radial, piloté par 2
+   propriétés custom (--spot-x/--spot-y, mises à jour en JS au pointermove —
+   voir index.js, étape 4 du plan) plutôt qu'un <canvas> à redessiner à la
+   main. --spot-r par défaut à 0 (aucun trou) : cette étape pose seulement
+   le calque plein, l'interactivité arrive à l'étape suivante. */
+.recherche-area { max-width: 640px; margin: var(--space-lg) auto 0; }
+.recherche-wrap {
+  position: relative;
+  width: min(640px, 100%);
+  height: min(70vh, 420px);
+  margin: 0 auto var(--space-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  background: var(--color-surface);
+  /* Sans ça, glisser le doigt pour révéler l'image (voir index.js) déclenche
+     aussi le défilement de la page sur mobile — même raison que .order-item. */
+  touch-action: none;
+}
+.recherche-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+.recherche-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  --spot-x: 50%;
+  --spot-y: 50%;
+  --spot-r: 0px;
+  /* Trou transparent (image visible) du centre à (r - 16px), dégradé
+     progressif jusqu'à r (bord adouci), opaque au-delà (calque noir =
+     image cachée) — même recette dupliquée avec/sans préfixe -webkit- pour
+     Safari (jamais testé en pratique dans cette session, voir Risques). */
+  mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
+  -webkit-mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
+}
+
 /* Question "blind test" : orbe néon qui pulse en direct avec le volume de
    l'extrait audio (voir index.js startBlindTestPulse — Web Audio API, analyse
    locale du fichier décodé). "orb-idle" est la respiration CSS générique
@@ -2369,8 +2608,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-recap-bar-fill.tier-mid { background: linear-gradient(90deg, var(--tile-yellow) 0%, var(--tile-yellow-deep) 100%); }
 .question-recap-bar-fill.tier-high { background: linear-gradient(90deg, var(--tile-green) 0%, var(--tile-green-deep) 100%); }
 .question-recap-pct {
-  font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums;
-  min-width: 3.5ch; text-align: right; color: var(--color-text);
+  /* Chiffre plus imposant (18px -> 26px, chantier "plateau chaleureux") :
+     c'est LA donnée qu'on regarde d'un coup d'œil dans ce panneau, mérite
+     d'être plus affirmée que le reste du texte autour. */
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums;
+  min-width: 3ch; text-align: right; color: var(--color-text);
 }
 .question-recap-caption { font-size: 13px; color: var(--color-text-muted); margin-top: 8px; }
 .question-recap-top {
@@ -2379,9 +2622,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 .question-recap-top strong { color: var(--color-accent); }
 
-/* Panneau latéral (hôte, toujours sur PC — voir index.html) : recouvre le
+/* Panneau latéral (ouvert à TOUT LE MONDE, hôte ET joueurs — voir index.js,
+   "Ouvert à TOUT LE MONDE désormais", retour utilisateur ; comportement
+   identique sur mobile via la media query dédiée plus bas) : recouvre le
    bord droit de l'écran plutôt que de pousser le contenu principal (pas de
-   reflow du reste de la mise en page hôte à chaque ouverture/fermeture). */
+   reflow du reste de la mise en page à chaque ouverture/fermeture). */
 .recap-sidebar-toggle {
   /* Doit passer devant TOUT le contenu de la page, y compris la navbar
      (position:sticky, z-index:1000, voir .navbar plus haut) — sinon le
@@ -2391,7 +2636,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   position: fixed; top: 100px; right: 0; z-index: 1100;
   display: flex; align-items: center; gap: 6px;
   padding: 10px 14px; border: none; border-radius: 10px 0 0 10px;
-  background: var(--color-card); color: var(--color-text);
+  background: var(--gradient-card); color: var(--color-text);
   border: 1px solid var(--color-border); border-right: none;
   box-shadow: var(--shadow-md); cursor: pointer;
   font-weight: 700; font-size: 13px;
@@ -2411,8 +2656,21 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    de centrage déjà présente : marche donc dès un écran de laptop courant
    (1024px), pas seulement sur un très grand écran où la marge naturelle
    autour de .container (max-width 1100px, centré) suffirait par hasard à
-   loger le panneau sans y toucher. */
-@media (min-width: 1024px) {
+   loger le panneau sans y toucher.
+   Borné à max-width:1099.98px (tâche 006) : ce panneau fixe + décalage de
+   .container est l'ANCIENNE solution à ce même besoin ("place centrale
+   libre pour la présentation") — la tâche 005 l'a remplacé par une vraie
+   grille CSS à 3 colonnes (dock/carte/dock, + classement permanent) à
+   partir de 1100px. Les deux system  es ciblaient le même sélecteur
+   (body.is-host.game-active #hostPanel / .container) : sans cette borne,
+   #hostPanel repassait en position:fixed PAR-DESSUS la grille (qui l'y
+   place déjà via grid-column), et .container gardait un margin-left:280px
+   qui cassait le centrage de la grille — retour utilisateur avec capture
+   d'écran ("la tuile centrale devrait être vraiment au centre"). Gardée
+   intacte dans cette fourchette étroite (1024-1099px) plutôt que
+   supprimée : comportement connu, déjà réglé, pour cette poignée de
+   largeurs où la grille ne s'active pas encore. */
+@media (min-width: 1024px) and (max-width: 1099.98px) {
   body.is-host.game-active #hostPanel {
     position: fixed;
     left: 20px;
@@ -2463,11 +2721,34 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     margin-left: 280px;
     margin-right: 20px;
   }
+  /* Le texte de progression ("Question 4/12 · 3/8 réponses", voir index.js
+     hostQuestionLabel) mérite d'être plus affirmé que le simple libellé
+     14px d'origine, une fois qu'on est vraiment "en régie" — la donnée la
+     plus regardée de tout ce panneau pendant la partie. */
+  body.is-host.game-active #hostPanel #loadedInfo {
+    font-family: 'Baloo 2', sans-serif;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+  /* Curseur de volume plus épais UNIQUEMENT ici (pas .volume-track en
+     général, réutilisé ailleurs — blind test joueur, éditeur — où le fin
+     original reste très bien) : ce panneau en particulier mérite le même
+     traitement "friendly" que le reste de la régie. */
+  body.is-host.game-active #hostPanel .volume-track {
+    height: 8px;
+    background: rgba(255,255,255,0.10);
+  }
+  body.is-host.game-active #hostPanel .volume-fill {
+    box-shadow: 0 0 10px rgba(var(--color-accent-rgb), 0.5);
+  }
 }
 
 .recap-sidebar {
   position: fixed; top: 0; right: 0; height: 100vh; width: 320px;
-  background: var(--color-card); border-left: 1px solid var(--color-border);
+  /* Dégradé de carte (chantier "plateau chaleureux") plutôt qu'un aplat —
+     cohérent avec .card/#hostPanel ailleurs dans l'appli, ce panneau
+     tranchait un peu trop plat comparé au reste. */
+  background: var(--gradient-card); border-left: 1px solid var(--color-border);
   box-shadow: -8px 0 24px rgba(0,0,0,0.25);
   z-index: 1099; display: flex; flex-direction: column;
   transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
@@ -2476,6 +2757,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .recap-sidebar-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 20px; font-weight: 800; font-size: 14px;
+  font-family: 'Baloo 2', sans-serif;
   border-bottom: 1px solid var(--color-border); flex-shrink: 0;
 }
 .recap-sidebar-close {
@@ -2549,8 +2831,127 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 
 /* Éditeur : recadreur audio (voir editor.js encodeWavMono) */
-.audio-trim-wrap, .audio-clip-wrap { max-width: 480px; }
+/* Carte dédiée (nouvelle DA, tâche 003, décision validée) au lieu du simple
+   lecteur natif posé nu. */
+.audio-trim-wrap, .audio-clip-wrap {
+  max-width: 480px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* .audio-trim-wrap (import en cours) a maintenant la vraie forme d'onde
+   (voir .audio-waveform plus bas) — le halo pulsant garde son sens
+   uniquement sur .audio-clip-wrap (l'extrait déjà validé, juste un lecteur
+   nu sans forme d'onde à côté). */
+.audio-clip-wrap::before {
+  content: '🎵';
+  align-self: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  background: radial-gradient(circle, rgba(var(--color-accent-rgb),0.35), rgba(var(--color-accent-rgb),0.06));
+  box-shadow: 0 0 30px rgba(var(--color-accent-rgb),0.3);
+}
 .audio-trim-wrap audio, .audio-clip-wrap audio { width: 100%; }
+
+/* Vraie forme d'onde (nouvelle DA, tâche 003) — voir editor.js
+   renderWaveform : une barre par "seau" d'échantillons, hauteur = crête
+   réelle de l'extrait audio importé. La portion Début→Début+Durée ressort en
+   accent via .in-range sur les barres concernées (voir
+   updateWaveformSelection) — pas de calque séparé, une seule source de
+   vérité pour "quelle barre est dans l'extrait". */
+.audio-waveform {
+  position: relative;
+  height: 56px;
+  /* Retour utilisateur : au doigt/stylet, glisser dans un espace entre deux
+     barres repassait en scroll/pan tactile natif au lieu de déclencher le
+     glisser JS (seules les poignées avaient touch-action:none) — toute la
+     piste doit intercepter le geste, barres ET espaces entre elles. */
+  touch-action: none;
+  /* Retour utilisateur : un glisser rapide à la souris finissait par
+     sélectionner le texte/déclencher le drag natif du navigateur au lieu du
+     glisser JS (barres en surbrillance, curseur "interdit") — coupé ici en
+     plus du e.preventDefault() côté JS. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+/* Conteneur des barres à part (voir editor.js renderWaveform) : les barres
+   sont recréées à chaque import, contrairement aux poignées .waveform-handle
+   ci-dessous, qui doivent rester en place. */
+.audio-waveform-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+}
+.audio-waveform .bar {
+  position: relative;
+  flex: 1;
+  min-width: 1px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.audio-waveform .bar::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: var(--h, 8%);
+  border-radius: 2px;
+  background: rgba(255,255,255,0.18);
+  transition: background 0.15s ease;
+}
+.audio-waveform .bar.in-range::after { background: var(--color-accent); }
+/* Retour utilisateur : la zone surlignée (Début→Début+Durée) se glisse au
+   clic (voir editor.js, écouteurs pointerdown/pointermove sur
+   #audioWaveform) — curseur "attraper" sur les barres concernées, qui
+   passe en "attrapé" pendant le glisser (classe posée sur le conteneur,
+   pas les barres : elles sont recréées à chaque import, la classe sur le
+   conteneur n'a pas ce problème). */
+.audio-waveform .bar.in-range { cursor: grab; }
+.audio-waveform.dragging, .audio-waveform.dragging .bar.in-range { cursor: grabbing; }
+
+/* Poignées de bord (retour utilisateur : "étirer" la sélection, pas
+   seulement la déplacer en bloc) — deux éléments fixes, positionnés en %
+   par editor.js updateWaveformSelection, toujours au-dessus des barres.
+   touch-action:none pour éviter que le geste de glisser scrolle la page
+   sur mobile/tablette. */
+.waveform-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin-left: -5px;
+  border-radius: 4px;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(var(--color-accent-rgb),0.25);
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 2;
+}
+.waveform-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  background: rgba(255,255,255,0.75);
+  border-radius: 1px;
+}
+.audio-waveform.dragging .waveform-handle { filter: brightness(1.15); }
 
 /* Badge de confirmation après l'envoi d'une réponse */
 .answer-status {
@@ -2632,7 +3033,16 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .max-w-700 { max-width: 700px; }
 
 .avatar-lg { width: 120px; height: 120px; font-size: 48px; }
-.avatar-profile { border: 4px solid white; box-shadow: 0 0 0 4px white, 0 0 0 8px var(--color-accent-soft), var(--shadow-lg); }
+/* Carré arrondi + anneau accent (nouvelle DA, tâche 002) au lieu du rond
+   blanc cerclé blanc d'avant — scopé à .avatar-profile uniquement (pas
+   .avatar-main de base, réutilisé tel quel ailleurs dans le jeu : lobby,
+   classement... pas dans le périmètre de cette refonte). */
+.avatar-profile {
+  border-radius: 28px;
+  border: none;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  box-shadow: 0 12px 30px rgba(var(--color-accent-rgb),0.35);
+}
 
 .toast-container { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10000; }
 
@@ -2660,7 +3070,523 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .border-accent-top { border-top: 4px solid var(--color-accent); }
 .border-accent-left { border-left: 4px solid var(--color-accent); }
+
+/* Icône du panneau hôte (chantier "plateau chaleureux", voir #hostPanel) —
+   petit badge rond en dégradé accent, même langage que les icônes de type
+   de question (.question-type-badge-icon) et de la maquette validée. */
+.host-panel-eyebrow { margin-bottom: 2px; }
+/* Nom du quiz en cours, sous "Contrôles de l'hôte" (retour utilisateur) —
+   affiché uniquement en régie desktop (voir #hostQuizTitle { order } dans
+   la media query plus bas) : pas de place fiable dans le bandeau
+   horizontal d'origine. */
+.host-quiz-title {
+  display: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+.host-panel-icon {
+  width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  box-shadow: 0 3px 10px rgba(var(--color-accent-rgb), 0.4);
+}
+
+/* Pile d'avatars des joueurs dans le panneau hôte (voir index.js
+   renderHostPlayerStrip) — cercles qui se chevauchent, même langage que la
+   maquette "plateau chaleureux" validée. */
+.host-player-strip {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0 8px;
+}
+.host-player-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background-color: var(--color-surface-2);
+  background-size: cover; background-position: center;
+  border: 2px solid var(--color-card);
+  margin-right: -9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: var(--color-text);
+}
+.host-player-avatar-more {
+  background-color: var(--color-surface);
+  font-size: 10px; margin-right: 0;
+}
+.host-player-strip-count {
+  margin-left: 13px; font-size: 12px; font-weight: 700; color: var(--color-text-muted);
+}
+
+/* Layout "régie 2 rails" (tâche 005, maquette validée : dock hôte à gauche,
+   carte question au centre, classement permanent à droite) — gardé DERRIÈRE
+   une media query desktop ET body.is-host.game-active : le layout mobile
+   existant (déjà longuement retouché, retours utilisateur documentés un peu
+   partout dans ce fichier) reste 100% inchangé, y compris pour un hôte qui
+   ouvrirait sur petit écran. #hostPanel/#stageWrap/#liveClassementDock sont
+   tous les 3 enfants DIRECTS de .container (voir index.html) : la grille
+   les place par id, aucun déplacement de nœud DOM nécessaire. */
+/* Navbar pendant une partie EN COURS (tâche 006, dernière passe, retour
+   utilisateur : "je ne veux pas de navbar quand une game est en cours, ni
+   côté MJ ni côté joueurs, seulement le logo en haut centré") — voulu ici
+   pour TOUT LE MONDE (pas juste l'hôte) et à TOUTE largeur d'écran
+   (contrairement au reste de cette section, réservé à la régie hôte
+   desktop) : `body.game-active` seul est déjà posé sur tous les clients
+   dès qu'une question s'affiche (voir index.js), donc pas besoin de
+   `.is-host` ni de media query ici. Ne fait QUE masquer les groupes de
+   boutons et centrer ce qu'il reste (le logo) — la navbar elle-même n'est
+   plus jamais entièrement masquée (tentative précédente : la remplacer par
+   un en-tête séparé qui clonait le logo a cassé son rendu, voir plus bas
+   dans ce fichier pour le détail). */
+body.game-active .navbar {
+  justify-content: center;
+  /* Retour utilisateur (capture d'écran) : "toujours une navbar
+     disgracieuse" — masquer les boutons ne suffisait pas, la barre
+     elle-même (verre, bordure, ombre) restait visible derrière le logo.
+     Elle disparaît entièrement ici : ne reste plus qu'un logo flottant sur
+     le fond, sans aucune trace de "barre".
+     !important nécessaire : :root[data-theme="light"] .navbar (3 classes
+     de spécificité) l'emporterait sinon sur body.game-active .navbar
+     (2 classes + 1 type) et laissait passer son propre fond/ombre/bordure
+     clairs — repéré en vérifiant en thème clair, pas juste supposé bon. */
+  background: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  /* Le logo agrandi ci-dessous (72px) dépasse la hauteur de barre pensée
+     pour une navbar dense (64px) — élargie pour le loger sans qu'il ne
+     déborde visuellement de sa rangée. */
+  height: auto;
+  padding: 10px 22px;
+}
+body.game-active .navbar .nav-group {
+  display: none;
+}
+body.game-active .navbar > .brand { margin-right: 0; }
+/* Retour utilisateur : "logo un peu petit encore" — seul repère visuel du
+   haut de l'écran une fois la barre masquée, il mérite plus de présence
+   que la taille pensée pour une navbar dense (46px, voir .brand-logo-svg
+   plus haut). */
+body.game-active .navbar .brand-logo-svg { height: 72px; }
+/* Sur un petit écran (joueur sur téléphone), 72px prend une part trop
+   généreuse d'une hauteur déjà comptée — reste plus gros que la taille
+   navbar d'origine (46px) sans dominer tout le haut de l'écran. */
+@media (max-width: 640px) {
+  body.game-active .navbar .brand-logo-svg { height: 56px; }
+}
+/* Code de salle "EN DIRECT" : fixé en bas-droite partout ailleurs (voir
+   .persistent-code plus bas) — remonté en HAUT-GAUCHE pendant une partie
+   (retour utilisateur, référence maquette) : plus cohérent avec le logo
+   également remonté en haut, au lieu de deux repères à des hauteurs
+   opposées de l'écran.
+   Retour utilisateur (nouveau) : "gêne au niveau du téléphone" — cette
+   règle n'était PAS scopée desktop, elle s'appliquait donc aussi sous
+   640px, EN PLUS de la règle mobile dédiée plus bas (@media max-width:640px
+   .persistent-code, qui gère déjà top/right pour ce contexte, y compris le
+   décalage à droite en IRL/à distance pour laisser la place à la roue
+   crantée). Même spécificité (2 classes) des deux côtés → left:20px issu
+   d'ICI n'était jamais annulé sur mobile, alors que la règle mobile posait
+   right:64px : élément fixed avec left ET right non-auto = largeur étirée
+   entre les deux (mesuré : 306px, de x=20 à x=326) qui recouvrait le
+   logo centré. Restreint au desktop (régie hôte) où ce repositionnement a
+   été demandé à l'origine — le mobile garde son propre positionnement,
+   déjà complet, plus haut dans ce fichier. */
+@media (min-width: 641px) {
+  body.game-active .persistent-code {
+    top: 20px;
+    bottom: auto;
+    left: 20px;
+    right: auto;
+  }
+}
+/* Joueurs + réponses reçues (retour utilisateur, référence maquette :
+   "8 joueurs · 5 ont répondu") — même recette de pastille que
+   .persistent-code juste au-dessus, coin haut-DROIT symétrique (le code de
+   salle est à gauche). Hôte uniquement : voir socket.on('answer:progress')
+   dans index.js, seul endroit où cette donnée existe côté client. */
+.game-progress-info {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+  background: var(--color-card);
+  padding: 8px 16px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.35);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 1100px) {
+  body.is-host.game-active .container {
+    display: grid;
+    /* Retour utilisateur (capture d'écran) : "beaucoup trop centré, la
+       tuile gauche doit être collée à gauche, la droite à droite" — le
+       conteneur reprend TOUTE la largeur de l'écran (max-width normalement
+       1100px, annulé ici) avec juste une petite marge de respiration
+       (24px), au lieu de rester capé à 1100px centré comme le reste du
+       site. Colonnes légèrement élargies (280px) : à pleine largeur d'écran
+       les docks 260px paraissaient perdus, la carte centrale (minmax(0,1fr))
+       récupère de toute façon tout l'espace restant. */
+    max-width: none;
+    width: 100%;
+    padding: 0 24px;
+    margin: 0;
+    grid-template-columns: 280px minmax(0, 1fr) 280px;
+    /* Retour utilisateur (2e passe) : "les blocs gauche et droite doivent
+       prendre la hauteur, comme le design décidé ensemble" — une seule
+       rangée explicite (1fr) qui occupe TOUTE la hauteur disponible
+       (height, plus min-height comme avant) + stretch, au lieu de
+       align-items:start qui ne laissait chaque colonne haute que ce que
+       son propre contenu exigeait. */
+    /* 2e ligne "auto" (retour utilisateur : "une zone à part entière pour
+       la validation des réponses, sous le bloc central") : n'existe
+       visuellement que quand #moderationPanel a du contenu à montrer
+       (display:none sinon, une ligne "auto" sans contenu visible ne prend
+       pas de place) — le reste du layout ne bouge pas en son absence. */
+    grid-template-rows: 1fr auto;
+    align-items: stretch;
+    height: calc(100vh - 170px);
+    gap: 24px;
+  }
+  body.is-host.game-active .container #hostPanel {
+    /* grid-column/-row explicites sur les 3 (voir #stageWrap/
+       #liveClassementDock plus bas) : sans ça, le placement automatique de
+       la grille dépend de l'ORDRE et de la VISIBILITÉ des autres enfants de
+       .container (joinCard, recapSidebar...) — repéré en testant l'état
+       forcé à la main (sans repasser par le vrai flux JS qui les masque),
+       où #hostPanel finissait dans la colonne du centre à la place de
+       #stageWrap. Explicite = déterministe, peu importe ce qui traîne
+       encore visible à côté. */
+    grid-column: 1;
+    /* span 2 : la 2e ligne (voir .container, "auto") n'existe que sous la
+       colonne centrale (#moderationPanel) — la colonne hôte doit continuer
+       à couvrir toute la hauteur des 2 lignes, comme avant son ajout. */
+    grid-row: 1 / span 2;
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    /* Étiré à toute la hauteur de la rangée (voir .container ci-dessus).
+       Le contenu a été allégé (pile joueurs + #loadedInfo masqués
+       ci-dessous) mais reste réellement plus haut que la place dispo sur
+       un écran moins haut que large (mesuré : ~870px de contenu pour
+       ~580px de boîte sur un exemple 1600x750) — un simple overflow:hidden
+       (essayé d'abord, suite au retour "pas de scrollbar") coupait alors
+       du contenu SANS PRÉVENIR (dont, potentiellement, le bas du bouton
+       "Question suivante" et son icône — probable explication du retour
+       "l'icône n'apparaît toujours pas"). Remis scrollable, mais avec la
+       SCROLLBAR ELLE-MÊME masquée (voir ::-webkit-scrollbar plus bas) :
+       satisfait "pas de scrollbar visible" ET "coins arrondis" (plus rien
+       ne vient carrer le coin) SANS perdre silencieusement du contenu. */
+    overflow-y: auto;
+    scrollbar-width: none; /* Firefox */
+    /* Retour utilisateur (capture d'écran) : "la tuile gauche devrait
+       changer de design pour coller à celle de droite" (#liveClassementDock,
+       plus bas) — liseré rose (.border-accent-left, posé en dur dans le
+       HTML, réutilisé par d'autres cartes hors régie) retiré, padding
+       aligné sur celui du dock classement (18px, !important nécessaire :
+       le HTML pose un padding inline plus généreux pensé pour l'ancien
+       bandeau horizontal, précédent déjà en place pour ce même override en
+       mobile un peu plus bas dans ce fichier). */
+    border-left: none;
+    padding: 18px !important;
+  }
+  body.is-host.game-active .container #hostPanel::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Edge */
+  }
+  /* Retour utilisateur (référence maquette détaillée) : "reprends les
+     éléments de cette barre" — icône remise (elle n'aurait jamais dû
+     disparaître, cf. commentaire retiré ci-dessus), mais surtout un VRAI
+     réordonnancement demandé : gros bouton "Question suivante" en haut
+     (pas en bas), musique en dessous, pastille "Ambiance" tout en bas.
+     #hostPanel a 2 enfants directs en HTML (bloc texte .d-flex.flex-
+     column.gap-xs, groupe de boutons .d-flex.gap-sm) — `order` seul ne
+     peut PAS entrelacer les enfants de l'un avec ceux de l'autre. Solution :
+     display:contents sur le bloc texte, UNIQUEMENT ici (régie desktop) —
+     il "s'efface" du rendu sans rien changer au DOM, et tous ses enfants
+     (icône/titre, pile joueurs, infos, barre de progression, ligne
+     musique) deviennent des enfants DIRECTS de #hostPanel au même titre
+     que le groupe de boutons : tous réordonnables ensemble via `order`.
+     Le bandeau horizontal d'origine (mobile, desktop 1024-1099px) n'est
+     jamais dans ce contexte, donc jamais concerné. */
+  body.is-host.game-active .container #hostPanel > .d-flex.flex-column.gap-xs {
+    display: contents;
+  }
+  body.is-host.game-active .container #hostPanel .host-panel-eyebrow { order: 1; }
+  /* Nom du quiz en cours (retour utilisateur), juste sous le titre. */
+  body.is-host.game-active .container #hostPanel #hostQuizTitle {
+    order: 2;
+    display: block;
+  }
+  /* Pile d'avatars + texte "Question X/Y..." : redondants une fois la
+     barre de progression + le compteur #gameProgressInfo (coin haut-droit
+     de l'écran, tâche 006) en place — masqués ici plutôt que dupliqués. */
+  body.is-host.game-active .container #hostPanel #hostPlayerStrip,
+  body.is-host.game-active .container #hostPanel #loadedInfo {
+    display: none;
+  }
+  body.is-host.game-active .container #hostPanel #hostProgressBar { order: 3; }
+  /* Groupe boutons (Sélectionner/LANCER/Suivant) : en ligne par défaut
+     (voir #hostPanel dans index.html, pensé pour l'ancien bandeau
+     horizontal) — empilés pleine largeur et remontés juste sous la barre
+     de progression, comme sur la maquette ("Question suivante" en gros
+     bouton, tout en haut du panneau). */
+  body.is-host.game-active .container #hostPanel > .d-flex.gap-sm {
+    order: 4;
+    flex-direction: column;
+  }
+  body.is-host.game-active .container #hostPanel > .d-flex.gap-sm .btn {
+    /* Bouton "plein" comme sur la maquette : plus haut/généreux que le
+       h-48 par défaut (pensé pour l'ancien bandeau horizontal étroit).
+       Encore agrandi (retour utilisateur) + empilé en colonne pour loger
+       l'icône "shine" SOUS le libellé (voir .btn-label/.btn-shine-icon
+       dans index.html — <span> à part, pas juste un emoji collé au texte,
+       justement pour pouvoir l'empiler ici sans toucher au texte affiché
+       ailleurs). */
+    height: 76px;
+    font-size: 16px;
+    border-radius: var(--radius-md);
+    flex-direction: column;
+    gap: 2px;
+  }
+  body.is-host.game-active .container #hostPanel > .d-flex.gap-sm .btn .btn-shine-icon {
+    font-size: 15px;
+    line-height: 1;
+  }
+  body.is-host.game-active .container #hostPanel .host-volume-row {
+    order: 5;
+    /* Reprend la maquette : carte à part (fond + radius), pas une simple
+       ligne de texte posée à même le panneau — libellé + pourcentage sur
+       une ligne, la barre juste en dessous sur toute la largeur (voir
+       flex-wrap ci-dessous, .volume-track prend déjà 100% en pratique
+       une fois seule sur sa ligne). */
+    flex-wrap: wrap;
+    background: var(--color-surface-2);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    justify-content: space-between;
+  }
+  body.is-host.game-active .container #hostPanel .host-volume-row .volume-track {
+    order: 3;
+    flex-basis: 100%;
+    height: 8px;
+  }
+  body.is-host.game-active .container #hostPanel .host-volume-row #audioVolumeLabel {
+    order: 2;
+    margin-left: auto;
+  }
+  body.is-host.game-active .container #hostPanel #hostAmbiancePill {
+    order: 6;
+    /* Pousse la pastille tout en bas du panneau (retour utilisateur :
+       "sur place / à distance en bas") — #hostPanel est déjà étiré à toute
+       la hauteur de la rangée (voir plus haut), donc une marge auto avant
+       le dernier élément colle bien celui-ci au bord bas plutôt que de le
+       laisser juste après la musique. */
+    margin-top: auto;
+    display: block;
+  }
+  body.is-host.game-active .container #stageWrap {
+    grid-column: 2;
+    grid-row: 1;
+    position: relative;
+    /* Carte centrale de la maquette : #main (timer/question/options, déjà
+       stylés indépendamment ailleurs dans ce fichier) posé À L'INTÉRIEUR,
+       sur fond transparent — seul #stageWrap porte le fond/l'ombre, pour ne
+       pas empiler deux cartes visuellement. */
+    background: var(--gradient-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 48px 40px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow-y: auto;
+    /* Retour utilisateur (4e passe) : "recentre un peu la tuile centrale,
+       qui n'est pas sensée prendre toute la hauteur (mais garde une taille
+       convenable quand même)" — align-self:center (au lieu du stretch
+       hérité de .container) : les 2 docks restent étirés sur toute la
+       hauteur de la rangée, seule la carte se dimensionne sur son propre
+       contenu et se centre verticalement dedans. min-height conservée pour
+       qu'elle reste "convenable" même sur une question très courte, sans
+       obligation d'aller jusqu'au bord comme avant. */
+    align-self: center;
+    min-height: 380px;
+    max-height: 100%;
+  }
+  /* Retour utilisateur ("une zone à part entière dédiée à la validation
+     des réponses, sous le bloc central") : #moderationPanel (index.js,
+     réponses "texte libre" à juger) a maintenant sa PROPRE cellule de
+     grille, sous #stageWrap (voir la 2e ligne "auto" sur .container plus
+     haut) — plus un enfant de #hostPanel comme essayé au tour précédent.
+     margin-top:0 en !important : index.js pose 16px en inline (repli pour
+     les contextes hors régie desktop, où #moderationPanel n'est qu'un
+     <div class="card"> de plus dans le flux normal) — ici le gap:24px de
+     la grille fait déjà l'espacement avec #stageWrap au-dessus. */
+  body.is-host.game-active .container #moderationPanel {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0 !important;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  body.is-host.game-active .container #liveClassementDock {
+    grid-column: 3;
+    /* span 2, même raison que #hostPanel plus haut. */
+    grid-row: 1 / span 2;
+    /* #recapSidebarToggle (bouton "Récap") est position:fixed; top:100px;
+       right:0 — pensé pour l'ancien layout où rien n'occupait ce coin.
+       Se retrouve maintenant pile sur le coin haut-droit du dock classement
+       (retour utilisateur avec capture d'écran). Corrigé ICI plutôt que sur
+       le bouton Récap lui-même (fonctionnalité déjà ancienne et longuement
+       retouchée, voir son propre commentaire — préférence pour ne pas y
+       toucher) : on pousse simplement le dock sous lui. */
+    margin-top: 48px;
+    overflow-y: auto;
+  }
+  /* Badge de type de question : fixe à l'écran partout ailleurs (voir sa
+     propre règle plus haut, IMPORTANT documenté sur le risque backdrop-
+     filter) — ICI il doit au contraire suivre la carte centrale comme sur
+     la maquette (petite pastille en haut de la carte, pas un repère
+     "coin d'écran" puisque l'écran n'a plus qu'une seule vraie zone de
+     contenu qui défile). #stageWrap est la SEULE ancre positionnée voulue
+     pour lui dans ce contexte (position:relative ci-dessus).
+     Retour utilisateur (3e passe) : coin HAUT-GAUCHE de la carte (au lieu
+     de centré) — le timer (voir #timerContainer juste en dessous) prend le
+     coin haut-droit symétrique. */
+  body.is-host.game-active .container #questionTypeBadge {
+    position: absolute;
+    /* Retour utilisateur (4e passe) : marge par rapport au bord de la
+       carte, au lieu d'être collé pile dans le coin. */
+    top: 20px;
+    left: 20px;
+  }
+  /* Timer : bandeau pleine largeur partout ailleurs (voir .timer-container
+     plus haut, sticky sous la navbar) — ICI transformé en petite pastille
+     ancrée en haut-droite de la carte, symétrique au badge de type
+     ci-dessus (retour utilisateur). Toujours le même #timerBar/#timerLabel
+     à l'intérieur (voir index.js), juste un contenant plus étroit et
+     positionné différemment. */
+  body.is-host.game-active .container #timerContainer {
+    position: absolute;
+    /* Même marge que le badge de type ci-dessus (retour utilisateur). */
+    top: 20px;
+    right: 20px;
+    left: auto;
+    width: 220px;
+    max-width: 220px;
+    margin: 0;
+    /* Retour utilisateur : "enlève le noir autour chez le MJ" — .timer-
+       container (voir plus haut dans ce fichier) porte un fond sombre +
+       flou pensé pour rester lisible par-dessus le CONTENU DE LA QUESTION
+       qui défile (image, illustration...) en mobile/joueur. Ici, la
+       pastille flotte sur la carte régie elle-même (déjà un fond uni,
+       jamais de contenu qui défile derrière) — ce fond n'a plus lieu
+       d'être, seule la barre en dessous garde un habillage. */
+    background: none;
+    /* Tâche 011 : .timer-container porte désormais aussi une box-shadow
+       (--shadow-md, carte) en base — sans contre-passe ici elle resterait
+       visible même sans fond, en flottant bizarrement au-dessus de la
+       carte régie. Même logique que background:none juste au-dessus. */
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding: 0;
+  }
+  /* Retour utilisateur : "design des barres à revoir, prendre comme réf
+     la nouvelle DA" — la pastille épaisse (28px, chiffre superposé dedans)
+     ne collait plus au langage plus fin adopté pour .host-progress-track
+     juste à côté (voir plus bas dans ce fichier). Passée en fine barre
+     (8px), le temps restant écrit À CÔTÉ (retour utilisateur : vraiment à
+     l'extérieur de la barre, pas juste "en bout de piste" en partageant
+     encore son fond) — #timer-bar-wrapper est réduit à la largeur de la
+     seule barre (calc(100% - 34px)) et #timerLabel positionné en absolu
+     dans l'espace ainsi laissé libre, DANS les 220px de #timerContainer
+     (jamais au-delà, pour ne jamais dépendre du comportement d'overflow de
+     #stageWrap — un ancêtre). #timerBar/#timerLabel restent les mêmes
+     éléments (voir index.js) : seule leur mise en page change ici. Cette
+     barre n'accueille pas le compte à rebours "urgent" en pulsation (voir
+     .timer-urgent plus haut) via une taille dédiée — le dégradé rouge
+     s'applique tel quel, juste plus fin. */
+  body.is-host.game-active .container #timerContainer .timer-bar-wrapper {
+    position: relative;
+    width: calc(100% - 34px);
+    height: 8px;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    box-shadow: none;
+    border-radius: 999px;
+    /* overflow:hidden en base (voir .timer-bar-wrapper plus haut, sert à
+       clipper le remplissage) clipperait aussi #timerLabel ci-dessous,
+       maintenant positionné en dehors de cette boîte (left:100%) — sans
+       incidence sur le remplissage : .timer-bar-fill a son propre
+       border-radius:999px (juste en dessous), il n'a plus besoin d'être
+       clippé par son parent pour paraître arrondi. */
+    overflow: visible;
+  }
+  body.is-host.game-active .container #timerContainer .timer-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+  body.is-host.game-active .container #timerContainer .timer-label {
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    right: auto;
+    transform: translateY(-50%);
+    margin-left: 10px;
+    font-size: 13px;
+    color: var(--color-text);
+    text-shadow: none;
+  }
+}
+
 .border-danger-soft { border-color: rgba(255,59,92,0.2); }
+
+/* Classement permanent (tâche 005) — mini version de .leader-row/-rank/
+   -name/-score (voir plus bas dans ce fichier), pensée pour un dock étroit
+   plutôt que la liste plein écran : mêmes tokens de couleur, pas de
+   duplication de palette. */
+.live-classement-dock {
+  display: none; /* affiché uniquement en layout régie, voir media query au-dessus */
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 18px;
+}
+@media (min-width: 1100px) {
+  body.is-host.game-active .live-classement-dock { display: block; }
+}
+.live-classement-title {
+  margin: 0 0 14px;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+.live-classement-list { display: flex; flex-direction: column; gap: 8px; }
+.live-classement-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+.live-classement-rank {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  background: var(--tile-blue); color: white;
+  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.live-classement-row:nth-child(1) .live-classement-rank { background: var(--tile-yellow); }
+.live-classement-row:nth-child(2) .live-classement-rank { background: var(--tile-green); }
+.live-classement-row:nth-child(3) .live-classement-rank { background: var(--tile-red); }
+.live-classement-name { flex: 1; font-weight: 700; font-size: 13px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-classement-score { font-weight: 700; font-size: 13px; color: var(--color-accent); font-family: 'Baloo 2', sans-serif; }
 
 .cursor-pointer { cursor: pointer; }
 .resize-v { resize: vertical; min-height: 80px; }
@@ -2675,13 +3601,310 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .divider-line { flex: 1; height: 1px; background: var(--color-border); }
 .divider-text { color: var(--color-text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 
-.qr-container { display: inline-block; padding: 16px; background: white; border-radius: var(--radius-md); border: 1px solid var(--color-border); margin-bottom: 20px; }
-.info-box { background: var(--color-surface); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--color-border); }
+.qr-container {
+  display: inline-block;
+  padding: 16px;
+  background: white;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  /* Retour utilisateur (design décidé, Lobby.dc.html) : le QR s'agrandit en
+     plein écran au clic — pour un joueur IRL qui le photographie depuis un
+     écran projeté, la version affichée en permanence dans la carte n'est
+     pas assez grande/nette à distance. position:relative sert de repère à
+     .qr-expand-badge ci-dessous. */
+  position: relative;
+  cursor: pointer;
+}
+/* QRCode() (qrcodejs) dessine un <img> (ou <canvas> en repli) à une taille
+   FIXE en pixels — sans ça, il ne rétrécit jamais, quelle que soit la
+   place que la carte "Partager l'accès" lui laisse (retour utilisateur :
+   "toujours trop grand le QR code"). #qr grandit avec .qr-container (voir
+   la répartition 40/60 en JS, syncLobbyColumnHeight) plutôt que l'inverse. */
+#qr img, #qr canvas { max-width: 100%; max-height: 100%; height: auto; display: block; }
+/* Pastille "agrandir" en coin — TOUJOURS visible (pas au survol seul :
+   un joueur IRL regarde un écran projeté, jamais une souris, donc rien à
+   survoler). Même recette pastille ronde en dégradé accent que le reste
+   de l'appli (.host-panel-icon, etc.). */
+.qr-expand-badge {
+  position: absolute;
+  bottom: -8px;
+  right: -8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  border: 2px solid var(--color-card);
+  color: white;
+  pointer-events: none;
+}
+/* Retour utilisateur : QR à gauche, "Code Salle :" + le code à droite
+   (côte à côte plutôt qu'empilés) — voir #roomInfo dans index.html et
+   #serverInfo dans index.js (room:created). Design "billet" retenu
+   (option B du canvas de design "Partager l'accès") : séparateur
+   perforé entre le QR et le code, façon ticket de spectacle — voir
+   .room-info-ticket/.room-info-perf plus bas. */
+.room-info-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.room-info-row .qr-container { margin-bottom: 0; }
+.room-info-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.room-info-text .btn { width: 100%; box-sizing: border-box; }
+/* Ligne pointillée façon perforation de billet détachable, entre le QR et
+   le code — purement décoratif, aria-hidden côté HTML. Pas de "trous"
+   ronds façon découpe (essayé d'abord) : #roomInfo a un fond en DÉGRADÉ
+   (--gradient-card), un rond de couleur unie pour simuler un trou
+   tranchait dessus au lieu de s'y fondre — la ligne seule suffit à lire
+   "billet". */
+.room-info-ticket .room-info-perf {
+  align-self: stretch;
+  width: 0;
+  border-left: 2px dashed var(--color-border);
+  flex: none;
+}
 
+/* Carte "Partager l'accès" (design décidé, artboard Lobby.dc.html) :
+   liseré fin teinté accent sur tout le pourtour au lieu de la grosse barre
+   .border-accent-top (4px, un seul côté) utilisée ailleurs — scopé par id
+   pour ne pas changer ce que fait .border-accent-top sur ses autres
+   usages. */
+#roomInfo { border: 1px solid rgba(var(--color-accent-rgb),0.3); }
+
+/* Overlay QR plein écran (retour utilisateur, design décidé) : même SVG
+   (généré par la même lib QRCode, voir index.js openQrOverlay) redessiné
+   plus grand — un simple agrandissement CSS (transform:scale) d'un canvas
+   déjà petit aurait rendu flou ; ici la lib régénère le code à la taille
+   cible. Se ferme au clic n'importe où (voir index.js), pas de bouton
+   fermer dédié : cohérent avec le reste de l'appli (popups fermées par un
+   clic sur le fond, ex. .modal-overlay). */
+#qrExpandOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(5,5,15,0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  cursor: pointer;
+}
+#qrExpandOverlay .qr-expand-code {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: 6px;
+  color: white;
+}
+#qrExpandOverlay .qr-expand-hint {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.7);
+}
+#qrExpandOverlay .qr-container {
+  cursor: default;
+  margin-bottom: 0;
+}
+
+/* Retour utilisateur (revue visuelle) : "Partager l'accès" et "Joueurs
+   connectés" regroupés dans #lobbyShareCol (voir index.html) — sur
+   mobile/tablette (pas scopé), c'est un simple empilement en colonne avec
+   un espacement entre les cartes (avant, deux <div class="card"> qui se
+   touchaient). En desktop (media query plus bas), ce même conteneur
+   devient l'unique item de grille de la colonne droite. */
+#lobbyShareCol { display: flex; flex-direction: column; gap: var(--space-lg); margin-top: var(--space-lg); }
+#lobbyShareCol #roomInfo { margin: 0; }
+#lobbyShareCol #lobbyPlayersCard { margin: 0; }
+
+/* Disposition 2 colonnes du salon d'attente (design décidé, artboard
+   Lobby.dc.html, plusieurs passes avec retours utilisateur) : colonne
+   gauche = salon (organisateur + réglages, SANS les joueurs) + contrôles
+   de l'hôte en dessous ; colonne droite = partage d'accès (QR + code) EN
+   HAUT + joueurs connectés en dessous. :has() plutôt qu'une classe body
+   dédiée : #lobby porte déjà son propre d-none (voir showLobby/
+   enterGameScreen dans index.js), pas besoin d'un 2e état à maintenir en
+   JS rien que pour ce layout. */
+@media (min-width: 1100px) {
+  .container:has(#lobby:not(.d-none)) {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 20px;
+    align-items: start;
+  }
+  /* #lobby lui-même n'est plus qu'un groupeur d-none (voir index.html) —
+     aplati pour que #lobbySalon/#lobbyShareCol rejoignent directement la
+     grille de .container, aux côtés de #hostPanel. Même technique que
+     #hostPanel en régie hôte pendant la partie (voir plus haut dans ce
+     fichier). !important nécessaire : showLobby (index.js) pose
+     display:block en inline sur #lobby, qu'un sélecteur normal ne peut
+     pas battre. */
+  .container:has(#lobby:not(.d-none)) #lobby { display: contents !important; }
+  .container:has(#lobby:not(.d-none)) #lobbySalon { grid-column: 1; grid-row: 1; }
+  .container:has(#lobby:not(.d-none)) #hostPanel { grid-column: 1; grid-row: 2; margin-top: 0; }
+  /* Retour utilisateur ("disposition un peu cassée, les joueurs devraient
+     être juste en dessous du partage d'accès") : avant, #roomInfo et
+     #lobbyPlayersCard étaient deux items de grille séparés sur les LIGNES
+     1 et 2, lignes elles-mêmes dimensionnées par le contenu le plus haut
+     de chaque ligne — y compris celui de la colonne gauche (#lobbySalon,
+     souvent bien plus haut que le QR). Résultat : #lobbyPlayersCard
+     démarrait à la hauteur de #lobbySalon, laissant un grand vide sous le
+     QR. #lobbyShareCol est maintenant un seul item de grille qui couvre
+     les 2 lignes. Deux essais intermédiaires qui n'ont pas suffi (pour
+     mémoire, ne pas y revenir) :
+     1) align-self:stretch sans hauteur explicite — les pistes "auto" se
+        dimensionnent AUSSI sur le contenu de l'item qui les enjambe, ce
+        qui gonflait les 2 lignes bien au-delà de la hauteur réelle de
+        #lobbySalon+#hostPanel et laissait cette fois un vide sous
+        "Contrôles de l'hôte" (le même bug, déplacé) ;
+     2) un min-height (au lieu de height) posé en JS — un min-height ne
+        plafonne rien : avec des enfants flex-grow (ratio 40/60
+        ci-dessous), #lobbyShareCol grandissait quand même au-delà, pour
+        les mêmes raisons.
+     Fixé avec une HAUTEUR (pas min-height) explicite posée en JS
+     (syncLobbyColumnHeight, index.js — ResizeObserver sur
+     #lobbySalon/#hostPanel), qui est une taille définie : la grille s'en
+     sert directement pour la piste, sans jamais regarder le contenu de
+     #lobbyShareCol. */
+  .container:has(#lobby:not(.d-none)) #lobbyShareCol {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin-top: 0;
+    overflow: hidden; /* filet de sécurité si jamais le contenu dépasse malgré tout la hauteur posée en JS — jamais de débordement visuel sur la carte suivante */
+    /* Retour utilisateur ("le haut de la tuile lors du hover disparaît") :
+       .card:hover (règle générale) fait "monter" #roomInfo de 3px — collée
+       au tout bord haut de #lobbyShareCol (1er enfant), ce décalage sortait
+       de la boîte et se faisait rogner par l'overflow:hidden ci-dessus.
+       Même famille de bug que .player-grid plus haut. padding-top absorbe
+       ces 3px ; le budget JS (syncLobbyColumnHeight) le déduit du total
+       disponible pour que #roomInfo/#lobbyPlayersCard restent bien alignées
+       sur le bas de la colonne gauche. */
+    padding-top: 5px;
+  }
+  /* Retour utilisateur, répété : "j'ai dit 40/60 en hauteur" — pris au
+     pied de la lettre. Un ratio flex-grow (essayé avant, 2 fois : d'abord
+     appliqué à l'espace EXTRA seulement, puis carrément retiré) ne donne
+     JAMAIS un vrai 40/60 du total, puisqu'il dépend de la taille de
+     contenu de départ de chaque carte (le QR est intrinsèquement large).
+     #roomInfo/#lobbyPlayersCard reçoivent maintenant une HAUTEUR EXACTE
+     en pixels posée par JS (syncLobbyColumnHeight, index.js — 40%/60% de
+     #lobbyShareCol moins le gap), flex:none pour ne pas la laisser
+     bouger.
+     Rendre le QR "responsive" en CSS (essayé d'abord : #qr height:100% +
+     img max-height:100%, dans une chaîne de % en cascade) a bouclé sur
+     une taille indéterminée et effondré le QR à 0×0 — un parent
+     flex-basis:auto n'a pas de hauteur propre tant que son contenu
+     (l'image) n'a pas la sienne, et l'image attendait celle du parent :
+     dépendance circulaire classique. Corrigé à la source à la place :
+     le QR est généré plus petit dès le départ (130×130, voir
+     room:created dans index.js) — plus besoin de le rétrécir en CSS,
+     juste de centrer son (petit) bloc dans les 282px alloués. padding
+     réduit sur la carte (20px, pas les 32px par défaut de .card) : avec
+     un QR déjà compact, le padding standard mangeait une part
+     disproportionnée des 40%. display:flex en !important : room:created
+     pose display:block EN INLINE sur #roomInfo pour le rendre visible
+     (roomInfo.style.display = 'block') — un inline style bat toujours
+     une règle de feuille de style normale (même technique déjà utilisée
+     sur #lobby plus haut).
+     :not(.d-none) sur le sélecteur — piège rencontré (retour utilisateur :
+     "tout pété pour les joueurs sur PC, ils ne devraient pas voir le
+     partager l'accès") : un !important bat TOUJOURS une règle non
+     !important, y compris .d-none (display:none) posée par JS pour cacher
+     la carte aux non-hôtes — #roomInfo restait donc affiché quoi qu'il
+     arrive tant que ce sélecteur matchait. En excluant .d-none du
+     sélecteur lui-même, la règle ne s'applique plus DU TOUT une fois la
+     classe posée, et .d-none (ailleurs dans ce fichier) reprend la main
+     normalement. */
+  /* Retour utilisateur ("adapte la tuile partage d'accès à son contenu,
+     ça va la réduire et laisser de la place aux joueurs") : plus de
+     hauteur fixe posée en JS sur #roomInfo (voir syncLobbyColumnHeight,
+     index.js) — flex:none + flex-basis:auto (implicite) le laisse à sa
+     taille de contenu naturelle (QR 130px + code + bouton), plus courte
+     que ce que lui donnait le ratio 40/60. #lobbyPlayersCard récupère
+     tout l'espace ainsi libéré. Plus besoin du margin:auto sur
+     .room-info-row essayé pour l'étape précédente (centrer le contenu
+     dans une boîte plus haute que lui) : la boîte épouse maintenant son
+     contenu, il n'y a plus d'espace en trop à répartir. */
+  .container:has(#lobby:not(.d-none)) #lobbyShareCol #roomInfo:not(.d-none) {
+    flex: none;
+    max-width: none;
+    display: flex !important;
+    flex-direction: column;
+    padding: 18px 20px !important;
+  }
+  .container:has(#lobby:not(.d-none)) #lobbyShareCol #roomInfo h3 {
+    margin-bottom: 8px;
+  }
+  /* Retour utilisateur : "pas de scroll bar si le nombre de joueurs ne
+     dépasse pas la taille de la tuile" — le scroll est posé sur
+     #lobbyGrid seul (voir plus bas), qui ne scrolle que si les tuiles
+     dépassent vraiment l'espace que #lobbyPlayersCard lui laisse. */
+  .container:has(#lobby:not(.d-none)) #lobbyShareCol #lobbyPlayersCard {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+  }
+  .container:has(#lobby:not(.d-none)) #lobbyShareCol #lobbyPlayersCard #lobbyGrid {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+/* Code de salle + lien, sur 2 lignes (design décidé) au lieu d'une seule
+   ligne concaténée "Salle créée: CODE • URL" — voir #serverInfo dans
+   index.js (room:created). */
+/* Retour utilisateur ("le code de la salle est redevenu minuscule") :
+   15px passait inaperçu à côté d'un QR de 180px+ — le code de salle est
+   l'info que l'hôte annonce à voix haute à ses joueurs IRL, il doit se
+   lire de loin. .room-info-code (le "Salle créée :" en préfixe) reste
+   discret ; c'est .room-info-code-value (le code lui-même) qui grossit. */
+.room-info-code { font-size: 15px; font-weight: 700; color: var(--color-text); margin-bottom: 4px; }
+/* Dégradé cyan -> accent en clip-text : couleurs du design validé
+   (artboard Lobby.dc.html, canvas "Écran hôte QuEazy") — perdues en
+   route lors du portage dans le vrai CSS, restaurées ici. */
+.room-info-code-value {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  letter-spacing: 2px;
+  font-size: 26px;
+  background: linear-gradient(90deg, var(--color-cyan), var(--color-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 .persistent-code {
   position: fixed; bottom: 20px; right: 20px; background: var(--color-card); padding: 8px 16px;
-  border-radius: var(--radius-sm); box-shadow: var(--shadow-md); border: 1px solid var(--color-border);
-  z-index: 100; font-size: 14px; color: var(--color-text-muted);
+  /* Chantier "plateau chaleureux" : pastille pleine largeur (999px) + liseré
+     accent plutôt que le rectangle à coins légèrement arrondis d'origine —
+     même langage que les puces "salle"/"joueurs" de la maquette validée. */
+  border-radius: 999px; box-shadow: var(--shadow-md); border: 1px solid rgba(var(--color-accent-rgb), 0.35);
+  z-index: 100; font-size: 14px; color: var(--color-text-muted); font-weight: 700;
+}
+/* Retour utilisateur : "toujours présent sur les postes joueurs" — ce badge
+   n'a d'utilité que côté hôte (partager le code avec la salle), le joueur
+   l'a déjà saisi pour rejoindre. Masqué pour lui pendant la partie, mobile
+   ET PC (hors media query, contrairement au reste des ajustements de ce
+   badge un peu plus bas — celui-ci doit s'appliquer partout). Le
+   commentaire mobile plus bas raconte l'historique de cette règle. */
+body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code {
+  display: none;
 }
 /* Sur mobile, ce badge fixe en bas-droite empiétait sur les contrôles de
    réponse (bouton Valider, options...) — eux aussi groupés en bas de l'écran
@@ -2696,11 +3919,93 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     padding: 4px 10px;
     font-size: 12px;
   }
-  /* En mode IRL joueur, la roue crantée (voir .irl-menu-btn) occupe déjà ce
-     même coin haut-droit — sans ce décalage, elle passait devant le badge
-     et cachait complètement le code salle (retour utilisateur). */
-  body.irl-player-mode .persistent-code { right: 64px; }
+  /* En mode IRL ou à distance côté joueur : retour utilisateur — ce badge
+     "EN DIRECT · Code salle" restait affiché sur les postes joueurs
+     pendant la partie ("toujours présent"), alors qu'il n'a d'utilité que
+     pour l'hôte (partager le code avec la salle) — le joueur, lui, l'a déjà
+     saisi pour rejoindre. Masqué entièrement ici plutôt que repositionné
+     (essayé d'abord contre le chevauchement avec le logo centré — voir
+     l'historique de cette règle — mais le bon correctif était de ne plus
+     l'afficher du tout côté joueur). Règle générale ci-dessous (hors media
+     query) : masque aussi bien en mobile qu'en PC joueur. */
 }
+
+/* "EN DIRECT" (chantier "plateau chaleureux", tâche 002) : posé dans
+   #persistentRoomCode plutôt qu'un nouvel élément flottant séparé — ce
+   badge est déjà positionné/z-indexé correctement (voir les multiples
+   retours utilisateur ci-dessus sur ce coin d'écran), pas la peine de
+   rouvrir ce chantier pour si peu. */
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tile-red);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tile-red);
+  animation: liveDotPulse 1.6s ease-in-out infinite;
+}
+@keyframes liveDotPulse {
+  0% { box-shadow: 0 0 0 0 rgba(var(--tile-red-rgb),0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(var(--tile-red-rgb),0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--tile-red-rgb),0); }
+}
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+.persistent-code-sep { color: var(--color-text-muted); opacity: 0.5; margin: 0 1px; }
+
+/* Barre de progression (voir #hostProgressBar, index.html + index.js
+   renderHostProgressBar) — retour utilisateur : remplace les points
+   d'origine par une vraie barre, comme sur la maquette de référence.
+   Même dégradé cyan->accent que la barre de temps (voir .timer-bar-fill
+   plus haut) : les 2 seules "barres" de tout l'écran de jeu partagent
+   maintenant le même langage. */
+.host-progress-bar { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.host-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+.host-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-cyan), var(--color-accent));
+  transition: width 0.3s ease;
+}
+.host-progress-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pastille "Ambiance : Sur place / À distance" du panneau hôte régie —
+   affiche gameMode (voir socket.on('game:mode') dans index.js), déjà
+   suivi côté client, jamais un nouvel état. Cachée par défaut (hors régie
+   desktop, pas de place fiable pour elle dans le bandeau horizontal
+   d'origine) — affichée uniquement via #hostAmbiancePill { order: 5 }
+   dans la media query régie plus haut. */
+.host-ambiance-pill {
+  display: none;
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--color-border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+.host-ambiance-pill #hostAmbianceValue { color: var(--color-text); }
 
 .question-text {
   font-family: 'Baloo 2', sans-serif;
@@ -2719,6 +4024,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 .free-text-input { display: flex; gap: 12px; background: var(--color-card); padding: 12px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); border: none; }
 .free-text-input.mcq-mode { background: transparent; padding: 0; box-shadow: none; justify-content: center; margin-top: 24px; }
+/* Empilé (design décidé, Player_Free.dc.html et consorts) plutôt qu'en
+   ligne (champ à gauche, bouton à droite) — seuls les types qui affichent
+   réellement un input ici sont concernés (free/reveal/pbac/zoomguess/
+   blindtest) : en mcq-mode, ce conteneur n'a jamais montré que le bouton
+   "Valider" seul, déjà centré, donc volontairement exclu ici. */
+.free-text-input:not(.mcq-mode) { flex-direction: column; }
+.free-text-input:not(.mcq-mode) #send { width: 100%; }
 .reveal-answer {
   max-width: 700px;
   margin: var(--space-md) auto 0;
@@ -2744,9 +4056,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   font-weight: 800;
   font-size: 18px;
   animation: fadeIn 0.3s ease;
+  /* Tâche 011 (retour utilisateur) : le bandeau était plat, seul élément
+     du reveal sans le relief "punchy" du reste de l'appli (.card/.btn ont
+     tous une ombre nette). Ajoutée ici, commune aux 3 variantes. */
+  box-shadow: var(--shadow-md);
 }
 .my-result-banner.is-correct { background: var(--tile-green); color: white; }
-.my-result-banner.is-incorrect { background: var(--color-surface); color: var(--color-text-muted); border: 2px solid var(--color-border); }
+.my-result-banner.is-incorrect { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
 .my-result-banner.is-close { background: var(--tile-yellow); color: #3a2e00; }
 
 /* Texte explicatif optionnel, écrit par le créateur du quiz, affiché sous le
@@ -2765,6 +4081,8 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   font-size: 15px;
   line-height: 1.5;
   animation: fadeIn 0.3s ease;
+  /* Tâche 011 : même ajout de relief que .my-result-banner juste au-dessus. */
+  box-shadow: var(--shadow-md);
 }
 
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
@@ -2881,6 +4199,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   .navbar.nav-open .nav-menu { display: flex; }
   .nav-group { width: 100%; justify-content: center; flex-wrap: wrap; gap: 8px; }
   .nav-group:last-child { justify-content: center; }
+  /* Le séparateur vertical entre .nav-group (voir plus haut) n'a de sens
+     qu'en ligne, sur le menu déroulant empilé en colonne il casserait la
+     mise en page — neutralisé ici. */
+  .nav-group + .nav-group { margin-left: 0; padding-left: 0; }
+  .nav-group + .nav-group::before { display: none; }
   .player-grid { grid-template-columns: repeat(2, 1fr); }
   /* "Mes Quiz"/"Quiz publics" (voir select.html #list) : contrairement aux
      tuiles joueur ci-dessus (nom court, 2 colonnes très bien), une carte
@@ -3086,6 +4409,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-item.type-zoomguess { --qt-color: var(--color-indigo); }
 .question-item.type-pbac { --qt-color: var(--color-lime); }
 .question-item.type-reveal { --qt-color: var(--tile-silver); }
+.question-item.type-recherche { --qt-color: var(--color-flame); }
 
 /* Même rappel de couleur que la sidebar, mais sur la grande tuile d'édition
    (.question-detail) — option "C" retenue après maquette (bordure teintée +
@@ -3108,6 +4432,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .question-detail[data-qtype="zoomguess"] { --qt-color: var(--color-indigo); }
 .question-detail[data-qtype="pbac"] { --qt-color: var(--color-lime); }
 .question-detail[data-qtype="reveal"] { --qt-color: var(--tile-silver); }
+.question-detail[data-qtype="recherche"] { --qt-color: var(--color-flame); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
@@ -3151,6 +4476,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .question-item .q-text {
   flex: 1;
+  /* Retour utilisateur : "on arrive pas à lire assez" — reste sur une
+     seule ligne (le passage à 2 lignes, essayé d'abord, n'a pas plu) ;
+     la place regagnée en retirant les flèches ▲▼ juste en dessous (audit
+     UX, retirées au même retour) suffit à elle seule à afficher plus de
+     texte avant la coupure. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3212,10 +4542,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 .question-item:hover .q-delete-btn,
-.question-item.active .q-delete-btn {
+.question-item.active .q-delete-btn,
+.question-item .q-delete-btn:focus-visible {
   opacity: 0.55;
 }
-.question-item .q-delete-btn:hover {
+.question-item .q-delete-btn:hover,
+.question-item .q-delete-btn:focus-visible {
   opacity: 1;
   background: var(--tile-red);
   color: white;
@@ -3279,6 +4611,62 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
      (le bouton flottant est bien plus petit), garde tout de même de la marge
      puisqu'il reste au-dessus du coin bas-droit du contenu. */
   padding-bottom: 90px;
+}
+
+/* Écran "aucune question" (nouvelle DA, tâche 003, décision validée : un
+   nouveau quiz démarre à 0 question). Hérite l'essentiel de .question-detail
+   ci-dessus (carte, radius, halo — --qt-color reste transparent ici, aucun
+   type encore choisi) ; ce modificateur ne fait que centrer le contenu. */
+.question-empty-state {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 18px;
+  min-height: 480px;
+}
+.question-empty-icon {
+  width: 84px;
+  height: 84px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  box-shadow: 0 10px 26px rgba(var(--color-accent-rgb),0.35);
+}
+.type-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+  max-width: 520px;
+}
+.type-picker-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.type-picker-tile:hover { border-color: var(--color-accent); transform: translateY(-2px); }
+.type-picker-tile-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.type-picker-tile-label { font-size: 11.5px; font-weight: 700; color: var(--color-text-muted); }
+@media (max-width: 640px) {
+  .type-picker-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* Bouton flottant "Sauvegarder" — remplace l'ancienne barre pleine largeur
@@ -3488,7 +4876,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   margin-bottom: 8px;
   background: var(--color-surface);
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   transition: all 0.2s ease;
 }
@@ -3496,6 +4884,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .option-row:focus-within {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb),0.15);
+}
+
+/* Case cochée = bonne réponse (QCM notamment, voir editor.js renderOptions)
+   : léger liseré vert au lieu d'un état visuellement identique à une
+   option non cochée (nouvelle DA, tâche 002 — cohérent avec le vert
+   "correct" déjà utilisé partout ailleurs dans l'appli). */
+.option-row:has(input[type="checkbox"]:checked) {
+  border-color: var(--tile-green);
+  background: rgba(var(--tile-green-rgb),0.06);
 }
 
 .option-row input[type="text"] {
@@ -3805,7 +5202,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   max-width: 500px;
   width: 90%;
   position: relative;
-  animation: fadeInScale 0.3s ease-out;
+  /* fill-mode:both + transform exclu de la transition héritée de .card
+     (voir commentaire sur .card plus haut) : une popup ne se soulève pas
+     au survol comme une .quiz-card, `transform` ne doit ici être piloté
+     QUE par cette animation, jamais par la transition générique. */
+  animation: fadeInScale 0.3s ease-out both;
+  transition: box-shadow 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 /* Popup de sauvegarde bloquante (voir editor.js showSaveLoading) — même
@@ -3863,6 +5265,73 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   box-shadow: var(--shadow-md);
   transform: translateY(-4px);
 }
+
+/* Carte "Mes Quiz"/"Quiz publics" (nouvelle DA, tâche 002) : avatar-
+   initiales colorée + titre + date, au lieu du simple titre+date sans
+   accroche visuelle d'avant (voir select.js render()). */
+.quiz-card-head { display: flex; align-items: center; gap: 14px; }
+.quiz-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+}
+.quiz-card-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quiz-card-meta {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Actions rapides d'une carte "Mes Quiz" (tâche 003, décision validée :
+   Dupliquer/Supprimer construits pour de vrai — pas que du visuel). */
+.quiz-card-actions { display: flex; gap: 8px; }
+.quiz-card-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  color: var(--color-text-muted);
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.quiz-card-action-btn:not(.is-primary) { flex: 0 0 38px; }
+.quiz-card-action-btn.is-primary {
+  border: none;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  color: white;
+  box-shadow: 0 4px 0 var(--color-accent-deep), 0 8px 16px rgba(var(--color-accent-rgb),0.3);
+}
+.quiz-card-action-btn:not(.is-primary):hover { background: rgba(255,255,255,0.12); color: var(--color-text); }
+.quiz-card-action-btn.is-primary:hover { filter: brightness(1.08); }
+.quiz-card-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+:root[data-theme="light"] .quiz-card-action-btn:not(.is-primary) { background: rgba(35,25,65,0.05); border-color: rgba(35,25,65,0.1); }
+:root[data-theme="light"] .quiz-card-action-btn:not(.is-primary):hover { background: rgba(35,25,65,0.09); }
 
 /* Quiz Item Styles */
 .quiz-item {
@@ -4331,10 +5800,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .leader-overlay {
   position: fixed; inset: 0; z-index: 1000;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-  background: linear-gradient(180deg, var(--color-bg-deep), var(--color-bg));
+  /* Même halo que body (nouvelle DA, tâche 001) — cet overlay couvre tout le
+     viewport et masquait donc complètement l'ambiance violette derrière lui,
+     seul écran de la partie encore sur l'ancien dégradé plat à 2 tons. */
+  background: radial-gradient(2200px 1300px at 50% -10%, #3a1450 0%, #200a38 42%, var(--color-bg) 78%, var(--color-bg-deep) 100%);
   padding: 60px 20px 20px; overflow-y: auto;
 }
-.leader-title { color: white; font-family: 'Baloo 2', sans-serif; font-size: 32px; margin-bottom: 24px; text-align: center; }
+.leader-title { color: var(--color-text); font-family: 'Baloo 2', sans-serif; font-size: 32px; margin-bottom: 24px; text-align: center; }
 .leaderboard-list { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 10px; margin: 0 auto; }
 .leader-row {
   display: flex; align-items: center; gap: 14px;
@@ -4364,6 +5836,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    juste sous "15" ressemblerait à un bug plutôt qu'à une troncature
    volontaire. */
 .leader-row.is-detached { margin-top: 10px; padding-top: 22px; border-top: 2px dashed rgba(255,255,255,0.18); }
+/* Thème clair (tâche 004) : les rgba(255,255,255,…) ci-dessus/dessous sont
+   pensés pour un fond sombre — quasi invisibles sur les cartes blanches du
+   thème clair. Même encre que les autres overrides clairs de ce fichier
+   (rgba(35,25,65,…), voir .nav-group+.nav-group::before plus haut). */
+:root[data-theme="light"] .leader-row.is-detached { border-top-color: rgba(35,25,65,0.18); }
 /* Même logique que .player-tile.is-disconnected au lobby (voir plus haut
    dans ce fichier) — étendue au classement EN COURS de partie, où rien ne
    signalait jusqu'ici qu'un joueur avait décroché (visible seulement dans le
@@ -4374,6 +5851,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   background: rgba(255,255,255,0.12); color: var(--color-text-muted);
   border: 1px solid rgba(255,255,255,0.18); flex-shrink: 0;
 }
+:root[data-theme="light"] .leader-gone-badge { background: rgba(35,25,65,0.08); border-color: rgba(35,25,65,0.15); }
 .leader-row.row-enter { opacity: 0; transform: translateY(18px) scale(0.96); }
 .leader-row.row-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .55s, transform .55s cubic-bezier(0.22,1,0.36,1); }
 /* Effet "dépassement" pendant le glissement FLIP (voir renderBoard() dans
@@ -4651,21 +6129,25 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   margin-bottom: 20px;
 }
 .results-tab-btn {
-  padding: 8px 18px;
+  padding: 9px 20px;
   border-radius: 999px;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text-muted);
-  font-weight: 700;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .results-tab-btn:hover { border-color: var(--color-accent); color: var(--color-text); }
+/* Alignée sur .btn-nav-active (nouvelle DA, tâche 002) : même pastille
+   pleine + halo que "Mes Quiz" actif dans la navbar. */
 .results-tab-btn.active {
   background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
   border-color: transparent;
   color: white;
+  box-shadow: 0 3px 10px rgba(var(--color-accent-rgb),0.35);
 }
 .results-tab-panel.d-none { display: none; }
 
@@ -4719,26 +6201,37 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    dépasser en largeur avec beaucoup de questions sans jamais faire
    scroller la PAGE elle-même horizontalement. */
 .detail-table-wrap { overflow-x: auto; margin-bottom: 20px; }
-.detail-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+/* Lignes "pilules" détachées (design décidé, ResultatsDetail.dc.html) au
+   lieu d'un tableau classique à bordures : border-collapse:separate +
+   border-spacing vertical crée l'espacement entre lignes, chaque <tr> porte
+   son propre fond (règle plus bas), et les coins arrondis sont posés sur la
+   1ère/dernière cellule de chaque ligne (:first-child/:last-child) plutôt
+   que sur <tr> lui-même (un <tr> n'accepte pas border-radius en rendu
+   table). */
+.detail-table { border-collapse: separate; border-spacing: 0 8px; width: 100%; font-size: 13px; }
 .detail-table th, .detail-table td {
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-align: center;
   white-space: nowrap;
-  border-bottom: 1px solid var(--color-border);
 }
 .detail-table thead th {
   color: var(--color-text-muted);
   font-weight: 700;
   font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   cursor: default;
 }
+.detail-table tbody tr { background: var(--color-surface); }
+.detail-table tbody td:first-child { border-radius: 12px 0 0 12px; }
+.detail-table tbody td:last-child { border-radius: 0 12px 12px 0; }
 .detail-table-name-col, .detail-table-name {
   text-align: left;
   font-weight: 700;
   color: var(--color-text);
   position: sticky;
   left: 0;
-  background: var(--color-card);
+  background: var(--color-surface);
 }
 .detail-table-total-col, .detail-table-total {
   font-weight: 800;
@@ -4851,6 +6344,21 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
 }
 .btn.btn-danger:hover { box-shadow: 0 6px 0 #7a0c28, var(--shadow-md); }
 .btn.btn-danger:active { box-shadow: 0 1px 0 #7a0c28; }
+
+/* Variante discrète de .btn-danger (contour rouge translucide, pas de
+   fond plein) — pendant rouge de .btn-nav-secondary, pour une action
+   destructive secondaire (ex. déconnexion) qui ne doit pas attirer autant
+   l'œil qu'une vraie confirmation de suppression. Corrige un bug : le
+   bouton "Se déconnecter" (profile.html) portait jusqu'ici la classe
+   ".border-danger" qui n'existe pas dans ce fichier (seule
+   ".border-danger-soft" existe, insuffisante seule vu que .btn a
+   "border:none" par défaut) — retombait donc sur le style .btn générique. */
+.btn.btn-danger-outline {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(var(--color-danger-rgb),0.35);
+  color: var(--color-danger);
+}
+.btn.btn-danger-outline:hover { background: rgba(var(--color-danger-rgb),0.1); }
 
 /* --- Sélecteur déroulant maison (remplace <select>, voir enhanceSelect) --- */
 .qz-select { position: relative; display: inline-block; width: 100%; }
@@ -5134,11 +6642,81 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
 
 /* Mode IRL joueur (voir index.js body.irl-player-mode, activé pour les
    JOUEURS non-hôtes quand room.gameMode === 'irl') : navbar remplacée par
-   une petite roue crantée, images décoratives des questions masquées (le
-   présentateur les montre sur l'écran commun). Jamais appliqué en mode "à
-   distance" ni côté hôte — la mise en page normale reste inchangée. */
-body.irl-player-mode .navbar { display: none; }
+   une petite roue crantée. Jamais côté hôte — la mise en page normale reste
+   inchangée.
+   Design décidé (PlayerRemote.dc.html) : même traitement de navbar/roue
+   crantée pour le mode "à distance" (body.remote-player-mode, voir
+   updateIrlPlayerUI côté index.js) — uniformise l'en-tête joueur entre les
+   2 modes. Seule l'image décorative des questions reste une exception IRL
+   uniquement (règle #illustrationImgWrap plus bas, jamais étendue au
+   remote : en remote chacun voit déjà tout sur son propre écran). */
+body.irl-player-mode .navbar, body.remote-player-mode .navbar { display: none; }
+/* Logo centré remplaçant la navbar masquée ci-dessus (retour utilisateur :
+   "le logo centré plutôt que rien") — jamais un lien, contrairement à
+   .brand : ni href ni onclick dans le HTML (index.html), pour qu'un tap
+   dessus ne quitte jamais la partie par erreur ; seule la roue crantée
+   (.irl-menu-btn, coin haut-droit) le permet volontairement via son menu.
+   pointer-events reste "auto" (retour utilisateur : "laisse le logo animé
+   au hover") — SANS lien/onclick, l'autoriser à recevoir le survol ne
+   réintroduit aucun risque de sortie accidentelle, seulement l'effet
+   visuel ci-dessous. Caché par défaut (hors mode IRL/à distance), affiché
+   seulement quand la navbar l'est effectivement. */
+.irl-center-logo {
+  display: none;
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Retour utilisateur : "trop petit sur PC, même taille que le MJ" — même
+     hauteur que le logo hôte en jeu (body.game-active .navbar .brand-logo-
+     svg, plus haut dans ce fichier), pas une taille inventée pour ce
+     nouvel élément. Réduit sous 640px (règle plus bas) pour la même
+     raison que le logo hôte l'est aussi à cette largeur. */
+  height: 72px;
+  width: auto;
+  z-index: 190;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45));
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+body.irl-player-mode .irl-center-logo, body.remote-player-mode .irl-center-logo { display: block; }
+/* Même esprit que .brand:hover/.logo-pop (voir plus haut) — pas la version
+   décorative complète (pin/triangle qui "explosent", voir .brand-logo-svg) :
+   impossible à reproduire ici, cette balise est une <img> qui référence le
+   SVG en fichier externe (voir index.html) plutôt que le SVG inliné dans le
+   DOM comme .brand-logo-svg — le contenu interne d'une image externe n'est
+   pas accessible en CSS depuis la page. Un pop + lueur douce au survol
+   reste un réel retour visuel, cohérent avec le reste du logo. */
+.irl-center-logo:hover {
+  transform: translateX(-50%) scale(1.06);
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45)) drop-shadow(0 0 16px rgba(var(--color-accent-rgb),0.55));
+}
+/* Retour utilisateur ("le logo n'est pas animé côté joueurs") : le survol
+   ci-dessus ne se déclenche jamais sur un écran tactile (quasi tous les
+   joueurs, en vrai jeu IRL sur leur téléphone) — un logo "animé au hover"
+   est donc invisible pour la quasi-totalité des joueurs, alors qu'il doit
+   rester vivant en permanence (même esprit que .brand côté hôte). Léger
+   mouvement de respiration en continu, qui s'arrête pendant le survol
+   (:not(:hover)) pour laisser la place au pop ci-dessus sur les rares
+   appareils avec souris (mode "Quiz à distance" sur PC notamment). */
+.irl-center-logo:not(:hover) {
+  animation: irl-logo-breathe 3.2s ease-in-out infinite;
+}
+@keyframes irl-logo-breathe {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.045); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .irl-center-logo:not(:hover) { animation: none; }
+}
+@media (max-width: 640px) {
+  .irl-center-logo { top: 18px; height: 34px; }
+}
 body.irl-player-mode #illustrationImgWrap { display: none; }
+/* Exception décidée pour "zoomguess" (voir .zoomguess-visible posé côté
+   index.js) : l'image y est le mécanisme du jeu, pas une simple
+   illustration décorative — elle doit rester visible sur le téléphone du
+   joueur même en IRL, contrairement aux autres types. */
+body.irl-player-mode #illustrationImgWrap.zoomguess-visible { display: block; }
 .irl-menu-btn {
   display: none;
   position: fixed; top: 14px; right: 14px; z-index: 200;
@@ -5151,7 +6729,18 @@ body.irl-player-mode #illustrationImgWrap { display: none; }
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   font-size: 19px; cursor: pointer;
 }
-body.irl-player-mode .irl-menu-btn { display: flex; }
+body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { display: flex; }
+/* Ligne d'info non cliquable en tête du menu (voir #irlMenuModeInfo,
+   index.html) — même gabarit que .irl-menu-item mais non interactive,
+   séparée par un filet du bouton "Quitter le salon" en dessous. */
+.irl-menu-info {
+  padding: 10px 12px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
 .irl-menu-dropdown {
   display: none;
   position: fixed; top: 62px; right: 14px; z-index: 200;

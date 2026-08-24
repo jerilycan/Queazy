@@ -99,6 +99,8 @@ const checkAuth = async () => {
     const user = session.user
     let avatarUrl = null
     let displayName = user.user_metadata.full_name || user.email.split('@')[0]
+    // Repli volontaire sur user_metadata/email (déjà posé juste au-dessus) en
+    // cas d'échec (RLS, réseau) — pas bloquant pour afficher les résultats.
     try {
       const { data: p } = await sb.from('profiles').select('username, avatar_url').eq('id', user.id).single()
       if (p?.username) displayName = p.username

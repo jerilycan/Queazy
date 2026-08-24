@@ -15,6 +15,13 @@ const checkAuth = async () => {
   if (navCreateEl) {
     navCreateEl.classList.toggle('is-disabled', !canCreate)
     navCreateEl.title = canCreate ? '' : 'Connecte-toi pour créer'
+    // Bug corrigé (audit UX) : .is-disabled n'est qu'un style (voir style.css
+    // .btn:disabled/.is-disabled, pointer-events:auto volontaire) — sans
+    // cette garde, le lien restait cliquable en dessous. Même garde que
+    // navCreate.onclick dans index.js.
+    if (!canCreate) {
+      navCreateEl.onclick = (e) => { e.preventDefault(); window.location.href = '/login.html?reason=create' }
+    }
   }
 
   const firstNameOf = (name) => (name || '').trim().split(/\s+/)[0] || 'Profil'
@@ -60,6 +67,8 @@ const checkAuth = async () => {
   const user = session.user
   let avatarUrl = null
   let displayName = user.user_metadata.full_name || user.email.split('@')[0]
+  // Repli volontaire sur user_metadata/email (déjà posé juste au-dessus) en
+  // cas d'échec (RLS, réseau) — pas bloquant pour éditer un quiz.
   try {
     const { data: p } = await sb.from('profiles').select('username, avatar_url').eq('id', user.id).single()
     if (p?.username) displayName = p.username
@@ -97,6 +106,9 @@ const confirmReportBtn = document.getElementById('confirmReport')
 const addQuestionBtn = document.getElementById('addQuestion')
 const questionListEl = document.getElementById('questionList')
 const questionDetailEl = document.getElementById('questionDetail')
+const questionEmptyStateEl = document.getElementById('questionEmptyState')
+const typePickerCancelBtn = document.getElementById('typePickerCancelBtn')
+const typePickerGridEl = document.getElementById('typePickerGrid')
 const toastsEl = document.getElementById('toasts')
 
 // Champs de détail de question
@@ -270,6 +282,11 @@ const removeZoomGuessBtn = document.getElementById('removeZoomGuessBtn')
 const zoomGuessZoomInput = document.getElementById('zoomGuessZoomInput')
 const zoomGuessZoomMinusBtn = document.getElementById('zoomGuessZoomMinus')
 const zoomGuessZoomPlusBtn = document.getElementById('zoomGuessZoomPlus')
+const rechercheSection = document.getElementById('rechercheSection')
+const rechercheUploadInput = document.getElementById('rechercheUpload')
+const recherchePreviewWrap = document.getElementById('recherchePreviewWrap')
+const recherchePreviewImg = document.getElementById('recherchePreviewImg')
+const removeRechercheBtn = document.getElementById('removeRechercheBtn')
 const ZOOM_GUESS_MIN = 2
 // Plafond relevé de 8 à 25 (demande explicite) : à 8x, une zone assez unie
 // de l'image (peau, cheveux...) reste souvent reconnaissable — l'idée du
@@ -300,9 +317,12 @@ const blindtestSection = document.getElementById('blindtestSection')
 const audioUploadInput = document.getElementById('audioUpload')
 const audioTrimWrap = document.getElementById('audioTrimWrap')
 const audioTrimPlayer = document.getElementById('audioTrimPlayer')
+const audioWaveformEl = document.getElementById('audioWaveform')
+const audioWaveformBarsEl = document.getElementById('audioWaveformBars')
+const waveformHandleStartEl = document.getElementById('audioWaveformHandleStart')
+const waveformHandleEndEl = document.getElementById('audioWaveformHandleEnd')
 const audioStartInput = document.getElementById('audioStartInput')
 const audioDurationInput = document.getElementById('audioDurationInput')
-const audioStartFromEndBtn = document.getElementById('audioStartFromEndBtn')
 const audioTotalDurationEl = document.getElementById('audioTotalDuration')
 const audioPreviewBtn = document.getElementById('audioPreviewBtn')
 const audioExtractBtn = document.getElementById('audioExtractBtn')
@@ -360,14 +380,15 @@ let readOnly = false // true si on ouvre le quiz d'un autre créateur (lecture s
 const applyReadOnly = () => {
   readOnly = true
   const controls = [
-    titleEl, singleAttemptEl, isPublicEl, qPrompt, qType, qTimer, timerMinus, timerPlus,
+    titleEl, singleAttemptEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
     addAssociationPairBtn, addTimelineEventBtn, intrusPhotosUploadInput, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
-    zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn,
+    zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn, zoomGuessZoomInput,
+    rechercheUploadInput, removeRechercheBtn,
     revealEnigmeUploadInput, removeRevealEnigmeBtn, revealReponseUploadInput, removeRevealReponseBtn,
-    audioUploadInput, audioStartInput, audioDurationInput, audioStartFromEndBtn, audioPreviewBtn, audioExtractBtn,
+    audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
     removeAudioClipBtn, addCorrectTitleBtn, addCorrectArtistBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
     document.getElementById('gradMaxMinus'), document.getElementById('gradMaxPlus'),
@@ -564,7 +585,101 @@ const wireQuestionDrag = (item, idx) => {
 const QTYPE_ICON = {
   free: '📝', mcq: '🔘', truefalse: '✅', graduation: '↔️', order: '↕️',
   image: '📍', zoomguess: '🔍', reveal: '🖼️', blindtest: '🎵',
-  association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩'
+  association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩', recherche: '🔦'
+}
+
+// Miroir JS des règles .question-item.type-* de style.css (--qt-color) —
+// dupliqué plutôt que réutilisé en CSS pur : ces règles sont scopées à
+// .question-item, la tuile du sélecteur de type (#typePickerGrid, voir
+// renderTypePicker) n'en a pas besoin/n'est pas ce composant. Couleurs
+// identiques par construction (mêmes tokens), à tenir à jour ensemble si
+// jamais l'une des deux listes change.
+const QTYPE_COLOR = {
+  mcq: 'var(--tile-blue)', free: 'var(--tile-green)', graduation: 'var(--tile-yellow)',
+  truefalse: 'var(--tile-red)', order: 'var(--color-amber)', image: 'var(--color-cyan)',
+  blindtest: 'var(--color-sky)', association: 'var(--tile-bronze)', timeline: 'var(--color-teal)',
+  intrus: 'var(--color-violet)', zoomguess: 'var(--color-indigo)', pbac: 'var(--color-lime)',
+  reveal: 'var(--tile-silver)', recherche: 'var(--color-flame)'
+}
+
+// Écran "aucune question" (nouvelle DA, tâche 003, décision validée) : un
+// nouveau quiz démarre à 0 question désormais (au lieu d'une question
+// "Texte libre" vide par défaut) — #questionEmptyState remplace
+// #questionDetail tant que `questions` est vide. Une fois la 1ère question
+// ajoutée, deleteQuestionAt() empêche déjà de revenir à 0 (règle existante
+// "un quiz doit avoir au moins une question", inchangée), donc cette
+// fonction seule ne rouvre plus jamais l'écran après coup — voir
+// openTypePicker() ci-dessous pour le cas "+" avec des questions existantes.
+const updateEmptyState = () => {
+  if (!questionEmptyStateEl || !questionDetailEl) return
+  const isEmpty = questions.length === 0
+  questionEmptyStateEl.classList.toggle('d-none', !isEmpty)
+  questionDetailEl.classList.toggle('d-none', isEmpty)
+  // Le bouton flottant "Sauvegarder" reste géré par selectQuestion/
+  // applyReadOnly comme avant (voir plus bas) — on se contente ici de le
+  // masquer quand il n'y a encore RIEN à éditer, cas qu'aucun des deux ne
+  // couvrait jusqu'ici.
+  if (isEmpty && questionSaveBar) questionSaveBar.classList.add('d-none')
+  qIndexLabel.textContent = isEmpty ? 'Aucune question' : `Question ${activeIndex + 1} / ${questions.length}`
+  // "Annuler" n'a de sens que pendant un openTypePicker() ouvert depuis le
+  // "+" (voir plus bas) — dans les deux cas gérés ici (écran vide au tout
+  // début, ou retour à l'éditeur normal), il n'y a rien à annuler.
+  if (typePickerCancelBtn) typePickerCancelBtn.classList.add('d-none')
+}
+
+// Rouvre l'écran de choix de type pour AJOUTER une question, que le quiz en
+// ait déjà ou non (cas du "+" de la sidebar, voir addQuestionBtn.onclick plus
+// bas) — contrairement à updateEmptyState() ci-dessus qui ne montre cet écran
+// que quand `questions` est réellement vide. "Annuler" n'apparaît que s'il y
+// a une question active vers laquelle revenir.
+const openTypePicker = () => {
+  renderTypePicker()
+  if (!questionEmptyStateEl || !questionDetailEl) return
+  questionEmptyStateEl.classList.remove('d-none')
+  questionDetailEl.classList.add('d-none')
+  if (questionSaveBar) questionSaveBar.classList.add('d-none')
+  qIndexLabel.textContent = 'Choix du type'
+  if (typePickerCancelBtn) typePickerCancelBtn.classList.toggle('d-none', questions.length === 0)
+}
+
+// Grille de choix de type (voir #typePickerGrid dans editor.html) — générée
+// depuis les <option> de #qType, seule source de vérité pour la liste des
+// 13 types et leurs libellés (même principe que updateSidebar plus bas pour
+// la sidebar). Choisir un type ici ajoute directement la nouvelle question
+// DANS ce type plutôt que de forcer un passage par le type "Texte libre" par
+// défaut (createDefaultQuestion) puis un changement de type manuel.
+const renderTypePicker = () => {
+  if (!typePickerGridEl || typePickerGridEl.childElementCount) return
+  ;[...qType.options].forEach(opt => {
+    const type = opt.value
+    const tile = document.createElement('div')
+    tile.className = 'type-picker-tile'
+    tile.setAttribute('role', 'button')
+    tile.tabIndex = 0
+
+    const icon = document.createElement('div')
+    icon.className = 'type-picker-tile-icon'
+    icon.style.background = QTYPE_COLOR[type] || 'var(--color-surface-2)'
+    icon.textContent = QTYPE_ICON[type] || '❓'
+
+    const label = document.createElement('span')
+    label.className = 'type-picker-tile-label'
+    // Libellé complet de l'option (ex. "🔘 Choix multiples (QCM)") avec son
+    // icône déjà répétée juste au-dessus — on ne garde que le texte après
+    // l'icône pour ne pas la doubler.
+    label.textContent = opt.textContent.replace(/^\S+\s*/, '')
+
+    tile.appendChild(icon)
+    tile.appendChild(label)
+    tile.onclick = () => addQuestionOfType(type)
+    tile.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addQuestionOfType(type) } }
+    typePickerGridEl.appendChild(tile)
+  })
+}
+
+const addQuestionOfType = (type) => {
+  questions.push({ ...createDefaultQuestion(), type })
+  selectQuestion(questions.length - 1)
 }
 
 const updateSidebar = () => {
@@ -603,6 +718,13 @@ const updateSidebar = () => {
     item.appendChild(text)
 
     if (!readOnly) {
+      // Retour utilisateur : les flèches ▲▼ (alternative clavier au glisser-
+      // déposer, ajoutées lors d'un audit UX) mangeaient trop de place dans
+      // une tuile déjà étroite, au détriment du texte de la question ("on
+      // arrive pas à lire assez") — retirées. Le glisser-déposer
+      // (wireQuestionDrag) reste le seul moyen de réordonner depuis cette
+      // liste. moveQuestion() lui-même n'est pas touché, toujours utilisé
+      // par ce glisser.
       const del = document.createElement('button')
       del.type = 'button'
       del.className = 'q-delete-btn'
@@ -1037,6 +1159,50 @@ if (zoomGuessZoomInput) {
   zoomGuessZoomInput.onchange = () => commitZoomGuessLevel(Number(zoomGuessZoomInput.value) || ZOOM_GUESS_DEFAULT)
 }
 
+// --- Question "Recherche" : une image cachée sous un calque, révélée au
+// passage du curseur/doigt (tâche 009) — pas de point/niveau de zoom à
+// choisir ici, contrairement à "ZoomOut Devinette" ci-dessus (rayon de
+// révélation fixe, réglé côté jeu).
+const populateRechercheFields = (q) => {
+  if (!recherchePreviewWrap) return
+  if (q.type !== 'recherche') return
+  if (q.image) {
+    recherchePreviewImg.src = q.image
+    recherchePreviewWrap.classList.remove('d-none')
+  } else {
+    recherchePreviewWrap.classList.add('d-none')
+  }
+}
+
+if (rechercheUploadInput) {
+  rechercheUploadInput.onchange = () => {
+    const file = rechercheUploadInput.files && rechercheUploadInput.files[0]
+    rechercheUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    compressImageFile(file, (dataUrl) => {
+      const q = questions[activeIndex]
+      q.image = dataUrl
+      populateRechercheFields(q)
+    })
+  }
+}
+
+if (removeRechercheBtn) {
+  removeRechercheBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    QzUI.confirm({
+      title: 'Retirer cette image ?',
+      message: 'Il faudra réimporter une image pour en remettre une.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].image = null
+      populateRechercheFields(questions[activeIndex])
+    })
+  }
+}
+
 // --- Question "Révélation" : deux images (énigme / réponse) --------------
 const populateRevealFields = (q) => {
   if (!revealEnigmePreviewWrap || !revealReponsePreviewWrap) return
@@ -1120,6 +1286,7 @@ if (removeRevealReponseBtn) {
 // morceau dans un quiz.
 const AUDIO_MAX_UPLOAD_BYTES = 25 * 1024 * 1024 // 25 Mo — le fichier importé (piste complète ou déjà coupée), jamais stocké tel quel
 const AUDIO_CLIP_MAX_DURATION = 30 // secondes — plafond de l'extrait réellement conservé, pour garder un poids raisonnable
+const AUDIO_CLIP_MIN_DURATION = 5 // secondes — doit rester cohérent avec le min="5" de #audioDurationInput
 let pendingAudioBuffer = null // AudioBuffer décodé du fichier en cours d'import, tant que l'extrait n'a pas été validé
 let pendingAudioObjectUrl = null
 let audioPreviewTimeout = null
@@ -1131,23 +1298,187 @@ const clampAudioTrimInputs = () => {
   let start = Math.max(0, Math.min(Number(audioStartInput.value) || 0, pendingAudioBuffer.duration - duration))
   audioDurationInput.value = Math.round(duration)
   audioStartInput.value = Math.round(start)
+  updateWaveformSelection()
 }
 
-// "Depuis la fin" (retour utilisateur : viser la fin d'un morceau obligeait à
-// calculer et taper durée_totale - durée_extrait à la main, sans même voir la
-// durée totale affichée quelque part) — affichée à côté du champ "Début" dès
-// qu'un fichier est chargé (voir audioUploadInput.onchange plus bas).
+// Forme d'onde (nouvelle DA, tâche 003) : VRAIE forme d'onde de l'extrait
+// importé, pas une décoration — calculée depuis pendingAudioBuffer, déjà
+// décodé en mémoire pour l'export WAV (voir encodeWavMono), aucun nouveau
+// décodage. 90 "seaux" fixes (assez pour un rendu lisible, indépendant de
+// la durée réelle du morceau) ; crête (max absolu, plus lisible qu'une
+// moyenne pour repérer les passages forts) du premier canal — un mixdown
+// stéréo précis n'apporterait rien de plus à cette échelle visuelle.
+const WAVEFORM_BARS = 90
+let waveformBucketDuration = 0 // secondes couvertes par CHAQUE barre, pour updateWaveformSelection
+const renderWaveform = (audioBuffer) => {
+  if (!audioWaveformBarsEl) return
+  audioWaveformBarsEl.innerHTML = ''
+  const data = audioBuffer.getChannelData(0)
+  const bucketSize = Math.max(1, Math.floor(data.length / WAVEFORM_BARS))
+  waveformBucketDuration = audioBuffer.duration / WAVEFORM_BARS
+  const frag = document.createDocumentFragment()
+  for (let i = 0; i < WAVEFORM_BARS; i++) {
+    let peak = 0
+    const start = i * bucketSize
+    const end = Math.min(data.length, start + bucketSize)
+    for (let j = start; j < end; j++) {
+      const abs = Math.abs(data[j])
+      if (abs > peak) peak = abs
+    }
+    const bar = document.createElement('span')
+    bar.className = 'bar'
+    // Plancher à 6% : une barre à 0% (silence) redevient un point invisible,
+    // perd toute lisibilité du rythme de la forme d'onde.
+    bar.style.setProperty('--h', `${Math.max(6, Math.round(peak * 100))}%`)
+    frag.appendChild(bar)
+  }
+  audioWaveformBarsEl.appendChild(frag)
+  updateWaveformSelection()
+}
+
+// Marque en accent les barres couvertes par Début→Début+Durée (voir
+// clampAudioTrimInputs, seul appelant après le rendu initial) — c'est la
+// SEULE logique qui décide "quelle barre est dans l'extrait", pas de calque
+// séparé à garder synchronisé. Repositionne aussi les deux poignées de bord
+// (en % de la durée totale de la piste importée) sur les mêmes bornes.
+const updateWaveformSelection = () => {
+  if (!audioWaveformBarsEl || !waveformBucketDuration) return
+  const start = Number(audioStartInput.value) || 0
+  const end = start + (Number(audioDurationInput.value) || 0)
+  ;[...audioWaveformBarsEl.children].forEach((bar, i) => {
+    const t = i * waveformBucketDuration
+    bar.classList.toggle('in-range', t >= start && t < end)
+  })
+  if (pendingAudioBuffer && pendingAudioBuffer.duration) {
+    const total = pendingAudioBuffer.duration
+    const clampPct = (sec) => `${Math.max(0, Math.min(100, (sec / total) * 100))}%`
+    if (waveformHandleStartEl) waveformHandleStartEl.style.left = clampPct(start)
+    if (waveformHandleEndEl) waveformHandleEndEl.style.left = clampPct(end)
+  }
+}
+
+// Glisser-déposer directement sur la zone surlignée (retour utilisateur :
+// pouvoir "glisser" l'extrait sélectionné, plutôt que retaper le champ
+// "Début" à la main) — la durée ne bouge pas, seul le début se déplace ;
+// réutilise clampAudioTrimInputs, donc mêmes bornes que la saisie
+// manuelle/les boutons +/- (0 <= début, début+durée <= piste). Écouteurs
+// posés une seule fois sur le conteneur (délégation) : les barres
+// elles-mêmes sont recréées à chaque renderWaveform, pas besoin de
+// re-binder à chaque fois.
+// Détection par POSITION du pointeur (temps correspondant sous le curseur),
+// pas par élément ciblé (retour utilisateur : viser précisément une barre —
+// fines, séparées par des espaces — rendait le glisser difficile à
+// déclencher ; les espaces entre barres ne réagissaient pas).
+let waveformDragStartX = null
+let waveformDragStartValue = 0
+const isPointerInSelection = (e) => {
+  if (!pendingAudioBuffer || !audioWaveformEl) return false
+  const rect = audioWaveformEl.getBoundingClientRect()
+  if (!rect.width) return false
+  const t = ((e.clientX - rect.left) / rect.width) * pendingAudioBuffer.duration
+  const start = Number(audioStartInput.value) || 0
+  const end = start + (Number(audioDurationInput.value) || 0)
+  return t >= start && t <= end
+}
+if (audioWaveformEl) {
+  audioWaveformEl.addEventListener('pointerdown', (e) => {
+    if (!pendingAudioBuffer || !isPointerInSelection(e)) return
+    waveformDragStartX = e.clientX
+    waveformDragStartValue = Number(audioStartInput.value) || 0
+    audioWaveformEl.classList.add('dragging')
+    audioWaveformEl.setPointerCapture(e.pointerId)
+    // Retour utilisateur : un glisser rapide finissait par déclencher la
+    // sélection de texte / le drag natif du navigateur (barre en surbrillance,
+    // curseur "interdit") au lieu du glisser JS — preventDefault coupe ce
+    // comportement par défaut dès le pointerdown (voir aussi user-select et
+    // -webkit-user-drag sur .audio-waveform en CSS, qui couvrent le cas où
+    // le drag natif démarre avant même ce listener).
+    e.preventDefault()
+  })
+  audioWaveformEl.addEventListener('pointermove', (e) => {
+    if (waveformDragStartX === null || !pendingAudioBuffer) return
+    const rect = audioWaveformEl.getBoundingClientRect()
+    if (!rect.width) return
+    const deltaSec = ((e.clientX - waveformDragStartX) / rect.width) * pendingAudioBuffer.duration
+    audioStartInput.value = Math.round(waveformDragStartValue + deltaSec)
+    clampAudioTrimInputs()
+  })
+  const endWaveformDrag = (e) => {
+    if (waveformDragStartX === null) return
+    waveformDragStartX = null
+    audioWaveformEl.classList.remove('dragging')
+    if (e && audioWaveformEl.hasPointerCapture(e.pointerId)) audioWaveformEl.releasePointerCapture(e.pointerId)
+  }
+  audioWaveformEl.addEventListener('pointerup', endWaveformDrag)
+  audioWaveformEl.addEventListener('pointercancel', endWaveformDrag)
+}
+
+// Poignées de bord (retour utilisateur : pouvoir "étirer" la sélection
+// directement depuis la forme d'onde, pas seulement la déplacer en bloc ou
+// retaper la durée à la main) — chaque poignée ne bouge QUE sa propre borne,
+// l'autre reste FIXE, y compris quand on atteint la durée min/max (retour
+// utilisateur : ça ne doit pas "décaler" le reste de la sélection). D'où les
+// deux bornes (min ET max) appliquées directement sur newStart/newEnd, pas
+// seulement sur la durée après coup : borner la durée après avoir déjà
+// bougé la borne opposée aurait fait glisser cette borne fixe. État séparé
+// de waveformDragStartX (déplacement en bloc ci-dessus) : les deux gestes ne
+// peuvent pas se déclencher en même temps (stopPropagation empêche le
+// pointerdown d'une poignée de déclencher aussi le déplacement en bloc).
+let waveformResizeEdge = null // 'start' | 'end' | null
+const beginWaveformResize = (edge) => (e) => {
+  if (!pendingAudioBuffer) return
+  waveformResizeEdge = edge
+  audioWaveformEl.classList.add('dragging')
+  audioWaveformEl.setPointerCapture(e.pointerId)
+  e.preventDefault()
+  e.stopPropagation()
+}
+if (waveformHandleStartEl) waveformHandleStartEl.addEventListener('pointerdown', beginWaveformResize('start'))
+if (waveformHandleEndEl) waveformHandleEndEl.addEventListener('pointerdown', beginWaveformResize('end'))
+if (audioWaveformEl) {
+  audioWaveformEl.addEventListener('pointermove', (e) => {
+    if (!waveformResizeEdge || !pendingAudioBuffer) return
+    const rect = audioWaveformEl.getBoundingClientRect()
+    if (!rect.width) return
+    const t = Math.max(0, Math.min(pendingAudioBuffer.duration, ((e.clientX - rect.left) / rect.width) * pendingAudioBuffer.duration))
+    const start = Number(audioStartInput.value) || 0
+    const duration = Number(audioDurationInput.value) || 0
+    if (waveformResizeEdge === 'start') {
+      const end = start + duration
+      // newStart borné à la fois par 0/la durée min (ne pas dépasser la fin)
+      // ET par la durée max (ne pas s'éloigner de plus de 30s de la fin) —
+      // la fin, elle, ne bouge jamais ici.
+      const minStart = Math.max(0, end - AUDIO_CLIP_MAX_DURATION)
+      const maxStart = end - AUDIO_CLIP_MIN_DURATION
+      const newStart = Math.max(minStart, Math.min(t, maxStart))
+      audioStartInput.value = Math.round(newStart)
+      audioDurationInput.value = Math.round(end - newStart)
+    } else {
+      // Symétrique : le début ne bouge jamais ici, seule newEnd est bornée.
+      const minEnd = start + AUDIO_CLIP_MIN_DURATION
+      const maxEnd = Math.min(pendingAudioBuffer.duration, start + AUDIO_CLIP_MAX_DURATION)
+      const newEnd = Math.max(minEnd, Math.min(t, maxEnd))
+      audioDurationInput.value = Math.round(newEnd - start)
+    }
+    clampAudioTrimInputs()
+  })
+  const endWaveformResize = (e) => {
+    if (!waveformResizeEdge) return
+    waveformResizeEdge = null
+    audioWaveformEl.classList.remove('dragging')
+    if (e && audioWaveformEl.hasPointerCapture(e.pointerId)) audioWaveformEl.releasePointerCapture(e.pointerId)
+  }
+  audioWaveformEl.addEventListener('pointerup', endWaveformResize)
+  audioWaveformEl.addEventListener('pointercancel', endWaveformResize)
+}
+
+// Formatte la durée totale du morceau affichée à côté du champ "Début" dès
+// qu'un fichier est chargé (voir audioUploadInput.onchange plus bas). Le
+// bouton "Depuis la fin" qui vivait ici a été retiré (retour utilisateur) —
+// devenu redondant avec la poignée de fin qu'on peut glisser directement.
 const formatAudioDuration = (sec) => {
   const s = Math.max(0, Math.round(sec))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-if (audioStartFromEndBtn) {
-  audioStartFromEndBtn.onclick = () => {
-    if (!pendingAudioBuffer) return
-    const duration = Number(audioDurationInput.value) || 1
-    audioStartInput.value = Math.round(pendingAudioBuffer.duration - duration)
-    clampAudioTrimInputs()
-  }
 }
 
 const encodeWavMono = (audioBuffer, startSec, durationSec) => {
@@ -1228,6 +1559,7 @@ if (audioUploadInput) {
       pendingAudioBuffer = audioBuffer
       audioStartInput.value = 0
       audioDurationInput.value = Math.min(15, Math.floor(audioBuffer.duration))
+      renderWaveform(audioBuffer)
       clampAudioTrimInputs()
       if (audioTotalDurationEl) audioTotalDurationEl.textContent = `(morceau : ${formatAudioDuration(audioBuffer.duration)})`
       audioTrimWrap.classList.remove('d-none')
@@ -1366,7 +1698,8 @@ const selectQuestion = (index) => {
   if (hasSelectedOnce) saveCurrentQuestionState()
   activeIndex = index
   const q = questions[activeIndex]
-  if (!q) return
+  if (!q) { updateEmptyState(); return }
+  updateEmptyState() // bascule #questionEmptyState -> #questionDetail au besoin
 
   // Mettre à jour les champs
   if (qDraftToggle) qDraftToggle.checked = !!q.draft
@@ -1384,6 +1717,7 @@ const selectQuestion = (index) => {
   populateImageFields(q)
   populateIllustrationFields(q)
   populateZoomGuessFields(q)
+  populateRechercheFields(q)
   populateRevealFields(q)
   populateAudioFields(q)
   if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
@@ -1444,7 +1778,8 @@ const QTYPE_HINTS = {
   association: { icon: '🔗', text: 'Les joueurs relient chaque élément de gauche à son binôme à droite.', color: '#ff9f5a', rgb: '255,159,90' },
   timeline: { icon: '⏳', text: 'Les joueurs placent les événements dans l\'ordre chronologique.', color: '#14e0b8', rgb: '20,224,184' },
   intrus: { icon: '🎯', text: 'Les joueurs repèrent la photo qui n\'a rien à voir avec les autres.', color: '#b34bf5', rgb: '179,75,245' },
-  pbac: { icon: '🎩', text: 'Les joueurs tapent une réponse libre, jugée par toi pendant la partie — pas de liste à préparer.', color: '#c8f542', rgb: '200,245,66' }
+  pbac: { icon: '🎩', text: 'Les joueurs tapent une réponse libre, jugée par toi pendant la partie — pas de liste à préparer.', color: '#c8f542', rgb: '200,245,66' },
+  recherche: { icon: '🔦', text: 'Les joueurs balaient l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, façon lampe torche.', color: '#ff6a1a', rgb: '255,106,26' }
 }
 const qTypeHint = document.getElementById('qTypeHint')
 const updateQTypeHint = () => {
@@ -1465,6 +1800,7 @@ const toggleTypeSections = () => {
   if (orderSection) orderSection.classList.toggle('d-none', qType.value !== 'order')
   if (imageSection) imageSection.classList.toggle('d-none', qType.value !== 'image')
   if (zoomGuessSection) zoomGuessSection.classList.toggle('d-none', qType.value !== 'zoomguess')
+  if (rechercheSection) rechercheSection.classList.toggle('d-none', qType.value !== 'recherche')
   if (revealSection) revealSection.classList.toggle('d-none', qType.value !== 'reveal')
   if (blindtestSection) blindtestSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
@@ -1473,21 +1809,21 @@ const toggleTypeSections = () => {
   if (pbacSection) pbacSection.classList.toggle('d-none', qType.value !== 'pbac')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
   // déjà leur propre image (le type "image" utilise la sienne comme cible
-  // cliquable, "zoomguess" la sienne comme photo à deviner, "reveal" ses deux
-  // images énigme/réponse — pas comme simple décoration).
-  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal')
+  // cliquable, "zoomguess"/"recherche" la sienne comme photo à deviner,
+  // "reveal" ses deux images énigme/réponse — pas comme simple décoration).
+  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche')
   // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
   // blindtestSection ci-dessus) au lieu de la liste générique "correct".
   // "mcq" a aussi sa propre façon de désigner la bonne réponse : la case à
   // cocher sur chaque option (voir renderOptions), qui alimente déjà
   // entièrement q.correct — la liste "correct" générique ci-dessous ferait
   // donc double emploi (retaper le texte d'une réponse déjà cochée), d'où
-  // la confusion remontée par l'utilisateur. "free" (texte libre), "zoomguess"
-  // (deviner à partir de l'image) ET "reveal" (deviner avant la révélation)
-  // ont besoin de cette liste.
+  // la confusion remontée par l'utilisateur. "free" (texte libre), "zoomguess"/
+  // "recherche" (deviner à partir de l'image) ET "reveal" (deviner avant la
+  // révélation) ont besoin de cette liste.
   // "association" / "timeline" / "intrus" ont chacun leur propre section
   // ci-dessus.
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess' && qType.value !== 'reveal')
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess' && qType.value !== 'reveal' && qType.value !== 'recherche')
   correctLabel.textContent = 'Réponses acceptées'
 }
 
@@ -2630,6 +2966,11 @@ document.addEventListener('paste', (e) => {
       q.zoom = { x: 0.5, y: 0.5, startScale: q.zoom?.startScale || ZOOM_GUESS_DEFAULT }
       populateZoomGuessFields(q)
     })
+  } else if (q.type === 'recherche' && rechercheSection && !rechercheSection.classList.contains('d-none')) {
+    compressImageFile(files[0], (dataUrl) => {
+      q.image = dataUrl
+      populateRechercheFields(q)
+    })
   } else if (illustrationSection && !illustrationSection.classList.contains('d-none')) {
     compressImageFile(files[0], (dataUrl) => {
       q.illustration = dataUrl
@@ -2725,6 +3066,14 @@ qType.onchange = () => {
     // retour sur ce type, ou venant de "free" qui a la même forme).
     if (!Array.isArray(q.correct)) q.correct = ['']
     populateZoomGuessFields(q)
+  } else if (qType.value === 'recherche') {
+    // Même logique que "zoomguess"/"reveal" juste au-dessus : q.correct
+    // venant d'un autre type peut être un objet/une forme spécifique — on
+    // repart sur une liste de réponses acceptées classique, sauf s'il en a
+    // déjà une (ex. retour sur ce type, ou venant de free/zoomguess/reveal
+    // qui partagent la même forme).
+    if (!Array.isArray(q.correct)) q.correct = ['']
+    populateRechercheFields(q)
   } else if (qType.value === 'reveal') {
     // Même logique que "zoomguess" juste au-dessus (q.correct venant d'un
     // autre type peut être un objet/une forme spécifique) : on repart sur
@@ -2808,9 +3157,15 @@ if (qExplanation) {
   qExplanation.oninput = () => { questions[activeIndex].explanation = qExplanation.value }
 }
 
+// Le "+" rouvre désormais le choix du type (nouvelle DA, sur demande
+// explicite) au lieu d'ajouter directement un "Texte libre" par défaut —
+// même écran qu'au tout début du quiz (voir openTypePicker/addQuestionOfType
+// ci-dessus). "Annuler" ramène à la question qui était active.
 addQuestionBtn.onclick = () => {
-  questions.push(createDefaultQuestion())
-  selectQuestion(questions.length - 1)
+  openTypePicker()
+}
+if (typePickerCancelBtn) {
+  typePickerCancelBtn.onclick = () => selectQuestion(activeIndex)
 }
 
 // Extrait de l'ancien deleteQuestionBtn.onclick pour être appelable aussi
@@ -3095,6 +3450,20 @@ const validateQuestion = (q, i) => {
     if (!q.image) {
       selectQuestion(i)
       showToast(`La question ${i + 1} : importe une image à deviner`, 'error')
+      return false
+    }
+    const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
+    if (!hasAnswer) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
+      return false
+    }
+  } else if (q.type === 'recherche') {
+    // Même règle que "zoomguess" ci-dessus : une image à faire chercher ET
+    // au moins une réponse acceptée sont obligatoires.
+    if (!q.image) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : importe une image à faire chercher`, 'error')
       return false
     }
     const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
@@ -3394,6 +3763,13 @@ const persistQuiz = async (successMessage) => {
 
 saveQuizBtn.onclick = async () => {
   if (readOnly) return
+  // Un nouveau quiz démarre maintenant à 0 question (voir resetToNew) : même
+  // garde-fou que deleteQuestionAt/confirmDeleteQuestionAt pour ne jamais
+  // écrire un quiz injouable en base.
+  if (questions.length === 0) {
+    showToast('Ajoute au moins une question avant de sauvegarder', 'error')
+    return
+  }
   saveCurrentQuestionState()
   // Filet de sécurité : un onclick async dont la promesse rejette ne montre
   // RIEN à l'utilisateur (pas de .catch implicite pour un event handler) —
@@ -3604,11 +3980,17 @@ const init = () => {
 
 const resetToNew = () => {
   currentId = null
-  questions = [createDefaultQuestion()]
+  // Démarre à 0 question (nouvelle DA, tâche 003, décision validée) au lieu
+  // d'une question "Texte libre" vide par défaut — voir #questionEmptyState/
+  // renderTypePicker/addQuestionOfType. selectQuestion(0) n'a plus rien à
+  // sélectionner ici (bail out déjà géré, voir plus haut) : updateEmptyState
+  // s'en charge à la place.
+  questions = []
   activeIndex = 0
   titleEl.value = ''
   isPublicEl.checked = false
-  selectQuestion(0)
+  renderTypePicker()
+  updateEmptyState()
   updateSidebar()
   markSaved()
 }
