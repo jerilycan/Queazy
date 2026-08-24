@@ -777,7 +777,19 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   font-size: 36px;
   box-shadow: var(--shadow-sm);
   border: 2px solid white;
-  background-size: cover;
+  /* Retour utilisateur : "il n'y a que la baleine et le capybara" — ces deux
+     PNG (avatars/avatar22.png, avatar23.png) ont une marge sombre cuite dans
+     l'image (le cercle illustré ne remplit qu'environ 92% du canevas carré,
+     contre 100% pour les autres avatars) : avec background-size:cover
+     (mapping carré-à-carré 1:1), cette marge devient un anneau visible une
+     fois le carré recadré en cercle par border-radius:50%. 112% (un peu plus
+     que les ~108% mesurés nécessaires) zoome juste assez pour faire
+     disparaître la marge sur ces deux-là, sans recadrage perceptible sur les
+     avatars qui allaient déjà bord à bord. Même valeur partout où ces PNG
+     sont affichés en rond (.icon-opt.avatar-tile, .avatar-profile-link,
+     .host-player-avatar, .race-lane-avatar) : défaut des assets, pas du
+     conteneur, donc pas la peine d'y toucher au cas par cas. */
+  background-size: 112%;
   background-position: center;
   /* Même correctif que .icon-opt.avatar-tile (retour utilisateur) : sans
      no-repeat, un fin liseré de répétition du fond peut transparaître au
@@ -897,7 +909,9 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .icon-opt.avatar-tile {
   border-radius: 50%;
-  background-size: cover;
+  /* 112% : voir le commentaire détaillé sur .avatar-main (marge cuite dans
+     avatar22.png/avatar23.png). */
+  background-size: 112%;
   background-position: center;
   /* Retour utilisateur : "comme une répétition de l'image sur les côtés" —
      sans no-repeat, le navigateur répète le fond par défaut ; au bord du
@@ -910,7 +924,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 .icon-opt.avatar-tile.selected {
   background-color: transparent;
-  background-size: cover;
+  background-size: 112%;
   background-position: center;
   background-repeat: no-repeat;
   border-color: var(--color-accent);
@@ -3118,7 +3132,9 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .host-player-avatar {
   width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
   background-color: var(--color-surface-2);
-  background-size: cover; background-position: center;
+  /* 112% : voir le commentaire détaillé sur .avatar-main (marge cuite dans
+     avatar22.png/avatar23.png). */
+  background-size: 112%; background-position: center;
   border: 2px solid var(--color-card);
   margin-right: -9px;
   display: flex; align-items: center; justify-content: center;
@@ -3626,7 +3642,9 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
      bug) : pas de box-shadow, background-color:transparent (pas de fond
      blanc qui pouvait transparaître aux bords), overflow:hidden. */
   background-color: transparent;
-  background-size: cover;
+  /* 112% : voir le commentaire détaillé sur .avatar-main (marge cuite dans
+     avatar22.png/avatar23.png). */
+  background-size: 112%;
   background-position: center;
   background-repeat: no-repeat;
   overflow: hidden;
@@ -6050,7 +6068,9 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .race-lane-avatar {
   position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, 50%);
   width: 40px; height: 40px; border-radius: 50%; background: var(--color-surface);
-  background-size: cover; background-position: center;
+  /* 112% : voir le commentaire détaillé sur .avatar-main (marge cuite dans
+     avatar22.png/avatar23.png). */
+  background-size: 112%; background-position: center;
   border: 2px solid rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;
   font-size: 18px; z-index: 2; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
   transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1), border-color .3s;
