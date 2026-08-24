@@ -3033,12 +3033,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .max-w-700 { max-width: 700px; }
 
 .avatar-lg { width: 120px; height: 120px; font-size: 48px; }
-/* Carré arrondi + anneau accent (nouvelle DA, tâche 002) au lieu du rond
-   blanc cerclé blanc d'avant — scopé à .avatar-profile uniquement (pas
-   .avatar-main de base, réutilisé tel quel ailleurs dans le jeu : lobby,
-   classement... pas dans le périmètre de cette refonte). */
+/* Rond (retour utilisateur : le carré arrondi essayé en nouvelle DA, tâche
+   002, rendait bizarre à côté de la grille d'avatars ronds juste en dessous)
+   — dégradé + anneau accent conservés, juste le border-radius qui revient à
+   50%, cohérent avec .avatar-main/.avatar-tile utilisés partout ailleurs. */
 .avatar-profile {
-  border-radius: 28px;
+  border-radius: 50%;
   border: none;
   background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
   box-shadow: 0 12px 30px rgba(var(--color-accent-rgb),0.35);
