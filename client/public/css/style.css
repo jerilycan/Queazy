@@ -3615,9 +3615,16 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
 .resize-v { resize: vertical; min-height: 80px; }
 
 /* New Specific Styles */
-.avatar-profile-link { 
-  width: 40px; height: 40px; border-radius: 50%; background: white; 
-  border: 2px solid var(--color-border); box-shadow: var(--shadow-sm); display: block; 
+.avatar-profile-link {
+  width: 40px; height: 40px; border-radius: 50%; background: white;
+  border: 2px solid var(--color-border); box-shadow: var(--shadow-sm); display: block;
+  /* Même correctif que .icon-opt.avatar-tile/.avatar-main (retour
+     utilisateur) : background-size/position sont posés en inline par le JS
+     (voir applyAvatar dans index.js/select.js/etc.), jamais background-
+     repeat — sans lui, un fin liseré de répétition transparaît au bord du
+     cercle. Posé ici plutôt que dans chaque fichier JS : une seule classe
+     partagée par toutes les pages qui affichent #profileAvatar. */
+  background-repeat: no-repeat;
 }
 .grid-cols-split { grid-template-columns: 1fr 1.5fr; }
 .divider { display: flex; align-items: center; gap: 16px; margin: 12px 0; }
