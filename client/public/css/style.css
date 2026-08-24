@@ -903,7 +903,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   background-size: cover;
   background-position: center;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb),0.35), 0 4px 12px rgba(var(--color-accent-rgb),0.35);
+  /* Retour utilisateur : "rebord étrange, pas lisse" — l'anneau à 0px de
+     flou (0 0 0 3px) ne s'anti-aliase pas proprement sur les écrans à
+     échelle fractionnée (125%/150% Windows, courant), contrairement à la
+     bordure vectorielle du dessus. 1px de flou en plus (0 0 1px 3px) suffit
+     à lisser le tracé sans changer l'épaisseur perçue de l'anneau. */
+  box-shadow: 0 0 1px 3px rgba(var(--color-accent-rgb),0.35), 0 4px 12px rgba(var(--color-accent-rgb),0.35);
 }
 
 .icon-opt.custom-avatar {
@@ -3419,18 +3424,25 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     max-height: 100%;
   }
   /* Retour utilisateur ("une zone à part entière dédiée à la validation
-     des réponses, sous le bloc central") : #moderationPanel (index.js,
-     réponses "texte libre" à juger) a maintenant sa PROPRE cellule de
-     grille, sous #stageWrap (voir la 2e ligne "auto" sur .container plus
-     haut) — plus un enfant de #hostPanel comme essayé au tour précédent.
-     margin-top:0 en !important : index.js pose 16px en inline (repli pour
-     les contextes hors régie desktop, où #moderationPanel n'est qu'un
-     <div class="card"> de plus dans le flux normal) — ici le gap:24px de
-     la grille fait déjà l'espacement avec #stageWrap au-dessus. */
-  body.is-host.game-active .container #moderationPanel {
+     des réponses, sous le bloc central") : #moderationZone (index.js —
+     enveloppe barre œil + #moderationPanel, réponses à juger) a maintenant
+     sa PROPRE cellule de grille, sous #stageWrap (voir la 2e ligne "auto"
+     sur .container plus haut) — plus un enfant de #hostPanel comme essayé
+     au tour précédent. C'est la zone qui est placée (pas le panneau
+     directement) : sinon la barre œil, ajoutée à côté sans placement
+     explicite, tomberait dans une ligne de grille implicite. margin-top:0
+     en !important : #moderationZone pose 16px par défaut en CSS (repli pour
+     les contextes hors régie desktop, où c'est juste un bloc de plus dans le
+     flux normal) — ici le gap:24px de la grille fait déjà l'espacement avec
+     #stageWrap au-dessus. max-height/overflow-y restent sur le panneau
+     lui-même (pas la zone) : seule la liste de réponses défile, la barre
+     œil reste toujours visible au-dessus. */
+  body.is-host.game-active .container #moderationZone {
     grid-column: 2;
     grid-row: 2;
     margin-top: 0 !important;
+  }
+  body.is-host.game-active .container #moderationPanel {
     max-height: 260px;
     overflow-y: auto;
   }
@@ -5873,16 +5885,37 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .leader-name { flex: 1; font-weight: 700; color: var(--color-text); font-family: 'Nunito', sans-serif; }
 .leader-score { color: var(--color-accent); font-weight: 700; font-family: 'Baloo 2', sans-serif; }
 
-/* "Œil" du panneau de modération Petit Bac (voir index.js pbacEyeBtn,
-   retour utilisateur) : masque le TEXTE des réponses sans changer la mise
-   en page (aucun saut de largeur des lignes) — flou façon "spoiler" plutôt
-   qu'un remplacement par des points, qui aurait fixé une fausse longueur.
-   user-select:none : inutile de pouvoir sélectionner/copier un texte
-   volontairement illisible. */
-.moderation-answers-hidden .pbac-answer-text {
+/* "Œil" du panneau de modération, tous types de question confondus (voir
+   index.js moderationEyeBtn, retour utilisateur — copie possible si l'écran
+   de l'hôte est projeté/partagé en IRL) : masque le TEXTE des réponses sans
+   changer la mise en page (aucun saut de largeur des lignes) — flou façon
+   "spoiler" plutôt qu'un remplacement par des points, qui aurait fixé une
+   fausse longueur. user-select:none : inutile de pouvoir sélectionner/copier
+   un texte volontairement illisible. */
+.moderation-answers-hidden .moderation-answer-text {
   color: transparent;
   text-shadow: 0 0 9px rgba(255,255,255,0.6);
   user-select: none;
+}
+/* Enveloppe barre œil + panneau (voir index.js moderationZone) : porte le
+   margin-top qui vivait avant sur #moderationPanel lui-même (repris ici pour
+   que la barre œil, au-dessus, en bénéficie aussi) et empile les deux
+   verticalement. Hors régie desktop (mobile/tablette, ou avant que
+   .container ne soit une grille), reste un simple bloc empilé dans le flux
+   normal — le flex-column ne change rien à ce cas. */
+#moderationZone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+/* Bandeau "œil" (voir index.js moderationEyeBar) — même habillage que les
+   autres petites barres d'action au-dessus des cartes de modération (ex.
+   pbacGroupBar juste en dessous). */
+.moderation-eye-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
 }
 /* "+XXX" (voir index.js animateScoreGain, retour utilisateur) : apparaît à
    droite de la tuile (juste avant le score qu'il complète), avec un léger

@@ -3696,11 +3696,11 @@ socket.on('game:mode', ({ mode }) => {
   // donnée que ci-dessus, juste un 2e affichage.
   const ambianceValueEl = document.getElementById('hostAmbianceValue')
   if (ambianceValueEl) ambianceValueEl.textContent = gameMode === 'remote' ? 'À distance' : 'Sur place'
-  // updatePbacEyeVisibility est défini plus bas dans ce fichier (const, pas
-  // hissée) — mais ce handler ne s'exécute qu'au premier game:mode reçu du
-  // serveur, largement après que tout le script ait fini de s'évaluer, donc
-  // déjà bien définie à ce moment-là.
-  updatePbacEyeVisibility?.()
+  // updateModerationEyeVisibility est défini plus bas dans ce fichier (const,
+  // pas hissée) — mais ce handler ne s'exécute qu'au premier game:mode reçu
+  // du serveur, largement après que tout le script ait fini de s'évaluer,
+  // donc déjà bien définie à ce moment-là.
+  updateModerationEyeVisibility?.()
 })
 
 if (gameModeRemoteToggle) {
@@ -5359,9 +5359,71 @@ socket.on('answer:progress', ({ answered, total }) => {
 const moderationDiv = document.createElement('div')
 moderationDiv.id = 'moderationPanel'
 moderationDiv.className = 'card'
-moderationDiv.style.marginTop = '16px'
 moderationDiv.style.display = 'none' // Caché par défaut
-document.querySelector('.container').appendChild(moderationDiv)
+
+// Enveloppe #moderationZone (barre œil + panneau) : c'est ELLE la cellule de
+// grille en régie desktop (voir #moderationZone en CSS), pas le panneau
+// directement — sinon la barre œil, ajoutée à côté sans placement de grille
+// explicite, tomberait dans une ligne implicite (même piège que celui déjà
+// corrigé pour #moderationPanel, voir commentaire plus haut). Le panneau
+// garde SEUL le compte de ses lignes de réponse (moderationDiv.children,
+// utilisé partout pour savoir si le panneau a du contenu) : la barre œil vit
+// à côté, jamais dedans, sinon elle fausserait ce compte.
+const moderationZone = document.createElement('div')
+moderationZone.id = 'moderationZone'
+document.querySelector('.container').appendChild(moderationZone)
+
+// "Œil" partagé, TOUS types de questions confondus (retour utilisateur : en
+// IRL, l'écran de l'hôte peut être projeté/partagé — sans ça, n'importe qui
+// le regardant lit les réponses des joueurs avant l'hôte lui-même, et peut
+// "copier"). Masque le TEXTE des réponses en attente (classe
+// .moderation-answer-text posée sur chaque ligne, tous types — pbac, texte
+// libre, blind test — voir plus bas et .moderation-answers-hidden en CSS),
+// sans jamais toucher aux contrôles (case à cocher, boutons Valider/Refuser
+// restent cliquables). CACHÉ PAR DÉFAUT dès qu'on est en IRL (gameMode vaut
+// déjà 'irl' par défaut avant même la confirmation serveur, voir plus haut) :
+// l'hôte doit cliquer pour révéler, jamais l'inverse — sinon la fenêtre où
+// les réponses restent lisibles avant ce premier clic laisserait justement
+// le temps de copier. Sans objet à distance (chaque joueur ne voit que son
+// propre écran, rien à cacher) : la barre disparaît avec le reste dès que
+// gameMode bascule (voir updateModerationEyeVisibility).
+let moderationAnswersHidden = gameMode === 'irl'
+const moderationEyeBar = document.createElement('div')
+moderationEyeBar.id = 'moderationEyeBar'
+moderationEyeBar.className = 'card moderation-eye-bar d-none'
+const moderationEyeBtn = document.createElement('button')
+moderationEyeBtn.className = 'btn'
+moderationEyeBtn.style.padding = '8px 12px'
+const applyModerationEyeState = () => {
+  moderationDiv.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
+  moderationEyeBtn.textContent = moderationAnswersHidden ? '🙈 Réponses masquées' : '👁️ Réponses visibles'
+  moderationEyeBtn.title = moderationAnswersHidden
+    ? 'Réponses masquées — clique pour les réafficher'
+    : 'Afficher/masquer les réponses (utile si ton écran est partagé aux joueurs)'
+}
+moderationEyeBtn.onclick = () => {
+  moderationAnswersHidden = !moderationAnswersHidden
+  applyModerationEyeState()
+}
+moderationEyeBar.appendChild(moderationEyeBtn)
+moderationZone.appendChild(moderationEyeBar)
+moderationZone.appendChild(moderationDiv)
+applyModerationEyeState()
+
+// N'a de sens qu'en session IRL (à distance, chaque joueur regarde son
+// propre écran, jamais celui de l'hôte — rien à cacher). Un seul
+// MutationObserver sur moderationDiv plutôt qu'un appel ajouté à chacun des
+// nombreux points d'ajout/retrait de ligne (pbac, générique, blind test) :
+// une seule source de vérité pour "le panneau a du contenu", jamais désynchro.
+const updateModerationEyeVisibility = () => {
+  const showEye = gameMode === 'irl' && moderationDiv.children.length > 0
+  moderationEyeBar.classList.toggle('d-none', !showEye)
+  if (!showEye && moderationAnswersHidden) {
+    moderationAnswersHidden = false
+    applyModerationEyeState()
+  }
+}
+new MutationObserver(updateModerationEyeVisibility).observe(moderationDiv, { childList: true })
 
 // "Petit Bac" : contrairement au reste de la modération (une réponse jugée
 // isolément), l'hôte doit ici REGROUPER lui-même les réponses qu'il juge
@@ -5379,71 +5441,26 @@ pbacGroupBar.style.alignItems = 'center'
 pbacGroupBar.style.justifyContent = 'space-between'
 pbacGroupBar.style.gap = '12px'
 pbacGroupBar.style.flexWrap = 'wrap'
-// "Œil" (retour utilisateur) : masque le TEXTE des réponses en attente,
-// utile quand l'écran de l'hôte est projeté/partagé aux joueurs — sans ça,
-// n'importe qui regardant l'écran lit les réponses avant même que l'hôte
-// ait fini de les regrouper. Un seul bouton pour toutes les lignes (classe
-// posée sur moderationDiv, voir CSS .moderation-answers-hidden) plutôt
-// qu'un bouton par ligne : les nouvelles réponses qui arrivent pendant que
-// c'est masqué le sont automatiquement, pas besoin de les re-masquer une à
-// une. Visible par défaut (comportement existant inchangé tant que l'hôte
-// ne clique pas).
-let pbacAnswersHidden = false
-const pbacEyeBtn = document.createElement('button')
-pbacEyeBtn.className = 'btn'
-pbacEyeBtn.style.padding = '8px 12px'
-pbacEyeBtn.style.flexShrink = '0'
-pbacEyeBtn.title = 'Afficher/masquer les réponses (utile si ton écran est partagé aux joueurs)'
-pbacEyeBtn.textContent = '👁️'
-pbacEyeBtn.onclick = () => {
-  pbacAnswersHidden = !pbacAnswersHidden
-  moderationDiv.classList.toggle('moderation-answers-hidden', pbacAnswersHidden)
-  pbacEyeBtn.textContent = pbacAnswersHidden ? '🙈' : '👁️'
-  pbacEyeBtn.title = pbacAnswersHidden
-    ? 'Réponses masquées — clique pour les réafficher'
-    : 'Afficher/masquer les réponses (utile si ton écran est partagé aux joueurs)'
-}
-const pbacBarLeft = document.createElement('div')
-pbacBarLeft.style.display = 'flex'
-pbacBarLeft.style.alignItems = 'center'
-pbacBarLeft.style.gap = '10px'
 const pbacGroupLabel = document.createElement('div')
 pbacGroupLabel.style.fontSize = '13px'
 pbacGroupLabel.style.opacity = '0.75'
 pbacGroupLabel.textContent = 'Coche les réponses identiques entre elles, puis valide la famille'
-pbacBarLeft.appendChild(pbacEyeBtn)
-pbacBarLeft.appendChild(pbacGroupLabel)
 const pbacGroupBtn = document.createElement('button')
 pbacGroupBtn.className = 'btn btn-primary'
 pbacGroupBtn.style.padding = '8px 16px'
 pbacGroupBtn.disabled = true
 pbacGroupBtn.textContent = 'Valider la famille'
-pbacGroupBar.appendChild(pbacBarLeft)
+pbacGroupBar.appendChild(pbacGroupLabel)
 pbacGroupBar.appendChild(pbacGroupBtn)
 document.querySelector('.container').appendChild(pbacGroupBar)
 
-// L'œil n'a de sens qu'en session IRL (retour utilisateur) : à distance,
-// chaque joueur regarde son propre écran, jamais celui de l'hôte — rien à
-// cacher. Repose sur la même variable gameMode que le reste du mode IRL/à
-// distance (voir plus haut, socket.on('game:mode', ...)). Si le mode
-// bascule vers "à distance" pendant que les réponses étaient masquées, on
-// les réaffiche aussitôt : sinon elles resteraient illisibles sans aucun
-// bouton pour les rétablir (l'œil vient de disparaître).
-const updatePbacEyeVisibility = () => {
-  const showEye = gameMode === 'irl'
-  pbacEyeBtn.classList.toggle('d-none', !showEye)
-  if (!showEye && pbacAnswersHidden) {
-    pbacAnswersHidden = false
-    moderationDiv.classList.remove('moderation-answers-hidden')
-    pbacEyeBtn.textContent = '👁️'
-  }
-}
-
 // Rafraîchit le libellé/l'état du bandeau à partir des cases actuellement
 // cochées — appelée à chaque coche/décoche ainsi qu'après tout ajout/retrait
-// de ligne pbac (nouvelle réponse, famille validée, réponse refusée).
+// de ligne pbac (nouvelle réponse, famille validée, réponse refusée). L'œil
+// partagé (voir updateModerationEyeVisibility plus haut) se met déjà à jour
+// tout seul via le MutationObserver sur moderationDiv, pas besoin de
+// l'appeler ici.
 const updatePbacGroupBar = () => {
-  updatePbacEyeVisibility()
   const anyPbacRow = moderationDiv.querySelector('[data-pbac="1"]')
   pbacGroupBar.style.display = anyPbacRow ? 'flex' : 'none'
   const n = moderationDiv.querySelectorAll('input.pbac-check:checked').length
@@ -5606,7 +5623,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
     check.className = 'pbac-check'
     check.onchange = updatePbacGroupBar
     const answerLabel = document.createElement('span')
-    answerLabel.className = 'pbac-answer-text'
+    answerLabel.className = 'moderation-answer-text'
     answerLabel.style.fontWeight = '600'
     answerLabel.textContent = content
     left.appendChild(check)
@@ -5653,7 +5670,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
       row.style.padding = '6px 0'
 
       const text = document.createElement('div')
-      text.innerHTML = `<span style="opacity:0.7">${label} :</span> <strong>${(entry.content || '(vide)').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</strong>`
+      text.innerHTML = `<span style="opacity:0.7">${label} :</span> <strong class="moderation-answer-text">${(entry.content || '(vide)').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</strong>`
       row.appendChild(text)
 
       if (entry.status !== 'pending') {
@@ -5725,6 +5742,7 @@ socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest,
   row.style.gap = '12px'
 
   const label = document.createElement('div')
+  label.className = 'moderation-answer-text'
   label.style.fontWeight = '600'
   label.textContent = content
 
