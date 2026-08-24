@@ -92,7 +92,6 @@ if (savedAvatarPreview && profileAvatarPreviewEl) {
   profileAvatarPreviewEl.style.backgroundPosition = 'center'
 }
 
-const singleAttemptEl = document.getElementById('singleAttempt')
 const isPublicEl = document.getElementById('isPublic')
 const saveQuizBtn = document.getElementById('saveQuiz')
 const deleteQuizBtn = document.getElementById('deleteQuiz')
@@ -380,7 +379,7 @@ let readOnly = false // true si on ouvre le quiz d'un autre créateur (lecture s
 const applyReadOnly = () => {
   readOnly = true
   const controls = [
-    titleEl, singleAttemptEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, qType, qTimer, timerMinus, timerPlus,
+    titleEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
     addAssociationPairBtn, addTimelineEventBtn, intrusPhotosUploadInput, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
@@ -3286,7 +3285,6 @@ const snapshotQuizState = () => {
   return JSON.stringify({
     title: titleEl.value.trim(),
     questions,
-    singleAttempt: singleAttemptEl.checked,
     isPublic: isPublicEl.checked
   })
 }
@@ -3726,19 +3724,23 @@ const persistQuiz = async (successMessage) => {
     const body = {
       title,
       questions,
-      singleAttempt: singleAttemptEl.checked,
       isPublic: isPublicEl.checked
     }
     if (currentId) {
+      // single_attempt forcé à true (retour utilisateur : toggle retiré de
+      // l'éditeur, comportement multi-tentatives jamais fiabilisé pour tous
+      // les types de question) — explicite plutôt que simplement omis, pour
+      // remettre d'aplomb un quiz existant sauvegardé avant ce retrait avec
+      // la case décochée.
       const { error } = await sb.from('quizzes')
-        .update({ title, questions, single_attempt: body.singleAttempt, is_public: body.isPublic })
+        .update({ title, questions, single_attempt: true, is_public: body.isPublic })
         .eq('id', currentId)
       if (error) throw error
       showSaveSuccess(successMessage)
       markSaved()
     } else {
       const { data, error } = await sb.from('quizzes')
-        .insert([{ title, questions, single_attempt: body.singleAttempt, is_public: body.isPublic, owner_id: session.user.id }])
+        .insert([{ title, questions, single_attempt: true, is_public: body.isPublic, owner_id: session.user.id }])
         .select('id')
         .single()
       if (error) throw error
@@ -3818,7 +3820,7 @@ if (duplicateQuizBtn) {
         .insert([{
           title: 'Copie de ' + srcTitle,
           questions,
-          single_attempt: singleAttemptEl.checked,
+          single_attempt: true, // toggle retiré de l'éditeur, voir plus haut
           is_public: false, // une copie est privée par défaut
           owner_id: session.user.id
         }])
@@ -3929,13 +3931,12 @@ const init = () => {
   if (id) {
     currentId = id
     window.supabaseClient.from('quizzes')
-      .select('id,title,questions,single_attempt,is_public,owner_id')
+      .select('id,title,questions,is_public,owner_id')
       .eq('id', id)
       .single()
       .then(async ({ data, error }) => {
         if (error) throw error
         titleEl.value = data.title || ''
-        singleAttemptEl.checked = data.single_attempt !== false
         isPublicEl.checked = !!data.is_public
         questions = data.questions || [createDefaultQuestion()]
         activeIndex = 0

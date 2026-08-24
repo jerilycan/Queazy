@@ -769,7 +769,6 @@ let quizIndex = 0
 // .is-disabled seul ne bloque pas les clics (pointer-events:auto).
 let goNextPending = false
 let isHost = false
-let currentSingleAttempt = true
 let selectedIcon = AVATAR_CHOICES[0]
 let timerInt = null
 // Zoom progressif sur l'illustration (voir editor.js) : {x, y, startScale}
@@ -1023,7 +1022,7 @@ const wireOrderDrag = (el) => {
   // affichée comme simple indice visuel).
   el.addEventListener('pointerdown', (e) => {
     if (orderDisabled || dragActive) return
-    if (currentSingleAttempt && sendBtn.disabled) return
+    if (sendBtn.disabled) return
     e.preventDefault()
     dragActive = true
     const startY = e.clientY
@@ -1226,7 +1225,7 @@ const wireTimelineDrag = (el) => {
   let dragActive = false
   el.addEventListener('pointerdown', (e) => {
     if (timelineDisabled || dragActive) return
-    if (currentSingleAttempt && sendBtn.disabled) return
+    if (sendBtn.disabled) return
     e.preventDefault()
     dragActive = true
     const startY = e.clientY
@@ -1542,7 +1541,7 @@ const renderAssociationColumns = () => {
     if (selected?.side === 'a' && selected.index === i) el.classList.add('is-selected')
     el.onclick = () => {
       if (associationDisabled) return
-      if (currentSingleAttempt && sendBtn.disabled) return
+      if (sendBtn.disabled) return
       const sel = associationState.selected
       if (sel && sel.side === 'b') {
         // Un B était déjà sélectionné : ce clic sur A complète la paire.
@@ -1573,7 +1572,7 @@ const renderAssociationColumns = () => {
     if (selected?.side === 'b' && selected.index === j) el.classList.add('is-selected')
     el.onclick = () => {
       if (associationDisabled) return
-      if (currentSingleAttempt && sendBtn.disabled) return
+      if (sendBtn.disabled) return
       const sel = associationState.selected
       if (sel && sel.side === 'a') {
         // Un A était déjà sélectionné : ce clic sur B complète la paire.
@@ -1867,7 +1866,7 @@ let imagePanGesture = null
 
 const submitImageClick = (clientX, clientY) => {
   if (imageDisabled) return
-  if (currentSingleAttempt && sendBtn.disabled) return
+  if (sendBtn.disabled) return
   const rect = imageClickLayer.getBoundingClientRect()
   imageSelectedPoint = {
     x: Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)),
@@ -3031,7 +3030,7 @@ const loadQuizById = (id) => {
   if (loadedInfo) loadedInfo.textContent = 'Chargement du quiz...'
   return window.supabaseClient
     .from('quizzes')
-    .select('id,title,questions,single_attempt')
+    .select('id,title,questions')
     .eq('id', id)
     .single()
     .then(({ data, error }) => {
@@ -3072,11 +3071,9 @@ const loadQuizById = (id) => {
       loadedQuiz = {
         id: data.id,
         title: data.title || '',
-        singleAttempt: data.single_attempt !== false,
         questions: norm
       }
       quizIndex = 0
-      currentSingleAttempt = loadedQuiz.singleAttempt !== false
       const draftNote = draftCount > 0 ? ` (${draftCount} brouillon${draftCount > 1 ? 's' : ''} ignoré${draftCount > 1 ? 's' : ''})` : ''
       loadedInfo.textContent = 'Quiz chargé: ' + (loadedQuiz.title || id) + draftNote
       log('Quiz chargé: ' + (loadedQuiz.title || id) + draftNote)
@@ -4386,7 +4383,9 @@ const emitQuestion = (index) => {
     // bonne réponse cochée (et aucune mauvaise) suffit à valider — voir
     // server/index.js answer:submit pour le calcul du score.
     requireAllCorrect: q.type === 'mcq' ? (q.requireAllCorrect !== false) : undefined,
-    singleAttempt: currentSingleAttempt,
+    // singleAttempt non envoyé (retour utilisateur : toggle retiré côté
+    // éditeur) — server/index.js retombe sur son défaut (true) en l'absence
+    // du champ, une seule tentative pour tout le monde désormais.
     // Texte optionnel affiché SEULEMENT à la révélation (voir server/index.js,
     // jamais diffusé dans question:show — sinon lisible en devtools avant
     // même de répondre), ex. "Faux, l'entreprise a été créée en 1986".
@@ -4903,7 +4902,6 @@ socket.on('question:show', payload => {
     stopBlindTestAudio()
   }
 
-  currentSingleAttempt = payload.singleAttempt !== false
   const start = payload.startTs
   const total = payload.timerMs
   clearInterval(timerInt)
@@ -5077,7 +5075,7 @@ socket.on('question:show', payload => {
       el.textContent = opt
       makeTileFocusable(el)
       el.onclick = () => {
-        if (currentSingleAttempt && sendBtn.disabled) return
+        if (sendBtn.disabled) return
 
         // Toggle selection
         if (selectedMcqOptions.includes(opt)) {
@@ -5157,7 +5155,7 @@ socket.on('question:show', payload => {
       ring.className = 'intrus-tile-ring'
       el.appendChild(ring)
       el.onclick = () => {
-        if (currentSingleAttempt && sendBtn.disabled) return
+        if (sendBtn.disabled) return
         selectedMcqOptions = [id]
         Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'))
         el.classList.add('selected')
@@ -5212,7 +5210,7 @@ socket.on('question:show', payload => {
       el.textContent = opt
       makeTileFocusable(el)
       el.onclick = () => {
-        if (currentSingleAttempt && sendBtn.disabled) return
+        if (sendBtn.disabled) return
         selectedMcqOptions = [opt]
         Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'))
         el.classList.add('selected')
@@ -5293,35 +5291,38 @@ const submitCurrentAnswer = () => {
     if (!content) return
   }
 
-  if (currentSingleAttempt && sendBtn.disabled) return
+  if (sendBtn.disabled) return
   socket.emit('answer:submit', { roomCode, content })
   hasAnsweredThisQuestion = true
 
-  if (currentSingleAttempt) {
-    sendBtn.disabled = true
-    answerInput.disabled = true
-    gradState.disabled = true
-    setOrderDisabled(true)
-    setAssociationDisabled(true)
-    setTimelineDisabled(true)
-    imageDisabled = true
-    if (blindtestTitleInput) blindtestTitleInput.disabled = true
-    if (blindtestArtistInput) blindtestArtistInput.disabled = true
-    Array.from(optionsDiv.children).forEach(c => {
-      c.style.pointerEvents = 'none'
-      if (!c.classList.contains('selected')) {
-        c.style.opacity = '0.5'
-      }
-    })
-    // Retour visuel "verrouillé" pour les types sans équivalent des tuiles
-    // ci-dessus (retour utilisateur : seuls mcq/truefalse/intrus grisaient
-    // visiblement après envoi — les autres restaient identiques à l'écran,
-    // le joueur pouvait continuer à toucher/glisser sans aucun effet
-    // visible et se demander si son geste avait un effet).
-    ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields].forEach(el => {
-      if (el) el.classList.add('is-locked')
-    })
-  }
+  // Verrouillage systématique après envoi (retour utilisateur : le toggle
+  // "une seule tentative" a été retiré de l'éditeur — comportement
+  // incohérent selon le type de question et jamais fiabilisé côté panneau
+  // de modération hôte, voir docs/agent-tasks). Une seule tentative pour
+  // tout le monde, désormais.
+  sendBtn.disabled = true
+  answerInput.disabled = true
+  gradState.disabled = true
+  setOrderDisabled(true)
+  setAssociationDisabled(true)
+  setTimelineDisabled(true)
+  imageDisabled = true
+  if (blindtestTitleInput) blindtestTitleInput.disabled = true
+  if (blindtestArtistInput) blindtestArtistInput.disabled = true
+  Array.from(optionsDiv.children).forEach(c => {
+    c.style.pointerEvents = 'none'
+    if (!c.classList.contains('selected')) {
+      c.style.opacity = '0.5'
+    }
+  })
+  // Retour visuel "verrouillé" pour les types sans équivalent des tuiles
+  // ci-dessus (retour utilisateur : seuls mcq/truefalse/intrus grisaient
+  // visiblement après envoi — les autres restaient identiques à l'écran,
+  // le joueur pouvait continuer à toucher/glisser sans aucun effet
+  // visible et se demander si son geste avait un effet).
+  ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields].forEach(el => {
+    if (el) el.classList.add('is-locked')
+  })
 }
 sendBtn.onclick = submitCurrentAnswer
 
