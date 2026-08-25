@@ -236,7 +236,8 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    classe posée puis retirée) : remplace l'ancien défilement de dégradé sur
    le texte (logo-shimmer), impossible à reproduire sur une image — un petit
    "pop" lumineux à la place, même intention (le logo réagit au clic). */
-.brand.animate-logo .brand-logo-svg {
+.brand.animate-logo .brand-logo-svg,
+.irl-center-logo.animate-logo .brand-logo-svg {
   animation: logo-pop 0.6s ease-out;
 }
 
@@ -332,10 +333,18 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
      décalage de position est déjà quasiment retombé à zéro (c'est ce
      "reste de rotation sans déplacement visible" qui donnait l'impression
      d'un tour gratuit en fin de course). */
-.brand.animate-logo #brandPin      { animation: brand-pin-orbit      1.3s linear both; }
-.brand.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.4s linear both; }
-.brand.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.5s linear both; }
-.brand.animate-logo #brandNote     { animation: brand-note-orbit     1.6s linear both; }
+/* .irl-center-logo (logo centré joueur, voir plus bas dans ce fichier)
+   partage exactement les mêmes règles : SVG dupliqué tel quel dans
+   index.html avec les mêmes id (brandPin...) — chaque sélecteur ici reste
+   scopé par un ancêtre précis (.brand vs .irl-center-logo), donc ne matche
+   jamais le mauvais exemplaire malgré l'id partagé (retour utilisateur :
+   "met l'animation partout", le logo joueur n'avait que le pop+lueur, pas
+   la chorégraphie complète, faute d'accès en CSS au contenu d'une <img>
+   externe — réglé en l'inlinant). */
+.brand.animate-logo #brandPin,      .irl-center-logo.animate-logo #brandPin      { animation: brand-pin-orbit      1.3s linear both; }
+.brand.animate-logo #brandTriangle, .irl-center-logo.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.4s linear both; }
+.brand.animate-logo #brandCercle,   .irl-center-logo.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.5s linear both; }
+.brand.animate-logo #brandNote,     .irl-center-logo.animate-logo #brandNote     { animation: brand-note-orbit     1.6s linear both; }
 
 /* Chorégraphie en 3 temps par calque (retour utilisateur : "explosion +
    rotation > tourne autour du logo > revient à sa place", effet "woaw"
@@ -6884,19 +6893,16 @@ body.irl-player-mode .navbar, body.remote-player-mode .navbar { display: none; }
      nouvel élément. Réduit sous 640px (règle plus bas) pour la même
      raison que le logo hôte l'est aussi à cette largeur. */
   height: 72px;
-  width: auto;
   z-index: 190;
   filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45));
   transition: transform 0.25s ease, filter 0.25s ease;
 }
+/* SVG dupliqué (voir index.html) plutôt qu'une <img> externe (retour
+   utilisateur : "met l'animation partout") — remplace la hauteur par
+   défaut de .brand-logo-svg (46px, pensée pour la navbar) par celle du
+   wrapper ci-dessus. */
+.irl-center-logo .brand-logo-svg { height: 100%; width: auto; }
 body.irl-player-mode .irl-center-logo, body.remote-player-mode .irl-center-logo { display: block; }
-/* Même esprit que .brand:hover/.logo-pop (voir plus haut) — pas la version
-   décorative complète (pin/triangle qui "explosent", voir .brand-logo-svg) :
-   impossible à reproduire ici, cette balise est une <img> qui référence le
-   SVG en fichier externe (voir index.html) plutôt que le SVG inliné dans le
-   DOM comme .brand-logo-svg — le contenu interne d'une image externe n'est
-   pas accessible en CSS depuis la page. Un pop + lueur douce au survol
-   reste un réel retour visuel, cohérent avec le reste du logo. */
 .irl-center-logo:hover {
   transform: translateX(-50%) scale(1.06);
   filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45)) drop-shadow(0 0 16px rgba(var(--color-accent-rgb),0.55));

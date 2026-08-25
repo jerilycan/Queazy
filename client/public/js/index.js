@@ -261,15 +261,17 @@ roomInput.addEventListener('input', () => {
 })
 
 window.addEventListener('DOMContentLoaded', () => {
-  // Logo animation trigger
-  const brand = document.querySelector('.brand')
-  if (brand) {
+  // Logo animation trigger — .brand (navbar) ET .irl-center-logo (logo
+  // centré joueur IRL/à distance, voir index.html) partagent désormais le
+  // même SVG inliné et la même chorégorie au survol (retour utilisateur :
+  // "met l'animation partout", jusque là seul .brand l'avait).
+  document.querySelectorAll('.brand, .irl-center-logo').forEach(brand => {
     brand.addEventListener('mouseenter', () => {
       brand.classList.remove('animate-logo')
       void brand.offsetWidth // Trigger reflow
       brand.classList.add('animate-logo')
     })
-  }
+  })
 })
 
 ;(async () => {
