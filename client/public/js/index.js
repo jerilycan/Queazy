@@ -6587,7 +6587,25 @@ socket.on('question:reveal', payload => {
       if ((payload.correct || []).includes(value)) el.classList.add('correct-reveal')
       else el.classList.add('incorrect-reveal')
     })
-    showMyResultBanner()
+    // QCM à plusieurs bonnes réponses, réglage "doit tout cocher pour
+    // gagner des points" DÉSACTIVÉ (retour utilisateur) : score proportionnel
+    // côté serveur (voir answer:submit) -> bandeau "Presque !" possible ici,
+    // recalculé côté client comme pour "association"/"timeline" (mine vs
+    // correct), plutôt qu'un binaire "Bonne réponse"/"Mauvaise réponse".
+    // truefalse/intrus restent binaires (une seule réponse possible).
+    const correctList = payload.correct || []
+    if (payload.type === 'mcq' && correctList.length > 1) {
+      const correctCount = correctList.reduce((acc, c) => acc + (selectedMcqOptions.includes(c) ? 1 : 0), 0)
+      if (correctCount === correctList.length && myAnsweredCorrectlyThisQuestion) {
+        showMyResultBanner()
+      } else if (myAnsweredCorrectlyThisQuestion) {
+        showMyResultBanner(`Presque ! ${correctCount}/${correctList.length} bonnes réponses (+${myLastDelta} points)`, 'is-close')
+      } else {
+        showMyResultBanner('Mauvaise réponse', 'is-incorrect')
+      }
+    } else {
+      showMyResultBanner()
+    }
   } else if (payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'reveal' || payload.type === 'recherche') {
     // "recherche" en plus : retire le calque noir en entier (pas juste un
     // trou local) pour que le joueur voie enfin l'image complète — sinon la

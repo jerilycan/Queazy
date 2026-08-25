@@ -157,11 +157,14 @@ if (timerMinus && timerPlus && qTimer) {
 const mcqSection = document.getElementById('mcqSection')
 const optionsList = document.getElementById('optionsList')
 const addOptionBtn = document.getElementById('addOption')
-// "Toutes les bonnes réponses doivent être cochées pour valider" (QCM à
-// plusieurs bonnes réponses) : q.requireAllCorrect, undefined/true = ancien
-// comportement (ensemble exact attendu, jamais cassé pour un quiz déjà
-// sauvegardé), false = au moins une bonne cochée (et aucune mauvaise) suffit
-// — voir server/index.js answer:submit pour le calcul réel du score.
+// "Toutes les bonnes réponses doivent être cochées pour gagner des points"
+// (QCM à plusieurs bonnes réponses) : q.requireAllCorrect, undefined/true =
+// ancien comportement (ensemble exact attendu, binaire, jamais cassé pour un
+// quiz déjà sauvegardé) ; false = score PROPORTIONNEL au nombre de bonnes
+// réponses cochées (ex. 1/3 des points pour 1 bonne sur 3), toujours selon
+// le délai — une mauvaise coche reste éliminatoire (0 point) dans les deux
+// cas, seule la façon de compter les bonnes change (retour utilisateur, voir
+// server/index.js answer:submit pour le calcul réel du score).
 const mcqRequireAllToggle = document.getElementById('mcqRequireAllToggle')
 if (mcqRequireAllToggle) {
   mcqRequireAllToggle.onchange = () => {

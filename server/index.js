@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.4.3'
+const APP_VERSION = '2.5.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -500,10 +500,13 @@ const start = async () => {
     // doit pas mélanger les deux champs, voir answer:submit).
     // "presque" (état à part de correct/incorrect, voir index.js) : la
     // question a rapporté des points (deltas) sans être comptée "correct" —
-    // ne concerne que les types à score proportionnel (graduation, image,
-    // association, ordre, timeline, blindtest un seul champ) ; pour les
-    // types binaires (qcm/vrai-faux/intrus) delta reste toujours à 0 côté
-    // incorrect, donc jamais "presque" à tort.
+    // concerne les types à score proportionnel (graduation, image,
+    // association, ordre, timeline, rangement, blindtest un seul champ), et
+    // aussi "qcm" à plusieurs bonnes réponses quand son réglage "toutes
+    // cochées pour gagner des points" est désactivé (voir answer:submit) ;
+    // pour les types restés strictement binaires (qcm par défaut, vrai-faux,
+    // intrus) delta reste toujours à 0 côté incorrect, donc jamais "presque"
+    // à tort.
     const perPlayer = entries
       .map(([tok, result]) => {
         const correct = result === 'correct'
@@ -1896,11 +1899,18 @@ const start = async () => {
         // (voir submitCurrentAnswer côté index.js). q.requireAllCorrect
         // (réglage par question, voir editor.js) tranche entre deux
         // interprétations quand PLUSIEURS options sont marquées correctes à
-        // la création : par défaut (undefined = ancien comportement, jamais
-        // cassé pour un quiz existant), il faut cocher exactement l'ensemble
-        // des bonnes réponses, ni plus ni moins ; réglage désactivé
-        // explicitement (false) : au moins une bonne réponse cochée, et
-        // aucune mauvaise, suffit à valider.
+        // la création :
+        // - par défaut (undefined = ancien comportement, jamais cassé pour
+        //   un quiz existant) : il faut cocher EXACTEMENT l'ensemble des
+        //   bonnes réponses, ni plus ni moins, pour gagner le moindre point
+        //   (binaire, comme avant).
+        // - désactivé explicitement (false) : score PROPORTIONNEL au nombre
+        //   de bonnes réponses cochées (ex. 1 bonne sur 3 = 1/3 des points,
+        //   voir index.js pointsFor) — retour utilisateur, remplace l'ancien
+        //   comportement (qui était binaire dans les deux réglages, "au
+        //   moins une bonne et aucune mauvaise" = tous les points). Une
+        //   seule mauvaise coche reste éliminatoire dans les deux réglages
+        //   (0 point), seule la façon de compter les bonnes change.
         // Le client envoie désormais un JSON.stringify(array) (voir
         // submitCurrentAnswer côté index.js) — l'ancien split(',') cassait
         // le matching dès qu'une option contenait elle-même une virgule
@@ -1920,24 +1930,37 @@ const start = async () => {
         const correctSet = new Set(correctList)
         const submittedSet = new Set(submitted)
         const hasAnyWrong = submitted.some(s => !correctSet.has(s))
-        const isCorrect = q.requireAllCorrect === false
-          ? (submitted.some(s => correctSet.has(s)) && !hasAnyWrong)
-          : (correctList.every(c => submittedSet.has(c)) && !hasAnyWrong && submittedSet.size === correctSet.size)
+        const correctCount = correctList.reduce((acc, c) => acc + (submittedSet.has(c) ? 1 : 0), 0)
         const p = room.players.get(socket.id)
-        if (isCorrect) {
-          const delta = pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor)
+
+        // fraction : 1 (tout juste), 0 (une mauvaise coche, ou rien de bon),
+        // ou une valeur intermédiaire UNIQUEMENT si requireAllCorrect === false.
+        let fraction
+        if (hasAnyWrong || correctSet.size === 0) {
+          fraction = 0
+        } else if (q.requireAllCorrect === false) {
+          fraction = correctCount / correctSet.size
+        } else {
+          fraction = (correctCount === correctSet.size && submittedSet.size === correctSet.size) ? 1 : 0
+        }
+
+        if (fraction > 0) {
+          const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * fraction)
           const total = (room.scores.get(socket.id) || 0) + delta
           room.scores.set(socket.id, total)
           if (p?.token) {
             room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
             if (q.historyEntry) {
-              q.historyEntry.results[p.token] = 'correct'
+              // "correct" seulement si fraction === 1 (voir buildRecap :
+              // sinon "presque", delta > 0 mais pas "correct") — même
+              // convention que association/timeline/rangement.
+              q.historyEntry.results[p.token] = fraction === 1 ? 'correct' : 'incorrect'
               q.historyEntry.deltas[p.token] = delta
               q.historyEntry.answers[p.token] = submitted.join(', ')
             }
           }
           q.answered?.add(token)
-          q.submissions?.set(token, 'correct')
+          q.submissions?.set(token, fraction === 1 ? 'correct' : 'graded')
           io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         } else {
           q.submissions?.set(token, 'incorrect')
