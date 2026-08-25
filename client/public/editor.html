@@ -182,9 +182,15 @@
         👁️ Lecture seule — ce quiz appartient à un autre créateur. Tu peux le consulter mais pas le modifier.
       </div>
 
+      <!-- Sur 2 lignes (retour utilisateur, voir design canvas "Éditeur Quiz
+           — Barre d'actions") : le titre est le champ ÉDITABLE du quiz, il
+           mérite sa propre ligne plutôt que de partager la place avec le
+           toggle de visibilité — et un peu plus voyant (voir #title
+           ci-dessous, taille + soulignement accent permanent) pour bien
+           signaler que c'est cliquable, pas juste une étiquette. -->
       <div class="editor-top-bar">
-        <div class="quiz-meta">
-          <input id="title" placeholder="Titre du quiz" maxlength="100" />
+        <input id="title" placeholder="Titre du quiz" maxlength="100" />
+        <div class="editor-top-bar-row">
           <div class="align-center d-flex gap-sm">
             <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
               <input id="isPublic" type="checkbox" class="qz-toggle-input" />
@@ -192,13 +198,13 @@
               Partager ce quiz publiquement
             </label>
           </div>
-        </div>
-        <div class="editor-actions">
-          <button id="replayTutorialBtn" class="btn" type="button" title="Revoir le tutoriel de prise en main">❔ Tutoriel</button>
-          <button id="deleteQuiz" class="btn text-danger">Supprimer ce Quiz</button>
-          <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
-          <button id="reportQuizBtn" class="btn text-danger d-none">🚩 Signaler</button>
-          <button id="duplicateQuiz" class="btn btn-primary px-32 d-none">Dupliquer dans mes quiz</button>
+          <div class="editor-actions">
+            <button id="replayTutorialBtn" class="btn" type="button" title="Revoir le tutoriel de prise en main">❔ Tutoriel</button>
+            <button id="deleteQuiz" class="btn text-danger">Supprimer ce Quiz</button>
+            <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
+            <button id="reportQuizBtn" class="btn text-danger d-none">🚩 Signaler</button>
+            <button id="duplicateQuiz" class="btn btn-primary px-32 d-none">Dupliquer dans mes quiz</button>
+          </div>
         </div>
       </div>
       

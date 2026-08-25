@@ -5128,19 +5128,17 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   color: var(--color-danger);
 }
 
+/* 2 lignes désormais (retour utilisateur, voir design canvas "Éditeur Quiz
+   — Barre d'actions") : #title tout seul en haut (colonne), la ligne
+   toggle+actions dessous (voir .editor-top-bar-row) — remplace l'ancienne
+   disposition à une seule ligne (.quiz-meta + .editor-actions côte à côte),
+   où le titre partageait la place avec le reste au lieu d'être mis en avant
+   comme LE champ éditable de cette barre. */
 .editor-top-bar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  /* flex-wrap dès la base (pas seulement sous 900px, voir media query plus
-     bas) : à fort zoom navigateur, la largeur CSS effective rétrécit sans
-     jamais franchir ce seuil, et le titre + les boutons d'action peuvent ne
-     plus tenir sur une ligne. Sans repli, les derniers boutons (Sauvegarder)
-     se retrouvaient collés au bord droit de la carte, voire débordaient par-
-     dessus son coin arrondi (signalé par l'utilisateur, capture d'écran). */
-  flex-wrap: wrap;
-  margin-bottom: var(--space-lg);
+  flex-direction: column;
   gap: var(--space-md);
+  margin-bottom: var(--space-lg);
   background: var(--gradient-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -5148,28 +5146,37 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   box-shadow: var(--shadow-sm);
 }
 
-.quiz-meta {
-  flex: 1;
-  display: flex;
-  gap: var(--space-md);
-  align-items: center;
-}
-
-.quiz-meta input#title {
-  font-size: 24px;
+.editor-top-bar input#title {
+  font-size: 30px;
   font-weight: 800;
   border: none;
   background: transparent;
-  padding: 8px 0;
+  padding: 6px 2px 10px;
   border-radius: 0;
-  border-bottom: 2px solid transparent;
-  width: auto;
-  min-width: 300px;
+  width: 100%;
+  /* Soulignement accent PERMANENT (pas seulement au focus comme avant) :
+     rien d'autre ne distingue visuellement "ceci se tape au clavier" d'un
+     simple titre de carte statique tant qu'on n'a pas cliqué dedans. */
+  border-bottom: 2px solid rgba(var(--color-accent-rgb),0.35);
 }
 
-.quiz-meta input#title:focus {
+.editor-top-bar input#title:focus {
   box-shadow: none;
   border-bottom-color: var(--color-accent);
+}
+
+.editor-top-bar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* flex-wrap dès la base (pas seulement sous 900px, voir media query plus
+     bas) : à fort zoom navigateur, la largeur CSS effective rétrécit sans
+     jamais franchir ce seuil, et le toggle + les boutons d'action peuvent ne
+     plus tenir sur une ligne. Sans repli, les derniers boutons (Sauvegarder)
+     se retrouvaient collés au bord droit de la carte, voire débordaient par-
+     dessus son coin arrondi (signalé par l'utilisateur, capture d'écran). */
+  flex-wrap: wrap;
+  gap: var(--space-md);
 }
 
 .editor-actions {
@@ -6843,6 +6850,5 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
   /* Éditeur : la grille à sidebar fixe déborde sur petit écran → on empile */
   .editor-layout { grid-template-columns: 1fr; height: auto; min-height: 0; }
   .question-sidebar { max-height: 260px; }
-  /* .editor-top-bar bascule déjà en flex-wrap dans sa règle de base. */
-  .quiz-meta { flex-wrap: wrap; }
+  /* .editor-top-bar-row bascule déjà en flex-wrap dans sa règle de base. */
 }
