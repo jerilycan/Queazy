@@ -1565,6 +1565,14 @@ const revealRangementArea = (correctItems) => {
     const correctZone = correctItems[key]?.zone
     if (!Number.isInteger(correctZone)) return
     rangementState.zoneEls[correctZone]?.drop.appendChild(el)
+    // Le MJ ne joue jamais la question (myRangementSubmission reste vide
+    // côté hôte) : ne pas colorier ses tuiles en rouge à la révélation, ça
+    // donnait l'impression qu'il avait "raté" alors qu'il ne participe pas
+    // (retour utilisateur). Juste le placement dans la bonne zone suffit.
+    if (isHost) {
+      el.classList.remove('correct-reveal', 'incorrect-reveal')
+      return
+    }
     const isCorrect = mine[key] === correctZone
     el.classList.toggle('correct-reveal', isCorrect)
     el.classList.toggle('incorrect-reveal', !isCorrect)
