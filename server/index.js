@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.4.1'
+const APP_VERSION = '2.4.2'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1382,7 +1382,15 @@ const start = async () => {
       // fuiter sur une question SUIVANTE qui ne serait pas de type "reveal".
       const reponseImage = payload?.type === 'reveal' ? (payload?.reponseImageUrl || room.pendingRevealAnswer || null) : undefined
       room.pendingRevealAnswer = null
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length, options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage }
+      // zones : même oubli, une 4e fois (retour utilisateur, récap MJ
+      // "Makou → — Jer → —..." — zoneLabel() dans answer:submit retombait
+      // systématiquement sur '—' faute de q.zones ici) — après q.image,
+      // q.audio et q.zones côté client (index.js, la fonction `norm`), cette
+      // fois-ci c'est CET objet `question` (celui réellement utilisé par le
+      // serveur pour scorer/décrire les réponses) qui n'avait jamais reçu le
+      // champ. Toujours le même piège : liste blanche explicite, un champ
+      // spécifique à un type oublié dedans disparaît silencieusement.
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length, options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
