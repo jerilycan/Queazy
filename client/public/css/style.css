@@ -1840,7 +1840,8 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 #associationArea.is-locked,
 #timelineList.is-locked,
 #imageWrap.is-locked,
-#blindtestFields.is-locked {
+#blindtestFields.is-locked,
+#rangementArea.is-locked {
   opacity: 0.5;
   pointer-events: none;
 }
@@ -2025,6 +2026,132 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .timeline-list.is-revealed .timeline-item { cursor: default; }
 .timeline-item.correct-reveal { border-color: var(--tile-green); box-shadow: 0 0 0 4px rgba(var(--tile-green-rgb),0.3), var(--shadow-md); }
 .timeline-item.incorrect-reveal { border-color: var(--color-danger); opacity: 0.8; }
+
+/* Question "rangement" (tâche 013) : zones nommées par le créateur, cartes
+   à y glisser-déposer pour de vrai (retour utilisateur — voir index.js
+   wireRangementCardDrag, une carte détachée qui suit le pointeur, pas un
+   tap-tap). Repris du canvas de design "Zones / époques" validé avec
+   l'utilisateur (zones en pointillés, cartes qui viennent s'y "ranger"),
+   adapté aux tokens réels de l'appli plutôt que ceux, approximatifs, de la
+   maquette. */
+.rangement-area { max-width: 700px; margin: var(--space-lg) auto 0; }
+
+/* Rangées adaptées au nombre de zones, centrées (retour utilisateur : "j'en
+   ai 5, je veux 3 puis 2 centré", puis "pas respecté sur téléphone") — même
+   recette que .options-grid.intrus-grid un peu plus bas dans ce fichier :
+   --rangement-row-cols(-mobile) posé PAR ZONE en JS (voir index.js
+   RANGEMENT_ZONE_ROW_PATTERNS(_MOBILE)) pilote la largeur de chaque zone,
+   flex-wrap + justify-content:center centre naturellement toute rangée
+   incomplète. Contrairement à "intrus", ici la même logique s'applique en
+   dessous de 900px (juste avec un motif plafonné à 2 colonnes) plutôt
+   qu'une grille mobile figée : le nom de zone doit rester lisible. */
+.rangement-zones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+.rangement-zone {
+  flex: 0 0 calc((100% - (var(--rangement-row-cols-mobile, 2) - 1) * var(--space-sm)) / var(--rangement-row-cols-mobile, 2));
+  max-width: calc((100% - (var(--rangement-row-cols-mobile, 2) - 1) * var(--space-sm)) / var(--rangement-row-cols-mobile, 2));
+}
+@media (min-width: 900px) {
+  .rangement-zone {
+    flex-basis: calc((100% - (var(--rangement-row-cols, 3) - 1) * var(--space-sm)) / var(--rangement-row-cols, 3));
+    max-width: calc((100% - (var(--rangement-row-cols, 3) - 1) * var(--space-sm)) / var(--rangement-row-cols, 3));
+  }
+}
+.rangement-zone {
+  min-height: 160px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255,255,255,0.03);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+/* Zone survolée pendant un glisser en cours (classe posée/retirée en JS au
+   fil du pointermove, voir wireRangementCardDrag) — seul repère visuel de
+   "où ça va se déposer si je relâche maintenant". */
+.rangement-zone.drag-over {
+  border-color: var(--color-accent);
+  background: rgba(var(--color-accent-rgb),0.1);
+}
+.rangement-zone-label {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+.rangement-zone-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.rangement-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.rangement-card {
+  background: var(--color-card);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--color-text);
+  text-align: center;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  border: 2px solid transparent;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.rangement-card:hover { transform: translateY(-2px); }
+/* Carte activement saisie (voir index.js wireRangementCardDrag) — détachée
+   dans document.body en position:fixed le temps du geste, suit le pointeur
+   librement au-dessus de tout (z-index élevé, ombre creusée pour bien la
+   détacher visuellement des zones qu'elle survole). */
+.rangement-card.dragging {
+  cursor: grabbing;
+  z-index: 1000;
+  box-shadow: var(--shadow-lg);
+  transform: scale(1.05) rotate(-2deg);
+  transition: none;
+}
+.rangement-card.correct-reveal { border-color: var(--tile-green); box-shadow: 0 0 0 4px rgba(var(--tile-green-rgb),0.3), var(--shadow-sm); cursor: default; }
+.rangement-card.incorrect-reveal { border-color: var(--color-danger); opacity: 0.85; cursor: default; }
+.rangement-zones.is-revealed .rangement-card { cursor: default; }
+.rangement-zones.is-revealed .rangement-zone:hover { border-color: var(--color-border); background: rgba(255,255,255,0.03); }
+
+/* <select> d'assignation de zone côté éditeur (voir editor.js
+   renderRangementItems) — classe dédiée plutôt que .qz-select, réservée à
+   un tout autre composant (menu déroulant "maison"), pas un <select>
+   natif. Même recette visuelle que #qType (voir plus bas), simplifiée. */
+.rangement-zone-select {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rangement-zone-select:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* Révélation "order" : comparaison côte à côte plutôt qu'une seule liste
    qui se réordonne sous les yeux (l'ancien système forçait à retenir "où
    j'avais mis quoi" pendant l'animation, illisible — voir historique de
@@ -4458,6 +4585,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .question-item.type-blindtest { --qt-color: var(--color-sky); }
 .question-item.type-association { --qt-color: var(--tile-bronze); }
 .question-item.type-timeline { --qt-color: var(--color-teal); }
+.question-item.type-rangement { --qt-color: var(--color-accent-2); }
 .question-item.type-intrus { --qt-color: var(--color-violet); }
 .question-item.type-zoomguess { --qt-color: var(--color-indigo); }
 .question-item.type-pbac { --qt-color: var(--color-lime); }

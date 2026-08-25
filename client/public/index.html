@@ -676,6 +676,16 @@
           <div id="timelineArea" class="timeline-area d-none">
             <div id="timelineList" class="timeline-list"></div>
           </div>
+          <!-- Tâche 013, "rangement" : les zones (noms connus dès le début,
+               voir index.js payload.zones) sont rendues en colonnes dans
+               #rangementZones, les cartes pas encore placées vivent dans
+               #rangementTray — interaction tap-tap (comme "association",
+               voir associationState/completeAssociationPair) plutôt qu'un
+               vrai glisser multi-cibles, voir index.js buildRangementArea. -->
+          <div id="rangementArea" class="rangement-area d-none">
+            <div id="rangementZones" class="rangement-zones"></div>
+            <div id="rangementTray" class="rangement-tray"></div>
+          </div>
           <div id="associationArea" class="association-area d-none">
             <svg id="associationLinksSvg" class="association-links-svg" aria-hidden="true"></svg>
             <div class="association-col">

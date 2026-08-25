@@ -278,6 +278,7 @@
                 <option value="intrus">🎯 Intrus</option>
                 <option value="pbac">🎩 Petit Bac (catégorie ouverte)</option>
                 <option value="recherche">🔦 Recherche</option>
+                <option value="rangement">🗂️ Rangement</option>
               </select>
               <!-- Aperçu de la mécanique (retour utilisateur : réutiliser la
                    démo joueur ici aussi) — même texte que la popup montrée
@@ -471,6 +472,27 @@
             </div>
             <button id="addTimelineEvent" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter un événement</button>
             <p class="text-muted font-13 mt-8">La date sert uniquement à calculer l'ordre correct (nombres négatifs acceptés pour avant J.-C.) — jamais montrée aux joueurs. Trie automatiquement à la sauvegarde.</p>
+          </div>
+
+          <!-- Tâche 013 : "rangement" — les joueurs glissent des cartes dans
+               des ZONES nommées par le créateur (au lieu de les remettre
+               dans un ordre précis comme "timeline"). Deux listes
+               d'édition : les zones elles-mêmes (nom + ordre), puis les
+               cartes, chacune assignée à une zone via un <select> rempli en
+               JS (voir editor.js renderRangementItems). -->
+          <div id="rangementSection" class="detail-section d-none">
+            <label>Zones (2 à 5), glisser pour réordonner</label>
+            <div id="rangementZoneList" class="options-editor">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="addRangementZone" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une zone</button>
+
+            <label class="mt-16">Cartes (4 à 12) — assigne chacune à une zone</label>
+            <div id="rangementItemList" class="options-editor">
+              <!-- Rempli par JS -->
+            </div>
+            <button id="addRangementItem" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une carte</button>
+            <p class="text-muted font-13 mt-8">Les joueurs voient les noms de zones dès le début du jeu — seule l'assignation de chaque carte à sa zone reste cachée jusqu'à la révélation.</p>
           </div>
 
           <div id="intrusSection" class="detail-section d-none">

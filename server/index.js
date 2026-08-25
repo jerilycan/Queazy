@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.3.0'
+const APP_VERSION = '2.4.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1399,7 +1399,7 @@ const start = async () => {
       // doit jamais être lisible en devtools avant même d'avoir commencé à
       // explorer l'image.
       const { correct, explanation, reponseImageUrl, ...payloadWithoutCorrectOrExplanation } = payload || {}
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal' || payload?.type === 'recherche')
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'rangement' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal' || payload?.type === 'recherche')
         ? payloadWithoutCorrectOrExplanation
         : { ...payloadWithoutCorrectOrExplanation, correct }
 
@@ -1619,6 +1619,53 @@ const start = async () => {
             // seule ligne tronquée (retour hôte : "doit être lisible").
             q.historyEntry.answerDetails = q.historyEntry.answerDetails || {}
             q.historyEntry.answerDetails[p.token] = pairs.map((pair, i) => `${pair.a || '(image)'} → ${bLabel(submitted[i])}`).join('\n')
+          }
+        }
+        q.answered?.add(token)
+        q.submissions?.set(token, 'graded')
+        io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        emitProgress()
+        return
+      }
+
+      if (q.type === 'rangement') {
+        // q.correct = [{title, description, zone}, ...] (voir question:show),
+        // "zone" = index dans q.zones. submitted = { [key]: zoneIdx } (voir
+        // index.js getCurrentRangementAssignments), "key" = index d'origine
+        // de la carte — une carte jamais posée par le joueur est simplement
+        // absente de l'objet, comptée fausse comme les autres. Score
+        // proportionnel, même famille que "association" ci-dessus :
+        // pointsFor() × (correctCount / total).
+        let submitted
+        try { submitted = JSON.parse(payload?.content || '{}') } catch { submitted = null }
+        const items = Array.isArray(q.correct) ? q.correct : []
+        if (!submitted || typeof submitted !== 'object' || Array.isArray(submitted) || items.length === 0) return
+        const itemTotal = items.length
+        const correctCount = items.reduce((acc, it, i) => acc + (submitted[i] === it.zone ? 1 : 0), 0)
+        const fraction = Math.max(0, Math.min(1, correctCount / itemTotal))
+        const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * fraction)
+        const total = (room.scores.get(socket.id) || 0) + delta
+        room.scores.set(socket.id, total)
+        const p = room.players.get(socket.id)
+        if (p?.token) {
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
+          if (q.historyEntry) {
+            // Label binaire pour le récap/podium (comme association) :
+            // "correct" seulement si TOUTES les cartes sont bien rangées,
+            // même si le score, lui, reste proportionnel.
+            q.historyEntry.results[p.token] = correctCount === itemTotal ? 'correct' : 'incorrect'
+            q.historyEntry.deltas[p.token] = delta
+            const zoneLabel = (zIdx) => (Array.isArray(q.zones) && q.zones[zIdx]) || '—'
+            const describe = () => items.map((it, i) => {
+              const placed = submitted[i]
+              return `${it.title || '?'} → ${placed !== undefined ? zoneLabel(placed) : '(non placée)'}`
+            })
+            q.historyEntry.answers[p.token] = describe().join(' · ')
+            // Une ligne par carte (séparateur \n) pour le détail par joueur
+            // du panneau récap — même raison que "association" plus haut :
+            // illisible sur une seule ligne condensée dès plusieurs cartes.
+            q.historyEntry.answerDetails = q.historyEntry.answerDetails || {}
+            q.historyEntry.answerDetails[p.token] = describe().join('\n')
           }
         }
         q.answered?.add(token)

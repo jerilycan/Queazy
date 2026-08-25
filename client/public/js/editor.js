@@ -223,6 +223,27 @@ const addTimelineEventBtn = document.getElementById('addTimelineEvent')
 const TIMELINE_MIN_EVENTS = 3
 const TIMELINE_MAX_EVENTS = 8
 
+// Question "rangement" (tâche 013) : les joueurs glissent/rangent des
+// cartes dans des ZONES nommées par le créateur (ex. "Avant 1900",
+// "1900-1950"...), au lieu de les remettre dans un ordre précis comme
+// "timeline" — moins exigeant qu'une date, plus proche d'un tri par
+// catégorie. Bornes un peu plus larges que timeline/intrus (3-8) : les
+// zones tolèrent davantage de cartes qu'une frise à ordonner précisément.
+const rangementSection = document.getElementById('rangementSection')
+const rangementZoneList = document.getElementById('rangementZoneList')
+const addRangementZoneBtn = document.getElementById('addRangementZone')
+const rangementItemList = document.getElementById('rangementItemList')
+const addRangementItemBtn = document.getElementById('addRangementItem')
+const RANGEMENT_MIN_ZONES = 2
+const RANGEMENT_MAX_ZONES = 5
+const RANGEMENT_MIN_ITEMS = 4
+const RANGEMENT_MAX_ITEMS = 12
+// Nettement plus court que TEXT_SHORT_MAXLENGTH (120, pensé pour un titre de
+// carte) : un nom de zone s'affiche dans un espace étroit (en-tête de zone,
+// option de <select>, "carte" côté récap) — un nom trop long y déborderait
+// ou casserait la mise en page en plusieurs endroits à la fois.
+const RANGEMENT_ZONE_NAME_MAXLENGTH = 24
+
 const intrusSection = document.getElementById('intrusSection')
 const pbacSection = document.getElementById('pbacSection')
 const intrusEditList = document.getElementById('intrusEditList')
@@ -381,7 +402,7 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
-    addAssociationPairBtn, addTimelineEventBtn, intrusPhotosUploadInput, replayTutorialBtn,
+    addAssociationPairBtn, addTimelineEventBtn, addRangementZoneBtn, addRangementItemBtn, intrusPhotosUploadInput, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn, zoomGuessZoomInput,
@@ -584,7 +605,8 @@ const wireQuestionDrag = (item, idx) => {
 const QTYPE_ICON = {
   free: '📝', mcq: '🔘', truefalse: '✅', graduation: '↔️', order: '↕️',
   image: '📍', zoomguess: '🔍', reveal: '🖼️', blindtest: '🎵',
-  association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩', recherche: '🔦'
+  association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩', recherche: '🔦',
+  rangement: '🗂️'
 }
 
 // Miroir JS des règles .question-item.type-* de style.css (--qt-color) —
@@ -598,7 +620,10 @@ const QTYPE_COLOR = {
   truefalse: 'var(--tile-red)', order: 'var(--color-amber)', image: 'var(--color-cyan)',
   blindtest: 'var(--color-sky)', association: 'var(--tile-bronze)', timeline: 'var(--color-teal)',
   intrus: 'var(--color-violet)', zoomguess: 'var(--color-indigo)', pbac: 'var(--color-lime)',
-  reveal: 'var(--tile-silver)', recherche: 'var(--color-flame)'
+  reveal: 'var(--tile-silver)', recherche: 'var(--color-flame)',
+  // Réutilise --color-accent-2 (déjà défini, jamais pris comme couleur de
+  // type jusqu'ici) plutôt que d'ajouter un nouveau token CSS pour ça seul.
+  rangement: 'var(--color-accent-2)'
 }
 
 // Écran "aucune question" (nouvelle DA, tâche 003, décision validée) : un
@@ -1728,6 +1753,8 @@ const selectQuestion = (index) => {
   renderCorrectArtistList()
   renderAssociationPairs()
   renderTimelineEvents()
+  renderRangementZones()
+  renderRangementItems()
   renderIntrusOptions()
   toggleTypeSections()
   updateSidebar()
@@ -1776,6 +1803,7 @@ const QTYPE_HINTS = {
   zoomguess: { icon: '🔍', text: 'Les joueurs devinent ce que montre l\'image avant qu\'elle ne se dézoome complètement.', color: '#5865f2', rgb: '88,101,242' },
   association: { icon: '🔗', text: 'Les joueurs relient chaque élément de gauche à son binôme à droite.', color: '#ff9f5a', rgb: '255,159,90' },
   timeline: { icon: '⏳', text: 'Les joueurs placent les événements dans l\'ordre chronologique.', color: '#14e0b8', rgb: '20,224,184' },
+  rangement: { icon: '🗂️', text: 'Les joueurs rangent chaque carte dans la bonne zone.', color: '#7b2ff7', rgb: '123,47,247' },
   intrus: { icon: '🎯', text: 'Les joueurs repèrent la photo qui n\'a rien à voir avec les autres.', color: '#b34bf5', rgb: '179,75,245' },
   pbac: { icon: '🎩', text: 'Les joueurs tapent une réponse libre, jugée par toi pendant la partie — pas de liste à préparer.', color: '#c8f542', rgb: '200,245,66' },
   recherche: { icon: '🔦', text: 'Les joueurs balaient l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, façon lampe torche.', color: '#ff6a1a', rgb: '255,106,26' }
@@ -1804,6 +1832,7 @@ const toggleTypeSections = () => {
   if (blindtestSection) blindtestSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
+  if (rangementSection) rangementSection.classList.toggle('d-none', qType.value !== 'rangement')
   if (intrusSection) intrusSection.classList.toggle('d-none', qType.value !== 'intrus')
   if (pbacSection) pbacSection.classList.toggle('d-none', qType.value !== 'pbac')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
@@ -2596,6 +2625,20 @@ const isValidTimelineEvents = (correct) =>
   Array.isArray(correct) && correct.length >= 1 &&
   correct.every(e => e && typeof e === 'object' && typeof e.title === 'string')
 
+// --- Question "rangement" : q.zones = ['Nom A', ...] (public dès l'envoi
+// aux joueurs, voir index.js), q.correct = [{title, description, zone}, ...]
+// où "zone" est l'INDEX dans q.zones (pas le nom en clair — évite un risque
+// de désync si deux zones portaient un nom identique), cachée jusqu'à la
+// révélation comme "date" pour timeline.
+const isValidRangementZones = (zones) =>
+  Array.isArray(zones) && zones.length >= 1 &&
+  zones.every(z => typeof z === 'string')
+
+const isValidRangementItems = (correct, zones) =>
+  Array.isArray(correct) && correct.length >= 1 &&
+  correct.every(it => it && typeof it === 'object' && typeof it.title === 'string' &&
+    Number.isInteger(it.zone) && it.zone >= 0 && it.zone < (Array.isArray(zones) ? zones.length : 0))
+
 const TIMELINE_EDIT_LIST_GAP = 8
 let timelineEditDragActive = false
 
@@ -2742,6 +2785,255 @@ if (addTimelineEventBtn) {
     }
     q.correct.push({ title: '', description: '', date: 0 })
     renderTimelineEvents()
+  }
+}
+
+// --- Question "rangement" (tâche 013) : q.zones = ['Nom A', ...], q.correct
+// = [{title, description, zone}, ...] où "zone" est l'INDEX dans q.zones.
+// Deux listes d'édition DISTINCTES : les ZONES (glisser pour réordonner,
+// même mécanique que wireTimelineEditDrag ci-dessus) puis les CARTES (pas
+// de glisser ici — leur ordre d'affichage dans l'éditeur n'a aucun impact
+// sur le jeu, seule l'assignation à une zone compte ; contrairement à
+// "timeline" où l'ordre EST la réponse).
+
+// "zone" étant un INDEX de position (pas le nom), déplacer une zone dans la
+// liste ou en supprimer une doit remapper l'index stocké sur chaque carte
+// pour qu'elle continue à pointer vers la MÊME zone qu'avant, pas vers
+// "la zone qui occupe maintenant cette position".
+const remapZoneIndexAfterMove = (idx, from, to) => {
+  if (idx === from) return to
+  if (from < to) return (idx > from && idx <= to) ? idx - 1 : idx
+  return (idx >= to && idx < from) ? idx + 1 : idx
+}
+const remapZoneIndexAfterDelete = (idx, deletedIdx) => {
+  if (idx === deletedIdx) return 0 // zone supprimée : repli sur la 1re zone restante
+  return idx > deletedIdx ? idx - 1 : idx
+}
+
+const RANGEMENT_ZONE_LIST_GAP = 8
+let rangementZoneDragActive = false
+
+const wireRangementZoneDrag = (row) => {
+  row.addEventListener('pointerdown', (e) => {
+    if (readOnly || rangementZoneDragActive) return
+    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
+    e.preventDefault()
+    rangementZoneDragActive = true
+    const startY = e.clientY
+    row.classList.add('dragging')
+    try { row.setPointerCapture(e.pointerId) } catch {}
+
+    const others = Array.from(rangementZoneList.children).filter(c => c !== row)
+    const baseRects = others.map(c => c.getBoundingClientRect())
+    const startSlot = Array.from(rangementZoneList.children).indexOf(row)
+    const itemHeight = row.getBoundingClientRect().height + RANGEMENT_ZONE_LIST_GAP
+    let currentSlot = startSlot
+
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY
+      row.style.transform = `translateY(${dy}px) scale(1.02)`
+      const rect = row.getBoundingClientRect()
+      const center = rect.top + rect.height / 2
+      let newSlot = 0
+      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
+      if (newSlot === currentSlot) return
+      currentSlot = newSlot
+      others.forEach((c, i) => {
+        let shift = 0
+        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
+        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
+        c.style.transition = 'transform 0.18s ease'
+        c.style.transform = shift ? `translateY(${shift}px)` : ''
+      })
+    }
+
+    const cleanup = (applyReorder) => {
+      row.removeEventListener('pointermove', onMove)
+      row.removeEventListener('pointerup', onUp)
+      row.removeEventListener('pointercancel', onCancel)
+      rangementZoneDragActive = false
+      const q = questions[activeIndex]
+      if (applyReorder && currentSlot !== startSlot && q && Array.isArray(q.zones)) {
+        const [moved] = q.zones.splice(startSlot, 1)
+        q.zones.splice(currentSlot, 0, moved)
+        if (Array.isArray(q.correct)) {
+          q.correct.forEach(it => {
+            if (Number.isInteger(it.zone)) it.zone = remapZoneIndexAfterMove(it.zone, startSlot, currentSlot)
+          })
+        }
+      }
+      renderRangementZones()
+      renderRangementItems()
+    }
+    const onUp = (ev) => { try { row.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
+    const onCancel = () => cleanup(false)
+
+    row.addEventListener('pointermove', onMove)
+    row.addEventListener('pointerup', onUp)
+    row.addEventListener('pointercancel', onCancel)
+  })
+}
+
+const renderRangementZones = () => {
+  if (!rangementZoneList) return
+  rangementZoneList.innerHTML = ''
+  const q = questions[activeIndex]
+  if (!q || q.type !== 'rangement') return
+  if (!isValidRangementZones(q.zones)) q.zones = ['Zone A', 'Zone B']
+
+  q.zones.forEach((name, idx) => {
+    const row = document.createElement('div')
+    row.className = 'option-row order-edit-row'
+    row.dataset.index = idx
+
+    if (!readOnly) {
+      const handle = document.createElement('span')
+      handle.className = 'q-drag-handle'
+      handle.textContent = '⠿'
+      row.appendChild(handle)
+      wireRangementZoneDrag(row)
+    }
+
+    const num = document.createElement('span')
+    num.className = 'order-edit-num'
+    num.textContent = idx + 1
+    row.appendChild(num)
+
+    const nameInput = document.createElement('input')
+    nameInput.type = 'text'
+    nameInput.value = name || ''
+    nameInput.placeholder = 'Nom de la zone (ex: "Avant 1900")'
+    nameInput.disabled = readOnly
+    nameInput.maxLength = RANGEMENT_ZONE_NAME_MAXLENGTH
+    nameInput.oninput = (e) => { q.zones[idx] = e.target.value }
+    // Le libellé affiché dans les <select> des cartes doit suivre le
+    // renommage en direct — re-render complet plutôt qu'un patch ciblé
+    // (liste courte, coût négligeable), sinon une zone renommée reste
+    // affichée sous son ancien nom dans les cartes déjà assignées.
+    nameInput.onblur = () => renderRangementItems()
+    row.appendChild(nameInput)
+
+    if (!readOnly) {
+      const del = document.createElement('button')
+      del.className = 'btn-icon btn-danger'
+      del.innerHTML = '&times;'
+      del.onclick = () => {
+        if (q.zones.length <= RANGEMENT_MIN_ZONES) {
+          showToast(`Il faut au moins ${RANGEMENT_MIN_ZONES} zones`, 'error')
+          return
+        }
+        q.zones.splice(idx, 1)
+        if (Array.isArray(q.correct)) {
+          q.correct.forEach(it => {
+            if (Number.isInteger(it.zone)) it.zone = remapZoneIndexAfterDelete(it.zone, idx)
+          })
+        }
+        renderRangementZones()
+        renderRangementItems()
+      }
+      row.appendChild(del)
+    }
+
+    rangementZoneList.appendChild(row)
+  })
+}
+
+if (addRangementZoneBtn) {
+  addRangementZoneBtn.onclick = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    if (!isValidRangementZones(q.zones)) q.zones = []
+    if (q.zones.length >= RANGEMENT_MAX_ZONES) {
+      showToast(`Maximum ${RANGEMENT_MAX_ZONES} zones`, 'error')
+      return
+    }
+    q.zones.push('')
+    renderRangementZones()
+    renderRangementItems() // le <select> de chaque carte gagne la nouvelle option
+  }
+}
+
+const renderRangementItems = () => {
+  if (!rangementItemList) return
+  rangementItemList.innerHTML = ''
+  const q = questions[activeIndex]
+  if (!q || q.type !== 'rangement') return
+  if (!isValidRangementZones(q.zones)) q.zones = ['Zone A', 'Zone B']
+  if (!isValidRangementItems(q.correct, q.zones)) {
+    q.correct = [
+      { title: '', description: '', zone: 0 },
+      { title: '', description: '', zone: 0 },
+      { title: '', description: '', zone: 1 },
+      { title: '', description: '', zone: 1 }
+    ]
+  }
+
+  q.correct.forEach((it, idx) => {
+    const row = document.createElement('div')
+    row.className = 'option-row order-edit-row'
+    row.dataset.index = idx
+
+    const titleInput = document.createElement('input')
+    titleInput.type = 'text'
+    titleInput.value = it.title || ''
+    titleInput.placeholder = 'Titre de la carte'
+    titleInput.disabled = readOnly
+    titleInput.maxLength = TEXT_SHORT_MAXLENGTH
+    titleInput.oninput = (e) => { it.title = e.target.value }
+    row.appendChild(titleInput)
+
+    // Assignation à une zone : <select>, pas de glisser — bien plus direct
+    // que de faire viser une case précise au pointeur, et fonctionne aussi
+    // bien au clavier/lecteur d'écran (voir le plan, trade-off tap-tap
+    // retenu pour le jeu lui-même, même logique ici côté édition).
+    const zoneSelect = document.createElement('select')
+    zoneSelect.disabled = readOnly
+    // Classe dédiée (pas .qz-select : cette classe-là habille un tout autre
+    // composant, un menu déroulant "maison" avec sa propre structure
+    // trigger+liste — l'appliquer à un <select> natif ne collerait pas).
+    // Stylée à l'étape CSS du plan.
+    zoneSelect.className = 'rangement-zone-select'
+    ;(q.zones || []).forEach((name, zIdx) => {
+      const opt = document.createElement('option')
+      opt.value = String(zIdx)
+      opt.textContent = name || `Zone ${zIdx + 1}`
+      if (zIdx === it.zone) opt.selected = true
+      zoneSelect.appendChild(opt)
+    })
+    zoneSelect.onchange = (e) => { it.zone = Number(e.target.value) }
+    row.appendChild(zoneSelect)
+
+    if (!readOnly) {
+      const del = document.createElement('button')
+      del.className = 'btn-icon btn-danger'
+      del.innerHTML = '&times;'
+      del.onclick = () => {
+        if (q.correct.length <= RANGEMENT_MIN_ITEMS) {
+          showToast(`Il faut au moins ${RANGEMENT_MIN_ITEMS} cartes`, 'error')
+          return
+        }
+        q.correct.splice(idx, 1)
+        renderRangementItems()
+      }
+      row.appendChild(del)
+    }
+
+    rangementItemList.appendChild(row)
+  })
+}
+
+if (addRangementItemBtn) {
+  addRangementItemBtn.onclick = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    if (!isValidRangementZones(q.zones)) q.zones = ['Zone A', 'Zone B']
+    if (!isValidRangementItems(q.correct, q.zones)) q.correct = []
+    if (q.correct.length >= RANGEMENT_MAX_ITEMS) {
+      showToast(`Maximum ${RANGEMENT_MAX_ITEMS} cartes`, 'error')
+      return
+    }
+    q.correct.push({ title: '', description: '', zone: 0 })
+    renderRangementItems()
   }
 }
 
@@ -3095,6 +3387,20 @@ qType.onchange = () => {
     // [{title,description,date}, ...] attendue ici : on repart propre sauf
     // s'il a déjà cette forme (ex. retour sur ce type).
     if (!isValidTimelineEvents(q.correct)) q.correct = [{ title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }]
+  } else if (qType.value === 'rangement') {
+    // q.zones/q.correct venant d'un autre type n'ont pas la forme attendue
+    // ici (zones = liste de noms, correct = [{title,description,zone}, ...])
+    // : on repart propre sauf s'ils ont déjà cette forme (ex. retour sur ce
+    // type). Défaut à 2 zones/4 cartes — les bornes minimales du type.
+    if (!isValidRangementZones(q.zones)) q.zones = ['Zone A', 'Zone B']
+    if (!isValidRangementItems(q.correct, q.zones)) {
+      q.correct = [
+        { title: '', description: '', zone: 0 },
+        { title: '', description: '', zone: 0 },
+        { title: '', description: '', zone: 1 },
+        { title: '', description: '', zone: 1 }
+      ]
+    }
   } else if (qType.value === 'intrus') {
     // q.options venant d'un autre type n'a pas la forme [{id,image}, ...]
     // attendue ici (ni q.correct=[id]) : on repart propre dans les deux cas,
@@ -3130,6 +3436,8 @@ qType.onchange = () => {
   renderCorrectArtistList()
   renderAssociationPairs()
   renderTimelineEvents()
+  renderRangementZones()
+  renderRangementItems()
   renderIntrusOptions()
   // Sans ça, la pastille de couleur/icône de type dans la sidebar (voir
   // updateSidebar) restait sur l'ancien type jusqu'au prochain rendu complet
@@ -3213,6 +3521,8 @@ const deleteQuestionAt = (index) => {
     renderCorrectArtistList()
     renderAssociationPairs()
     renderTimelineEvents()
+    renderRangementZones()
+    renderRangementItems()
     renderIntrusOptions()
     toggleTypeSections()
   } else if (index < activeIndex) {
@@ -3566,6 +3876,36 @@ const validateQuestion = (q, i) => {
     }
   }
 
+  // Pour "rangement" (tâche 013), entre 2 et 5 zones toutes nommées, et
+  // entre 4 et 12 cartes toutes titrées — chaque carte pointe déjà forcément
+  // vers un index de zone existant (q.zones/q.correct sont tenus cohérents
+  // en continu par renderRangementZones/Items, voir remapZoneIndexAfter*),
+  // pas besoin de re-vérifier cette partie ici.
+  if (q.type === 'rangement') {
+    const zones = Array.isArray(q.zones) ? q.zones : []
+    if (zones.length < RANGEMENT_MIN_ZONES || zones.length > RANGEMENT_MAX_ZONES) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : il faut entre ${RANGEMENT_MIN_ZONES} et ${RANGEMENT_MAX_ZONES} zones`, 'error')
+      return false
+    }
+    if (zones.some(z => !z || !z.trim())) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : chaque zone doit avoir un nom`, 'error')
+      return false
+    }
+    const items = Array.isArray(q.correct) ? q.correct : []
+    if (items.length < RANGEMENT_MIN_ITEMS || items.length > RANGEMENT_MAX_ITEMS) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : il faut entre ${RANGEMENT_MIN_ITEMS} et ${RANGEMENT_MAX_ITEMS} cartes`, 'error')
+      return false
+    }
+    if (items.some(it => !it.title || !it.title.trim())) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : chaque carte doit avoir un titre`, 'error')
+      return false
+    }
+  }
+
   // Pour "intrus", entre 3 et 8 photos toutes importées, et exactement un
   // intrus désigné (le radio garantit déjà "au plus un" côté UI ; ici on
   // vérifie qu'il y en a bien "au moins un").
@@ -3905,7 +4245,10 @@ const EDITOR_TOUR_STEPS = [
   // Ordre aligné sur la disposition actuelle du formulaire (retour
   // utilisateur) : type + minuteur remontés tout en haut (juste sous
   // Brouillon), avant l'énoncé — voir editor.html.
-  { target: '#qType', title: 'Type de question', text: '13 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, Révélation, blind test, association, timeline, intrus, Petit Bac, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
+  // 15 types au total (retour utilisateur, tâche 013 : "recherche" et
+  // "rangement" manquaient déjà à l'appel — "recherche" (tâche 009) n'avait
+  // jamais été ajouté ici, le compte "13" datait donc d'avant lui).
+  { target: '#qType', title: 'Type de question', text: '15 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, Révélation, blind test, association, timeline, rangement, intrus, Petit Bac, recherche, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
   { target: '#qTimer', title: 'Temps imparti', text: 'Règle en secondes le temps laissé aux joueurs pour répondre, avec les boutons - et +.' },
   { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
   { target: '#illustrationUpload', title: 'Illustration (optionnelle)', text: 'Ajoute une image au-dessus de la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },

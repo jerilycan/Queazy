@@ -318,6 +318,7 @@ const QUESTION_TYPE_META = {
   blindtest: { icon: '🎵', label: 'Blind Test', color: '#7b2ff7', rgb: '123,47,247', hint: 'Écoute l\'extrait, puis trouve de quoi il s\'agit.' },
   association: { icon: '🔗', label: 'Association', color: '#ff9f5a', rgb: '255,159,90', hint: 'Relie chaque élément de gauche à son binôme à droite.' },
   timeline: { icon: '⏳', label: 'Timeline', color: '#14e0b8', rgb: '20,224,184', hint: 'Place les événements dans l\'ordre chronologique.' },
+  rangement: { icon: '🗂️', label: 'Rangement', color: '#7b2ff7', rgb: '123,47,247', hint: 'Range chaque carte dans la bonne zone.' },
   intrus: { icon: '🎯', label: 'Intrus', color: '#b34bf5', rgb: '179,75,245', hint: 'Repère la photo qui n\'a rien à voir avec les autres.' },
   pbac: { icon: '🎩', label: 'Petit Bac', color: '#c8f542', rgb: '200,245,66', hint: 'Tape ta réponse — elle sera jugée par l\'hôte, comme au vrai Petit Bac !' },
   recherche: { icon: '🔦', label: 'Recherche', color: '#ff6a1a', rgb: '255,106,26', hint: 'Balaie l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, puis valide ta réponse.' }
@@ -326,7 +327,7 @@ const QUESTION_TYPE_META = {
 // utilisateur) : l'intro reste affichée un peu plus longtemps pour ceux-là
 // avant de lancer le décompte (voir INTRO_DURATION_COMPLEX_MS). Les autres
 // (QCM, Vrai/Faux, texte libre...) sont auto-explicites, intro plus courte.
-const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche'])
+const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche', 'rangement'])
 const questionTypeBadge = document.getElementById('questionTypeBadge')
 const questionTypeBadgeIcon = document.getElementById('questionTypeBadgeIcon')
 const questionTypeBadgeLabel = document.getElementById('questionTypeBadgeLabel')
@@ -544,6 +545,9 @@ const orderCompareMine = document.getElementById('orderCompareMine')
 const orderCompareCorrect = document.getElementById('orderCompareCorrect')
 const timelineArea = document.getElementById('timelineArea')
 const timelineList = document.getElementById('timelineList')
+const rangementArea = document.getElementById('rangementArea')
+const rangementZonesEl = document.getElementById('rangementZones')
+const rangementTrayEl = document.getElementById('rangementTray')
 const associationArea = document.getElementById('associationArea')
 const associationColA = document.getElementById('associationColA')
 const associationColB = document.getElementById('associationColB')
@@ -1343,6 +1347,225 @@ const revealTimelineList = (correctEvents) => {
     const dateLabel = Number.isFinite(Number(correctEv?.date)) ? ` (${correctEv.date})` : ''
     el.querySelector('.timeline-item-desc').textContent = (correctEv?.description || '') + dateLabel
     const isCorrect = !!mine && mine[i]?.title === correctEv?.title
+    el.classList.toggle('correct-reveal', isCorrect)
+    el.classList.toggle('incorrect-reveal', !isCorrect)
+  })
+}
+
+// --- Question "rangement" (tâche 013) : glisser des cartes dans des zones
+// nommées par le créateur, au lieu d'un ordre précis comme "timeline" —
+// vrai glisser-déposer (retour utilisateur), la carte suit le pointeur et se
+// dépose dans la zone survolée au relâchement. Les cartes sont créées UNE
+// SEULE FOIS (voir buildRangementArea) puis simplement DÉPLACÉES d'un
+// conteneur à l'autre (appendChild) — jamais recréées, pour ne pas rejouer
+// l'animation d'entrée (voir applyTileReveal) à chaque dépôt.
+let rangementState = null // { zones, cardEls: Map(key -> element), zoneEls: [{el, drop}, ...], assignments: {key: zoneIdx} }
+let myRangementSubmission = null // assignments{} tel qu'envoyé, pour la comparaison au reveal
+let rangementDisabled = true
+const setRangementDisabled = (v) => { rangementDisabled = v }
+
+// Déplace la carte `key` vers la zone `zoneIdx` (dépose), ou vers `null`
+// (retire, retour au bac) — point d'écriture UNIQUE pour `assignments` et le
+// déplacement DOM réel, appelé à la fois par un dépôt réussi (wireRangement
+// CardDrag) et par le retrait rapide au simple clic d'une carte déjà posée.
+const moveRangementCard = (key, zoneIdx) => {
+  if (!rangementState) return
+  const el = rangementState.cardEls.get(key)
+  if (!el) return
+  if (zoneIdx === null || zoneIdx === undefined) {
+    delete rangementState.assignments[key]
+    rangementTrayEl.appendChild(el)
+  } else {
+    rangementState.assignments[key] = zoneIdx
+    rangementState.zoneEls[zoneIdx]?.drop.appendChild(el)
+  }
+}
+
+// Glisser-déposer d'une carte vers n'importe quelle zone (ou le bac) —
+// contrairement à wireOrderDrag/wireTimelineEditDrag (réordonnancement dans
+// UNE seule liste), la carte doit pouvoir traverser plusieurs conteneurs :
+// détachée dans document.body en position:fixed le temps du geste (suit le
+// pointeur librement, au-dessus de tout), puis RATTACHÉE définitivement par
+// moveRangementCard() au relâchement — qui la réinsère dans le bon
+// conteneur et efface au passage tout style de positionnement temporaire.
+// Seuil de déplacement avant d'activer le vrai glisser (DRAG_THRESHOLD) :
+// un simple tap sur une carte déjà posée la retire directement (repli
+// pratique), sans threshold un léger tremblement du doigt déclencherait à
+// tort un glisser au lieu du retrait.
+const RANGEMENT_DRAG_THRESHOLD = 4
+const wireRangementCardDrag = (el, key) => {
+  el.addEventListener('pointerdown', (e) => {
+    if (rangementDisabled || sendBtn.disabled) return
+    e.preventDefault()
+    const startX = e.clientX
+    const startY = e.clientY
+    const rect = el.getBoundingClientRect()
+    const offsetX = startX - rect.left
+    const offsetY = startY - rect.top
+    const originParent = el.parentElement
+    const originNext = el.nextSibling
+    let dragStarted = false
+    let lastZoneEl = null
+
+    const activateDrag = () => {
+      dragStarted = true
+      el.classList.add('dragging')
+      el.style.position = 'fixed'
+      el.style.width = `${rect.width}px`
+      el.style.left = `${rect.left}px`
+      el.style.top = `${rect.top}px`
+      document.body.appendChild(el)
+    }
+
+    const restoreStyles = () => {
+      el.classList.remove('dragging')
+      el.style.position = ''
+      el.style.width = ''
+      el.style.left = ''
+      el.style.top = ''
+      el.style.pointerEvents = ''
+    }
+
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+      if (!dragStarted) {
+        if (Math.hypot(dx, dy) < RANGEMENT_DRAG_THRESHOLD) return
+        activateDrag()
+      }
+      el.style.left = `${ev.clientX - offsetX}px`
+      el.style.top = `${ev.clientY - offsetY}px`
+      // pointer-events:none le temps du elementFromPoint : sans ça, la carte
+      // elle-même (juste sous le pointeur, qui la porte) serait détectée à
+      // la place de la zone qu'elle survole.
+      el.style.pointerEvents = 'none'
+      const under = document.elementFromPoint(ev.clientX, ev.clientY)
+      el.style.pointerEvents = ''
+      const zoneEl = under?.closest('.rangement-zone') || null
+      if (zoneEl !== lastZoneEl) {
+        lastZoneEl?.classList.remove('drag-over')
+        zoneEl?.classList.add('drag-over')
+        lastZoneEl = zoneEl
+      }
+    }
+
+    const cleanup = () => {
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointercancel', onCancel)
+      lastZoneEl?.classList.remove('drag-over')
+    }
+
+    const onUp = (ev) => {
+      try { el.releasePointerCapture(ev.pointerId) } catch {}
+      cleanup()
+      if (!dragStarted) {
+        // Simple clic (pas de glisser) sur une carte déjà posée : retrait
+        // rapide vers le bac, sans avoir à la re-glisser jusque-là.
+        if (rangementState?.assignments[key] !== undefined) moveRangementCard(key, null)
+        return
+      }
+      restoreStyles()
+      const zoneIdx = lastZoneEl ? Number(lastZoneEl.dataset.zone) : null
+      if (Number.isInteger(zoneIdx)) {
+        moveRangementCard(key, zoneIdx)
+      } else {
+        // Relâchée hors de toute zone : retour à sa position d'ORIGINE
+        // (bac ou zone où elle était déjà), pas un retrait implicite.
+        if (originNext) originParent.insertBefore(el, originNext)
+        else originParent.appendChild(el)
+      }
+    }
+    const onCancel = () => {
+      cleanup()
+      if (!dragStarted) return
+      restoreStyles()
+      if (originNext) originParent.insertBefore(el, originNext)
+      else originParent.appendChild(el)
+    }
+
+    try { el.setPointerCapture(e.pointerId) } catch {}
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', onUp)
+    el.addEventListener('pointercancel', onCancel)
+  })
+}
+
+// Découpage des zones en rangées adapté à leur nombre, CENTRÉES (retour
+// utilisateur) — même principe que INTRUS_ROW_PATTERNS un peu plus bas dans
+// ce fichier (5 photos -> [3,2], pas 3+3 avec la dernière à moitié vide) :
+// "rangement" est borné 2-5 zones par l'éditeur (voir editor.js
+// RANGEMENT_MIN/MAX_ZONES), donc les 4 cas possibles sont listés
+// explicitement plutôt qu'une formule générale.
+const RANGEMENT_ZONE_ROW_PATTERNS = { 2: [2], 3: [3], 4: [2, 2], 5: [3, 2] }
+// Même principe, plafonné à 2 colonnes par rangée : sur téléphone, 3 zones
+// côte à côte tiennent mal (labels tronqués), donc une rangée mobile dédiée
+// (retour utilisateur : "tres bien sur PC, mais pas respecté sur téléphone" —
+// la grille auto-fit ne centrait pas la dernière rangée incomplète).
+const RANGEMENT_ZONE_ROW_PATTERNS_MOBILE = { 2: [2], 3: [2, 1], 4: [2, 2], 5: [2, 2, 1] }
+
+const buildRangementArea = (zones, items) => {
+  if (!rangementZonesEl || !rangementTrayEl) return
+  rangementZonesEl.innerHTML = ''
+  rangementTrayEl.innerHTML = ''
+  setRangementDisabled(true)
+
+  const zoneList = zones || []
+  const rowPattern = RANGEMENT_ZONE_ROW_PATTERNS[zoneList.length] || [zoneList.length]
+  const zoneRowCols = rowPattern.flatMap(rowSize => Array(rowSize).fill(rowSize))
+  const rowPatternMobile = RANGEMENT_ZONE_ROW_PATTERNS_MOBILE[zoneList.length] || [Math.min(zoneList.length, 2)]
+  const zoneRowColsMobile = rowPatternMobile.flatMap(rowSize => Array(rowSize).fill(rowSize))
+
+  const zoneEls = []
+  zoneList.forEach((name, zIdx) => {
+    const zoneEl = document.createElement('div')
+    zoneEl.className = 'rangement-zone'
+    zoneEl.dataset.zone = zIdx
+    zoneEl.style.setProperty('--rangement-row-cols', zoneRowCols[zIdx] || 3)
+    zoneEl.style.setProperty('--rangement-row-cols-mobile', zoneRowColsMobile[zIdx] || 2)
+    const label = document.createElement('div')
+    label.className = 'rangement-zone-label'
+    label.textContent = name || `Zone ${zIdx + 1}`
+    const drop = document.createElement('div')
+    drop.className = 'rangement-zone-cards'
+    zoneEl.appendChild(label)
+    zoneEl.appendChild(drop)
+    zoneEls.push({ el: zoneEl, drop })
+    rangementZonesEl.appendChild(zoneEl)
+  })
+
+  const cardEls = new Map()
+  rangementState = { zones: zoneList, cardEls, zoneEls, assignments: {} }
+  ;(items || []).forEach((item, uid) => {
+    const el = document.createElement('div')
+    el.className = 'rangement-card'
+    el.dataset.key = item.key
+    el.textContent = item.title || ''
+    cardEls.set(item.key, el)
+    rangementTrayEl.appendChild(el)
+    wireRangementCardDrag(el, item.key)
+    applyTileReveal(el, uid)
+  })
+}
+
+const getCurrentRangementAssignments = () => rangementState ? { ...rangementState.assignments } : {}
+
+// Révélation : chaque carte migre vers sa VRAIE zone (qu'elle y ait été
+// posée ou non) — même esprit que revealTimelineList (montrer la vérité,
+// pas juste juger ce qui était affiché). `correctItems` = q.correct tel
+// quel côté serveur (voir server/index.js revealQuestion), indexé par
+// "key" (l'index d'origine, PAS l'ordre mélangé affiché au joueur) :
+// correctItems[key].zone est la bonne réponse pour cette carte.
+const revealRangementArea = (correctItems) => {
+  if (!rangementState || !Array.isArray(correctItems) || correctItems.length === 0) return
+  setRangementDisabled(true)
+  if (rangementZonesEl) rangementZonesEl.classList.add('is-revealed')
+  const mine = myRangementSubmission || {}
+  rangementState.cardEls.forEach((el, key) => {
+    const correctZone = correctItems[key]?.zone
+    if (!Number.isInteger(correctZone)) return
+    rangementState.zoneEls[correctZone]?.drop.appendChild(el)
+    const isCorrect = mine[key] === correctZone
     el.classList.toggle('correct-reveal', isCorrect)
     el.classList.toggle('incorrect-reveal', !isCorrect)
   })
@@ -2423,6 +2646,10 @@ const clearRevealState = () => {
   if (associationColB) {
     Array.from(associationColB.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   }
+  if (rangementZonesEl) {
+    rangementZonesEl.classList.remove('is-revealed')
+    Array.from(rangementZonesEl.querySelectorAll('.rangement-card')).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal', 'is-selected'))
+  }
   if (imageZonesRevealPath) imageZonesRevealPath.setAttribute('d', '')
   if (imageMarker) imageMarker.classList.remove('marker-correct', 'marker-incorrect')
   if (questionRecapCard) questionRecapCard.classList.add('d-none')
@@ -3066,7 +3293,15 @@ const loadQuizById = (id) => {
         // du blind test disparaissait silencieusement au chargement du quiz
         // (question démarrée sans le moindre son, aucune erreur visible).
         audio: q.audio,
-        explanation: q.explanation || ''
+        explanation: q.explanation || '',
+        // Même oubli, une 3e fois (retour utilisateur, tâche 013 : "aucun
+        // bloc lors de mes tests") — sans ce champ, "rangement" perdait
+        // silencieusement ses zones à CE chargement précis (celui utilisé
+        // pour lancer une vraie partie), alors que l'éditeur/la sauvegarde
+        // le gardaient très bien : q.zones tombait à `undefined`, donc
+        // buildRangementArea() côté joueur ne créait tout simplement aucune
+        // zone.
+        zones: Array.isArray(q.zones) ? q.zones : []
       }))
       loadedQuiz = {
         id: data.id,
@@ -4355,6 +4590,14 @@ const emitQuestion = (index) => {
     // pour scorer/révéler) mais n'est JAMAIS incluse ici — seuls titre/
     // description + une clé (index d'origine) partent au mélange.
     timelineItems: q.type === 'timeline' ? shuffleArray(correctOrder.map((e, i) => ({ title: e?.title ?? '', description: e?.description ?? '', key: i }))) : undefined,
+    // "rangement" (tâche 013) : zones PUBLIQUES dès le départ (ce sont les
+    // cibles à taper, jamais mélangées — leur ORDRE fait partie de
+    // l'affichage voulu par le créateur) ; rangementItems reprend le même
+    // principe que timelineItems : titre/description + clé (index d'origine)
+    // mélangés, la zone attendue (correctOrder[i].zone) n'est JAMAIS incluse
+    // ici, seulement dans q.correct côté serveur (révélée à la fin).
+    zones: q.type === 'rangement' ? q.zones : undefined,
+    rangementItems: q.type === 'rangement' ? shuffleArray(correctOrder.map((it, i) => ({ title: it?.title ?? '', description: it?.description ?? '', key: i }))) : undefined,
     min: q.min,
     max: q.max,
     // Écart accepté comme "Bonne réponse !" pour ce type, configuré par
@@ -4719,6 +4962,10 @@ socket.on('question:show', payload => {
     timelineArea.classList.toggle('d-none', payload.type !== 'timeline')
     if (timelineList) timelineList.classList.remove('is-revealed')
   }
+  if (rangementArea) {
+    rangementArea.classList.toggle('d-none', payload.type !== 'rangement')
+    if (rangementZonesEl) rangementZonesEl.classList.remove('is-revealed')
+  }
   if (imageArea) {
     imageArea.classList.toggle('d-none', payload.type !== 'image')
   }
@@ -4842,7 +5089,7 @@ socket.on('question:show', payload => {
   if (blindtestArtistInput) blindtestArtistInput.disabled = false
   // Symétrique du .add('is-locked') posé dans submitCurrentAnswer — sans
   // ça, le grisage de la question précédente resterait affiché sur celle-ci.
-  ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields].forEach(el => {
+  ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields, rangementArea].forEach(el => {
     if (el) el.classList.remove('is-locked')
   })
   // "Titre uniquement" (voir editor.js) : masque le champ artiste plutôt que
@@ -4859,7 +5106,7 @@ socket.on('question:show', payload => {
   const freeTextEl = document.getElementById('freeText')
   freeTextEl.classList.add('d-none')
   if (!isHost) {
-    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association' || payload.type === 'timeline'
+    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association' || payload.type === 'timeline' || payload.type === 'rangement'
     const isBlindtest = payload.type === 'blindtest'
     freeTextEl.classList.toggle('mcq-mode', isTileType)
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
@@ -4893,6 +5140,9 @@ socket.on('question:show', payload => {
   if (payload.type === 'timeline') {
     buildTimelineList(payload.timelineItems)
   }
+  if (payload.type === 'rangement') {
+    buildRangementArea(payload.zones, payload.rangementItems)
+  }
   if (payload.type === 'image' && payload.imageUrl) {
     buildImageAnswerArea(payload.imageUrl)
   }
@@ -4912,6 +5162,7 @@ socket.on('question:show', payload => {
   myOrderSubmission = null
   myAssociationSubmission = null
   myTimelineSubmission = null
+  myRangementSubmission = null
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -4935,6 +5186,7 @@ socket.on('question:show', payload => {
       setOrderDisabled(false)
       setAssociationDisabled(false)
       setTimelineDisabled(false)
+      setRangementDisabled(false)
       // Garde-fou en plus du nettoyage normal dans applyTileReveal
       // (animationend) : au cas où cet évènement ne se déclencherait pas
       // (onglet mis en arrière-plan pendant l'entrée, navigateur capricieux...),
@@ -5286,6 +5538,12 @@ const submitCurrentAnswer = () => {
   } else if (currentQuestionType === 'timeline') {
     myTimelineSubmission = getCurrentTimelineSubmission() // pour la comparaison au reveal (titres)
     content = JSON.stringify(getCurrentTimelineKeys()) // pour le serveur (clés = index d'origine)
+  } else if (currentQuestionType === 'rangement') {
+    // Pas d'obligation d'avoir tout rangé (score proportionnel, comme
+    // "association" ci-dessus) — une carte jamais posée est simplement
+    // absente de l'objet, comptée comme mauvaise zone côté serveur.
+    myRangementSubmission = getCurrentRangementAssignments()
+    content = JSON.stringify(myRangementSubmission)
   } else {
     content = answerInput.value.trim()
     if (!content) return
@@ -5306,6 +5564,7 @@ const submitCurrentAnswer = () => {
   setOrderDisabled(true)
   setAssociationDisabled(true)
   setTimelineDisabled(true)
+  setRangementDisabled(true)
   imageDisabled = true
   if (blindtestTitleInput) blindtestTitleInput.disabled = true
   if (blindtestArtistInput) blindtestArtistInput.disabled = true
@@ -5320,7 +5579,7 @@ const submitCurrentAnswer = () => {
   // visiblement après envoi — les autres restaient identiques à l'écran,
   // le joueur pouvait continuer à toucher/glisser sans aucun effet
   // visible et se demander si son geste avait un effet).
-  ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields].forEach(el => {
+  ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields, rangementArea].forEach(el => {
     if (el) el.classList.add('is-locked')
   })
 }
@@ -6218,6 +6477,7 @@ socket.on('timer:end', (payload) => {
     setOrderDisabled(true)
     setAssociationDisabled(true)
     setTimelineDisabled(true)
+    setRangementDisabled(true)
     imageDisabled = true
     const ft = document.getElementById('freeText')
     if (ft) ft.classList.add('d-none')
@@ -6387,6 +6647,22 @@ socket.on('question:reveal', payload => {
       showMyResultBanner()
     } else if (myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! ${correctCount}/${correctEvents.length} bien placés (+${myLastDelta} points)`, 'is-close')
+    } else {
+      showMyResultBanner('Mauvaise réponse', 'is-incorrect')
+    }
+  } else if (payload.type === 'rangement') {
+    // payload.correct = q.correct tel quel côté serveur (indexé par "key",
+    // l'index d'origine — jamais retrié, contrairement à "timeline" où
+    // l'ordre chronologique doit être recalculé, voir server/index.js
+    // revealQuestion). myRangementSubmission = { [key]: zoneIdx }.
+    const correctItems = payload.correct || []
+    revealRangementArea(correctItems)
+    const mine = myRangementSubmission || {}
+    const correctCount = correctItems.reduce((acc, it, key) => acc + (mine[key] === it?.zone ? 1 : 0), 0)
+    if (correctCount === correctItems.length && correctItems.length > 0) {
+      showMyResultBanner()
+    } else if (myAnsweredCorrectlyThisQuestion) {
+      showMyResultBanner(`Presque ! ${correctCount}/${correctItems.length} bien rangées (+${myLastDelta} points)`, 'is-close')
     } else {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }
