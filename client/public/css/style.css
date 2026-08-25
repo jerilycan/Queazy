@@ -49,6 +49,12 @@
      que d'en réutiliser un (même logique que le reste de cette liste, un
      token par type). Orange "flamme", cohérent avec le thème lampe torche. */
   --color-flame: #ff6a1a;
+  /* "indice" (tâche 014) : 16e type, tous les tokens de couleur ci-dessus
+     étaient déjà pris par un des 15 précédents (vérifié dans editor.js
+     QTYPE_COLOR) — nouveau token dédié, or/jaune chaud cohérent avec le
+     thème "ampoule". Décision validée avec l'utilisateur. */
+  --color-gold: #f2c94c;
+  --color-gold-rgb: 242,201,76;
   --color-accent-soft: rgba(255,47,176,0.14);
   --color-accent-rgb: 255,47,176;
   --color-border: rgba(255,255,255,0.10);
@@ -119,6 +125,11 @@
   --color-accent-soft: rgba(247,37,168,0.14);
   --color-accent-2: #7c3aed;
   --color-accent-2-rgb: 124,58,237;
+  /* Même valeur que le thème sombre (or/jaune chaud déjà lisible sur fond
+     clair) — présent dans les deux blocs :root comme demandé, pas de
+     variante distincte nécessaire pour ce token. */
+  --color-gold: #f2c94c;
+  --color-gold-rgb: 242,201,76;
   --shadow-sm: 0 4px 12px rgba(35,25,65,0.08);
   --shadow-md: 0 16px 40px rgba(35,25,65,0.16);
   --shadow-lg: 0 20px 48px rgba(35,25,65,0.22);
@@ -2641,6 +2652,125 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   -webkit-mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
 }
 
+/* Question "indice" (tâche 014, animation revue via canvas de design —
+   retour utilisateur) : indices texte/image qui apparaissent
+   progressivement pendant la question, chacun à son propre délai. Carte
+   centrale (.indice-central-card) = indice actuel, agrandi ; bande latérale
+   (.indice-history) = indices précédents, réduits mais toujours visibles
+   (voir index.js updateIndiceArea/flipIndiceCardToHistory, qui déplace
+   simplement la carte de l'un à l'autre conteneur plutôt que de la
+   recréer). Deux animations distinctes :
+   - .indice-enter (nouvel indice qui devient central) : la carte se
+     RETOURNE en 3D (perspective sur .indice-central, rotateY sur la carte)
+     avec un reflet qui la balaie — remplace l'ancien fade+scale
+     (tileRevealIn), jugé pas assez distinctif pour ce type.
+   - le passage vers l'historique, lui, est un vrai FLIP (voir
+     flipIndiceCardToHistory côté index.js) : la carte VOLE de sa position
+     centrale jusqu'à son carré dans .indice-history en rétrécissant tout
+     du long, plutôt qu'un simple changement de taille sur place qui ne
+     donnait aucune impression de déplacement. */
+.indice-area {
+  max-width: 640px;
+  margin: var(--space-lg) auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  align-items: center;
+}
+.indice-central {
+  width: 100%;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1200px;
+}
+.indice-central-card {
+  position: relative;
+  width: 100%;
+  min-height: 180px;
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  box-shadow: var(--shadow-lg);
+  border: 2px solid rgba(var(--color-gold-rgb), 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  box-sizing: border-box;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  transition: min-height 0.35s ease, padding 0.35s ease;
+}
+.indice-central-card.indice-enter {
+  animation: indiceFlipIn 0.6s cubic-bezier(.25,.9,.35,1) both;
+}
+.indice-central-card.indice-enter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.4) 47%, transparent 64%);
+  transform: translateX(-130%);
+  animation: indiceSweep 0.6s ease-out both;
+}
+@keyframes indiceFlipIn {
+  0% { transform: rotateY(-110deg); opacity: 0; }
+  55% { opacity: 1; }
+  100% { transform: rotateY(0deg); opacity: 1; }
+}
+@keyframes indiceSweep {
+  0% { transform: translateX(-130%); }
+  100% { transform: translateX(130%); }
+}
+.indice-history {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.indice-history-card {
+  width: 84px;
+  height: 84px;
+  min-height: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  box-shadow: var(--shadow-sm);
+  border: 2px solid rgba(var(--color-gold-rgb), 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  box-sizing: border-box;
+  opacity: 0.75;
+  overflow: hidden;
+  transform-origin: top left;
+  transition: transform 0.5s cubic-bezier(.3,.85,.35,1), opacity 0.35s ease;
+}
+.indice-card-text {
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--color-text);
+  text-align: center;
+  line-height: 1.35;
+}
+.indice-history-card .indice-card-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.indice-card-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
 /* Question "blind test" : orbe néon qui pulse en direct avec le volume de
    l'extrait audio (voir index.js startBlindTestPulse — Web Audio API, analyse
    locale du fichier décodé). "orb-idle" est la respiration CSS générique
@@ -4600,6 +4730,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .question-item.type-pbac { --qt-color: var(--color-lime); }
 .question-item.type-reveal { --qt-color: var(--tile-silver); }
 .question-item.type-recherche { --qt-color: var(--color-flame); }
+.question-item.type-indice { --qt-color: var(--color-gold); }
 
 /* Même rappel de couleur que la sidebar, mais sur la grande tuile d'édition
    (.question-detail) — option "C" retenue après maquette (bordure teintée +
@@ -4623,6 +4754,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .question-detail[data-qtype="pbac"] { --qt-color: var(--color-lime); }
 .question-detail[data-qtype="reveal"] { --qt-color: var(--tile-silver); }
 .question-detail[data-qtype="recherche"] { --qt-color: var(--color-flame); }
+.question-detail[data-qtype="indice"] { --qt-color: var(--color-gold); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
@@ -5147,6 +5279,24 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 .intrus-photo-thumb:hover { border-color: var(--color-accent); transform: scale(1.05); }
+
+/* Ligne d'édition "indice" (tâche 014) — même base .option-row, mais avec
+   une vignette cliquable (mode image, remplace CET indice) OU un champ
+   texte (mode texte), suivis d'un petit champ délai en secondes. Pas de
+   glisser-déposer ici (contrairement à "ordre"/"intrus") : l'ordre
+   d'apparition est entièrement dérivé du délai, voir editor.js
+   renderIndiceHints. */
+.indice-edit-row { flex-wrap: wrap; }
+.indice-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+  border: 2px solid var(--color-border);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.indice-thumb:hover { border-color: var(--color-accent); transform: scale(1.05); }
 
 /* Vignette optionnelle par élément association (A ou B) — contrairement à
    "intrus", l'image n'est jamais obligatoire : soit une vignette 40x40

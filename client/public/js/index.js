@@ -323,13 +323,14 @@ const QUESTION_TYPE_META = {
   rangement: { icon: '🗂️', label: 'Rangement', color: '#7b2ff7', rgb: '123,47,247', hint: 'Range chaque carte dans la bonne zone.' },
   intrus: { icon: '🎯', label: 'Intrus', color: '#b34bf5', rgb: '179,75,245', hint: 'Repère la photo qui n\'a rien à voir avec les autres.' },
   pbac: { icon: '🎩', label: 'Petit Bac', color: '#c8f542', rgb: '200,245,66', hint: 'Tape ta réponse — elle sera jugée par l\'hôte, comme au vrai Petit Bac !' },
-  recherche: { icon: '🔦', label: 'Recherche', color: '#ff6a1a', rgb: '255,106,26', hint: 'Balaie l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, puis valide ta réponse.' }
+  recherche: { icon: '🔦', label: 'Recherche', color: '#ff6a1a', rgb: '255,106,26', hint: 'Balaie l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, puis valide ta réponse.' },
+  indice: { icon: '💡', label: 'Indice', color: '#f2c94c', rgb: '242,201,76', hint: 'Devine la réponse en texte libre à l\'aide des indices qui apparaissent progressivement, puis valide.' }
 }
 // Types dont la mécanique n'est pas évidente au premier coup d'œil (retour
 // utilisateur) : l'intro reste affichée un peu plus longtemps pour ceux-là
 // avant de lancer le décompte (voir INTRO_DURATION_COMPLEX_MS). Les autres
 // (QCM, Vrai/Faux, texte libre...) sont auto-explicites, intro plus courte.
-const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche', 'rangement'])
+const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche', 'rangement', 'indice'])
 const questionTypeBadge = document.getElementById('questionTypeBadge')
 const questionTypeBadgeIcon = document.getElementById('questionTypeBadgeIcon')
 const questionTypeBadgeLabel = document.getElementById('questionTypeBadgeLabel')
@@ -599,6 +600,13 @@ const rechercheArea = document.getElementById('rechercheArea')
 const rechercheWrap = document.getElementById('rechercheWrap')
 const rechercheImg = document.getElementById('rechercheImg')
 const rechercheOverlay = document.getElementById('rechercheOverlay')
+// Question "indice" (tâche 014) : indices texte/image qui apparaissent
+// progressivement pendant la question (voir buildIndiceArea/updateIndiceArea
+// plus bas, pilotés par le tick du chrono déjà partagé — même pattern que le
+// dézoom "ZoomOut Devinette").
+const indiceArea = document.getElementById('indiceArea')
+const indiceCentral = document.getElementById('indiceCentral')
+const indiceHistory = document.getElementById('indiceHistory')
 // Lampe torche (tâche 009, décidé avec l'utilisateur : jamais cumulatif) —
 // Pointer Events unifient souris/tactile (même convention que wireOrderDrag
 // plus bas) : pointermove suffit pour les deux (survol pour la souris,
@@ -1578,6 +1586,100 @@ const revealRangementArea = (correctItems) => {
     const isCorrect = mine[key] === correctZone
     el.classList.toggle('correct-reveal', isCorrect)
     el.classList.toggle('incorrect-reveal', !isCorrect)
+  })
+}
+
+// --- Question "indice" (tâche 014) : indices texte/image qui apparaissent
+// progressivement pendant la question, chacun à son propre délai depuis
+// startTs (indépendant du minuteur global) — animation : le nouvel indice
+// devient l'élément central, les précédents se rangent dans l'historique en
+// réduit. Piloté par le TICK du chrono déjà partagé (voir timerInt plus bas,
+// même pattern que le dézoom "ZoomOut Devinette"/la révélation "reveal")
+// plutôt que par un setTimeout isolé par indice : un late-joiner/refresh
+// recalcule immédiatement l'état correct au premier tick après montage, sans
+// jamais "rater" un indice déjà passé (piège explicitement signalé dans le
+// fichier de tâche). Les indices continuent d'apparaître pour TOUT LE MONDE
+// indépendamment de l'état individuel (même après envoi de la réponse par
+// CE joueur) — pas d'ajout à la liste is-locked, rien à griser ici.
+let indiceHints = [] // hints triés par delayS croissant, pour la question active
+let indiceState = { shown: [] } // index (dans indiceHints) des indices déjà affichés
+
+const buildIndiceArea = (hints) => {
+  if (!indiceCentral || !indiceHistory) return
+  indiceCentral.innerHTML = ''
+  indiceHistory.innerHTML = ''
+  indiceHints = (hints || []).slice().sort((a, b) => (Number(a.delayS) || 0) - (Number(b.delayS) || 0))
+  indiceState = { shown: [] }
+}
+
+// Contenu (texte ou image) d'une carte d'indice — réutilisé pour
+// l'emplacement central ET l'historique réduit.
+const buildIndiceCardContent = (hint) => {
+  if (hint.image) {
+    const img = document.createElement('img')
+    img.className = 'indice-card-img'
+    img.src = hint.image
+    img.alt = ''
+    return img
+  }
+  const span = document.createElement('span')
+  span.className = 'indice-card-text'
+  span.textContent = hint.text || ''
+  return span
+}
+
+// Fait voler l'ancienne carte centrale jusqu'à son carré dans l'historique
+// EN RÉTRÉCISSANT tout du long (retour utilisateur, revu via canvas de
+// design) — remplace l'ancien comportement (juste un changement de taille
+// sur place, sans aucune impression de déplacement). Technique FLIP
+// classique (First/Last/Invert/Play) : on mesure la carte AVANT tout
+// changement (grande, centrale), on la reparente + bascule sa classe
+// (taille/police finales déjà appliquées), on la remesure APRÈS (petite,
+// dans l'historique), puis on lui impose la transform inverse pour qu'elle
+// paraisse ne pas avoir bougé — et on la relâche au frame suivant : le
+// navigateur anime alors le vrai trajet du point A au point B.
+const flipIndiceCardToHistory = (el) => {
+  const first = el.getBoundingClientRect()
+  el.classList.remove('indice-central-card', 'indice-enter')
+  el.classList.add('indice-history-card')
+  indiceHistory.appendChild(el)
+  const last = el.getBoundingClientRect()
+  const dx = first.left - last.left
+  const dy = first.top - last.top
+  const sx = first.width / last.width
+  const sy = first.height / last.height
+  el.style.transition = 'none'
+  el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.style.transition = ''
+      el.style.transform = ''
+    })
+  })
+}
+
+// Appelé à CHAQUE tick du chrono partagé (voir timerInt plus bas) avec
+// `elapsedMs` = temps écoulé depuis startTs — fait apparaître tous les
+// indices dont le délai est atteint et pas encore affichés. Recalculé en
+// entier à chaque tick (pas de setTimeout par indice) : un joueur qui
+// rejoint/rafraîchit en cours de question voit immédiatement tous les
+// indices déjà "dus" s'afficher au premier tick après le montage.
+const updateIndiceArea = (elapsedMs) => {
+  if (!indiceCentral || !indiceHistory || !indiceHints.length) return
+  indiceHints.forEach((hint, idx) => {
+    if (indiceState.shown.includes(idx)) return
+    if ((Number(hint.delayS) || 0) * 1000 > elapsedMs) return
+    indiceState.shown.push(idx)
+    // L'ancien indice central (s'il y en a un) VOLE jusqu'à l'historique en
+    // rétrécissant (voir flipIndiceCardToHistory) — simplement déplacé (pas
+    // recréé), le nouveau devient central avec l'animation d'entrée (voir
+    // style.css .indice-enter, un retournement 3D).
+    const prevCentral = indiceCentral.firstElementChild
+    if (prevCentral) flipIndiceCardToHistory(prevCentral)
+    const card = document.createElement('div')
+    card.className = 'indice-central-card indice-enter'
+    card.appendChild(buildIndiceCardContent(hint))
+    indiceCentral.appendChild(card)
   })
 }
 
@@ -3311,7 +3413,12 @@ const loadQuizById = (id) => {
         // le gardaient très bien : q.zones tombait à `undefined`, donc
         // buildRangementArea() côté joueur ne créait tout simplement aucune
         // zone.
-        zones: Array.isArray(q.zones) ? q.zones : []
+        zones: Array.isArray(q.zones) ? q.zones : [],
+        // Même piège, une 4e fois (tâche 014) : sans ce champ, "indice"
+        // perdrait silencieusement tous ses indices à CE chargement précis
+        // (celui utilisé pour lancer une vraie partie) — la question
+        // démarrerait sans le moindre indice, aucune erreur visible.
+        hints: Array.isArray(q.hints) ? q.hints : []
       }))
       loadedQuiz = {
         id: data.id,
@@ -4608,6 +4715,14 @@ const emitQuestion = (index) => {
     // ici, seulement dans q.correct côté serveur (révélée à la fin).
     zones: q.type === 'rangement' ? q.zones : undefined,
     rangementItems: q.type === 'rangement' ? shuffleArray(correctOrder.map((it, i) => ({ title: it?.title ?? '', description: it?.description ?? '', key: i }))) : undefined,
+    // "indice" (tâche 014) : hints publics dès le départ dans leur
+    // INTÉGRALITÉ (texte/image/délai) — contrairement à timeline/rangement,
+    // il n'y a rien à cacher DANS ce tableau lui-même (le contenu d'un
+    // indice n'est pas la réponse), seule q.correct doit rester secrète
+    // (voir server/index.js, exclusion broadcastPayload). Pas de mélange/
+    // anonymisation nécessaire : les indices n'ont pas d'ordre à cacher,
+    // delayS détermine déjà tout côté affichage.
+    hints: q.type === 'indice' ? (q.hints || []).map(h => ({ text: h.text || null, image: h.image || null, delayS: Math.max(0, Number(h.delayS) || 0) })) : undefined,
     min: q.min,
     max: q.max,
     // Écart accepté comme "Bonne réponse !" pour ce type, configuré par
@@ -5001,6 +5116,9 @@ socket.on('question:show', payload => {
   if (blindtestArea) {
     blindtestArea.classList.toggle('d-none', payload.type !== 'blindtest')
   }
+  if (indiceArea) {
+    indiceArea.classList.toggle('d-none', payload.type !== 'indice')
+  }
   // Réinitialisé pour CHAQUE question (comme currentIllustrationZoom plus
   // haut) — sinon resterait vrai après une question "reveal" suivie d'un
   // autre type, et le tick du chrono continuerait d'essayer de flouter
@@ -5131,7 +5249,7 @@ socket.on('question:show', payload => {
     // answerInput). Uniquement sur pointeur fin (souris/trackpad) — sur
     // mobile, focus() ferait surgir le clavier virtuel par-dessus l'écran
     // avant même que le joueur ait vu la question.
-    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac' || payload.type === 'reveal' || payload.type === 'recherche') && window.matchMedia('(pointer: fine)').matches) {
+    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac' || payload.type === 'reveal' || payload.type === 'recherche' || payload.type === 'indice') && window.matchMedia('(pointer: fine)').matches) {
       answerInput.focus()
     }
   }
@@ -5153,6 +5271,9 @@ socket.on('question:show', payload => {
   if (payload.type === 'rangement') {
     buildRangementArea(payload.zones, payload.rangementItems)
   }
+  if (payload.type === 'indice') {
+    buildIndiceArea(payload.hints)
+  }
   if (payload.type === 'image' && payload.imageUrl) {
     buildImageAnswerArea(payload.imageUrl)
   }
@@ -5173,6 +5294,7 @@ socket.on('question:show', payload => {
   myAssociationSubmission = null
   myTimelineSubmission = null
   myRangementSubmission = null
+  indiceState = { shown: [] }
 
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
@@ -5254,6 +5376,15 @@ socket.on('question:show', payload => {
       revealEnigmeImg.style.filter = `blur(${REVEAL_ENIGME_BLUR_MAX_PX * (1 - progress)}px)`
     }
 
+    // Apparition progressive des indices (type "indice", tâche 014) — voir
+    // updateIndiceArea, appelé à chaque tick avec le temps écoulé depuis
+    // start. Jamais de setTimeout isolé par indice : ce recalcul systématique
+    // permet le rattrapage automatique d'un late-joiner/refresh (même
+    // garantie que le dézoom "zoomguess" ci-dessus).
+    if (currentQuestionType === 'indice') {
+      updateIndiceArea(now - start)
+    }
+
     if (timerBarFill) {
       timerBarFill.style.transform = `scaleX(${pct / 100})`
       if (pct <= 20) {
@@ -5285,7 +5416,7 @@ socket.on('question:show', payload => {
     // fois (voir plus bas, filet de sécurité en fin de chrono).
     const attemptAutoSubmit = () => {
       if (isHost || hasAnsweredThisQuestion) return
-      if ((currentQuestionType === 'free' || currentQuestionType === 'pbac' || currentQuestionType === 'reveal') && answerInput.value.trim()) {
+      if ((currentQuestionType === 'free' || currentQuestionType === 'pbac' || currentQuestionType === 'reveal' || currentQuestionType === 'indice') && answerInput.value.trim()) {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'blindtest' && ((blindtestTitleInput?.value || '').trim() || (blindtestArtistInput?.value || '').trim())) {
         submitCurrentAnswer()
@@ -6606,7 +6737,7 @@ socket.on('question:reveal', payload => {
     } else {
       showMyResultBanner()
     }
-  } else if (payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'reveal' || payload.type === 'recherche') {
+  } else if (payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'reveal' || payload.type === 'recherche' || payload.type === 'indice') {
     // "recherche" en plus : retire le calque noir en entier (pas juste un
     // trou local) pour que le joueur voie enfin l'image complète — sinon la
     // question se terminerait sans jamais montrer ce qu'il cherchait,

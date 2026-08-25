@@ -919,6 +919,21 @@
               <div id="rechercheOverlay" class="recherche-overlay"></div>
             </div>
           </div>
+          <!-- Question "indice" (tâche 014) : indices texte/image qui
+               apparaissent progressivement pendant la question, chacun à un
+               délai configurable — timing calé sur payload.startTs et
+               recalculé à chaque tick du chrono partagé (voir index.js,
+               même pattern que le dézoom "ZoomOut Devinette"), jamais un
+               setTimeout isolé par indice, pour permettre le rattrapage d'un
+               late-joiner/refresh. #indiceCentral affiche l'indice le plus
+               récent en grand ; #indiceHistory range les précédents en
+               réduit sur le côté, toujours visibles. Réponse en texte libre
+               classique (#freeText/#answer juste en dessous, réutilisé tel
+               quel, comme "free"). -->
+          <div id="indiceArea" class="indice-area d-none">
+            <div id="indiceCentral" class="indice-central"></div>
+            <div id="indiceHistory" class="indice-history"></div>
+          </div>
           <div id="freeText" class="free-text-input">
             <input id="answer" placeholder="Ta réponse..." class="h-60 border-none bg-transparent font-18" maxlength="150" />
             <div id="blindtestFields" class="blindtest-fields d-none">

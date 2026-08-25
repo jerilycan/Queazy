@@ -279,6 +279,7 @@
                 <option value="pbac">🎩 Petit Bac (catégorie ouverte)</option>
                 <option value="recherche">🔦 Recherche</option>
                 <option value="rangement">🗂️ Rangement</option>
+                <option value="indice">💡 Indice</option>
               </select>
               <!-- Aperçu de la mécanique (retour utilisateur : réutiliser la
                    démo joueur ici aussi) — même texte que la popup montrée
@@ -502,6 +503,13 @@
             </div>
             <input type="file" id="intrusPhotosUpload" accept="image/*" multiple class="cursor-pointer" />
             <p class="text-muted font-13 mt-8">Sélectionne plusieurs photos d'un coup dans le sélecteur de fichier (jusqu'à 8) — pas besoin de les ajouter une par une.</p>
+          </div>
+
+          <div id="indiceSection" class="detail-section d-none">
+            <label>Indices (1 à 4), chacun avec son délai d'apparition</label>
+            <div id="indiceList" class="options-editor"><!-- Rempli par JS --></div>
+            <button id="addIndiceBtn" class="btn btn-nav-secondary mt-8">+ Ajouter un indice</button>
+            <p class="text-muted font-13 mt-8">Chaque indice est un texte OU une image, avec un délai en secondes depuis le début de la question (0s = visible dès le départ).</p>
           </div>
 
           <div id="imageSection" class="detail-section d-none">

@@ -254,6 +254,47 @@ const intrusPhotosUploadInput = document.getElementById('intrusPhotosUpload')
 const INTRUS_MIN_OPTIONS = 3
 const INTRUS_MAX_OPTIONS = 8
 
+// Question "indice" (tâche 014) : 1 à 4 indices (texte OU image chacun,
+// jamais les deux à la fois) qui apparaissent progressivement pendant la
+// question, chacun à un délai (en secondes depuis le début) configurable
+// individuellement. Constantes + validation seulement ici — le DOM de la
+// section (#indiceSection) et son rendu arrivent aux étapes suivantes du
+// plan, `editor.html` ne le porte pas encore à ce stade.
+const INDICE_MIN_HINTS = 1
+const INDICE_MAX_HINTS = 4
+
+// Valide le tableau `hints` d'une question "indice" au moment de la
+// sauvegarde (même esprit que les vérifs INTRUS_MIN/MAX_OPTIONS plus bas) :
+// - chaque indice a EXACTEMENT un contenu (texte non vide OU image, jamais
+//   les deux, jamais aucun des deux — cf. modèle de données du fichier de
+//   tâche, un simple XOR) ;
+// - `delayS` numérique >= 0 ;
+// - délais non décroissants (pas nécessairement strictement croissants :
+//   plus simple à éditer, deux indices au même délai reste valide, pas de
+//   friction pendant un réordonnancement provisoire) ;
+// - `delayS * 1000 <= timerMs` : un indice configuré après la fin du timer
+//   de la question ne s'afficherait jamais (règle explicite du Périmètre).
+const isValidIndiceHints = (hints, timerMs) => {
+  if (!Array.isArray(hints) || hints.length < INDICE_MIN_HINTS || hints.length > INDICE_MAX_HINTS) return false
+  let lastDelay = -Infinity
+  return hints.every(h => {
+    if (!h) return false
+    const hasText = typeof h.text === 'string' && h.text.trim() !== ''
+    const hasImage = typeof h.image === 'string' && h.image.trim() !== ''
+    if (hasText === hasImage) return false // ni les deux, ni aucun des deux
+    const delayS = Number(h.delayS)
+    if (!Number.isFinite(delayS) || delayS < 0 || delayS < lastDelay) return false
+    if (delayS * 1000 > Number(timerMs)) return false
+    lastDelay = delayS
+    return true
+  })
+}
+
+// DOM de la section "indice" (existe depuis l'étape 2, editor.html).
+const indiceSection = document.getElementById('indiceSection')
+const indiceList = document.getElementById('indiceList')
+const addIndiceBtn = document.getElementById('addIndiceBtn')
+
 // Chaque photo reçoit un petit id stable (alphanumérique minuscule, sûr pour
 // la comparaison serveur — voir fuzzy()/norm() qui met tout en minuscules :
 // jamais le contenu de l'image elle-même comme "valeur" comparée). q.correct
@@ -405,7 +446,7 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
-    addAssociationPairBtn, addTimelineEventBtn, addRangementZoneBtn, addRangementItemBtn, intrusPhotosUploadInput, replayTutorialBtn,
+    addAssociationPairBtn, addTimelineEventBtn, addRangementZoneBtn, addRangementItemBtn, intrusPhotosUploadInput, addIndiceBtn, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn, zoomGuessZoomInput,
@@ -609,7 +650,7 @@ const QTYPE_ICON = {
   free: '📝', mcq: '🔘', truefalse: '✅', graduation: '↔️', order: '↕️',
   image: '📍', zoomguess: '🔍', reveal: '🖼️', blindtest: '🎵',
   association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩', recherche: '🔦',
-  rangement: '🗂️'
+  rangement: '🗂️', indice: '💡'
 }
 
 // Miroir JS des règles .question-item.type-* de style.css (--qt-color) —
@@ -626,7 +667,13 @@ const QTYPE_COLOR = {
   reveal: 'var(--tile-silver)', recherche: 'var(--color-flame)',
   // Réutilise --color-accent-2 (déjà défini, jamais pris comme couleur de
   // type jusqu'ici) plutôt que d'ajouter un nouveau token CSS pour ça seul.
-  rangement: 'var(--color-accent-2)'
+  rangement: 'var(--color-accent-2)',
+  // Tous les tokens --tile-*/--color-cyan|teal|violet|indigo|lime|flame|
+  // sky|amber|accent-2 sont déjà pris par les 15 types précédents (vérifié
+  // ci-dessus) — nouveau token dédié --color-gold, ajouté à style.css à
+  // l'étape 9 du plan (pas encore fait à ce stade : la variable CSS
+  // n'existe pas tant que style.css n'est pas touché).
+  indice: 'var(--color-gold)'
 }
 
 // Écran "aucune question" (nouvelle DA, tâche 003, décision validée) : un
@@ -671,7 +718,7 @@ const openTypePicker = () => {
 
 // Grille de choix de type (voir #typePickerGrid dans editor.html) — générée
 // depuis les <option> de #qType, seule source de vérité pour la liste des
-// 13 types et leurs libellés (même principe que updateSidebar plus bas pour
+// 16 types et leurs libellés (même principe que updateSidebar plus bas pour
 // la sidebar). Choisir un type ici ajoute directement la nouvelle question
 // DANS ce type plutôt que de forcer un passage par le type "Texte libre" par
 // défaut (createDefaultQuestion) puis un changement de type manuel.
@@ -1759,6 +1806,7 @@ const selectQuestion = (index) => {
   renderRangementZones()
   renderRangementItems()
   renderIntrusOptions()
+  renderIndiceHints()
   toggleTypeSections()
   updateSidebar()
 
@@ -1809,7 +1857,8 @@ const QTYPE_HINTS = {
   rangement: { icon: '🗂️', text: 'Les joueurs rangent chaque carte dans la bonne zone.', color: '#7b2ff7', rgb: '123,47,247' },
   intrus: { icon: '🎯', text: 'Les joueurs repèrent la photo qui n\'a rien à voir avec les autres.', color: '#b34bf5', rgb: '179,75,245' },
   pbac: { icon: '🎩', text: 'Les joueurs tapent une réponse libre, jugée par toi pendant la partie — pas de liste à préparer.', color: '#c8f542', rgb: '200,245,66' },
-  recherche: { icon: '🔦', text: 'Les joueurs balaient l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, façon lampe torche.', color: '#ff6a1a', rgb: '255,106,26' }
+  recherche: { icon: '🔦', text: 'Les joueurs balaient l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, façon lampe torche.', color: '#ff6a1a', rgb: '255,106,26' },
+  indice: { icon: '💡', text: 'Les joueurs devinent la réponse en texte libre à l\'aide d\'indices (texte ou image) qui apparaissent progressivement.', color: '#f2c94c', rgb: '242,201,76' }
 }
 const qTypeHint = document.getElementById('qTypeHint')
 const updateQTypeHint = () => {
@@ -1838,11 +1887,13 @@ const toggleTypeSections = () => {
   if (rangementSection) rangementSection.classList.toggle('d-none', qType.value !== 'rangement')
   if (intrusSection) intrusSection.classList.toggle('d-none', qType.value !== 'intrus')
   if (pbacSection) pbacSection.classList.toggle('d-none', qType.value !== 'pbac')
+  if (indiceSection) indiceSection.classList.toggle('d-none', qType.value !== 'indice')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
   // déjà leur propre image (le type "image" utilise la sienne comme cible
   // cliquable, "zoomguess"/"recherche" la sienne comme photo à deviner,
-  // "reveal" ses deux images énigme/réponse — pas comme simple décoration).
-  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche')
+  // "reveal" ses deux images énigme/réponse, "indice" une image PAR indice
+  // — pas comme simple décoration).
+  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice')
   // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
   // blindtestSection ci-dessus) au lieu de la liste générique "correct".
   // "mcq" a aussi sa propre façon de désigner la bonne réponse : la case à
@@ -1853,8 +1904,10 @@ const toggleTypeSections = () => {
   // "recherche" (deviner à partir de l'image) ET "reveal" (deviner avant la
   // révélation) ont besoin de cette liste.
   // "association" / "timeline" / "intrus" ont chacun leur propre section
-  // ci-dessus.
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess' && qType.value !== 'reveal' && qType.value !== 'recherche')
+  // ci-dessus. "indice" réutilise directement cette liste générique pour la
+  // réponse à deviner (même chemin que "free" côté serveur, fuzzy()) — pas
+  // de nouveau champ, la section indices ci-dessus ne gère QUE les indices.
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess' && qType.value !== 'reveal' && qType.value !== 'recherche' && qType.value !== 'indice')
   correctLabel.textContent = 'Réponses acceptées'
 }
 
@@ -3191,6 +3244,187 @@ const renderIntrusOptions = () => {
   })
 }
 
+// --- Question "Indice" (tâche 014) : 1 à 4 indices texte OU image, chacun
+// avec son délai d'apparition -------------------------------------------
+//
+// Pas de flag "hintType" séparé (voir modèle de données du fichier de
+// tâche) : le mode d'affichage de CHAQUE ligne (texte vs image) se déduit
+// simplement de la présence de hint.image. Un indice tout neuf démarre en
+// mode texte (image null) — passer en mode image vide l'éventuel texte et
+// ouvre directement le sélecteur de fichier ; revenir en texte vide
+// l'image. Cohérent avec l'exclusivité stricte attendue par
+// isValidIndiceHints (jamais les deux, jamais aucun des deux une fois
+// rempli).
+const renderIndiceHints = () => {
+  if (!indiceList) return
+  indiceList.innerHTML = ''
+  const q = questions[activeIndex]
+  if (!q || q.type !== 'indice') return
+  if (!Array.isArray(q.hints)) q.hints = []
+
+  // Tri purement VISUEL par délai croissant (le Plan écarte un ordre de
+  // liste séparé/glisser-déposer : l'ordre d'apparition en jeu est
+  // entièrement dérivé de delayS) — on édite les objets d'origine (pas des
+  // copies), q.hints reste la seule source de vérité malgré ce tri
+  // d'affichage.
+  const sorted = q.hints.slice().sort((a, b) => (Number(a.delayS) || 0) - (Number(b.delayS) || 0))
+
+  // Le tout premier indice (le plus tôt à apparaître) est TOUJOURS à 0s,
+  // verrouillé — retour utilisateur : sinon rien ne s'affiche pendant le
+  // laps de temps avant lui, ce qui n'a pas de sens pour un indice "de
+  // départ". On force l'objet d'origine (pas une copie), cohérent avec le
+  // reste de cette fonction qui édite q.hints directement via `sorted`.
+  if (sorted[0]) sorted[0].delayS = 0
+
+  sorted.forEach((hint, sortedIdx) => {
+    const idx = q.hints.indexOf(hint)
+    const isFirst = sortedIdx === 0
+    const row = document.createElement('div')
+    row.className = 'option-row indice-edit-row'
+
+    if (hint.image) {
+      const thumb = document.createElement('img')
+      thumb.className = 'indice-thumb'
+      thumb.src = hint.image
+      thumb.alt = ''
+      if (!readOnly) {
+        thumb.title = 'Cliquer pour remplacer cette image'
+        thumb.classList.add('cursor-pointer')
+        thumb.onclick = () => {
+          const input = document.createElement('input')
+          input.type = 'file'
+          input.accept = 'image/*'
+          input.onchange = () => {
+            const file = input.files && input.files[0]
+            if (!file) return
+            compressImageFile(file, (dataUrl) => { hint.image = dataUrl; renderIndiceHints() }, TILE_IMAGE_MAX_DIMENSION)
+          }
+          input.click()
+        }
+      }
+      row.appendChild(thumb)
+
+      if (!readOnly) {
+        const toText = document.createElement('button')
+        toText.type = 'button'
+        toText.className = 'btn btn-nav-secondary font-13'
+        toText.textContent = '📝 Texte'
+        toText.title = 'Repasser cet indice en texte'
+        toText.onclick = () => { hint.image = null; renderIndiceHints() }
+        row.appendChild(toText)
+      }
+
+      // Espaceur : en mode texte, l'input `flex:1` pousse naturellement le
+      // délai/bouton supprimer à droite — en mode image, rien ne prend cette
+      // place (vignette + bouton restent à taille fixe), donc tout se
+      // retrouvait collé à gauche avec un grand vide à droite (retour
+      // utilisateur). Un simple bloc flexible reproduit le même effet.
+      const spacer = document.createElement('div')
+      spacer.style.flex = '1'
+      row.appendChild(spacer)
+    } else {
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.value = hint.text || ''
+      input.placeholder = 'Texte de l\'indice...'
+      input.style.flex = '1'
+      input.disabled = readOnly
+      input.maxLength = TEXT_SHORT_MAXLENGTH
+      input.oninput = (e) => { hint.text = e.target.value }
+      row.appendChild(input)
+
+      if (!readOnly) {
+        const toImage = document.createElement('button')
+        toImage.type = 'button'
+        toImage.className = 'btn btn-nav-secondary font-13'
+        toImage.textContent = '🖼️ Image'
+        toImage.title = 'Utiliser une image pour cet indice'
+        toImage.onclick = () => {
+          const input2 = document.createElement('input')
+          input2.type = 'file'
+          input2.accept = 'image/*'
+          input2.onchange = () => {
+            const file = input2.files && input2.files[0]
+            if (!file) return
+            compressImageFile(file, (dataUrl) => {
+              hint.text = null
+              hint.image = dataUrl
+              renderIndiceHints()
+            }, TILE_IMAGE_MAX_DIMENSION)
+          }
+          input2.click()
+        }
+        row.appendChild(toImage)
+      }
+    }
+
+    const delayLabel = document.createElement('span')
+    delayLabel.className = 'text-muted font-13'
+    delayLabel.textContent = 'à'
+    delayLabel.style.flexShrink = '0'
+    row.appendChild(delayLabel)
+
+    const delayInput = document.createElement('input')
+    delayInput.type = 'number'
+    delayInput.min = '0'
+    delayInput.step = '1'
+    delayInput.value = isFirst ? 0 : (Number.isFinite(Number(hint.delayS)) ? hint.delayS : 0)
+    // Premier indice (voir plus haut) : délai figé à 0, non éditable — pas
+    // juste une valeur par défaut, un vrai verrou (retour utilisateur).
+    // Largeur élargie (était 64px, trop juste pour 2 chiffres + les flèches
+    // natives du input[type=number] — retour utilisateur : "pas assez de
+    // place").
+    delayInput.disabled = readOnly || isFirst
+    delayInput.title = isFirst ? 'Le premier indice apparaît toujours à 0s' : ''
+    delayInput.style.width = '76px'
+    delayInput.style.flexShrink = '0'
+    delayInput.oninput = (e) => { hint.delayS = Math.max(0, Number(e.target.value) || 0) }
+    row.appendChild(delayInput)
+
+    const delaySuffix = document.createElement('span')
+    delaySuffix.className = 'text-muted font-13'
+    delaySuffix.textContent = 's'
+    row.appendChild(delaySuffix)
+
+    if (!readOnly) {
+      const del = document.createElement('button')
+      del.className = 'btn-icon btn-danger'
+      del.innerHTML = '&times;'
+      del.disabled = q.hints.length <= INDICE_MIN_HINTS
+      del.onclick = () => {
+        if (q.hints.length <= INDICE_MIN_HINTS) {
+          showToast(`Il faut au moins ${INDICE_MIN_HINTS} indice`, 'error')
+          return
+        }
+        q.hints.splice(idx, 1)
+        renderIndiceHints()
+      }
+      row.appendChild(del)
+    }
+
+    indiceList.appendChild(row)
+  })
+}
+
+if (addIndiceBtn) {
+  addIndiceBtn.onclick = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    if (!Array.isArray(q.hints)) q.hints = []
+    if (q.hints.length >= INDICE_MAX_HINTS) {
+      showToast(`Maximum ${INDICE_MAX_HINTS} indices`, 'error')
+      return
+    }
+    // Délai par défaut du nouvel indice : juste après le dernier existant
+    // (borné au timer de la question), plutôt que 0 systématiquement — évite
+    // de devoir retaper un délai à chaque ajout pour rester non-décroissant.
+    const maxDelay = q.hints.reduce((m, h) => Math.max(m, Number(h.delayS) || 0), 0)
+    const timerS = Math.floor((Number(q.timerMs) || 15000) / 1000)
+    q.hints.push({ text: '', image: null, delayS: Math.min(maxDelay + 5, timerS) })
+    renderIndiceHints()
+  }
+}
+
 // Sélection MULTIPLE de fichiers en une fois (attribut "multiple" sur
 // l'input, voir editor.html) : on compresse chaque fichier retenu et on
 // ajoute une photo par fichier, jusqu'à INTRUS_MAX_OPTIONS — pas besoin de
@@ -3421,6 +3655,16 @@ qType.onchange = () => {
     // ce type, ou venant de zoomguess/mcq qui partagent la même forme).
     if (!Array.isArray(q.options) || !q.options.every(o => typeof o === 'string')) q.options = []
     if (!Array.isArray(q.correct)) q.correct = ['']
+  } else if (qType.value === 'indice') {
+    // q.hints venant d'un autre type n'a jamais la forme [{text,image,delayS}]
+    // attendue ici : on repart sur un seul indice vide (borne minimale du
+    // type) sauf s'il a déjà cette forme (ex. retour sur ce type). q.correct
+    // réutilise directement la liste de réponses acceptées générique
+    // (comme "free") — mêmes règles que la branche 'free' juste en dessous.
+    if (!Array.isArray(q.hints) || !q.hints.every(h => h && typeof h === 'object')) {
+      q.hints = [{ text: '', image: null, delayS: 0 }]
+    }
+    if (!Array.isArray(q.correct)) q.correct = ['']
   } else if (qType.value === 'pbac') {
     // "Petit Bac" n'a aucune liste de bonnes réponses prédéfinie (tout passe
     // par le regroupement de l'hôte en direct, voir server/index.js) : q.
@@ -3442,6 +3686,7 @@ qType.onchange = () => {
   renderRangementZones()
   renderRangementItems()
   renderIntrusOptions()
+  renderIndiceHints()
   // Sans ça, la pastille de couleur/icône de type dans la sidebar (voir
   // updateSidebar) restait sur l'ancien type jusqu'au prochain rendu complet
   // (changement de question, sauvegarde...) — trompeur juste après avoir
@@ -3527,6 +3772,7 @@ const deleteQuestionAt = (index) => {
     renderRangementZones()
     renderRangementItems()
     renderIntrusOptions()
+    renderIndiceHints()
     toggleTypeSections()
   } else if (index < activeIndex) {
     // Une question AVANT celle en cours d'édition disparaît : tout le monde
@@ -3746,8 +3992,9 @@ const validateQuestion = (q, i) => {
       showToast(`Le QCM ${i + 1} : cochez au moins une bonne réponse`, 'error')
       return false
     }
-  } else if (q.type === 'free') {
-    // Au moins une réponse acceptée renseignée
+  } else if (q.type === 'free' || q.type === 'indice') {
+    // Au moins une réponse acceptée renseignée — commun à "free" et "indice"
+    // (ce dernier réutilise exactement la même liste, voir correctSection).
     const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
     if (!hasAnswer) {
       selectQuestion(i)
@@ -3932,6 +4179,20 @@ const validateQuestion = (q, i) => {
     }
   }
 
+  // Pour "indice" (tâche 014), 1 à 4 indices chacun avec EXACTEMENT un
+  // contenu (texte OU image), un délai croissant/cohérent et ≤ au timer de
+  // la question (isValidIndiceHints couvre déjà tout ça — un indice
+  // configuré trop tard ne s'afficherait jamais, règle explicite du
+  // Périmètre). La vérification "au moins une réponse acceptée" est déjà
+  // couverte plus haut (même bloc que "free").
+  if (q.type === 'indice') {
+    if (!isValidIndiceHints(q.hints, q.timerMs)) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : vérifie les indices (1 à ${INDICE_MAX_HINTS}, texte OU image chacun, délais croissants et ≤ au temps imparti)`, 'error')
+      return false
+    }
+  }
+
   // Pour "image", il faut une image importée et une case désignée
   if (q.type === 'image') {
     if (!q.image) {
@@ -3978,38 +4239,42 @@ const validateQuestion = (q, i) => {
 }
 
 // Upload à la sauvegarde vers le bucket Supabase Storage "quiz-media" (voir
-// supabase/schema.sql) : jusqu'ici chaque image/son de question était
-// stocké en base64 DANS la colonne JSON `questions` elle-même — ça alourdit
-// la base pour rien (surtout les extraits blind test, en WAV non compressé,
-// voir encodeWavMono plus haut). Un champ déjà en URL (http...) est laissé
-// tel quel, idempotent : une re-sauvegarde ne réuploade pas ce qui n'a pas
-// changé. Les vieux quiz jamais resauvegardés depuis ce chantier restent en
-// base64 indéfiniment — pas de migration automatique de l'existant (voir
-// emitQuestion côté index.js, qui gère toujours les deux formats).
-// Tolérant à l'échec (jamais de throw) : le bucket/les policies "quiz-media"
-// (voir supabase/schema.sql) doivent être collés à la main dans le Dashboard
-// Supabase — tant que ce n'est pas fait (ou en cas de souci réseau/quota),
-// l'upload échoue et cette fonction garde le base64 tel quel plutôt que de
-// bloquer TOUTE la sauvegarde du quiz (retour utilisateur : le code peut
-// partir en prod avant que le SQL soit collé). La migration s'active
-// automatiquement dès que le bucket existe, sans nouveau déploiement.
+// supabase/schema.sql) : chaque image/son de question doit finir en URL
+// Supabase Storage dans la colonne JSON `questions`, jamais en base64 brut —
+// ça alourdit la base pour rien (surtout les extraits blind test, en WAV non
+// compressé, voir encodeWavMono plus haut). Un champ déjà en URL (http...)
+// est laissé tel quel, idempotent : une re-sauvegarde ne réuploade pas ce
+// qui n'a pas changé.
+// Décision produit : Supabase Storage est désormais considéré fiable en
+// prod (bucket + policies "quiz-media" en place, voir supabase/schema.sql) —
+// on préfère un échec net et visible de la sauvegarde (throw, propagé
+// jusqu'à persistQuiz) plutôt que l'ancien repli silencieux qui gardait le
+// base64 en base indéfiniment en cas d'échec d'upload. Les vieux quiz dont
+// un média est resté en base64 depuis avant ce changement ne sont plus
+// traités comme un cas normal ici : tant qu'ils ne sont pas resauvegardés
+// avec succès, une tentative de resauvegarde échoue désormais explicitement
+// au lieu de "réussir" en conservant du base64.
 const uploadMediaField = async (sb, ownerId, dataUrl) => {
   if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl
-  try {
-    const match = /^data:([^;]+);base64,/.exec(dataUrl)
-    const mime = match ? match[1] : 'application/octet-stream'
-    const ext = mime.split('/')[1] || 'bin'
-    const blob = await (await fetch(dataUrl)).blob()
-    // owner_id/... : correspond exactement à la policy RLS d'upload sur
-    // storage.objects (voir schema.sql) — sinon rejeté par Supabase.
-    const path = `${ownerId}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`
-    const { error } = await sb.storage.from('quiz-media').upload(path, blob, { contentType: mime })
-    if (error) throw error
-    return sb.storage.from('quiz-media').getPublicUrl(path).data.publicUrl
-  } catch (err) {
-    console.warn('[quiz-media] upload impossible, base64 conservé :', err?.message || err)
-    return dataUrl
+  const match = /^data:([^;]+);base64,/.exec(dataUrl)
+  const mime = match ? match[1] : 'application/octet-stream'
+  const ext = mime.split('/')[1] || 'bin'
+  const blob = await (await fetch(dataUrl)).blob()
+  // owner_id/... : correspond exactement à la policy RLS d'upload sur
+  // storage.objects (voir schema.sql) — sinon rejeté par Supabase.
+  const path = `${ownerId}/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const { error } = await sb.storage.from('quiz-media').upload(path, blob, { contentType: mime })
+  if (error) {
+    console.error('[quiz-media] upload impossible :', error)
+    // Message dédié (voir persistQuiz, qui l'affiche tel quel plutôt que le
+    // générique "Erreur lors de la sauvegarde du quiz") : contrairement au
+    // jargon Supabase/Postgres, celui-ci est déjà lisible pour un créateur
+    // de quiz sans repasser par la console.
+    const uploadErr = new Error('Échec de l\'upload d\'une image ou d\'un son — sauvegarde annulée')
+    uploadErr.isMediaUploadError = true
+    throw uploadErr
   }
+  return sb.storage.from('quiz-media').getPublicUrl(path).data.publicUrl
 }
 
 // Parcourt tous les champs média connus, quel que soit le type de question
@@ -4037,6 +4302,13 @@ const uploadQuestionMedia = async (sb, ownerId, qs) => {
     }
     if (q.type === 'intrus' && Array.isArray(q.options)) {
       q.options.forEach(opt => field(opt, 'image'))
+    }
+    // "indice" (tâche 014) : chaque indice peut porter sa propre image
+    // (exclusive du texte, voir isValidIndiceHints) — même piège de liste
+    // blanche oubliée que q.image/q.audio/q.zones (voir tâche 013), traité
+    // ici à part par prudence.
+    if (q.type === 'indice' && Array.isArray(q.hints)) {
+      q.hints.forEach(h => field(h, 'image'))
     }
   })
   await Promise.all(uploads)
@@ -4096,9 +4368,11 @@ const persistQuiz = async (successMessage) => {
     // Message générique côté utilisateur (retour utilisateur : le message
     // brut du SDK Supabase/Postgres, ex. une violation de policy RLS, est du
     // jargon technique illisible pour un créateur de quiz) — le détail reste
-    // disponible en console pour le débogage.
+    // disponible en console pour le débogage. Exception : une erreur d'upload
+    // média (voir uploadMediaField) porte déjà un message clair et français,
+    // pas la peine de le remplacer par le générique.
     console.error('[quiz] sauvegarde impossible :', err)
-    showToast('Erreur lors de la sauvegarde du quiz', 'error')
+    showToast(err?.isMediaUploadError ? err.message : 'Erreur lors de la sauvegarde du quiz', 'error')
   } finally {
     isSaving = false
     saveQuizBtn.disabled = false
@@ -4251,7 +4525,7 @@ const EDITOR_TOUR_STEPS = [
   // 15 types au total (retour utilisateur, tâche 013 : "recherche" et
   // "rangement" manquaient déjà à l'appel — "recherche" (tâche 009) n'avait
   // jamais été ajouté ici, le compte "13" datait donc d'avant lui).
-  { target: '#qType', title: 'Type de question', text: '15 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, Révélation, blind test, association, timeline, rangement, intrus, Petit Bac, recherche, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
+  { target: '#qType', title: 'Type de question', text: '16 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, Révélation, blind test, association, timeline, rangement, intrus, Petit Bac, recherche, indice, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
   { target: '#qTimer', title: 'Temps imparti', text: 'Règle en secondes le temps laissé aux joueurs pour répondre, avec les boutons - et +.' },
   { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
   { target: '#illustrationUpload', title: 'Illustration (optionnelle)', text: 'Ajoute une image au-dessus de la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },
