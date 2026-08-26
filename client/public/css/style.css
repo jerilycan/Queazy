@@ -2679,16 +2679,22 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 }
 .indice-central {
   width: 100%;
-  min-height: 180px;
+  height: 240px;
   display: flex;
   align-items: center;
   justify-content: center;
   perspective: 1200px;
 }
+/* Hauteur FIXE (pas juste un minimum) — retour utilisateur : une image
+   (ratio quelconque) faisait sauter la carte à sa propre taille sans
+   transition possible (CSS ne peut pas animer un "auto" qui change à
+   cause du contenu). Texte et image (voir .indice-card-img,
+   object-fit:contain) se calent tous les deux dans ce même gabarit,
+   quel que soit l'indice — plus aucun saut, quel que soit son contenu. */
 .indice-central-card {
   position: relative;
   width: 100%;
-  min-height: 180px;
+  height: 240px;
   border-radius: var(--radius-lg);
   background: var(--color-card);
   box-shadow: var(--shadow-lg);
@@ -2700,7 +2706,6 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   box-sizing: border-box;
   overflow: hidden;
   transform-style: preserve-3d;
-  transition: min-height 0.35s ease, padding 0.35s ease;
 }
 .indice-central-card.indice-enter {
   animation: indiceFlipIn 0.6s cubic-bezier(.25,.9,.35,1) both;

@@ -1049,7 +1049,15 @@ const IMAGE_MAX_DIMENSION = 1280
 const TILE_IMAGE_MAX_DIMENSION = 640
 const IMAGE_JPEG_QUALITY = 0.8
 
-const compressImageFile = (file, onSuccess, maxDimension = IMAGE_MAX_DIMENSION) => {
+// `square` (retour utilisateur, question "Indice") : recadre au centre en
+// 1:1 AVANT compression, plutôt que de garder le ratio d'origine — la
+// carte d'indice a une taille FIXE (voir .indice-central-card en CSS) et
+// affiche l'image en object-fit:contain ; sans recadrage, une image très
+// large ou très haute s'y retrouvait minuscule (lettrboxée) alors qu'une
+// image carrée remplit correctement le gabarit. Recadrage au centre (pas
+// d'étirement) : le plus grand côté est simplement coupé à ras du plus
+// petit.
+const compressImageFile = (file, onSuccess, maxDimension = IMAGE_MAX_DIMENSION, square = false) => {
   if (!file) return
   if (!file.type || !file.type.startsWith('image/')) {
     showToast('Ce fichier n\'est pas une image', 'error')
@@ -1063,12 +1071,22 @@ const compressImageFile = (file, onSuccess, maxDimension = IMAGE_MAX_DIMENSION) 
   const objectUrl = URL.createObjectURL(file)
   img.onload = () => {
     URL.revokeObjectURL(objectUrl)
-    const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight))
     const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
-    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
     const ctx = canvas.getContext('2d')
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    if (square) {
+      const side = Math.min(img.naturalWidth, img.naturalHeight)
+      const sx = (img.naturalWidth - side) / 2
+      const sy = (img.naturalHeight - side) / 2
+      const size = Math.min(maxDimension, side)
+      canvas.width = size
+      canvas.height = size
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size)
+    } else {
+      const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight))
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    }
     // Recompressée en JPEG : plus léger que le PNG d'origine pour une
     // photo, et taille finale plafonnée quelle que soit l'image importée.
     onSuccess(canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY))
@@ -3297,7 +3315,7 @@ const renderIndiceHints = () => {
           input.onchange = () => {
             const file = input.files && input.files[0]
             if (!file) return
-            compressImageFile(file, (dataUrl) => { hint.image = dataUrl; renderIndiceHints() }, TILE_IMAGE_MAX_DIMENSION)
+            compressImageFile(file, (dataUrl) => { hint.image = dataUrl; renderIndiceHints() }, TILE_IMAGE_MAX_DIMENSION, true)
           }
           input.click()
         }
@@ -3350,7 +3368,7 @@ const renderIndiceHints = () => {
               hint.text = null
               hint.image = dataUrl
               renderIndiceHints()
-            }, TILE_IMAGE_MAX_DIMENSION)
+            }, TILE_IMAGE_MAX_DIMENSION, true)
           }
           input2.click()
         }
