@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.8.0'
+const APP_VERSION = '2.8.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -743,9 +743,13 @@ const start = async () => {
   // échoue (voir diagnostic Cloudflare dans la route /api/feedback
   // ci-dessous). Même philosophie que le webhook : clé absente → aucune
   // tentative, jamais de crash. API HTTP Resend directe, pas de SDK.
+  // Diagnostic TEMPORAIRE (retour utilisateur : webhook ET email en échec
+  // en prod) : renvoie un détail exploitable ({ok, ...}) au lieu d'un
+  // simple booléen, pour voir la VRAIE réponse Resend sans avoir accès aux
+  // logs Render. À revenir à un simple booléen une fois la cause trouvée.
   async function sendFeedbackEmail(subject, text) {
     const resendApiKey = process.env.RESEND_API_KEY?.trim()
-    if (!resendApiKey) return false
+    if (!resendApiKey) return { ok: false, reason: 'no_key' }
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -760,15 +764,15 @@ const start = async () => {
           text
         })
       })
+      const body = await res.text().catch(() => '')
       if (!res.ok) {
-        const body = await res.text().catch(() => '')
         app.log.warn(`/api/feedback: envoi email Resend échoué (HTTP ${res.status}) — ${body.slice(0, 300)}`)
-        return false
+        return { ok: false, reason: 'http', status: res.status, body: body.slice(0, 300), keyLength: resendApiKey.length, keyPrefix: resendApiKey.slice(0, 6) }
       }
-      return true
+      return { ok: true }
     } catch (err) {
       app.log.warn(`/api/feedback: envoi email Resend impossible — ${err.message || err}`)
-      return false
+      return { ok: false, reason: 'exception', message: String(err.message || err), keyLength: resendApiKey.length, keyPrefix: resendApiKey.slice(0, 6) }
     }
   }
 
@@ -815,22 +819,24 @@ const start = async () => {
         app.log.warn(`/api/feedback: envoi webhook Discord échoué (HTTP ${res.status}) — ${body.slice(0, 300)}`)
         // Repli email (tâche 016) : tenté seulement parce que le webhook a
         // échoué, jamais en plus d'un succès.
-        if (await sendFeedbackEmail(emailSubject, emailText)) {
+        const emailResult = await sendFeedbackEmail(emailSubject, emailText)
+        if (emailResult.ok) {
           app.log.warn('/api/feedback: signalement livré via email (repli, webhook Discord en échec)')
           return { ok: true }
         }
         app.log.warn('/api/feedback: signalement perdu — webhook et email en échec (ou email non configuré)')
-        return reply.code(502).send({ error: 'relay_failed' })
+        return reply.code(502).send({ error: 'relay_failed', emailDebug: emailResult })
       }
       app.log.info('/api/feedback: signalement livré via webhook Discord')
     } catch (err) {
       app.log.warn(`/api/feedback: envoi webhook Discord impossible — ${err.message || err}`)
-      if (await sendFeedbackEmail(emailSubject, emailText)) {
+      const emailResult = await sendFeedbackEmail(emailSubject, emailText)
+      if (emailResult.ok) {
         app.log.warn('/api/feedback: signalement livré via email (repli, webhook Discord en échec)')
         return { ok: true }
       }
       app.log.warn('/api/feedback: signalement perdu — webhook et email en échec (ou email non configuré)')
-      return reply.code(502).send({ error: 'relay_failed' })
+      return reply.code(502).send({ error: 'relay_failed', emailDebug: emailResult })
     }
     return { ok: true }
   })
