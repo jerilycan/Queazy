@@ -352,10 +352,15 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
    "met l'animation partout", le logo joueur n'avait que le pop+lueur, pas
    la chorégraphie complète, faute d'accès en CSS au contenu d'une <img>
    externe — réglé en l'inlinant). */
-.brand.animate-logo #brandPin,      .irl-center-logo.animate-logo #brandPin      { animation: brand-pin-orbit      1.3s linear both; }
-.brand.animate-logo #brandTriangle, .irl-center-logo.animate-logo #brandTriangle { animation: brand-triangle-orbit 1.4s linear both; }
-.brand.animate-logo #brandCercle,   .irl-center-logo.animate-logo #brandCercle   { animation: brand-cercle-orbit   1.5s linear both; }
-.brand.animate-logo #brandNote,     .irl-center-logo.animate-logo #brandNote     { animation: brand-note-orbit     1.6s linear both; }
+/* #brandPinIrl etc. (pas #brandPin) : le SVG .irl-center-logo a ses propres
+   id, rendus uniques (suffixe "Irl") pour le rendre autonome — voir
+   index.html, fix "logo complètement buggé" — les 4 décorations de CE
+   logo portent donc des id différents de celles de la navbar, plus
+   attrapées par ces règles tant qu'elles ciblaient encore #brandPin. */
+.brand.animate-logo #brandPin,      .irl-center-logo.animate-logo #brandPinIrl      { animation: brand-pin-orbit      1.3s linear both; }
+.brand.animate-logo #brandTriangle, .irl-center-logo.animate-logo #brandTriangleIrl { animation: brand-triangle-orbit 1.4s linear both; }
+.brand.animate-logo #brandCercle,   .irl-center-logo.animate-logo #brandCercleIrl   { animation: brand-cercle-orbit   1.5s linear both; }
+.brand.animate-logo #brandNote,     .irl-center-logo.animate-logo #brandNoteIrl     { animation: brand-note-orbit     1.6s linear both; }
 
 /* Chorégraphie en 3 temps par calque (retour utilisateur : "explosion +
    rotation > tourne autour du logo > revient à sa place", effet "woaw"
