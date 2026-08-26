@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.7.3'
+const APP_VERSION = '2.7.4'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -769,23 +769,18 @@ const start = async () => {
         body: JSON.stringify({ content: text })
       })
       if (!res.ok) {
+        // Diagnostic mené avec l'utilisateur (voir tâche 015) : le 502 vient
+        // de Cloudflare (page HTML de blocage/challenge, pas une vraie
+        // réponse Discord JSON) qui catalogue l'IP de sortie partagée du
+        // plan Render gratuit comme suspecte pour l'API Discord — jamais un
+        // souci côté webhook/URL (testé fonctionnel en direct).
         const body = await res.text().catch(() => '')
-        app.log.warn(`/api/feedback: envoi webhook Discord échoué (HTTP ${res.status}) — ${body}`)
-        // Diagnostic TEMPORAIRE (retour utilisateur : 502 systématique alors
-        // que le même webhook fonctionne en direct) — ne renvoie jamais
-        // l'URL elle-même, seulement sa forme (longueur + les 34 premiers
-        // caractères, qui couvrent pile le préfixe public
-        // "https://discord.com/api/webhooks/" sans jamais atteindre
-        // l'id/le token) et la vraie réponse Discord, pour voir d'un coup
-        // d'œil si l'URL lue depuis Render a la forme attendue. À retirer
-        // une fois la cause trouvée.
-        return reply.code(502).send({ error: 'relay_failed', debugStatus: res.status, debugBody: body.slice(0, 300), debugUrlLength: webhookUrl.length, debugUrlPrefix: webhookUrl.slice(0, 34) })
+        app.log.warn(`/api/feedback: envoi webhook Discord échoué (HTTP ${res.status}) — ${body.slice(0, 300)}`)
+        return reply.code(502).send({ error: 'relay_failed' })
       }
     } catch (err) {
       app.log.warn(`/api/feedback: envoi webhook Discord impossible — ${err.message || err}`)
-      // Même diagnostic temporaire que ci-dessus, pour le cas où fetch()
-      // échoue avant même d'obtenir une réponse (DNS, réseau...).
-      return reply.code(502).send({ error: 'relay_failed', debugMessage: String(err.message || err), debugCode: err.code || null, debugUrlLength: webhookUrl.length, debugUrlPrefix: webhookUrl.slice(0, 34) })
+      return reply.code(502).send({ error: 'relay_failed' })
     }
     return { ok: true }
   })
