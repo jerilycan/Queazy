@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.7.1'
+const APP_VERSION = '2.7.2'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -751,7 +751,12 @@ const start = async () => {
     }
     const roomCode = typeof req.body?.roomCode === 'string' ? req.body.roomCode : null
     const questionType = typeof req.body?.questionType === 'string' ? req.body.questionType : null
-    const webhookUrl = process.env.FEEDBACK_WEBHOOK_URL
+    // .trim() : un espace ou retour à la ligne parasite collé par erreur
+    // dans la variable d'environnement (fréquent en copiant-collant depuis
+    // le dashboard Render) suffit à rendre l'URL invalide pour fetch() —
+    // vu en pratique (retour utilisateur : webhook testé OK en direct,
+    // mais 502 systématique une fois relayé par le serveur déployé).
+    const webhookUrl = process.env.FEEDBACK_WEBHOOK_URL?.trim()
     if (!webhookUrl) {
       app.log.warn(`/api/feedback: FEEDBACK_WEBHOOK_URL absent, signalement perdu — ${message.trim()}`)
       return reply.code(503).send({ error: 'not_configured' })
