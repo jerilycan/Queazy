@@ -181,6 +181,12 @@
         <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
       </div>
       <div class="nav-group">
+        <!-- Retour utilisateur : le bouton "Signaler un bug" (menu IRL/à
+             distance, voir plus bas dans ce fichier) devait aussi être
+             accessible depuis la page principale (hors partie) — même
+             modale #reportBugOverlay, juste un 2e déclencheur (voir
+             openReportBugOverlay côté index.js). -->
+        <button type="button" id="navReportBugBtn" class="btn-icon" title="Signaler un bug">🐛</button>
         <a href="/select.html" class="btn btn-nav-secondary">Mes Quiz</a>
         <a id="navLogin" href="/login.html" class="btn btn-nav-secondary d-none">Connexion</a>
         <a id="profile" href="/profile.html" class="profile-chip d-none">

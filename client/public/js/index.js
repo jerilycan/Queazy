@@ -717,6 +717,7 @@ const irlMenuBtn = document.getElementById('irlMenuBtn')
 const irlMenuDropdown = document.getElementById('irlMenuDropdown')
 const irlLeaveBtn = document.getElementById('irlLeaveBtn')
 const irlReportBugBtn = document.getElementById('irlReportBugBtn')
+const navReportBugBtn = document.getElementById('navReportBugBtn')
 const reportBugOverlay = document.getElementById('reportBugOverlay')
 const reportBugMessage = document.getElementById('reportBugMessage')
 const reportBugSendBtn = document.getElementById('reportBugSendBtn')
@@ -4149,13 +4150,19 @@ const closeReportBugOverlay = () => {
   reportBugOverlay.classList.add('d-none')
   if (reportBugMessage) reportBugMessage.value = ''
 }
-if (irlReportBugBtn && reportBugOverlay) {
-  irlReportBugBtn.onclick = () => {
-    irlMenuDropdown.classList.remove('is-open')
-    irlMenuBtn.setAttribute('aria-expanded', 'false')
-    reportBugOverlay.classList.remove('d-none')
-    reportBugMessage?.focus()
-  }
+// Ouverture partagée par les 2 déclencheurs (menu IRL/à distance ET
+// bouton navbar — retour utilisateur : "aussi sur la page principale") :
+// ferme le menu roue crantée s'il était ouvert (no-op sinon, cas du
+// bouton navbar qui n'a pas ce menu), affiche la modale.
+const openReportBugOverlay = () => {
+  irlMenuDropdown?.classList.remove('is-open')
+  irlMenuBtn?.setAttribute('aria-expanded', 'false')
+  reportBugOverlay.classList.remove('d-none')
+  reportBugMessage?.focus()
+}
+if (reportBugOverlay) {
+  if (irlReportBugBtn) irlReportBugBtn.onclick = openReportBugOverlay
+  if (navReportBugBtn) navReportBugBtn.onclick = openReportBugOverlay
   // Fermeture par clic extérieur (mousedown sur l'overlay lui-même, pas son
   // contenu) ou Échap — même pattern que qzConfirm (ui-widgets.js).
   reportBugOverlay.addEventListener('mousedown', (e) => {

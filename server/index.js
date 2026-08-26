@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.7.4'
+const APP_VERSION = '2.8.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -739,11 +739,45 @@ const start = async () => {
     return Buffer.from(match[2], 'base64')
   })
 
+  // Repli email (tâche 016) : tenté uniquement quand le webhook Discord
+  // échoue (voir diagnostic Cloudflare dans la route /api/feedback
+  // ci-dessous). Même philosophie que le webhook : clé absente → aucune
+  // tentative, jamais de crash. API HTTP Resend directe, pas de SDK.
+  async function sendFeedbackEmail(subject, text) {
+    const resendApiKey = process.env.RESEND_API_KEY?.trim()
+    if (!resendApiKey) return false
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: 'onboarding@resend.dev',
+          to: 'jeremy.hulewicz@hotmail.fr',
+          subject,
+          text
+        })
+      })
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        app.log.warn(`/api/feedback: envoi email Resend échoué (HTTP ${res.status}) — ${body.slice(0, 300)}`)
+        return false
+      }
+      return true
+    } catch (err) {
+      app.log.warn(`/api/feedback: envoi email Resend impossible — ${err.message || err}`)
+      return false
+    }
+  }
+
   // Bouton "Signaler un bug" (menu IRL/à distance) : relaie un message libre
   // vers un webhook Discord, sur le même modèle que checkStorageUsage
   // ci-dessus (webhook optionnel, absent → réponse propre, jamais de crash).
-  // Pas besoin de `rooms` mais placé ici pour rester groupé avec les autres
-  // routes "en jeu" (/api/room-*) plutôt qu'au niveau racine.
+  // Repli email (tâche 016) si le webhook échoue — voir sendFeedbackEmail
+  // ci-dessus. Pas besoin de `rooms` mais placé ici pour rester groupé avec
+  // les autres routes "en jeu" (/api/room-*) plutôt qu'au niveau racine.
   app.post('/api/feedback', async (req, reply) => {
     const message = req.body?.message
     if (typeof message !== 'string' || !message.trim() || message.length > FEEDBACK_MESSAGE_MAX_LENGTH) {
@@ -762,6 +796,9 @@ const start = async () => {
       return reply.code(503).send({ error: 'not_configured' })
     }
     const text = `🐛 **Signalement**\nSalle: ${roomCode || '—'} · Question: ${questionType || '—'}\n\n${message.trim()}`
+    // Corps texte simple pour l'email de repli (pas de markdown Discord).
+    const emailSubject = `Signalement QuEazy — salle ${roomCode || '—'}`
+    const emailText = `Salle: ${roomCode || '—'} · Question: ${questionType || '—'}\n\n${message.trim()}`
     try {
       const res = await fetch(webhookUrl, {
         method: 'POST',
@@ -776,10 +813,23 @@ const start = async () => {
         // souci côté webhook/URL (testé fonctionnel en direct).
         const body = await res.text().catch(() => '')
         app.log.warn(`/api/feedback: envoi webhook Discord échoué (HTTP ${res.status}) — ${body.slice(0, 300)}`)
+        // Repli email (tâche 016) : tenté seulement parce que le webhook a
+        // échoué, jamais en plus d'un succès.
+        if (await sendFeedbackEmail(emailSubject, emailText)) {
+          app.log.warn('/api/feedback: signalement livré via email (repli, webhook Discord en échec)')
+          return { ok: true }
+        }
+        app.log.warn('/api/feedback: signalement perdu — webhook et email en échec (ou email non configuré)')
         return reply.code(502).send({ error: 'relay_failed' })
       }
+      app.log.info('/api/feedback: signalement livré via webhook Discord')
     } catch (err) {
       app.log.warn(`/api/feedback: envoi webhook Discord impossible — ${err.message || err}`)
+      if (await sendFeedbackEmail(emailSubject, emailText)) {
+        app.log.warn('/api/feedback: signalement livré via email (repli, webhook Discord en échec)')
+        return { ok: true }
+      }
+      app.log.warn('/api/feedback: signalement perdu — webhook et email en échec (ou email non configuré)')
       return reply.code(502).send({ error: 'relay_failed' })
     }
     return { ok: true }
