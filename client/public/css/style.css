@@ -7110,7 +7110,15 @@ body.irl-player-mode #illustrationImgWrap { display: none; }
 body.irl-player-mode #illustrationImgWrap.zoomguess-visible { display: block; }
 .irl-menu-btn {
   display: none;
-  position: fixed; top: 14px; right: 14px; z-index: 200;
+  /* z-index 1200 (pas 200) : au-dessus de #recapSidebarToggle (1100,
+     position:fixed top:100px right:0, ouvert à tout le monde — voir
+     .recap-sidebar-toggle plus haut). Le menu ne contenait qu'un seul
+     item avant l'ajout de "Signaler un bug" (retour utilisateur, capture
+     à l'appui) : assez court pour ne jamais toucher la zone du bouton
+     Récap — avec 2 items le menu déroulé s'étend maintenant jusque dans
+     cette zone, et devait passer AU-DESSUS plutôt que de s'entremêler
+     visuellement avec lui. */
+  position: fixed; top: 14px; right: 14px; z-index: 1200;
   width: 42px; height: 42px; border-radius: 50%;
   align-items: center; justify-content: center;
   background: rgba(5,5,12,0.78);
@@ -7134,7 +7142,10 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
 }
 .irl-menu-dropdown {
   display: none;
-  position: fixed; top: 62px; right: 14px; z-index: 200;
+  /* Même z-index que .irl-menu-btn (voir juste au-dessus) et même raison :
+     doit passer au-dessus de #recapSidebarToggle, avec qui il chevauche
+     désormais spatialement (2 items). */
+  position: fixed; top: 62px; right: 14px; z-index: 1200;
   min-width: 190px;
   background: var(--gradient-card);
   border: 1px solid var(--color-border);
