@@ -1658,6 +1658,37 @@ const flipIndiceCardToHistory = (el) => {
   })
 }
 
+// Retour utilisateur : cliquer un indice déjà vu (dans l'historique) le
+// fait revenir au centre, à la place de l'indice principal actuel — qui
+// rejoint l'historique exactement comme lors d'une révélation normale
+// (même flipIndiceCardToHistory, même animation de vol). L'indice rappelé,
+// lui, reprend l'animation d'entrée habituelle (retournement 3D,
+// .indice-enter) plutôt qu'un 2e vol simultané : un élément ne peut pas
+// suivre à la fois une trajectoire FLIP (transform posé en JS) ET
+// l'animation CSS `indiceFlipIn` (qui anime aussi `transform`) sans que
+// l'une écrase l'autre — l'entrée « fraîche » reste le repère visuel le
+// plus clair pour « cet indice redevient l'indice principal ».
+const selectIndiceHistoryCard = (el) => {
+  if (!indiceCentral || !indiceHistory) return
+  const central = indiceCentral.firstElementChild
+  if (!central || central === el) return
+  flipIndiceCardToHistory(central)
+  el.classList.remove('indice-history-card')
+  el.classList.add('indice-central-card', 'indice-enter')
+  indiceCentral.appendChild(el)
+}
+
+// Délégation sur le conteneur (posée une seule fois) plutôt qu'un listener
+// par carte : les cartes de l'historique changent au fil de la question
+// (voir updateIndiceArea/flipIndiceCardToHistory), pas besoin de re-câbler
+// à chaque déplacement.
+if (indiceHistory) {
+  indiceHistory.addEventListener('click', (e) => {
+    const card = e.target.closest('.indice-history-card')
+    if (card) selectIndiceHistoryCard(card)
+  })
+}
+
 // Appelé à CHAQUE tick du chrono partagé (voir timerInt plus bas) avec
 // `elapsedMs` = temps écoulé depuis startTs — fait apparaître tous les
 // indices dont le délai est atteint et pas encore affichés. Recalculé en
@@ -3782,8 +3813,16 @@ socket.on('player:token', ({ token }) => {
   setupLiveProfile()
   
   const code = roomInput.value.trim()
+  // Retour utilisateur : ce badge ("EN DIRECT · Code salle: XXXX") n'a de
+  // sens que pour l'hôte (retrouver/partager le code pendant la partie) —
+  // un joueur qui a déjà rejoint n'en a plus l'usage, et ça encombrait son
+  // écran de jeu. Ce handler `player:token` fire pour l'hôte ET les
+  // joueurs (l'hôte rejoint aussi sa propre salle comme un joueur, voir
+  // server/index.js) : gardé uniquement côté hôte (`isHost` déjà à jour à
+  // ce stade, posé par `room:created` avant que l'hôte ne reçoive son
+  // propre `player:token`).
   const persistentCode = document.getElementById('persistentRoomCode')
-  if (persistentCode) {
+  if (persistentCode && isHost) {
     persistentCode.classList.remove('d-none')
     persistentCode.style.display = 'block'
   }

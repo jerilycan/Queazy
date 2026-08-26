@@ -2728,6 +2728,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
+  /* Retour utilisateur : réserve la place d'une rangée de carrés (84px)
+     MÊME VIDE (aucun indice encore révélé) — sans ça, la barre de réponse
+     juste en dessous (voir #freeText dans index.html, placé après
+     #indiceArea dans le flux normal) descendait d'un cran à chaque nouvel
+     indice qui rejoignait l'historique, gênant pour taper une réponse. */
+  min-height: 84px;
 }
 .indice-history-card {
   width: 84px;
@@ -2744,8 +2750,16 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   box-sizing: border-box;
   opacity: 0.75;
   overflow: hidden;
+  cursor: pointer;
   transform-origin: top left;
-  transition: transform 0.5s cubic-bezier(.3,.85,.35,1), opacity 0.35s ease;
+  transition: transform 0.5s cubic-bezier(.3,.85,.35,1), opacity 0.35s ease, border-color 0.15s ease;
+}
+/* Retour utilisateur : un indice déjà vu doit pouvoir revenir au centre en
+   cliquant dessus (voir index.js selectIndiceHistoryCard) — un simple
+   indice visuel au survol suffit, pas besoin d'un habillage plus lourd. */
+.indice-history-card:hover {
+  opacity: 1;
+  border-color: rgba(var(--color-gold-rgb), 0.6);
 }
 .indice-card-text {
   font-weight: 700;
