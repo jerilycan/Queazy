@@ -399,6 +399,7 @@
            côté index.js) — absente en IRL, où ce menu n'a jamais eu besoin
            de préciser le mode. -->
       <div id="irlMenuModeInfo" class="irl-menu-info d-none">🌐 Connecté à distance</div>
+      <button type="button" id="irlReportBugBtn" class="irl-menu-item">🐛 Signaler un bug</button>
       <button type="button" id="irlLeaveBtn" class="irl-menu-item">🚪 Quitter le salon</button>
     </div>
 
@@ -579,6 +580,23 @@
             <button id="soundCheckBtn" type="button" class="btn h-44 w-full font-14">🔊 Tester le son (pour les Blind Tests)</button>
             <span id="soundCheckStatus" class="font-13 text-muted d-none">Tu entends un petit bip ? Ton son est prêt 👍</span>
             <button id="lobbySave" class="btn btn-primary h-50 w-full">Je suis prêt !</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modale "Signaler un bug" (menu IRL/à distance, roue crantée) : un
+           seul champ libre, pas de bouton Annuler dédié — clic
+           extérieur/Échap couvrent déjà l'annulation (voir qzConfirm dans
+           ui-widgets.js pour le pattern d'ouverture/fermeture repris ici). -->
+      <div id="reportBugOverlay" class="modal-overlay d-none">
+        <div class="modal-content card max-w-500">
+          <div class="d-flex justify-between align-center mb-lg">
+            <h2 class="font-28">Signaler un bug</h2>
+            <button type="button" id="reportBugCloseBtn" class="btn-close">&times;</button>
+          </div>
+          <textarea id="reportBugMessage" rows="4" class="w-full mb-lg" maxlength="2000" placeholder="Décris ce qui ne va pas..."></textarea>
+          <div class="d-flex gap-sm justify-end">
+            <button type="button" id="reportBugSendBtn" class="btn btn-primary h-48">Envoyer</button>
           </div>
         </div>
       </div>

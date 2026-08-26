@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.6.3'
+const APP_VERSION = '2.7.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -214,6 +214,9 @@ const generateRoomCode = () => {
   return code
 }
 const MAX_NAME_LENGTH = 20
+// Bornage du message libre du bouton "Signaler un bug" (menu IRL/à distance) —
+// évite un texte vide ou énorme relayé tel quel vers le webhook Discord.
+const FEEDBACK_MESSAGE_MAX_LENGTH = 2000
 // Délai de grâce avant de fermer la salle quand l'hôte se déconnecte — une
 // coupure wifi de quelques secondes ne doit pas tuer la partie pour tout le
 // monde. Voir le handler 'disconnect' et room:join (reconnexion via hostToken).
@@ -734,6 +737,41 @@ const start = async () => {
     reply.header('Cache-Control', 'no-store')
     reply.type(match[1])
     return Buffer.from(match[2], 'base64')
+  })
+
+  // Bouton "Signaler un bug" (menu IRL/à distance) : relaie un message libre
+  // vers un webhook Discord, sur le même modèle que checkStorageUsage
+  // ci-dessus (webhook optionnel, absent → réponse propre, jamais de crash).
+  // Pas besoin de `rooms` mais placé ici pour rester groupé avec les autres
+  // routes "en jeu" (/api/room-*) plutôt qu'au niveau racine.
+  app.post('/api/feedback', async (req, reply) => {
+    const message = req.body?.message
+    if (typeof message !== 'string' || !message.trim() || message.length > FEEDBACK_MESSAGE_MAX_LENGTH) {
+      return reply.code(400).send({ error: 'invalid_message' })
+    }
+    const roomCode = typeof req.body?.roomCode === 'string' ? req.body.roomCode : null
+    const questionType = typeof req.body?.questionType === 'string' ? req.body.questionType : null
+    const webhookUrl = process.env.FEEDBACK_WEBHOOK_URL
+    if (!webhookUrl) {
+      app.log.warn(`/api/feedback: FEEDBACK_WEBHOOK_URL absent, signalement perdu — ${message.trim()}`)
+      return reply.code(503).send({ error: 'not_configured' })
+    }
+    const text = `🐛 **Signalement**\nSalle: ${roomCode || '—'} · Question: ${questionType || '—'}\n\n${message.trim()}`
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text })
+      })
+      if (!res.ok) {
+        app.log.warn(`/api/feedback: envoi webhook Discord échoué (HTTP ${res.status})`)
+        return reply.code(502).send({ error: 'relay_failed' })
+      }
+    } catch (err) {
+      app.log.warn(`/api/feedback: envoi webhook Discord impossible — ${err.message || err}`)
+      return reply.code(502).send({ error: 'relay_failed' })
+    }
+    return { ok: true }
   })
 
   await refreshMinPointsFloor()

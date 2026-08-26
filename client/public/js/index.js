@@ -716,6 +716,11 @@ const gameModeRemoteToggle = document.getElementById('gameModeRemoteToggle')
 const irlMenuBtn = document.getElementById('irlMenuBtn')
 const irlMenuDropdown = document.getElementById('irlMenuDropdown')
 const irlLeaveBtn = document.getElementById('irlLeaveBtn')
+const irlReportBugBtn = document.getElementById('irlReportBugBtn')
+const reportBugOverlay = document.getElementById('reportBugOverlay')
+const reportBugMessage = document.getElementById('reportBugMessage')
+const reportBugSendBtn = document.getElementById('reportBugSendBtn')
+const reportBugCloseBtn = document.getElementById('reportBugCloseBtn')
 const loadedInfo = document.getElementById('loadedInfo')
 const qrDiv = document.getElementById('qr')
 // Agrandissement du QR au clic (retour utilisateur, design décidé) : voir
@@ -4132,6 +4137,62 @@ if (irlLeaveBtn) {
       cancelLabel: 'Rester',
       danger: true
     }).then((ok) => { if (ok) proceed() })
+  }
+}
+
+// Bouton "Signaler un bug" (menu roue crantée) : petite modale dédiée (pas de
+// composant générique de saisie de texte dans QzUI), écouteurs de
+// fermeture posés une seule fois au chargement — jamais re-créés à
+// l'ouverture, comme #qrExpandOverlay plus haut.
+const closeReportBugOverlay = () => {
+  if (!reportBugOverlay) return
+  reportBugOverlay.classList.add('d-none')
+  if (reportBugMessage) reportBugMessage.value = ''
+}
+if (irlReportBugBtn && reportBugOverlay) {
+  irlReportBugBtn.onclick = () => {
+    irlMenuDropdown.classList.remove('is-open')
+    irlMenuBtn.setAttribute('aria-expanded', 'false')
+    reportBugOverlay.classList.remove('d-none')
+    reportBugMessage?.focus()
+  }
+  // Fermeture par clic extérieur (mousedown sur l'overlay lui-même, pas son
+  // contenu) ou Échap — même pattern que qzConfirm (ui-widgets.js).
+  reportBugOverlay.addEventListener('mousedown', (e) => {
+    if (e.target === reportBugOverlay) closeReportBugOverlay()
+  })
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !reportBugOverlay.classList.contains('d-none')) closeReportBugOverlay()
+  })
+  if (reportBugCloseBtn) reportBugCloseBtn.onclick = closeReportBugOverlay
+  if (reportBugSendBtn) {
+    reportBugSendBtn.onclick = async () => {
+      const message = reportBugMessage?.value.trim()
+      if (!message) return
+      reportBugSendBtn.disabled = true
+      try {
+        const res = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, roomCode: roomInput.value.trim() || null, questionType: currentQuestionType || null })
+        })
+        if (res.ok) {
+          window.QzUI.toast('Signalement envoyé, merci !', 'success')
+          closeReportBugOverlay()
+        } else {
+          // Webhook non configuré côté hôte (503) ou relais en échec (502) :
+          // même message générique côté joueur, qui n'a de toute façon rien à
+          // en faire dans les deux cas (voir plan de tâche 015). La modale
+          // reste ouverte pour ne pas perdre le texte tapé.
+          window.QzUI.toast('Envoi impossible, réessaie plus tard.', 'error')
+        }
+      } catch {
+        // Panne réseau : même traitement qu'une réponse HTTP en échec.
+        window.QzUI.toast('Envoi impossible, réessaie plus tard.', 'error')
+      } finally {
+        reportBugSendBtn.disabled = false
+      }
+    }
   }
 }
 
