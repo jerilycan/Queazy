@@ -4583,6 +4583,33 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   perspective: 1200px;
   transform-style: preserve-3d;
 }
+/* Bouton de fermeture manuelle (retour utilisateur, tâche 019 v2) : tout le
+   monde (hôte ET joueurs) peut fermer la popup avant la fin du délai auto —
+   même geste que .illustration-remove-btn (cercle sombre, ✕), juste plus
+   grand pour rester facile à toucher au doigt sur une grande carte. Coupe
+   aussi le son en cours (voir closeRevealPopup, index.js) : fermer doit
+   vraiment arrêter la révélation, pas juste la cacher visuellement pendant
+   que le son continue en arrière-plan. */
+.reveal-popup-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.35);
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.reveal-popup-close-btn:hover { background: rgba(0,0,0,0.55); transform: scale(1.06); }
 /* Les blocs réutilisés (.reveal-answer/.my-result-banner/.reveal-explanation/
    .reveal-media-img-wrap) ont chacun leur propre margin-top pensé pour un
    empilement à plat dans la page — remis à zéro ici, l'espacement vertical

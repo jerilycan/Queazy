@@ -553,6 +553,7 @@ const revealAudioPlayer = document.getElementById('revealAudioPlayer')
 const revealPopupOverlay = document.getElementById('revealPopupOverlay')
 const revealPopupCard = document.getElementById('revealPopupCard')
 const revealPopupBadge = document.getElementById('revealPopupBadge')
+const revealPopupCloseBtn = document.getElementById('revealPopupCloseBtn')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
 const orderCompare = document.getElementById('orderCompare')
@@ -2808,13 +2809,32 @@ const openRevealPopup = () => {
   revealPopupCard.classList.add('popup-enter')
 }
 
-// Ferme la popup sans toucher au contenu qu'elle affichait (les éléments
+// Ferme la popup sans toucher au CONTENU qu'elle affichait (les éléments
 // à l'intérieur sont nettoyés séparément par clearRevealState, appelé à la
 // question/au classement suivant) — juste la coupure plein écran qui
-// disparaît, révélant le plateau déjà coloré en dessous.
+// disparaît, révélant le plateau déjà coloré en dessous. Coupe aussi le son
+// en cours (retour utilisateur : fermer avant la fin doit vraiment arrêter
+// la révélation, pas juste la cacher visuellement pendant qu'il continue de
+// jouer en arrière-plan) — pause seulement, .currentTime pas remis à zéro
+// ici : un contenu déjà chargé/en cache le fait de toute façon sans le
+// couper une seconde fois quand clearRevealState() le nettoie ensuite pour
+// de bon (retrait du src) à la question suivante.
 const closeRevealPopup = () => {
   if (revealPopupCloseTimer) { clearTimeout(revealPopupCloseTimer); revealPopupCloseTimer = null }
   if (revealPopupOverlay) revealPopupOverlay.classList.add('d-none')
+  if (revealAudioPlayer) revealAudioPlayer.pause()
+}
+
+// Fermeture manuelle (retour utilisateur : tout le monde — hôte ET joueurs —
+// doit pouvoir fermer avant la fin du délai auto) : croix dédiée, ou clic en
+// dehors de la carte (sur le fond assombri lui-même, pas sur son contenu —
+// même garde `e.target === overlay` que les popups de recadrage existantes
+// côté éditeur). Câblés une seule fois ici, pas à chaque ouverture.
+if (revealPopupCloseBtn) revealPopupCloseBtn.onclick = () => closeRevealPopup()
+if (revealPopupOverlay) {
+  revealPopupOverlay.addEventListener('click', (e) => {
+    if (e.target === revealPopupOverlay) closeRevealPopup()
+  })
 }
 
 const clearRevealState = () => {

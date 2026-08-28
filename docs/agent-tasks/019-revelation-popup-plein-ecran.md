@@ -244,6 +244,23 @@ types sans exception.
   hôte (IRL et à distance) avec une vraie partie, cas limite de reconnexion
   pile pendant une fermeture programmée.
 
+## Correctif post-review (v2)
+Retour utilisateur : tout le monde (hôte ET joueurs) doit pouvoir fermer la
+popup manuellement avant la fin du délai automatique — via une croix dédiée
+ou en cliquant en dehors de la carte — et fermer doit couper le son en
+cours, pas juste masquer la popup pendant qu'il continue de jouer.
+- `index.html` : bouton `#revealPopupCloseBtn` (✕) ajouté en haut à droite
+  de `#revealPopupCard`.
+- `style.css` : `.reveal-popup-close-btn` — même principe que
+  `.illustration-remove-btn` (cercle sombre translucide), en plus grand
+  pour rester facile à toucher sur une carte plus large.
+- `index.js` : `closeRevealPopup()` met maintenant `revealAudioPlayer` en
+  pause en plus de cacher l'overlay. Deux écouteurs câblés une seule fois
+  (pas à chaque ouverture) : clic sur `#revealPopupCloseBtn`, et clic sur
+  `#revealPopupOverlay` lui-même (garde `e.target === revealPopupOverlay`,
+  même pattern que les popups de recadrage existantes côté éditeur — un
+  clic sur le contenu de la carte ne ferme pas). `node --check` → OK.
+
 ## Tests manuels recommandés
 - Lancer une partie de test avec plusieurs types de question (au moins un
   à tuiles comme QCM, un texte libre comme "free"/"indice", un type "riche"
@@ -255,6 +272,9 @@ types sans exception.
   net.
 - Bonne réponse perso → confettis ; mauvaise réponse perso → pas de
   confettis.
+- Fermeture manuelle (croix ou clic à l'extérieur de la carte) pendant
+  qu'un son de révélation joue : le son doit s'arrêter net, pas continuer
+  en arrière-plan popup fermée.
 - Reconnexion pile pendant qu'une popup de révélation aurait dû se fermer
   (cas limite) : ne doit pas laisser une popup fantôme bloquée à l'écran
   à la question suivante.
