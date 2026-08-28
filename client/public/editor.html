@@ -322,9 +322,48 @@
             <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
           </div>
 
+          <!-- Bloc groupé "Après la révélation" (design validé via /design,
+               canvas "Éditeur — Révélation Enrichie") : texte (existant,
+               q.explanation) + image/son (nouveaux, q.revealImage/
+               q.revealAudio) côte à côte façon .split-grid. Les 3 volets
+               sont indépendamment optionnels, pour n'importe quel type de
+               question — mêmes patterns visuels que l'illustration
+               (.illustration-preview-wrap) et la carte audio Blind Test,
+               mais sans découpage/waveform (juste un court effet, 15s max
+               vérifiées côté JS à la sélection du fichier). -->
           <div class="detail-section">
-            <label for="qExplanation">Explication (optionnelle, affichée après la révélation)</label>
-            <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986." maxlength="400"></textarea>
+            <label>Après la révélation</label>
+            <p class="text-muted font-13">Explication, image et son sont facultatifs — affichés aux joueurs juste après la bonne réponse.</p>
+
+            <div class="reveal-card">
+              <div class="reveal-row">
+                <span class="reveal-sublabel">Texte</span>
+                <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986." maxlength="400"></textarea>
+              </div>
+
+              <div class="reveal-media-grid">
+                <div class="reveal-row">
+                  <span class="reveal-sublabel">Image</span>
+                  <input type="file" id="revealImageUpload" accept="image/*" class="cursor-pointer" />
+                  <div id="revealImagePreviewWrap" class="illustration-preview-wrap reveal-media-preview d-none mt-8">
+                    <img id="revealImagePreviewImg" class="illustration-preview-img" alt="" />
+                    <button type="button" id="removeRevealImageBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+                  </div>
+                  <p class="text-muted font-13 mt-8">Sous l'explication, à la révélation.</p>
+                </div>
+
+                <div class="reveal-row">
+                  <span class="reveal-sublabel">Son</span>
+                  <input type="file" id="revealAudioUpload" accept="audio/*" class="cursor-pointer" />
+                  <div id="revealAudioPreviewWrap" class="reveal-sound-card d-none mt-8">
+                    <div class="reveal-sound-badge">🎵</div>
+                    <audio id="revealAudioPreviewPlayer" controls></audio>
+                    <button type="button" id="removeRevealAudioBtn" class="reveal-remove-link">Retirer le son</button>
+                  </div>
+                  <p class="text-muted font-13 mt-8">Un court effet sonore (15 s max).</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div id="zoomGuessSection" class="detail-section d-none">

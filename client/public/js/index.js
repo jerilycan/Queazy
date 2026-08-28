@@ -541,6 +541,11 @@ const gradIncBtn = document.getElementById('gradIncBtn')
 const revealAnswerText = document.getElementById('revealAnswerText')
 const myResultBanner = document.getElementById('myResultBanner')
 const revealExplanationText = document.getElementById('revealExplanationText')
+// Bloc "Après la révélation" (tâche 017) : image/son optionnels, à côté de
+// revealExplanationText juste au-dessus — génériques, quel que soit le type
+// de question (voir server/index.js revealQuestion, question.revealPayload).
+const revealImageDisplay = document.getElementById('revealImageDisplay')
+const revealAudioPlayer = document.getElementById('revealAudioPlayer')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
 const orderCompare = document.getElementById('orderCompare')
@@ -2777,6 +2782,8 @@ const clearRevealState = () => {
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
   if (revealExplanationText) { revealExplanationText.classList.add('d-none'); revealExplanationText.textContent = '' }
+  if (revealImageDisplay) { revealImageDisplay.classList.add('d-none'); revealImageDisplay.removeAttribute('src') }
+  if (revealAudioPlayer) { revealAudioPlayer.pause(); revealAudioPlayer.classList.add('d-none'); revealAudioPlayer.removeAttribute('src') }
   if (gradSlider) gradSlider.classList.remove('reveal')
   if (gradMyMarker) gradMyMarker.classList.add('d-none')
   if (orderCompare) orderCompare.classList.add('d-none')
@@ -6815,6 +6822,24 @@ socket.on('question:reveal', payload => {
   if (revealExplanationText && payload.explanation) {
     revealExplanationText.textContent = payload.explanation
     revealExplanationText.classList.remove('d-none')
+  }
+  if (revealImageDisplay && payload.revealImage) {
+    revealImageDisplay.src = payload.revealImage
+    revealImageDisplay.classList.remove('d-none')
+  }
+  if (revealAudioPlayer && payload.revealAudio) {
+    revealAudioPlayer.src = payload.revealAudio
+    revealAudioPlayer.classList.remove('d-none')
+    // Même règle que blindtestAudio (voir buildBlindTestArea) : en "à
+    // distance", chacun entend sur son poste ; en "irl" (par défaut), tout
+    // le monde est dans la même pièce, seul l'hôte doit faire sortir le son
+    // — sans ce mute, chaque téléphone joueur aurait rejoué le son en même
+    // temps que l'hôte.
+    revealAudioPlayer.muted = gameMode === 'remote' ? false : !isHost
+    // Politique autoplay des navigateurs (risque connu, documenté dans la
+    // tâche 017 — pas de mécanique de repli ici) : certains joueurs, selon
+    // leur historique d'interaction, verront le son bloqué silencieusement.
+    revealAudioPlayer.play().catch(() => {})
   }
   if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus') && optionsDiv) {
     Array.from(optionsDiv.children).forEach(el => {

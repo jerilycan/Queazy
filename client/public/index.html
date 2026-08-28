@@ -1016,6 +1016,12 @@
           <div id="revealAnswerText" class="reveal-answer d-none"></div>
           <div id="myResultBanner" class="my-result-banner d-none"></div>
           <div id="revealExplanationText" class="reveal-explanation d-none"></div>
+          <!-- Bloc "Après la révélation" (tâche 017) : image/son optionnels,
+               affichés/joués juste après revealExplanationText, quel que
+               soit le type de question (voir socket.on('question:reveal')
+               dans index.js). -->
+          <img id="revealImageDisplay" class="reveal-media-img d-none" alt="" />
+          <audio id="revealAudioPlayer" class="d-none"></audio>
         </div>
         
         <div id="log" class="log-message"></div>

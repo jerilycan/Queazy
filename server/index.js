@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.8.2'
+const APP_VERSION = '2.9.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -588,6 +588,8 @@ const start = async () => {
       type: question.type,
       correct: revealCorrect,
       explanation: question.explanation || '',
+      revealImage: question.revealImage || undefined,
+      revealAudio: question.revealAudio || undefined,
       target: question.type === 'graduation' ? question.correct?.[0] : undefined,
       tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined,
       players: imagePlayers

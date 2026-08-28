@@ -374,6 +374,20 @@ const revealReponsePreviewWrap = document.getElementById('revealReponsePreviewWr
 const revealReponsePreviewImg = document.getElementById('revealReponsePreviewImg')
 const removeRevealReponseBtn = document.getElementById('removeRevealReponseBtn')
 
+// Bloc groupé "Après la révélation" (tâche 017) : q.revealImage/q.revealAudio,
+// génériques à TOUS les types de question (contrairement à q.enigmeImage/
+// q.reponseImage juste au-dessus, réservés au type "reveal") — vivent juste
+// à côté de q.explanation dans le même bloc éditeur.
+const revealImageUploadInput = document.getElementById('revealImageUpload')
+const revealImagePreviewWrap = document.getElementById('revealImagePreviewWrap')
+const revealImagePreviewImg = document.getElementById('revealImagePreviewImg')
+const removeRevealImageBtn = document.getElementById('removeRevealImageBtn')
+const revealAudioUploadInput = document.getElementById('revealAudioUpload')
+const revealAudioPreviewWrap = document.getElementById('revealAudioPreviewWrap')
+const revealAudioPreviewPlayer = document.getElementById('revealAudioPreviewPlayer')
+const removeRevealAudioBtn = document.getElementById('removeRevealAudioBtn')
+const REVEAL_AUDIO_MAX_DURATION = 15 // secondes — plafond dur, refusé (pas tronqué) au-delà
+
 // Question "blind test" : upload du morceau + recadrage (début/durée) en un
 // extrait court, encodé en WAV mono côté client (voir plus bas) — q.audio
 // stocke directement l'extrait déjà coupé, jamais le fichier complet importé.
@@ -452,6 +466,7 @@ const applyReadOnly = () => {
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn, zoomGuessZoomInput,
     rechercheUploadInput, removeRechercheBtn,
     revealEnigmeUploadInput, removeRevealEnigmeBtn, revealReponseUploadInput, removeRevealReponseBtn,
+    revealImageUploadInput, removeRevealImageBtn, revealAudioUploadInput, removeRevealAudioBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
     removeAudioClipBtn, addCorrectTitleBtn, addCorrectArtistBtn,
     document.getElementById('gradMinMinus'), document.getElementById('gradMinPlus'),
@@ -1367,6 +1382,106 @@ if (removeRevealReponseBtn) {
   }
 }
 
+// --- Bloc "Après la révélation" : image + son, génériques à tous les types
+// (contrairement au bloc "Révélation" juste au-dessus, spécifique au type
+// "reveal") — même cycle de vie que q.explanation (peuplé à selectQuestion,
+// jamais réinitialisé au changement de type puisqu'indépendant de q.type).
+const populateRevealMediaFields = (q) => {
+  if (!revealImagePreviewWrap || !revealAudioPreviewWrap) return
+  if (q.revealImage) {
+    revealImagePreviewImg.src = q.revealImage
+    revealImagePreviewWrap.classList.remove('d-none')
+  } else {
+    revealImagePreviewWrap.classList.add('d-none')
+  }
+  if (q.revealAudio) {
+    revealAudioPreviewPlayer.src = q.revealAudio
+    revealAudioPreviewWrap.classList.remove('d-none')
+  } else {
+    revealAudioPreviewPlayer.removeAttribute('src')
+    revealAudioPreviewWrap.classList.add('d-none')
+  }
+}
+
+if (revealImageUploadInput) {
+  revealImageUploadInput.onchange = () => {
+    const file = revealImageUploadInput.files && revealImageUploadInput.files[0]
+    revealImageUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    compressImageFile(file, (dataUrl) => {
+      questions[activeIndex].revealImage = dataUrl
+      populateRevealMediaFields(questions[activeIndex])
+    })
+  }
+}
+if (removeRevealImageBtn) {
+  removeRevealImageBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    QzUI.confirm({
+      title: 'Retirer cette image ?',
+      message: 'Il faudra réimporter une image pour en remettre une.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].revealImage = null
+      populateRevealMediaFields(questions[activeIndex])
+    })
+  }
+}
+
+if (revealAudioUploadInput) {
+  revealAudioUploadInput.onchange = () => {
+    const file = revealAudioUploadInput.files && revealAudioUploadInput.files[0]
+    revealAudioUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    if (!file.type || !file.type.startsWith('audio/')) {
+      showToast('Ce fichier n\'est pas un son', 'error')
+      return
+    }
+    // Durée lue via un <audio> temporaire (jamais côté serveur) : on refuse
+    // clairement au-delà de 15s plutôt que de tronquer silencieusement (pas
+    // de découpage pour ce son, contrairement au Blind Test — hors périmètre
+    // ici, voir tâche 017).
+    const probe = new Audio()
+    const objectUrl = URL.createObjectURL(file)
+    probe.preload = 'metadata'
+    probe.onloadedmetadata = () => {
+      URL.revokeObjectURL(objectUrl)
+      if (probe.duration > REVEAL_AUDIO_MAX_DURATION) {
+        showToast(`Son trop long (${REVEAL_AUDIO_MAX_DURATION}s max)`, 'error')
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => {
+        questions[activeIndex].revealAudio = reader.result
+        populateRevealMediaFields(questions[activeIndex])
+      }
+      reader.readAsDataURL(file)
+    }
+    probe.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      showToast('Impossible de lire ce fichier son', 'error')
+    }
+    probe.src = objectUrl
+  }
+}
+if (removeRevealAudioBtn) {
+  removeRevealAudioBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    QzUI.confirm({
+      title: 'Retirer ce son ?',
+      message: 'Il faudra réimporter un son pour en remettre un.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].revealAudio = null
+      populateRevealMediaFields(questions[activeIndex])
+    })
+  }
+}
+
 // --- Question "blind test" : upload + recadrage audio ---
 // q.audio stocke directement l'extrait déjà coupé (jamais le fichier
 // complet importé) : on décode le fichier importé en mémoire (Web Audio
@@ -1811,6 +1926,7 @@ const selectQuestion = (index) => {
   populateZoomGuessFields(q)
   populateRechercheFields(q)
   populateRevealFields(q)
+  populateRevealMediaFields(q)
   populateAudioFields(q)
   if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
 
@@ -3777,6 +3893,7 @@ const deleteQuestionAt = (index) => {
     populateIllustrationFields(q)
     populateZoomGuessFields(q)
     populateRevealFields(q)
+    populateRevealMediaFields(q)
     populateAudioFields(q)
     if (mcqRequireAllToggle) mcqRequireAllToggle.checked = q.requireAllCorrect !== false
 
@@ -4298,7 +4415,9 @@ const uploadMediaField = async (sb, ownerId, dataUrl) => {
 // Parcourt tous les champs média connus, quel que soit le type de question
 // (voir emitQuestion côté index.js pour la liste de référence : q.image,
 // q.illustration, q.audio, q.enigmeImage/q.reponseImage pour "reveal",
-// pair.aImage/bImage pour "association", options[].image pour "intrus").
+// q.revealImage/q.revealAudio pour le bloc "Après la révélation" (tous
+// types), pair.aImage/bImage pour "association", options[].image pour
+// "intrus").
 // Uploads en parallèle, pas séquentiels.
 const uploadQuestionMedia = async (sb, ownerId, qs) => {
   const uploads = []
@@ -4312,6 +4431,8 @@ const uploadQuestionMedia = async (sb, ownerId, qs) => {
     field(q, 'audio')
     field(q, 'enigmeImage')
     field(q, 'reponseImage')
+    field(q, 'revealImage')
+    field(q, 'revealAudio')
     if (q.type === 'association' && Array.isArray(q.correct)) {
       q.correct.forEach(pair => {
         field(pair, 'aImage')
