@@ -1410,6 +1410,10 @@ if (revealImageUploadInput) {
     if (!file || !questions[activeIndex]) return
     compressImageFile(file, (dataUrl) => {
       questions[activeIndex].revealImage = dataUrl
+      // Nouvelle image : l'ancien cadrage n'a plus de sens (même principe
+      // qu'openAssocCropModal/onReplace pour "association").
+      delete questions[activeIndex].revealPos
+      delete questions[activeIndex].revealBg
       populateRevealMediaFields(questions[activeIndex])
     })
   }
@@ -1425,7 +1429,34 @@ if (removeRevealImageBtn) {
     }).then((ok) => {
       if (!ok || !questions[activeIndex]) return
       questions[activeIndex].revealImage = null
+      delete questions[activeIndex].revealPos
+      delete questions[activeIndex].revealBg
       populateRevealMediaFields(questions[activeIndex])
+    })
+  }
+}
+// Vignette cliquable → recadrage (tâche 018), même geste que les vignettes
+// association/intrus (voir openAssocCropModal) : q.revealImage → q.revealPos
+// ({x,y,zoom}) et q.revealBg (couleur dominante), même convention de nommage
+// (imgField.replace('Image', 'Pos'|'Bg')) mais appliquée directement sur la
+// question plutôt que sur une paire. Lié une seule fois ici (pas dans
+// populateRevealMediaFields, rappelée à chaque affichage) : le handler lit
+// questions[activeIndex] au moment du clic, pas besoin de re-binder.
+if (revealImagePreviewImg) {
+  revealImagePreviewImg.title = 'Cliquer pour recadrer cette image'
+  revealImagePreviewImg.classList.add('cursor-pointer')
+  revealImagePreviewImg.onclick = () => {
+    const q = questions[activeIndex]
+    if (readOnly || !q || !q.revealImage) return
+    openImageCropModal(q.revealImage, q.revealPos, q.revealBg, {
+      onSave: (pos) => { q.revealPos = pos },
+      onBgReady: (bg) => { q.revealBg = bg },
+      onReplace: (dataUrl) => {
+        q.revealImage = dataUrl
+        delete q.revealPos
+        delete q.revealBg
+        populateRevealMediaFields(q)
+      }
     })
   }
 }
@@ -1439,17 +1470,23 @@ if (revealAudioUploadInput) {
       showToast('Ce fichier n\'est pas un son', 'error')
       return
     }
-    // Durée lue via un <audio> temporaire (jamais côté serveur) : on refuse
-    // clairement au-delà de 15s plutôt que de tronquer silencieusement (pas
-    // de découpage pour ce son, contrairement au Blind Test — hors périmètre
-    // ici, voir tâche 017).
+    // Durée lue via un <audio> temporaire (jamais côté serveur) : un fichier
+    // déjà ≤15s est accepté directement tel quel (dataURL, aucun ré-encodage,
+    // comportement inchangé depuis la tâche 017) ; au-delà, on ouvre
+    // désormais une popup de découpe (tâche 018, voir openRevealAudioTrimModal
+    // plus bas) plutôt qu'un refus sec — l'utilisateur choisit quelle portion
+    // de REVEAL_AUDIO_MAX_DURATION garder.
     const probe = new Audio()
     const objectUrl = URL.createObjectURL(file)
     probe.preload = 'metadata'
     probe.onloadedmetadata = () => {
       URL.revokeObjectURL(objectUrl)
       if (probe.duration > REVEAL_AUDIO_MAX_DURATION) {
-        showToast(`Son trop long (${REVEAL_AUDIO_MAX_DURATION}s max)`, 'error')
+        openRevealAudioTrimModal(file, (dataUrl) => {
+          if (!questions[activeIndex]) return
+          questions[activeIndex].revealAudio = dataUrl
+          populateRevealMediaFields(questions[activeIndex])
+        })
         return
       }
       const reader = new FileReader()
@@ -1725,6 +1762,269 @@ const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
   reader.onerror = reject
   reader.readAsDataURL(blob)
 })
+
+// Popup de découpe pour le son de révélation (tâche 018) : un fichier trop
+// long (> REVEAL_AUDIO_MAX_DURATION) n'est plus rejeté sec (voir
+// revealAudioUploadInput.onchange plus bas) — cette popup laisse choisir
+// QUELLE portion de REVEAL_AUDIO_MAX_DURATION garder, même principe que le
+// composant Blind Test (#audioTrimWrap, forme d'onde, poignées, WAV mono)
+// mais AUTONOME : ses propres éléments DOM créés à la volée dans un overlay
+// (comme openImageCropModal), pas de branchement sur pendingAudioBuffer/
+// audioStartInput/etc. déjà utilisés par le Blind Test — les deux popups
+// pourraient sinon se marcher dessus si ouvertes/fermées dans un ordre
+// inattendu. La logique de forme d'onde/glisser/redimensionner est donc
+// dupliquée ici (même choix assumé que computeCropGeometry, dupliquée entre
+// editor.js et index.js) ; encodeWavMono/blobToDataUrl, purs et sans état
+// partagé, sont en revanche réutilisés tels quels (pas de raison de les
+// dupliquer aussi, voir CLAUDE.md "pas de duplication évitable").
+// file : le fichier importé (déjà connu > REVEAL_AUDIO_MAX_DURATION).
+// onConfirm(dataUrl) : appelé UNIQUEMENT si l'utilisateur valide un extrait
+// (jamais sur "Annuler" — découpe obligatoire avant validation, voir plan).
+const REVEAL_AUDIO_TRIM_BARS = 90
+const openRevealAudioTrimModal = (file, onConfirm) => {
+  let audioBuffer = null
+  let objectUrl = URL.createObjectURL(file)
+  let bucketDuration = 0
+  let previewTimeout = null
+
+  const overlay = document.createElement('div')
+  overlay.className = 'modal-overlay'
+  overlay.innerHTML = `
+    <div class="modal-content card max-w-500">
+      <h2 class="mb-md font-20">Découper le son de révélation</h2>
+      <p class="text-muted font-13 mb-md">Ce son dépasse ${REVEAL_AUDIO_MAX_DURATION}s — choisis la portion à garder (${REVEAL_AUDIO_MAX_DURATION}s max).</p>
+      <div class="audio-trim-wrap">
+        <div class="audio-waveform reveal-trim-waveform">
+          <div class="audio-waveform-bars"></div>
+          <div class="waveform-handle reveal-trim-handle-start" role="slider" tabindex="0" aria-label="Début de l'extrait"></div>
+          <div class="waveform-handle reveal-trim-handle-end" role="slider" tabindex="0" aria-label="Fin de l'extrait"></div>
+        </div>
+        <audio class="reveal-trim-player" controls></audio>
+        <div class="d-grid grid-cols-split gap-lg mt-8">
+          <div class="detail-section">
+            <label>Début (secondes) <span class="text-muted font-13 reveal-trim-total"></span></label>
+            <div class="timer-controls">
+              <button type="button" class="btn-timer reveal-trim-start-minus">-</button>
+              <input type="number" class="stepper-input reveal-trim-start-input" value="0" min="0" />
+              <button type="button" class="btn-timer reveal-trim-start-plus">+</button>
+            </div>
+          </div>
+          <div class="detail-section">
+            <label>Durée (secondes)</label>
+            <div class="timer-controls">
+              <button type="button" class="btn-timer reveal-trim-duration-minus">-</button>
+              <input type="number" class="stepper-input reveal-trim-duration-input" value="${REVEAL_AUDIO_MAX_DURATION}" min="1" max="${REVEAL_AUDIO_MAX_DURATION}" />
+              <button type="button" class="btn-timer reveal-trim-duration-plus">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex justify-between align-center mt-20">
+        <button type="button" class="btn h-48 reveal-trim-preview">▶ Prévisualiser</button>
+        <div class="d-flex gap-sm">
+          <button type="button" class="btn h-48 reveal-trim-cancel">Annuler</button>
+          <button type="button" class="btn btn-primary h-48 reveal-trim-ok">Utiliser cet extrait</button>
+        </div>
+      </div>
+    </div>
+  `
+  document.body.appendChild(overlay)
+
+  const waveformEl = overlay.querySelector('.reveal-trim-waveform')
+  const barsEl = overlay.querySelector('.audio-waveform-bars')
+  const handleStartEl = overlay.querySelector('.reveal-trim-handle-start')
+  const handleEndEl = overlay.querySelector('.reveal-trim-handle-end')
+  const player = overlay.querySelector('.reveal-trim-player')
+  const totalEl = overlay.querySelector('.reveal-trim-total')
+  const startInput = overlay.querySelector('.reveal-trim-start-input')
+  const durationInput = overlay.querySelector('.reveal-trim-duration-input')
+  player.src = objectUrl
+
+  const cleanup = () => {
+    if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null }
+    if (previewTimeout) clearTimeout(previewTimeout)
+  }
+  const close = () => { cleanup(); overlay.remove() }
+
+  // Même logique de "seaux de crête" que renderWaveform (Blind Test) — voir
+  // le commentaire en tête de fonction pour pourquoi c'est dupliqué plutôt
+  // que réutilisé tel quel (état local à cette popup, pas de partage).
+  const renderBars = (buffer) => {
+    barsEl.innerHTML = ''
+    const data = buffer.getChannelData(0)
+    const bucketSize = Math.max(1, Math.floor(data.length / REVEAL_AUDIO_TRIM_BARS))
+    bucketDuration = buffer.duration / REVEAL_AUDIO_TRIM_BARS
+    const frag = document.createDocumentFragment()
+    for (let i = 0; i < REVEAL_AUDIO_TRIM_BARS; i++) {
+      let peak = 0
+      const start = i * bucketSize
+      const end = Math.min(data.length, start + bucketSize)
+      for (let j = start; j < end; j++) {
+        const abs = Math.abs(data[j])
+        if (abs > peak) peak = abs
+      }
+      const bar = document.createElement('span')
+      bar.className = 'bar'
+      bar.style.setProperty('--h', `${Math.max(6, Math.round(peak * 100))}%`)
+      frag.appendChild(bar)
+    }
+    barsEl.appendChild(frag)
+  }
+
+  const updateSelection = () => {
+    if (!audioBuffer || !bucketDuration) return
+    const start = Number(startInput.value) || 0
+    const end = start + (Number(durationInput.value) || 0)
+    ;[...barsEl.children].forEach((bar, i) => {
+      const t = i * bucketDuration
+      bar.classList.toggle('in-range', t >= start && t < end)
+    })
+    const total = audioBuffer.duration
+    const clampPct = (sec) => `${Math.max(0, Math.min(100, (sec / total) * 100))}%`
+    handleStartEl.style.left = clampPct(start)
+    handleEndEl.style.left = clampPct(end)
+  }
+
+  // Clampe Début/Durée : 0 <= début, REVEAL_AUDIO_MAX_DURATION comme plafond
+  // dur de la durée (pas 30s comme le Blind Test, voir plan tâche 018) et
+  // jamais au-delà de la piste importée.
+  const clampInputs = () => {
+    if (!audioBuffer) return
+    const maxDuration = Math.min(REVEAL_AUDIO_MAX_DURATION, audioBuffer.duration)
+    const duration = Math.min(maxDuration, Math.max(1, Number(durationInput.value) || 1))
+    const start = Math.max(0, Math.min(Number(startInput.value) || 0, audioBuffer.duration - duration))
+    durationInput.value = Math.round(duration)
+    startInput.value = Math.round(start)
+    updateSelection()
+  }
+
+  startInput.oninput = clampInputs
+  durationInput.oninput = clampInputs
+  overlay.querySelector('.reveal-trim-start-minus').onclick = () => { startInput.value = (Number(startInput.value) || 0) - 1; clampInputs() }
+  overlay.querySelector('.reveal-trim-start-plus').onclick = () => { startInput.value = (Number(startInput.value) || 0) + 1; clampInputs() }
+  overlay.querySelector('.reveal-trim-duration-minus').onclick = () => { durationInput.value = (Number(durationInput.value) || 0) - 1; clampInputs() }
+  overlay.querySelector('.reveal-trim-duration-plus').onclick = () => { durationInput.value = (Number(durationInput.value) || 0) + 1; clampInputs() }
+
+  // Glisser la sélection en bloc (clic dans la zone surlignée) — même
+  // principe que le Blind Test, état local (pas de variables module).
+  let dragStartX = null
+  let dragStartValue = 0
+  const isPointerInSelection = (e) => {
+    if (!audioBuffer) return false
+    const rect = waveformEl.getBoundingClientRect()
+    if (!rect.width) return false
+    const t = ((e.clientX - rect.left) / rect.width) * audioBuffer.duration
+    const start = Number(startInput.value) || 0
+    const end = start + (Number(durationInput.value) || 0)
+    return t >= start && t <= end
+  }
+  waveformEl.addEventListener('pointerdown', (e) => {
+    if (!audioBuffer || !isPointerInSelection(e)) return
+    dragStartX = e.clientX
+    dragStartValue = Number(startInput.value) || 0
+    waveformEl.classList.add('dragging')
+    waveformEl.setPointerCapture(e.pointerId)
+    e.preventDefault()
+  })
+  waveformEl.addEventListener('pointermove', (e) => {
+    if (dragStartX === null || !audioBuffer) return
+    const rect = waveformEl.getBoundingClientRect()
+    if (!rect.width) return
+    const deltaSec = ((e.clientX - dragStartX) / rect.width) * audioBuffer.duration
+    startInput.value = Math.round(dragStartValue + deltaSec)
+    clampInputs()
+  })
+  const endDrag = (e) => {
+    if (dragStartX === null) return
+    dragStartX = null
+    waveformEl.classList.remove('dragging')
+    if (e && waveformEl.hasPointerCapture(e.pointerId)) waveformEl.releasePointerCapture(e.pointerId)
+  }
+  waveformEl.addEventListener('pointerup', endDrag)
+  waveformEl.addEventListener('pointercancel', endDrag)
+
+  // Poignées de bord (étirer un seul côté de la sélection, l'autre fixe).
+  let resizeEdge = null
+  const beginResize = (edge) => (e) => {
+    if (!audioBuffer) return
+    resizeEdge = edge
+    waveformEl.classList.add('dragging')
+    waveformEl.setPointerCapture(e.pointerId)
+    e.preventDefault()
+    e.stopPropagation()
+  }
+  handleStartEl.addEventListener('pointerdown', beginResize('start'))
+  handleEndEl.addEventListener('pointerdown', beginResize('end'))
+  waveformEl.addEventListener('pointermove', (e) => {
+    if (!resizeEdge || !audioBuffer) return
+    const rect = waveformEl.getBoundingClientRect()
+    if (!rect.width) return
+    const t = Math.max(0, Math.min(audioBuffer.duration, ((e.clientX - rect.left) / rect.width) * audioBuffer.duration))
+    const start = Number(startInput.value) || 0
+    const duration = Number(durationInput.value) || 0
+    if (resizeEdge === 'start') {
+      const end = start + duration
+      const minStart = Math.max(0, end - REVEAL_AUDIO_MAX_DURATION)
+      const maxStart = end - 1
+      const newStart = Math.max(minStart, Math.min(t, maxStart))
+      startInput.value = Math.round(newStart)
+      durationInput.value = Math.round(end - newStart)
+    } else {
+      const minEnd = start + 1
+      const maxEnd = Math.min(audioBuffer.duration, start + REVEAL_AUDIO_MAX_DURATION)
+      const newEnd = Math.max(minEnd, Math.min(t, maxEnd))
+      durationInput.value = Math.round(newEnd - start)
+    }
+    clampInputs()
+  })
+  const endResize = (e) => {
+    if (!resizeEdge) return
+    resizeEdge = null
+    waveformEl.classList.remove('dragging')
+    if (e && waveformEl.hasPointerCapture(e.pointerId)) waveformEl.releasePointerCapture(e.pointerId)
+  }
+  waveformEl.addEventListener('pointerup', endResize)
+  waveformEl.addEventListener('pointercancel', endResize)
+
+  overlay.querySelector('.reveal-trim-preview').onclick = () => {
+    if (!audioBuffer) return
+    clampInputs()
+    const start = Number(startInput.value) || 0
+    const duration = Number(durationInput.value) || 1
+    if (previewTimeout) clearTimeout(previewTimeout)
+    player.currentTime = start
+    player.play().catch(() => {})
+    previewTimeout = setTimeout(() => player.pause(), duration * 1000)
+  }
+  overlay.querySelector('.reveal-trim-cancel').onclick = close
+  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close() })
+  overlay.querySelector('.reveal-trim-ok').onclick = async () => {
+    if (!audioBuffer) return
+    clampInputs()
+    const start = Number(startInput.value) || 0
+    const duration = Number(durationInput.value) || 1
+    const blob = encodeWavMono(audioBuffer, start, duration)
+    const dataUrl = await blobToDataUrl(blob)
+    close()
+    onConfirm(dataUrl)
+  }
+
+  file.arrayBuffer().then(buf => {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    const ctx = new AudioCtx()
+    return ctx.decodeAudioData(buf).finally(() => ctx.close())
+  }).then(buffer => {
+    audioBuffer = buffer
+    startInput.value = 0
+    durationInput.value = Math.min(REVEAL_AUDIO_MAX_DURATION, Math.floor(buffer.duration))
+    if (totalEl) totalEl.textContent = `(morceau : ${formatAudioDuration(buffer.duration)})`
+    renderBars(buffer)
+    clampInputs()
+  }).catch(() => {
+    showToast('Impossible de lire ce fichier son', 'error')
+    close()
+  })
+}
 
 const populateAudioFields = (q) => {
   if (!audioClipWrap) return

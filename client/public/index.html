@@ -1019,8 +1019,16 @@
           <!-- Bloc "Après la révélation" (tâche 017) : image/son optionnels,
                affichés/joués juste après revealExplanationText, quel que
                soit le type de question (voir socket.on('question:reveal')
-               dans index.js). -->
-          <img id="revealImageDisplay" class="reveal-media-img d-none" alt="" />
+               dans index.js). Conteneur (.reveal-media-img-wrap,
+               position:relative/overflow:hidden — voir style.css, même
+               principe que .assoc-item-img) ajouté en tâche 018 pour porter
+               le cadrage choisi côté éditeur (payload.revealPos, appliqué
+               via applyCropTransform) : l'<img> seule ne peut pas être
+               scale/translate à l'intérieur d'une boîte qui rogne le
+               débord sans ce wrapper. -->
+          <div id="revealImageDisplayWrap" class="reveal-media-img-wrap d-none">
+            <img id="revealImageDisplay" class="reveal-media-img" alt="" />
+          </div>
           <audio id="revealAudioPlayer" class="d-none"></audio>
         </div>
         

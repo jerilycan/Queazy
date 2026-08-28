@@ -544,6 +544,7 @@ const revealExplanationText = document.getElementById('revealExplanationText')
 // Bloc "Après la révélation" (tâche 017) : image/son optionnels, à côté de
 // revealExplanationText juste au-dessus — génériques, quel que soit le type
 // de question (voir server/index.js revealQuestion, question.revealPayload).
+const revealImageDisplayWrap = document.getElementById('revealImageDisplayWrap')
 const revealImageDisplay = document.getElementById('revealImageDisplay')
 const revealAudioPlayer = document.getElementById('revealAudioPlayer')
 const orderArea = document.getElementById('orderArea')
@@ -2782,7 +2783,12 @@ const clearRevealState = () => {
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
   if (revealExplanationText) { revealExplanationText.classList.add('d-none'); revealExplanationText.textContent = '' }
-  if (revealImageDisplay) { revealImageDisplay.classList.add('d-none'); revealImageDisplay.removeAttribute('src') }
+  // Wrapper masqué en plus de l'<img> elle-même (tâche 018, voir
+  // applyCropTransform) — le d-none seul sur revealImageDisplay ne
+  // suffirait plus à cacher le conteneur .reveal-media-img-wrap, qui a
+  // désormais sa propre taille/fond visibles indépendamment de l'image.
+  if (revealImageDisplayWrap) revealImageDisplayWrap.classList.add('d-none')
+  if (revealImageDisplay) { revealImageDisplay.classList.add('d-none'); revealImageDisplay.removeAttribute('src'); revealImageDisplay.style.transform = ''; revealImageDisplay.style.width = ''; revealImageDisplay.style.height = '' }
   if (revealAudioPlayer) { revealAudioPlayer.pause(); revealAudioPlayer.classList.add('d-none'); revealAudioPlayer.removeAttribute('src') }
   if (gradSlider) gradSlider.classList.remove('reveal')
   if (gradMyMarker) gradMyMarker.classList.add('d-none')
@@ -4872,6 +4878,26 @@ const emitQuestion = (index) => {
     // jamais diffusé dans question:show — sinon lisible en devtools avant
     // même de répondre), ex. "Faux, l'entreprise a été créée en 1986".
     explanation: q.explanation || '',
+    // "Après la révélation" (tâche 017) : image/son génériques à TOUS les
+    // types de question, saisis dans le même bloc éditeur que explanation
+    // juste au-dessus. Correctif tâche 018 : ces deux champs manquaient ICI
+    // depuis la 017 — jamais transmis au serveur, donc jamais rejoués en
+    // jeu quoi que le créateur ait configuré (revealPayload.revealImage/
+    // revealAudio valaient toujours undefined côté server/index.js). Toujours
+    // déjà des URLs https:// à ce stade (uploadées au save via editor.js
+    // uploadQuestionMedia, ce champ n'existe que depuis la 017 — contrairement
+    // à q.illustration/q.audio, aucun ancien quiz ne peut en avoir une
+    // version base64 non migrée) : passthrough direct, pas besoin du relais
+    // HTTP uploadRoomImage/uploadRoomAudio (room.pendingImage/pendingAudio
+    // sont des slots UNIQUES par salle déjà utilisés par l'illustration/le
+    // blindtest de la même question — les réutiliser ici les écraserait).
+    revealImage: q.revealImage || undefined,
+    revealAudio: q.revealAudio || undefined,
+    // Cadrage de revealImage (voir editor.js openImageCropModal), même
+    // convention que pair.aPos/bPos pour "association" : purement cosmétique,
+    // jamais validé côté serveur, transmis tel quel.
+    revealPos: q.revealPos || undefined,
+    revealBg: q.revealBg || undefined,
     // "zoomguess" : zoom obligatoire sur SA propre image (voir editor.js),
     // {x, y, startScale}. Purement cosmétique côté client, aucun impact sur
     // le scoring (qui reste le texte libre générique) — pas besoin que le
@@ -6824,8 +6850,25 @@ socket.on('question:reveal', payload => {
     revealExplanationText.classList.remove('d-none')
   }
   if (revealImageDisplay && payload.revealImage) {
-    revealImageDisplay.src = payload.revealImage
+    // Cadrage choisi côté éditeur (tâche 018, payload.revealPos —
+    // {x,y,zoom}, absent = centré + zoom plein, voir editor.js
+    // openImageCropModal) : appliqué via applyCropTransform une fois
+    // l'image chargée, comme pour "association"/"intrus" — le wrapper
+    // .reveal-media-img-wrap (position:relative/overflow:hidden, voir
+    // style.css) sert de boîte de référence, l'<img> seule est scale/
+    // translate à l'intérieur.
+    if (revealImageDisplayWrap && payload.revealBg) revealImageDisplayWrap.style.background = payload.revealBg
+    // d-none retiré AVANT de poser src/de vérifier .complete : applyNow lit
+    // wrapEl.clientWidth/Height (voir applyCropTransform), qui vaudrait 0 si
+    // le wrapper était encore caché — une image déjà en cache peut avoir
+    // .complete === true dès l'assignation de .src, sans jamais redéclencher
+    // onload ensuite.
     revealImageDisplay.classList.remove('d-none')
+    if (revealImageDisplayWrap) revealImageDisplayWrap.classList.remove('d-none')
+    const applyNow = () => applyCropTransform(revealImageDisplayWrap, revealImageDisplay, payload.revealPos)
+    revealImageDisplay.onload = applyNow
+    revealImageDisplay.src = payload.revealImage
+    if (revealImageDisplay.complete && revealImageDisplay.naturalWidth) applyNow()
   }
   if (revealAudioPlayer && payload.revealAudio) {
     revealAudioPlayer.src = payload.revealAudio

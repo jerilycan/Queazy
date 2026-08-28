@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.9.0'
+const APP_VERSION = '2.10.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -590,6 +590,11 @@ const start = async () => {
       explanation: question.explanation || '',
       revealImage: question.revealImage || undefined,
       revealAudio: question.revealAudio || undefined,
+      // Cadrage choisi côté éditeur (tâche 018, voir editor.js
+      // openImageCropModal) — {x,y,zoom}/couleur dominante, purement
+      // cosmétiques (voir index.js applyCropTransform pour l'affichage).
+      revealPos: question.revealPos || undefined,
+      revealBg: question.revealBg || undefined,
       target: question.type === 'graduation' ? question.correct?.[0] : undefined,
       tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined,
       players: imagePlayers
@@ -1503,7 +1508,16 @@ const start = async () => {
       // serveur pour scorer/décrire les réponses) qui n'avait jamais reçu le
       // champ. Toujours le même piège : liste blanche explicite, un champ
       // spécifique à un type oublié dedans disparaît silencieusement.
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length, options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage }
+      // revealImage/revealAudio/revealPos/revealBg ("Après la révélation",
+      // tâche 017/018) : bloc générique image+son+cadrage, indépendant du
+      // type de question — même piège qu'au-dessus (q.zones), une 5e fois :
+      // ces 4 champs manquaient dans cette liste blanche depuis la 017,
+      // laissant question.revealImage/revealAudio toujours undefined pour
+      // revealQuestion() (voir plus haut) malgré un payload qui les portait
+      // bien. revealPos/revealBg purement cosmétiques (cadrage choisi côté
+      // éditeur, voir editor.js openImageCropModal), jamais validés ici —
+      // même traitement que pair.aPos/bPos pour "association".
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length, options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -1519,7 +1533,13 @@ const start = async () => {
       // devine visuellement (ici en balayant l'image cachée), q.correct ne
       // doit jamais être lisible en devtools avant même d'avoir commencé à
       // explorer l'image.
-      const { correct, explanation, reponseImageUrl, ...payloadWithoutCorrectOrExplanation } = payload || {}
+      // revealImage/revealAudio/revealPos/revealBg (tâche 017/018) : même
+      // raison qu'explanation — déjà copiés sur l'objet question ci-dessus
+      // (et sur question.revealPayload, voir revealQuestion) pour la
+      // diffusion à l'heure ; les laisser dans broadcastPayload aurait
+      // spoilé image/son de révélation dès question:show, lisible en
+      // devtools avant même la fin du chrono.
+      const { correct, explanation, reponseImageUrl, revealImage, revealAudio, revealPos, revealBg, ...payloadWithoutCorrectOrExplanation } = payload || {}
       // "indice" (tâche 014) : contrairement à "free" (q.correct diffusé en
       // clair dès question:show, écart connu et hors périmètre ici), tout le
       // principe du type est de deviner PROGRESSIVEMENT à partir d'indices —

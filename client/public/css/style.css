@@ -4493,16 +4493,31 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 
 /* Bloc "Après la révélation" côté jeu (tâche 017) : image/son affichés juste
    sous .reveal-explanation, chez l'hôte comme chez tous les joueurs (même
-   payload, voir question:reveal). */
-.reveal-media-img {
+   payload, voir question:reveal). Conteneur ajouté en tâche 018
+   (.reveal-media-img-wrap, position:relative/overflow:hidden) pour porter
+   le cadrage choisi côté éditeur (payload.revealPos) — même principe que
+   .assoc-item-img/.assoc-item-img-inner : l'<img> interne est positionnée en
+   absolu et transformée en JS (voir index.js applyCropTransform), jamais un
+   simple <img src> plein cadre. aspect-ratio (pas de hauteur fixe en px) :
+   la hauteur suit la largeur réelle du conteneur, comme .assoc-item-img. */
+.reveal-media-img-wrap {
   display: block;
-  max-width: min(420px, 100%);
-  max-height: 260px;
-  width: auto;
+  width: min(420px, 100%);
+  aspect-ratio: 16 / 10;
   margin: var(--space-sm) auto 0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
+  overflow: hidden;
+  position: relative;
+  background: var(--color-surface-2);
   animation: fadeIn 0.3s ease;
+}
+.reveal-media-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  display: block;
 }
 
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
