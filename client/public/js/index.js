@@ -6923,7 +6923,19 @@ socket.on('question:reveal', payload => {
   // popup ne fait qu'afficher par-dessus ce que ces branches posent, jamais
   // recalculé. Fermeture programmée tout en bas de ce handler, une fois
   // TOUTES les branches passées (voir plus bas).
-  openRevealPopup()
+  // Retour utilisateur (v3) : pour les types dont la révélation EST déjà
+  // parlante en soi (feedback spatial affiché directement sur le plateau —
+  // cartes/liens/points/curseur qui passent au vert ou rouge en place), la
+  // popup généique (juste un badge + "Bonne réponse !"/"Presque !") cachait
+  // ce feedback pour peu de valeur ajoutée ("Rangement par exemple... peu
+  // d'intérêt non ?"). Elle ne s'ouvre donc plus INCONDITIONNELLEMENT pour
+  // ces types-là — seulement s'il y a un vrai contenu à montrer dedans
+  // (explication/image/son ajoutés à CETTE question précise, voir tâches
+  // 017/018), qui lui n'est visible nulle part ailleurs sur l'écran.
+  const REVEAL_SPATIAL_FEEDBACK_TYPES = new Set(['rangement', 'association', 'timeline', 'image', 'graduation', 'order'])
+  const hasRevealExtras = !!(payload.explanation || payload.revealImage || payload.revealAudio)
+  const shouldOpenRevealPopup = !REVEAL_SPATIAL_FEEDBACK_TYPES.has(payload.type) || hasRevealExtras
+  if (shouldOpenRevealPopup) openRevealPopup()
   if (revealExplanationText && payload.explanation) {
     revealExplanationText.textContent = payload.explanation
     revealExplanationText.classList.remove('d-none')
@@ -7128,7 +7140,12 @@ socket.on('question:reveal', payload => {
   // s'arrête tout de suite pour lui (voir plus haut, `if (!myResultBanner ||
   // isHost) return`), #myResultBanner ne porte donc jamais ces classes chez
   // lui -> popup neutre, badge caché (d-none posé par openRevealPopup).
-  if (revealPopupOverlay && myResultBanner) {
+  // shouldOpenRevealPopup (voir tout en haut du handler) : pas de badge/
+  // minuteur à poser pour une popup qu'on n'a délibérément pas ouverte
+  // (type à feedback spatial, sans explication/image/son sur cette
+  // question) — resterait de toute façon caché (`d-none`), mais autant ne
+  // pas laisser cet état traîner sur des éléments qu'on n'a pas touchés.
+  if (shouldOpenRevealPopup && revealPopupOverlay && myResultBanner) {
     const resultState = ['is-correct', 'is-incorrect', 'is-close'].find(c => myResultBanner.classList.contains(c))
     if (resultState) {
       revealPopupOverlay.classList.add(resultState)
@@ -7141,6 +7158,10 @@ socket.on('question:reveal', payload => {
   // Confettis (tâche 019) : réutilisation TELLE QUELLE du déclencheur déjà en
   // place en fin de partie (voir results.js, mêmes réglages) — jamais côté
   // hôte (n'a jamais de réponse personnelle, voir tâche 019 "Hors périmètre").
+  // Indépendant de shouldOpenRevealPopup à dessein : les confettis ne cachent
+  // rien du plateau (juste un calque décoratif par-dessus), donc aucune
+  // raison de les priver d'une "Rangement"/"Association" bien réussie sous
+  // prétexte que la popup générique, elle, ne s'ouvre pas pour ce type.
   if (!isHost && myAnsweredCorrectlyThisQuestion && window.confetti) {
     window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.55 } })
   }
@@ -7149,15 +7170,18 @@ socket.on('question:reveal', payload => {
   // marge après sa fin) — jamais raccourci en dessous du délai de base. La
   // durée du son n'est pas toujours connue de façon synchrone ici (métadonnées
   // pas encore chargées) : si c'est le cas, on garde simplement le délai de
-  // base, comme prévu au plan de la tâche.
-  const REVEAL_POPUP_BASE_DELAY_MS = 4500
-  const REVEAL_POPUP_AUDIO_MARGIN_MS = 500
-  let revealPopupDelay = REVEAL_POPUP_BASE_DELAY_MS
-  if (revealAudioPlayer && payload.revealAudio && Number.isFinite(revealAudioPlayer.duration) && revealAudioPlayer.duration > 0) {
-    revealPopupDelay = Math.max(revealPopupDelay, revealAudioPlayer.duration * 1000 + REVEAL_POPUP_AUDIO_MARGIN_MS)
+  // base, comme prévu au plan de la tâche. Rien à programmer si la popup n'a
+  // pas été ouverte (shouldOpenRevealPopup faux).
+  if (shouldOpenRevealPopup) {
+    const REVEAL_POPUP_BASE_DELAY_MS = 4500
+    const REVEAL_POPUP_AUDIO_MARGIN_MS = 500
+    let revealPopupDelay = REVEAL_POPUP_BASE_DELAY_MS
+    if (revealAudioPlayer && payload.revealAudio && Number.isFinite(revealAudioPlayer.duration) && revealAudioPlayer.duration > 0) {
+      revealPopupDelay = Math.max(revealPopupDelay, revealAudioPlayer.duration * 1000 + REVEAL_POPUP_AUDIO_MARGIN_MS)
+    }
+    if (revealPopupCloseTimer) clearTimeout(revealPopupCloseTimer)
+    revealPopupCloseTimer = setTimeout(() => { revealPopupCloseTimer = null; closeRevealPopup() }, revealPopupDelay)
   }
-  if (revealPopupCloseTimer) clearTimeout(revealPopupCloseTimer)
-  revealPopupCloseTimer = setTimeout(() => { revealPopupCloseTimer = null; closeRevealPopup() }, revealPopupDelay)
 })
 
 socket.on('leaderboard:show', () => {

@@ -261,6 +261,28 @@ cours, pas juste masquer la popup pendant qu'il continue de jouer.
   même pattern que les popups de recadrage existantes côté éditeur — un
   clic sur le contenu de la carte ne ferme pas). `node --check` → OK.
 
+## Correctif post-review (v3)
+Retour utilisateur : pour les types dont la révélation est déjà parlante en
+soi via un feedback spatial affiché directement sur le plateau (Rangement,
+Association, Timeline, Image, Graduation, Order — cartes/liens/points/
+curseur qui passent au vert/rouge en place), la popup générique (juste un
+badge + "Bonne réponse !"/"Presque !") cachait ce feedback pour peu de
+valeur ajoutée. Décision : elle ne s'ouvre plus INCONDITIONNELLEMENT pour
+ces 6 types — seulement s'il y a un vrai contenu à montrer dedans
+(explication/image/son ajoutés à cette question précise), qui lui n'est
+visible nulle part ailleurs. Les autres types (mcq/truefalse/intrus,
+free/pbac/indice/blindtest/reveal/recherche/zoomguess) gardent le
+comportement inchangé (popup toujours ouverte).
+- `index.js` : `REVEAL_SPATIAL_FEEDBACK_TYPES` (Set) + `hasRevealExtras`
+  (`payload.explanation || payload.revealImage || payload.revealAudio`) →
+  `shouldOpenRevealPopup`, calculé tout en haut du handler
+  `question:reveal`. `openRevealPopup()` conditionné dessus ; le badge/fond
+  teinté et le minuteur de fermeture (fin du handler) aussi, pour ne pas
+  laisser d'état/minuteur sur une popup jamais ouverte. Les confettis
+  restent INDÉPENDANTS de cette bascule (décoratifs, ne cachent rien du
+  plateau) — une bonne réponse "Rangement" déclenche toujours les
+  confettis même sans popup. `node --check` → OK.
+
 ## Tests manuels recommandés
 - Lancer une partie de test avec plusieurs types de question (au moins un
   à tuiles comme QCM, un texte libre comme "free"/"indice", un type "riche"
@@ -275,6 +297,11 @@ cours, pas juste masquer la popup pendant qu'il continue de jouer.
 - Fermeture manuelle (croix ou clic à l'extérieur de la carte) pendant
   qu'un son de révélation joue : le son doit s'arrêter net, pas continuer
   en arrière-plan popup fermée.
+- Question "Rangement"/"Association"/"Timeline"/"Image"/"Graduation"/
+  "Order" SANS explication/image/son configurés : la popup ne doit PAS
+  s'ouvrir, le plateau coloré doit rester visible immédiatement à la
+  révélation. La même question AVEC une explication ajoutée : la popup
+  doit s'ouvrir normalement pour la montrer.
 - Reconnexion pile pendant qu'une popup de révélation aurait dû se fermer
   (cas limite) : ne doit pas laisser une popup fantôme bloquée à l'écran
   à la question suivante.
