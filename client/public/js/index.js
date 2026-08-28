@@ -3468,7 +3468,19 @@ const loadQuizById = (id) => {
         // perdrait silencieusement tous ses indices à CE chargement précis
         // (celui utilisé pour lancer une vraie partie) — la question
         // démarrerait sans le moindre indice, aucune erreur visible.
-        hints: Array.isArray(q.hints) ? q.hints : []
+        hints: Array.isArray(q.hints) ? q.hints : [],
+        // Même piège, une 5e fois (tâche 017/018, retour utilisateur : "rien
+        // ne s'est affiché lors de ma révélation") : le bloc "Après la
+        // révélation" (image/son/cadrage, générique à tous les types)
+        // disparaissait silencieusement à CE chargement précis — emitQuestion
+        // et le serveur avaient déjà été corrigés (tâche 018), mais cette
+        // normalisation, en amont, ne les recopiait pas : ils n'atteignaient
+        // donc jamais emitQuestion pour une vraie partie lancée depuis un
+        // quiz sauvegardé, malgré le correctif de la tâche 018.
+        revealImage: q.revealImage,
+        revealAudio: q.revealAudio,
+        revealPos: q.revealPos,
+        revealBg: q.revealBg
       }))
       loadedQuiz = {
         id: data.id,
