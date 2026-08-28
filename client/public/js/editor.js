@@ -1820,7 +1820,7 @@ const openRevealAudioTrimModal = (file, onConfirm) => {
         </div>
       </div>
       <div class="d-flex justify-between align-center mt-20">
-        <button type="button" class="btn h-48 reveal-trim-preview">▶ Prévisualiser</button>
+        <button type="button" class="btn h-48 reveal-trim-preview">▶ Écouter cet extrait</button>
         <div class="d-flex gap-sm">
           <button type="button" class="btn h-48 reveal-trim-cancel">Annuler</button>
           <button type="button" class="btn btn-primary h-48 reveal-trim-ok">Utiliser cet extrait</button>
