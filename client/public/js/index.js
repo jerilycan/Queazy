@@ -547,6 +547,12 @@ const revealExplanationText = document.getElementById('revealExplanationText')
 const revealImageDisplayWrap = document.getElementById('revealImageDisplayWrap')
 const revealImageDisplay = document.getElementById('revealImageDisplay')
 const revealAudioPlayer = document.getElementById('revealAudioPlayer')
+// Popup plein écran de révélation (tâche 019) : conteneur qui recouvre tout
+// l'écran pendant la révélation, contenant désormais les éléments ci-dessus
+// (voir index.html) — voir openRevealPopup/closeRevealPopup plus bas.
+const revealPopupOverlay = document.getElementById('revealPopupOverlay')
+const revealPopupCard = document.getElementById('revealPopupCard')
+const revealPopupBadge = document.getElementById('revealPopupBadge')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
 const orderCompare = document.getElementById('orderCompare')
@@ -2778,7 +2784,41 @@ const revealBlindTestAnswer = (correctTitle, correctArtist) => {
   revealAnswerText.classList.remove('d-none')
 }
 
+// Popup plein écran de révélation (tâche 019, retour utilisateur :
+// "l'affichage est un peu catastrophique" — bandeau/réponse/explication/
+// image de la révélation empilés à plat dans la page). Ouverte tout en haut
+// de socket.on('question:reveal', ...) (avant les branches par type),
+// fermée automatiquement après un délai programmé tout en bas de ce même
+// handler (voir revealPopupCloseTimer) — jamais par une action hôte, voir
+// tâche 019 "Hors périmètre".
+let revealPopupCloseTimer = null
+
+const openRevealPopup = () => {
+  if (!revealPopupOverlay || !revealPopupCard) return
+  if (revealPopupCloseTimer) { clearTimeout(revealPopupCloseTimer); revealPopupCloseTimer = null }
+  revealPopupOverlay.classList.remove('d-none', 'is-correct', 'is-incorrect', 'is-close')
+  if (revealPopupBadge) { revealPopupBadge.classList.add('d-none'); revealPopupBadge.textContent = '' }
+  // Reflow forcé avant de rejouer l'animation d'entrée : sans ça, une
+  // révélation qui arrive avant la fin de l'animation précédente (cas
+  // limite, question très courte) ne la rejouerait pas, la classe étant
+  // déjà présente sur l'élément (même technique que .indice-enter plus haut
+  // dans ce fichier, voir flipIndiceCardToHistory/updateIndiceArea).
+  revealPopupCard.classList.remove('popup-enter')
+  void revealPopupCard.offsetWidth
+  revealPopupCard.classList.add('popup-enter')
+}
+
+// Ferme la popup sans toucher au contenu qu'elle affichait (les éléments
+// à l'intérieur sont nettoyés séparément par clearRevealState, appelé à la
+// question/au classement suivant) — juste la coupure plein écran qui
+// disparaît, révélant le plateau déjà coloré en dessous.
+const closeRevealPopup = () => {
+  if (revealPopupCloseTimer) { clearTimeout(revealPopupCloseTimer); revealPopupCloseTimer = null }
+  if (revealPopupOverlay) revealPopupOverlay.classList.add('d-none')
+}
+
 const clearRevealState = () => {
+  closeRevealPopup()
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
@@ -6857,6 +6897,13 @@ socket.on('question:reveal', payload => {
   // désormais le SEUL signal de fin de question, pour tous les types).
   isModerationPending = false
   hideModerationWait()
+  // Popup plein écran (tâche 019) : ouverte ICI, tout en haut du handler,
+  // AVANT toutes les branches par type ci-dessous qui continuent de peupler
+  // #myResultBanner/#revealAnswerText/etc. exactement comme avant — la
+  // popup ne fait qu'afficher par-dessus ce que ces branches posent, jamais
+  // recalculé. Fermeture programmée tout en bas de ce handler, une fois
+  // TOUTES les branches passées (voir plus bas).
+  openRevealPopup()
   if (revealExplanationText && payload.explanation) {
     revealExplanationText.textContent = payload.explanation
     revealExplanationText.classList.remove('d-none')
@@ -7053,6 +7100,44 @@ socket.on('question:reveal', payload => {
     vibrate(myAnsweredCorrectlyThisQuestion ? VIBRATE_CORRECT : VIBRATE_INCORRECT)
   }
   if (isHost) { hostPhase = 'revealed'; updateHostControls() }
+  // Badge + fond teinté de la popup (tâche 019) : posés ICI, une fois TOUTES
+  // les branches par type ci-dessus passées, en miroir de l'état déjà posé
+  // par showMyResultBanner sur #myResultBanner (is-correct/is-incorrect/
+  // is-close) — aucune nouvelle logique de détermination, juste un second
+  // affichage de la même donnée. Absent côté hôte : showMyResultBanner
+  // s'arrête tout de suite pour lui (voir plus haut, `if (!myResultBanner ||
+  // isHost) return`), #myResultBanner ne porte donc jamais ces classes chez
+  // lui -> popup neutre, badge caché (d-none posé par openRevealPopup).
+  if (revealPopupOverlay && myResultBanner) {
+    const resultState = ['is-correct', 'is-incorrect', 'is-close'].find(c => myResultBanner.classList.contains(c))
+    if (resultState) {
+      revealPopupOverlay.classList.add(resultState)
+      if (revealPopupBadge) {
+        revealPopupBadge.classList.remove('d-none')
+        revealPopupBadge.textContent = resultState === 'is-correct' ? '✓' : resultState === 'is-close' ? '≈' : '✗'
+      }
+    }
+  }
+  // Confettis (tâche 019) : réutilisation TELLE QUELLE du déclencheur déjà en
+  // place en fin de partie (voir results.js, mêmes réglages) — jamais côté
+  // hôte (n'a jamais de réponse personnelle, voir tâche 019 "Hors périmètre").
+  if (!isHost && myAnsweredCorrectlyThisQuestion && window.confetti) {
+    window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.55 } })
+  }
+  // Fermeture automatique de la popup (tâche 019) : délai de base ~4.5s,
+  // étendu pour ne jamais couper net un son de révélation plus long (petite
+  // marge après sa fin) — jamais raccourci en dessous du délai de base. La
+  // durée du son n'est pas toujours connue de façon synchrone ici (métadonnées
+  // pas encore chargées) : si c'est le cas, on garde simplement le délai de
+  // base, comme prévu au plan de la tâche.
+  const REVEAL_POPUP_BASE_DELAY_MS = 4500
+  const REVEAL_POPUP_AUDIO_MARGIN_MS = 500
+  let revealPopupDelay = REVEAL_POPUP_BASE_DELAY_MS
+  if (revealAudioPlayer && payload.revealAudio && Number.isFinite(revealAudioPlayer.duration) && revealAudioPlayer.duration > 0) {
+    revealPopupDelay = Math.max(revealPopupDelay, revealAudioPlayer.duration * 1000 + REVEAL_POPUP_AUDIO_MARGIN_MS)
+  }
+  if (revealPopupCloseTimer) clearTimeout(revealPopupCloseTimer)
+  revealPopupCloseTimer = setTimeout(() => { revealPopupCloseTimer = null; closeRevealPopup() }, revealPopupDelay)
 })
 
 socket.on('leaderboard:show', () => {

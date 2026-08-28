@@ -1013,23 +1013,11 @@
             </div>
             <button id="send" class="btn btn-primary w-140 h-60 font-16">Valider</button>
           </div>
-          <div id="revealAnswerText" class="reveal-answer d-none"></div>
-          <div id="myResultBanner" class="my-result-banner d-none"></div>
-          <div id="revealExplanationText" class="reveal-explanation d-none"></div>
-          <!-- Bloc "Après la révélation" (tâche 017) : image/son optionnels,
-               affichés/joués juste après revealExplanationText, quel que
-               soit le type de question (voir socket.on('question:reveal')
-               dans index.js). Conteneur (.reveal-media-img-wrap,
-               position:relative/overflow:hidden — voir style.css, même
-               principe que .assoc-item-img) ajouté en tâche 018 pour porter
-               le cadrage choisi côté éditeur (payload.revealPos, appliqué
-               via applyCropTransform) : l'<img> seule ne peut pas être
-               scale/translate à l'intérieur d'une boîte qui rogne le
-               débord sans ce wrapper. -->
-          <div id="revealImageDisplayWrap" class="reveal-media-img-wrap d-none">
-            <img id="revealImageDisplay" class="reveal-media-img" alt="" />
-          </div>
-          <audio id="revealAudioPlayer" class="d-none"></audio>
+          <!-- Bandeau résultat + réponse + explication + image/son de la
+               révélation (tâches 011/017/018) : DÉPLACÉS en tâche 019 dans
+               la popup plein écran #revealPopupOverlay (voir plus bas, juste
+               avant #leaderOverlay) — ids et logique JS inchangés, seul
+               l'emplacement dans le DOM change. -->
         </div>
         
         <div id="log" class="log-message"></div>
@@ -1101,6 +1089,45 @@
           <p id="questionIntroHint" class="question-intro-hint"></p>
           <div id="questionIntroCountdown" class="question-intro-countdown"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Popup plein écran de révélation (tâche 019, retour utilisateur :
+         "l'affichage est un peu catastrophique" — bandeau + réponse +
+         explication + image/son de la révélation, tâches 011/017/018,
+         s'empilaient à plat dans la page). Coupure plein écran commune à
+         TOUS les types de question, hôte compris (même DOM partagé) : le
+         feedback riche déjà en place pour les types à tuiles/zones/liens
+         (QCM, association, timeline, image, rangement, graduation, ordre,
+         blindtest...) n'est PAS modifié, juste temporairement masqué en
+         dessous pendant que cette popup est affichée (voir
+         socket.on('question:reveal') dans index.js, qui l'ouvre tout en
+         haut du handler puis programme sa fermeture automatique tout en
+         bas, après que TOUTES les branches par type aient peuplé le
+         contenu). Les éléments à l'intérieur (#myResultBanner,
+         #revealAnswerText, #revealExplanationText,
+         #revealImageDisplayWrap/#revealImageDisplay, #revealAudioPlayer)
+         gardent EXACTEMENT leurs ids et leur logique JS existante
+         (showMyResultBanner, revealFreeAnswer, applyCropTransform, le mute
+         IRL/à distance de la tâche 018) — seul leur emplacement dans le DOM
+         a changé, ils étaient posés à plat juste après #freeText/#answer
+         auparavant. #revealAudioPlayer n'a déjà aucune barre visible
+         aujourd'hui (<audio class="d-none">, sans controls) : le son joue
+         en fond, jamais de contrôle visible ajouté ici. #revealPopupBadge
+         (✓/≈/✗) reprend en miroir le MÊME état déjà calculé sur
+         #myResultBanner (classe is-correct/is-incorrect/is-close) — aucune
+         nouvelle logique de détermination, juste un badge visuel en plus,
+         posé par index.js une fois toutes les branches passées. -->
+    <div id="revealPopupOverlay" class="d-none reveal-popup-overlay">
+      <div id="revealPopupCard" class="reveal-popup-card">
+        <div id="revealPopupBadge" class="reveal-popup-badge d-none"></div>
+        <div id="revealAnswerText" class="reveal-answer d-none"></div>
+        <div id="myResultBanner" class="my-result-banner d-none"></div>
+        <div id="revealExplanationText" class="reveal-explanation d-none"></div>
+        <div id="revealImageDisplayWrap" class="reveal-media-img-wrap d-none">
+          <img id="revealImageDisplay" class="reveal-media-img" alt="" />
+        </div>
+        <audio id="revealAudioPlayer" class="d-none"></audio>
       </div>
     </div>
 

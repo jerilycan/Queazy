@@ -4520,6 +4520,114 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   display: block;
 }
 
+/* Popup plein écran de révélation (tâche 019, retour utilisateur :
+   "l'affichage est un peu catastrophique" — bandeau/réponse/explication/
+   image de la révélation empilés à plat dans la page). Recouvre TOUT
+   l'écran, pour tous les types de question, hôte compris — le feedback
+   riche déjà en place dessous (tuiles/zones/liens colorés) n'est jamais
+   modifié, juste masqué le temps que cette popup soit affichée (voir
+   socket.on('question:reveal') côté index.js). z-index au-dessus de
+   .question-intro-overlay (1500) : filet de sécurité si jamais les deux se
+   chevauchaient, même principe que le commentaire sur .question-intro-overlay
+   plus bas dans ce fichier. Fond radial teinté selon l'état (classe
+   is-correct/is-incorrect/is-close posée sur CE conteneur, en miroir de
+   .my-result-banner — jamais une nouvelle logique de détermination) ; sans
+   classe d'état (cas de l'hôte, qui n'a jamais de résultat perso, voir
+   showMyResultBanner), fond neutre sombre. */
+.reveal-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: radial-gradient(circle at 50% 38%, rgba(30, 35, 50, 0.92) 0%, rgba(6, 7, 14, 0.96) 70%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.reveal-popup-overlay.is-correct {
+  background: radial-gradient(circle at 50% 38%, rgba(var(--tile-green-rgb), 0.35) 0%, rgba(6, 7, 14, 0.96) 70%);
+}
+.reveal-popup-overlay.is-incorrect {
+  background: radial-gradient(circle at 50% 38%, rgba(var(--color-danger-rgb), 0.32) 0%, rgba(6, 7, 14, 0.96) 70%);
+}
+.reveal-popup-overlay.is-close {
+  background: radial-gradient(circle at 50% 38%, rgba(var(--tile-yellow-rgb), 0.32) 0%, rgba(6, 7, 14, 0.96) 70%);
+}
+
+/* Carte centrée, bascule 3D à l'ouverture — même famille d'animation que
+   .indice-central-card.indice-enter/@keyframes indiceFlipIn (tâche 014, voir
+   plus haut dans ce fichier) mais bascule VERTICALE (rotateX, "Variante 1 —
+   bascule verticale" du canvas de design) plutôt qu'horizontale, pour rester
+   distincte visuellement des indices. Classe/keyframes dédiées (pas de
+   partage direct avec .indice-central-card) : contexte plein écran
+   différent (taille libre au contenu, pas de gabarit fixe 240px). */
+.reveal-popup-card {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: calc(100vh - var(--space-lg) * 2);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 40px var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+  border: 2px solid rgba(var(--color-accent-rgb), 0.4);
+  box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+/* Les blocs réutilisés (.reveal-answer/.my-result-banner/.reveal-explanation/
+   .reveal-media-img-wrap) ont chacun leur propre margin-top pensé pour un
+   empilement à plat dans la page — remis à zéro ici, l'espacement vertical
+   vient désormais du gap de .reveal-popup-card ci-dessus. */
+.reveal-popup-card > .reveal-answer,
+.reveal-popup-card > .my-result-banner,
+.reveal-popup-card > .reveal-explanation,
+.reveal-popup-card > .reveal-media-img-wrap {
+  margin-top: 0;
+}
+.reveal-popup-card.popup-enter {
+  animation: revealPopupFlipIn 0.6s cubic-bezier(.25,.9,.35,1) both;
+}
+@keyframes revealPopupFlipIn {
+  0% { transform: rotateX(-100deg); opacity: 0; }
+  55% { opacity: 1; }
+  100% { transform: rotateX(0deg); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal-popup-card.popup-enter { animation: none !important; transform: none !important; opacity: 1 !important; }
+}
+
+/* Badge rond (✓/≈/✗) au-dessus du texte de résultat — couleur dérivée du
+   MÊME état que .my-result-banner.is-* juste en dessous (posé sur
+   #revealPopupOverlay, lu ici via le sélecteur parent) : pas de nouvelle
+   logique de détermination, juste un second élément visuel piloté par la
+   même classe. Caché (d-none, voir index.html) côté hôte, qui n'a jamais de
+   résultat perso à afficher (showMyResultBanner ne fait rien pour lui). */
+.reveal-popup-badge {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 800;
+  color: white;
+  background: var(--color-text-muted);
+  box-shadow: var(--shadow-md);
+}
+.reveal-popup-overlay.is-correct .reveal-popup-badge { background: var(--tile-green); }
+.reveal-popup-overlay.is-incorrect .reveal-popup-badge { background: var(--color-danger); }
+.reveal-popup-overlay.is-close .reveal-popup-badge { background: var(--tile-yellow); color: #3a2e00; }
+
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
 
 .bg-accent { background: var(--color-accent) !important; }
