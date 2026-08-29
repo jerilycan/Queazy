@@ -316,6 +316,41 @@ pratique dessus (retour utilisateur), rien de spécial à coder pour ça.
   teinté et minuteur de fermeture de nouveau inconditionnels en fin de
   handler. `node --check` → OK.
 
+## Correctif post-review (v5, affine le v4)
+Retour utilisateur : ne pas afficher la popup s'il n'y a aucune explication
+(ni image/son) écrite par le MJ sur cette question — plus besoin de la
+coupure plein écran s'il n'y a rien "en plus" à montrer. Question posée en
+retour avant d'implémenter : pour les types SANS feedback visuel sur le
+plateau (texte libre, indice, blind test, pbac...), la popup était le SEUL
+endroit montrant le bandeau résultat/réponse — réponse retenue : le
+bandeau (`#myResultBanner`/`#revealAnswerText`) sort de la popup et reste à
+plat dans la page, TOUJOURS visible, que la popup s'ouvre ou non.
+- `index.html` : `#revealAnswerText`/`#myResultBanner` déplacés hors de
+  `#revealPopupOverlay`, remis à leur emplacement d'origine (juste après
+  `#freeText`/`#answer`). La popup ne contient plus que le badge +
+  l'explication + l'image + le son.
+- `style.css` : règle `margin-top: 0` scoping revue (ne s'applique plus
+  qu'à `.reveal-explanation`/`.reveal-media-img-wrap`, plus à
+  `.reveal-answer`/`.my-result-banner` qui ont quitté le conteneur).
+- `index.js` : `hasRevealExtras = !!(payload.explanation ||
+  payload.revealImage || payload.revealAudio)` calculé tout en haut du
+  handler `question:reveal`, remplace le gating par type de la v3.
+  `openRevealPopup()`, le badge/fond teinté et le minuteur de fermeture
+  sont maintenant conditionnés dessus. Les confettis restent
+  INDÉPENDANTS (décoratifs, ne cachent rien).
+
+## Correctif indépendant : auto-validation "Rangement" en fin de chrono
+Retour utilisateur (à l'origine soupçonné comme un bug de score, en réalité
+un oubli d'auto-envoi) : contrairement à "order"/"graduation"/
+"association"/"timeline" (déjà auto-envoyés via `attemptAutoSubmit()` si le
+joueur n'a jamais cliqué "Valider"), "rangement" en était absent — un
+joueur qui plaçait des cartes sans jamais cliquer "Valider" perdait
+silencieusement sa tentative (0 point, cartes non transmises), malgré un
+placement partiellement/totalement correct. `index.js` : `'rangement'`
+ajouté à la même branche inconditionnelle que les 4 autres types (aucune
+garde de contenu nécessaire, un rangement partiel/vide reste une
+soumission valide côté serveur).
+
 ## Tests manuels recommandés
 - Lancer une partie de test avec plusieurs types de question (au moins un
   à tuiles comme QCM, un texte libre comme "free"/"indice", un type "riche"
@@ -331,10 +366,19 @@ pratique dessus (retour utilisateur), rien de spécial à coder pour ça.
   qu'un son de révélation joue : le son doit s'arrêter net, pas continuer
   en arrière-plan popup fermée.
 - Question "Rangement"/"Association"/"Timeline"/"Image" avec un résultat
-  partiel (ni 100% juste, ni tout faux) : la popup doit afficher le texte
-  nuancé ("Presque ! X/Y ... (+N points)"), pas juste "Bonne réponse !".
-- QCM à plusieurs bonnes réponses, résultat partiel : même vérification
-  ("Presque ! X/Y bonnes réponses (+N points)").
+  partiel (ni 100% juste, ni tout faux) : le bandeau à plat doit afficher
+  le texte nuancé ("Presque ! X/Y ... (+N points)"), visible immédiatement
+  (pas besoin d'attendre/ouvrir une popup).
+- QCM à plusieurs bonnes réponses, résultat partiel : même vérification.
+- Question SANS explication/image/son : pas de popup du tout, juste le
+  bandeau résultat visible directement.
+- Question AVEC une explication (même minimale) : la popup s'ouvre bien,
+  contenant le badge + l'explication (+ image/son si présents) — le
+  bandeau résultat reste visible en dessous, à plat.
+- "Rangement" : placer 2 cartes sur 4 sans jamais cliquer "Valider", laisser
+  le chrono s'écouler entièrement — la tentative doit partir automatiquement
+  (score proportionnel reçu, cartes correctement placées ressortent vertes
+  à la révélation), pas 0 point silencieux.
 - Reconnexion pile pendant qu'une popup de révélation aurait dû se fermer
   (cas limite) : ne doit pas laisser une popup fantôme bloquée à l'écran
   à la question suivante.

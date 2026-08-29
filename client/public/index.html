@@ -1014,11 +1014,18 @@
             </div>
             <button id="send" class="btn btn-primary w-140 h-60 font-16">Valider</button>
           </div>
-          <!-- Bandeau résultat + réponse + explication + image/son de la
-               révélation (tâches 011/017/018) : DÉPLACÉS en tâche 019 dans
-               la popup plein écran #revealPopupOverlay (voir plus bas, juste
-               avant #leaderOverlay) — ids et logique JS inchangés, seul
-               l'emplacement dans le DOM change. -->
+          <!-- Bandeau résultat + réponse (tâche 011) : reste ICI, à plat,
+               TOUJOURS visible quel que soit le type — c'est le seul endroit
+               où certains types (texte libre, indice, blind test, pbac...)
+               montrent "Bonne réponse : X"/le verdict, donc ça ne peut pas
+               dépendre de l'ouverture de la popup de révélation (tâche 019,
+               retour utilisateur v5 : la popup elle-même ne s'ouvre plus que
+               s'il y a une explication/image/son à montrer — voir
+               #revealPopupOverlay plus bas). Explication/image/son (tâches
+               017/018), eux, restent dans la popup : c'est justement le
+               contenu qui la justifie. -->
+          <div id="revealAnswerText" class="reveal-answer d-none"></div>
+          <div id="myResultBanner" class="my-result-banner d-none"></div>
         </div>
         
         <div id="log" class="log-message"></div>
@@ -1094,25 +1101,20 @@
     </div>
 
     <!-- Popup plein écran de révélation (tâche 019, retour utilisateur :
-         "l'affichage est un peu catastrophique" — bandeau + réponse +
-         explication + image/son de la révélation, tâches 011/017/018,
-         s'empilaient à plat dans la page). Coupure plein écran commune à
-         TOUS les types de question, hôte compris (même DOM partagé) : le
-         feedback riche déjà en place pour les types à tuiles/zones/liens
-         (QCM, association, timeline, image, rangement, graduation, ordre,
-         blindtest...) n'est PAS modifié, juste temporairement masqué en
-         dessous pendant que cette popup est affichée (voir
-         socket.on('question:reveal') dans index.js, qui l'ouvre tout en
-         haut du handler puis programme sa fermeture automatique tout en
-         bas, après que TOUTES les branches par type aient peuplé le
-         contenu). Les éléments à l'intérieur (#myResultBanner,
-         #revealAnswerText, #revealExplanationText,
-         #revealImageDisplayWrap/#revealImageDisplay, #revealAudioPlayer)
-         gardent EXACTEMENT leurs ids et leur logique JS existante
-         (showMyResultBanner, revealFreeAnswer, applyCropTransform, le mute
-         IRL/à distance de la tâche 018) — seul leur emplacement dans le DOM
-         a changé, ils étaient posés à plat juste après #freeText/#answer
-         auparavant. #revealAudioPlayer n'a déjà aucune barre visible
+         "l'affichage est un peu catastrophique" — explication + image/son
+         de la révélation, tâches 017/018, s'empilaient à plat dans la
+         page). Retour utilisateur v5 : ne s'ouvre plus que s'il y a une
+         explication/image/son à montrer sur CETTE question (voir
+         hasRevealExtras dans socket.on('question:reveal'), index.js) — le
+         bandeau résultat/réponse (#myResultBanner/#revealAnswerText), lui,
+         est resté à plat plus haut dans la page (voir juste après
+         #freeText/#answer) : il doit rester visible MÊME sans popup, c'est
+         le seul endroit où certains types (texte libre, indice, blind
+         test...) montrent le verdict. Le feedback riche déjà en place pour
+         les types à tuiles/zones/liens (QCM, association, timeline, image,
+         rangement, graduation, ordre, blindtest...) n'est PAS modifié, juste
+         temporairement masqué en dessous pendant que cette popup est
+         affichée. #revealAudioPlayer n'a déjà aucune barre visible
          aujourd'hui (<audio class="d-none">, sans controls) : le son joue
          en fond, jamais de contrôle visible ajouté ici. #revealPopupBadge
          (✓/≈/✗) reprend en miroir le MÊME état déjà calculé sur
@@ -1123,8 +1125,6 @@
       <div id="revealPopupCard" class="reveal-popup-card">
         <button type="button" id="revealPopupCloseBtn" class="reveal-popup-close-btn" aria-label="Fermer la révélation" title="Fermer">✕</button>
         <div id="revealPopupBadge" class="reveal-popup-badge d-none"></div>
-        <div id="revealAnswerText" class="reveal-answer d-none"></div>
-        <div id="myResultBanner" class="my-result-banner d-none"></div>
         <div id="revealExplanationText" class="reveal-explanation d-none"></div>
         <div id="revealImageDisplayWrap" class="reveal-media-img-wrap d-none">
           <img id="revealImageDisplay" class="reveal-media-img" alt="" />

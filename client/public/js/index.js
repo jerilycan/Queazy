@@ -5648,20 +5648,22 @@ socket.on('question:show', payload => {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'image' && imageSelectedPoint) {
         submitCurrentAnswer()
-      } else if (currentQuestionType === 'order' || currentQuestionType === 'graduation' || currentQuestionType === 'association' || currentQuestionType === 'timeline') {
-        // Ces quatre types n'ont aucune garde de contenu dans
+      } else if (currentQuestionType === 'order' || currentQuestionType === 'graduation' || currentQuestionType === 'association' || currentQuestionType === 'timeline' || currentQuestionType === 'rangement') {
+        // Ces cinq types n'ont aucune garde de contenu dans
         // submitCurrentAnswer (voir plus bas) : l'état actuellement affiché
         // — modifié ou pas (ordre mélangé tel quel, curseur resté au
-        // milieu, aucune paire faite, dates dans l'ordre de mélange...) —
-        // est toujours une soumission valide, donc toujours sûr d'auto-
-        // envoyer ici plutôt que de perdre la tentative d'un joueur qui a
-        // interagi sans jamais cliquer "Valider" (retour utilisateur —
-        // corrigé d'abord pour "order" seul cette session, étendu ici aux
-        // 3 autres types dans exactement le même cas). mcq/truefalse/
-        // intrus/image restent à part juste au-dessus : eux DOIVENT avoir
-        // une vraie garde ("Rien n'est envoyé si le champ est resté vide"),
-        // sans quoi un joueur n'ayant jamais touché l'écran se verrait
-        // quand même compter une tentative.
+        // milieu, aucune paire faite, dates dans l'ordre de mélange, cartes
+        // encore dans le bac...) — est toujours une soumission valide, donc
+        // toujours sûr d'auto-envoyer ici plutôt que de perdre la tentative
+        // d'un joueur qui a interagi sans jamais cliquer "Valider" (retour
+        // utilisateur — corrigé d'abord pour "order" seul, étendu aux 3
+        // suivants, puis à "rangement" ici : même oubli exact, un joueur qui
+        // avait bien rangé des cartes mais jamais cliqué "Valider" perdait
+        // silencieusement sa tentative, 0 point malgré des cartes
+        // correctement placées). mcq/truefalse/intrus/image restent à part
+        // juste au-dessus : eux DOIVENT avoir une vraie garde ("Rien n'est
+        // envoyé si le champ est resté vide"), sans quoi un joueur n'ayant
+        // jamais touché l'écran se verrait quand même compter une tentative.
         submitCurrentAnswer()
       }
     }
@@ -6928,25 +6930,19 @@ socket.on('question:reveal', payload => {
   isModerationPending = false
   hideModerationWait()
   // Popup plein écran (tâche 019) : ouverte ICI, tout en haut du handler,
-  // AVANT toutes les branches par type ci-dessous qui continuent de peupler
-  // #myResultBanner/#revealAnswerText/etc. exactement comme avant — la
-  // popup ne fait qu'afficher par-dessus ce que ces branches posent, jamais
-  // recalculé. Fermeture programmée tout en bas de ce handler, une fois
-  // TOUTES les branches passées (voir plus bas).
-  // Retour utilisateur (v4, remplace le gating v3 par type) : plutôt que de
-  // ne pas ouvrir la popup pour les types à feedback spatial (Rangement,
-  // Image, etc.), on l'ouvre à nouveau INCONDITIONNELLEMENT pour tous les
-  // types — mais elle affiche désormais le texte de résultat déjà NUANCÉ
-  // que chaque branche calcule (ex. "Presque ! 3/5 bien rangées (+120
-  // points)" pour "rangement", "Presque ! +80 points" pour "image" — déjà
-  // posé sur #myResultBanner par showMyResultBanner, aucune nouvelle
-  // logique de calcul). La popup révèle donc une vraie réponse (le texte),
-  // puis en se fermant (auto ou manuelle) laisse voir le plateau déjà
-  // coloré (cartes/liens/points/curseur), calculé en même temps mais
-  // simplement masqué derrière elle entre-temps — pas de recadrage
-  // spécifique par type nécessaire pour ça, la popup est plein écran donc
-  // le masque déjà pour tout le monde.
-  openRevealPopup()
+  // AVANT toutes les branches par type ci-dessous. Historique : v3 la
+  // réservait aux types sans feedback spatial riche ; v4 l'a rouverte
+  // inconditionnellement pour tous les types (texte de résultat nuancé
+  // affiché dedans) ; v5 (retour utilisateur) revient sur CE point précis —
+  // la popup ne s'ouvre plus que s'il y a une explication/image/son à
+  // montrer sur CETTE question (hasRevealExtras). Le bandeau résultat
+  // (#myResultBanner/#revealAnswerText) n'est PLUS dans la popup depuis
+  // cette même v5 (voir index.html) : il reste à plat dans la page, donc
+  // toujours visible que la popup s'ouvre ou non — seul le contenu
+  // "en plus" (explication/image/son) justifie encore la coupure plein
+  // écran. Fermeture programmée tout en bas de ce handler (voir plus bas).
+  const hasRevealExtras = !!(payload.explanation || payload.revealImage || payload.revealAudio)
+  if (hasRevealExtras) openRevealPopup()
   if (revealExplanationText && payload.explanation) {
     revealExplanationText.textContent = payload.explanation
     revealExplanationText.classList.remove('d-none')
@@ -7143,15 +7139,16 @@ socket.on('question:reveal', payload => {
     vibrate(myAnsweredCorrectlyThisQuestion ? VIBRATE_CORRECT : VIBRATE_INCORRECT)
   }
   if (isHost) { hostPhase = 'revealed'; updateHostControls() }
-  // Badge + fond teinté de la popup (tâche 019) : posés ICI, une fois TOUTES
-  // les branches par type ci-dessus passées, en miroir de l'état déjà posé
-  // par showMyResultBanner sur #myResultBanner (is-correct/is-incorrect/
+  // Badge + fond teinté de la popup (tâche 019, uniquement si elle s'est
+  // ouverte — v5, hasRevealExtras) : posés ICI, une fois TOUTES les branches
+  // par type ci-dessus passées, en miroir de l'état déjà posé par
+  // showMyResultBanner sur #myResultBanner (is-correct/is-incorrect/
   // is-close) — aucune nouvelle logique de détermination, juste un second
   // affichage de la même donnée. Absent côté hôte : showMyResultBanner
   // s'arrête tout de suite pour lui (voir plus haut, `if (!myResultBanner ||
   // isHost) return`), #myResultBanner ne porte donc jamais ces classes chez
   // lui -> popup neutre, badge caché (d-none posé par openRevealPopup).
-  if (revealPopupOverlay && myResultBanner) {
+  if (hasRevealExtras && revealPopupOverlay && myResultBanner) {
     const resultState = ['is-correct', 'is-incorrect', 'is-close'].find(c => myResultBanner.classList.contains(c))
     if (resultState) {
       revealPopupOverlay.classList.add(resultState)
@@ -7164,6 +7161,9 @@ socket.on('question:reveal', payload => {
   // Confettis (tâche 019) : réutilisation TELLE QUELLE du déclencheur déjà en
   // place en fin de partie (voir results.js, mêmes réglages) — jamais côté
   // hôte (n'a jamais de réponse personnelle, voir tâche 019 "Hors périmètre").
+  // Indépendant de hasRevealExtras à dessein : décoratif, ne cache rien du
+  // plateau, aucune raison de le priver d'une bonne réponse sous prétexte
+  // que la popup, elle, ne s'ouvre pas faute d'explication/image/son.
   if (!isHost && myAnsweredCorrectlyThisQuestion && window.confetti) {
     window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.55 } })
   }
@@ -7172,15 +7172,18 @@ socket.on('question:reveal', payload => {
   // marge après sa fin) — jamais raccourci en dessous du délai de base. La
   // durée du son n'est pas toujours connue de façon synchrone ici (métadonnées
   // pas encore chargées) : si c'est le cas, on garde simplement le délai de
-  // base, comme prévu au plan de la tâche.
-  const REVEAL_POPUP_BASE_DELAY_MS = 4500
-  const REVEAL_POPUP_AUDIO_MARGIN_MS = 500
-  let revealPopupDelay = REVEAL_POPUP_BASE_DELAY_MS
-  if (revealAudioPlayer && payload.revealAudio && Number.isFinite(revealAudioPlayer.duration) && revealAudioPlayer.duration > 0) {
-    revealPopupDelay = Math.max(revealPopupDelay, revealAudioPlayer.duration * 1000 + REVEAL_POPUP_AUDIO_MARGIN_MS)
+  // base, comme prévu au plan de la tâche. Rien à programmer si la popup n'a
+  // pas été ouverte (hasRevealExtras faux, v5).
+  if (hasRevealExtras) {
+    const REVEAL_POPUP_BASE_DELAY_MS = 4500
+    const REVEAL_POPUP_AUDIO_MARGIN_MS = 500
+    let revealPopupDelay = REVEAL_POPUP_BASE_DELAY_MS
+    if (revealAudioPlayer && payload.revealAudio && Number.isFinite(revealAudioPlayer.duration) && revealAudioPlayer.duration > 0) {
+      revealPopupDelay = Math.max(revealPopupDelay, revealAudioPlayer.duration * 1000 + REVEAL_POPUP_AUDIO_MARGIN_MS)
+    }
+    if (revealPopupCloseTimer) clearTimeout(revealPopupCloseTimer)
+    revealPopupCloseTimer = setTimeout(() => { revealPopupCloseTimer = null; closeRevealPopup() }, revealPopupDelay)
   }
-  if (revealPopupCloseTimer) clearTimeout(revealPopupCloseTimer)
-  revealPopupCloseTimer = setTimeout(() => { revealPopupCloseTimer = null; closeRevealPopup() }, revealPopupDelay)
 })
 
 socket.on('leaderboard:show', () => {

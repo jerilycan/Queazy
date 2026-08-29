@@ -4609,12 +4609,12 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   transition: background 0.15s ease, transform 0.15s ease;
 }
 .reveal-popup-close-btn:hover { background: rgba(0,0,0,0.55); transform: scale(1.06); }
-/* Les blocs réutilisés (.reveal-answer/.my-result-banner/.reveal-explanation/
-   .reveal-media-img-wrap) ont chacun leur propre margin-top pensé pour un
-   empilement à plat dans la page — remis à zéro ici, l'espacement vertical
-   vient désormais du gap de .reveal-popup-card ci-dessus. */
-.reveal-popup-card > .reveal-answer,
-.reveal-popup-card > .my-result-banner,
+/* .reveal-explanation/.reveal-media-img-wrap ont chacun leur propre
+   margin-top pensé pour un empilement à plat dans la page — remis à zéro
+   ici, l'espacement vertical vient désormais du gap de .reveal-popup-card
+   ci-dessus. .reveal-answer/.my-result-banner ne sont plus dans ce
+   conteneur depuis la v5 (retour utilisateur : ils doivent rester visibles
+   même sans popup, voir index.html) — gardent leur margin-top d'origine. */
 .reveal-popup-card > .reveal-explanation,
 .reveal-popup-card > .reveal-media-img-wrap {
   margin-top: 0;
