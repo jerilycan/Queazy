@@ -2960,17 +2960,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   background: var(--color-border);
   cursor: pointer;
   touch-action: none;
-  /* Un peu d'air par rapport au texte/icônes voisins (voir .host-volume-row
-     et .blindtest-volume-row) : le pouce (16px, déborde de 6px de chaque
-     côté de la piste elle-même) se retrouvait quasiment collé au texte sans
+  /* Un peu d'air par rapport au texte/icônes voisins (voir
+     .blindtest-volume-row) : le pouce (16px, déborde de 6px de chaque côté
+     de la piste elle-même) se retrouvait quasiment collé au texte sans
      cette marge. */
   margin: 0 6px;
 }
-/* Panneau de l'hôte : "🔊 Volume musique par défaut [piste] 70%" — le gap-xs
-   générique (4px) était pensé pour du texte, trop serré une fois qu'il y a
-   une vraie piste de curseur au milieu. */
-.host-volume-row { gap: 10px; }
-
 /* Récap rapide de la question (hôte uniquement), voir index.html
    #questionRecapCard + index.js socket.on('question:recap', ...). */
 .question-recap-card { padding: 20px 28px; text-align: left; }
@@ -3094,11 +3089,6 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
     font-size: 12px;
     line-height: 1.35;
   }
-  body.is-host.game-active #hostPanel .host-volume-row {
-    flex-wrap: wrap;
-    font-size: 12px;
-  }
-  body.is-host.game-active #hostPanel .volume-track { flex-shrink: 0; }
   body.is-host.game-active .container {
     max-width: none;
     margin-left: 280px;
@@ -3741,28 +3731,6 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   body.is-host.game-active .container #hostPanel > .d-flex.gap-sm .btn .btn-shine-icon {
     font-size: 15px;
     line-height: 1;
-  }
-  body.is-host.game-active .container #hostPanel .host-volume-row {
-    order: 5;
-    /* Reprend la maquette : carte à part (fond + radius), pas une simple
-       ligne de texte posée à même le panneau — libellé + pourcentage sur
-       une ligne, la barre juste en dessous sur toute la largeur (voir
-       flex-wrap ci-dessous, .volume-track prend déjà 100% en pratique
-       une fois seule sur sa ligne). */
-    flex-wrap: wrap;
-    background: var(--color-surface-2);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
-    justify-content: space-between;
-  }
-  body.is-host.game-active .container #hostPanel .host-volume-row .volume-track {
-    order: 3;
-    flex-basis: 100%;
-    height: 8px;
-  }
-  body.is-host.game-active .container #hostPanel .host-volume-row #audioVolumeLabel {
-    order: 2;
-    margin-left: auto;
   }
   body.is-host.game-active .container #hostPanel #hostAmbiancePill {
     order: 6;

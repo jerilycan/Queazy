@@ -592,10 +592,6 @@ const blindtestUnlockBtn = document.getElementById('blindtestUnlockBtn')
 const blindtestFields = document.getElementById('blindtestFields')
 const blindtestTitleInput = document.getElementById('blindtestTitleInput')
 const blindtestArtistInput = document.getElementById('blindtestArtistInput')
-const audioVolumeTrack = document.getElementById('audioVolumeTrack')
-const audioVolumeFill = document.getElementById('audioVolumeFill')
-const audioVolumeThumb = document.getElementById('audioVolumeThumb')
-const audioVolumeLabel = document.getElementById('audioVolumeLabel')
 const blindtestVolumeTrack = document.getElementById('blindtestVolumeTrack')
 const blindtestVolumeFill = document.getElementById('blindtestVolumeFill')
 const blindtestVolumeThumb = document.getElementById('blindtestVolumeThumb')
@@ -2517,17 +2513,6 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   }
 }
 
-// Volume par défaut choisi par l'hôte (0-100, transmis dans le payload de
-// question:show) : sert de point de départ pour un joueur qui n'a encore
-// jamais touché à SON propre curseur (voir plus bas, blindtestVolumeSlider) —
-// une fois qu'il l'a fait, sa préférence perso (localStorage) prend toujours
-// le dessus, y compris pour les questions suivantes du même quiz.
-let hostAudioVolume = 70
-const audioVolumeSlider = wireVolumeSlider(audioVolumeTrack, audioVolumeFill, audioVolumeThumb, hostAudioVolume, (pct) => {
-  hostAudioVolume = pct
-  if (audioVolumeLabel) audioVolumeLabel.textContent = pct + '%'
-})
-
 // Volume LOCAL du joueur, jamais envoyé au serveur — juste pour lui, en cas
 // de son trop fort à son goût. Persisté en localStorage pour ne pas avoir à
 // le refaire à chaque question/partie.
@@ -2686,7 +2671,7 @@ const startBlindTestPulse = () => {
 // posée une seule fois par question, lue par blindtestReloadBtn ci-dessous
 // pour retenter le chargement sans empiler de paramètres à chaque tentative.
 let currentBlindTestAudioSrc = null
-const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
+const buildBlindTestArea = (audioUrl, mode) => {
   if (!blindtestAudio) return
   stopBlindTestPulse()
   hideBlindTestUnlockPrompt()
@@ -2714,14 +2699,12 @@ const buildBlindTestArea = (audioUrl, mode, hostVolumePct) => {
     if (blindtestErrorMsg) blindtestErrorMsg.classList.remove('d-none')
   }
   blindtestAudio.src = audioUrl || ''
-  // Volume : la valeur "par défaut" choisie par l'hôte ne sert QUE de point
-  // de départ pour quelqu'un qui n'a JAMAIS touché à son propre curseur (ni
-  // en tant que joueur, ni en tant qu'hôte, sur CE navigateur) — dès qu'une
-  // préférence perso existe (même une seule fois, n'importe quand), elle
-  // gagne pour toujours, y compris pour l'hôte lui-même : le "défaut" ne
-  // doit jamais écraser un réglage volontaire déjà fait.
+  // Volume : réglage 100% local au joueur (retour utilisateur : le volume
+  // "par défaut" décidé par l'hôte ne servait à rien — chacun ajuste le
+  // sien de toute façon) — 70% de repli tant qu'aucune préférence perso
+  // n'a jamais été enregistrée sur ce navigateur.
   const myVolumePct = getMyBlindTestVolumePct()
-  const startVolumePct = myVolumePct !== null ? myVolumePct : (typeof hostVolumePct === 'number' ? hostVolumePct : 70)
+  const startVolumePct = myVolumePct !== null ? myVolumePct : 70
   blindtestAudio.volume = Math.min(1, Math.max(0, startVolumePct / 100))
   blindtestVolumeSlider.setPct(startVolumePct)
   applyBlindTestAudioOutput()
@@ -4926,7 +4909,6 @@ const emitQuestion = (index) => {
     // notions se recouvraient (retour utilisateur), inutile de les régler
     // deux fois.
     audioMode: q.type === 'blindtest' ? gameMode : undefined,
-    audioVolume: q.type === 'blindtest' ? hostAudioVolume : undefined,
     // "Titre uniquement" (voir editor.js) : pas d'artiste attendu pour ce
     // morceau (ex. générique de dessin animé). Le champ artiste n'est alors
     // ni affiché côté joueur ni jugé côté serveur (voir answer:submit).
@@ -5490,7 +5472,7 @@ socket.on('question:show', payload => {
     buildImageAnswerArea(payload.imageUrl)
   }
   if (payload.type === 'blindtest') {
-    buildBlindTestArea(payload.audioUrl, payload.audioMode, payload.audioVolume)
+    buildBlindTestArea(payload.audioUrl, payload.audioMode)
   } else {
     stopBlindTestAudio()
   }
