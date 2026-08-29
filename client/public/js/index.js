@@ -588,6 +588,7 @@ const blindtestAudio = document.getElementById('blindtestAudio')
 const blindtestErrorMsg = document.getElementById('blindtestErrorMsg')
 const blindtestReloadBtn = document.getElementById('blindtestReloadBtn')
 const blindtestOrb = document.getElementById('blindtestOrb')
+const blindtestOrbBars = document.getElementById('blindtestOrbBars')
 const blindtestUnlockBtn = document.getElementById('blindtestUnlockBtn')
 const blindtestFields = document.getElementById('blindtestFields')
 const blindtestTitleInput = document.getElementById('blindtestTitleInput')
@@ -2638,6 +2639,33 @@ if (soundCheckBtn) {
     })
   }
 }
+
+// Couronne de barres décoratives autour du cœur de l'orbe (tâche design
+// "rond rose peu esthétique", canvas "Lecteur Blind Test" — Variante 2a
+// "Couronne circulaire"). Motif FIXE, peuplé une seule fois au chargement du
+// script (pas à chaque question blindtest — rien ne dépend des données de
+// la question, purement décoratif) ; startBlindTestPulse/stopBlindTestPulse
+// juste en dessous continuent d'animer #blindtestOrb dans son ENSEMBLE
+// (couronne + cœur), exactement comme avant sur l'ancien disque plein —
+// aucune de leur logique n'a changé.
+const buildBlindTestOrbBars = () => {
+  if (!blindtestOrbBars) return
+  const count = 24
+  const radius = 42
+  const heights = [18, 26, 14, 32, 20, 28, 16, 24]
+  const frag = document.createDocumentFragment()
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * 360
+    const bar = document.createElement('div')
+    bar.className = 'blindtest-orb-bar'
+    bar.style.height = `${heights[i % heights.length]}px`
+    bar.style.transform = `rotate(${angle}deg) translate(-50%, ${radius}px)`
+    bar.style.animationDelay = `${-(i % 6) * 0.2}s`
+    frag.appendChild(bar)
+  }
+  blindtestOrbBars.appendChild(frag)
+}
+buildBlindTestOrbBars()
 
 const stopBlindTestPulse = () => {
   if (blindtestPulseRAF) cancelAnimationFrame(blindtestPulseRAF)

@@ -2870,34 +2870,65 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   gap: 18px;
   margin: 0 auto var(--space-lg);
 }
+/* Retour utilisateur : "le rond rose est peu esthétique" — remplacé par une
+   couronne de barres réactives (direction validée via /design, canvas
+   "Lecteur Blind Test", Variante 2a "Couronne circulaire") autour d'un cœur
+   central. .blindtest-orb reste le même ÉLÉMENT ciblé par startBlindTestPulse/
+   stopBlindTestPulse (index.js) : transform/box-shadow continuent d'animer
+   TOUT le groupe (couronne + cœur) ensemble, exactement comme avant sur
+   l'ancien disque plein — aucune logique JS de pulsation à changer, seul
+   l'habillage visuel à l'intérieur change. */
 .blindtest-orb {
   position: relative;
-  width: 160px;
-  height: 160px;
+  width: 176px;
+  height: 176px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffc2f0 0%, var(--color-accent) 55%, var(--color-accent-2) 100%);
-  box-shadow: 0 0 40px 10px rgba(var(--color-accent-rgb), 0.35);
   transition: transform 0.05s linear, box-shadow 0.05s linear;
   will-change: transform, box-shadow;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .blindtest-orb.orb-idle { animation: orbBreathe 2.2s ease-in-out infinite; }
 @keyframes orbBreathe {
   0%, 100% { transform: scale(1); box-shadow: 0 0 40px 10px rgba(var(--color-accent-rgb), 0.3); }
   50% { transform: scale(1.08); box-shadow: 0 0 55px 18px rgba(var(--color-accent-rgb), 0.45); }
 }
+/* Conteneur des 24 barres, peuplé une seule fois au chargement du script
+   (voir index.js buildBlindTestOrbBars) — motif décoratif fixe, pas de
+   raison de le régénérer à chaque question. Chaque barre a sa propre
+   respiration CSS asynchrone (orbBarFlicker) ; le pouls RÉEL (lié au volume
+   de l'extrait) reste porté par .blindtest-orb dans son ensemble, via
+   startBlindTestPulse plus haut. */
+.blindtest-orb-bars { position: absolute; inset: 0; }
+.blindtest-orb-bar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--color-cyan), var(--color-accent));
+  transform-origin: 50% 0%;
+  animation: orbBarFlicker 1.2s ease-in-out infinite;
+}
+@keyframes orbBarFlicker {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
 .blindtest-orb-core {
-  position: absolute;
-  inset: 22%;
+  position: relative;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.28);
-  filter: blur(3px);
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md), 0 0 26px -4px rgba(var(--color-accent-rgb), 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
 }
-.blindtest-orb-ring {
-  position: absolute;
-  inset: -10px;
-  border-radius: 50%;
-  border: 2px solid rgba(var(--color-accent-rgb), 0.3);
-}
+.blindtest-orb-core svg { width: 26px; height: 26px; color: var(--color-text); }
 .blindtest-orb-wrap { position: relative; display: inline-flex; }
 /* Filet de secours si la lecture programmatique est refusée par le
    navigateur (voir index.js playBlindTestAudio) : un tap direct dessus est

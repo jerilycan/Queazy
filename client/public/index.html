@@ -939,9 +939,18 @@
                  audio/:code, servi en same-origin. -->
             <audio id="blindtestAudio" preload="auto" crossorigin="anonymous"></audio>
             <div class="blindtest-orb-wrap">
+              <!-- Couronne de barres (retour utilisateur : "le rond rose est
+                   peu esthétique") à la place de l'ancien disque plein —
+                   #blindtestOrbBars peuplée une seule fois au chargement du
+                   script (voir index.js buildBlindTestOrbBars), pas à
+                   régénérer à chaque question. #blindtestOrb reste le même
+                   id/élément ciblé par startBlindTestPulse/stopBlindTestPulse
+                   (index.js), aucune logique de pulsation à changer. -->
               <div id="blindtestOrb" class="blindtest-orb orb-idle">
-                <div class="blindtest-orb-core"></div>
-                <div class="blindtest-orb-ring"></div>
+                <div id="blindtestOrbBars" class="blindtest-orb-bars"></div>
+                <div class="blindtest-orb-core">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                </div>
               </div>
               <button type="button" id="blindtestUnlockBtn" class="blindtest-unlock-btn d-none">🔇 Touche pour activer le son</button>
             </div>
