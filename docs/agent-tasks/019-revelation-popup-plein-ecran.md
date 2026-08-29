@@ -283,6 +283,39 @@ comportement inchangé (popup toujours ouverte).
   plateau) — une bonne réponse "Rangement" déclenche toujours les
   confettis même sans popup. `node --check` → OK.
 
+## Correctif post-review (v4, remplace le v3)
+Le gating par type (v3) réglait le symptôme (popup "vide" pour Rangement)
+mais créait une autre incohérence : QCM/Vrai-Faux/Intrus ont exactement le
+même souci (tuiles déjà parlantes une fois colorées) et étaient pourtant
+restés dans le "toujours ouvrir". Nouvelle direction, plus simple et plus
+cohérente : la popup s'ouvre à nouveau **inconditionnellement pour tous les
+types**, mais montre le texte de résultat déjà NUANCÉ que chaque branche
+calcule (aucune nouvelle logique) :
+- `association` → "Presque ! X/Y associations correctes (+N points)"
+- `timeline` → "Presque ! X/Y bien placés (+N points)"
+- `rangement` → "Presque ! X/Y bien rangées (+N points)"
+- `image`/`graduation` → "Presque ! +N points"
+- `mcq` (plusieurs bonnes réponses) → "Presque ! X/Y bonnes réponses (+N
+  points)"
+- tous les autres types → "Bonne réponse !"/"Mauvaise réponse" (déjà le cas)
+
+Ce texte, déjà posé sur `#myResultBanner` par `showMyResultBanner()`
+(inchangé), est donc maintenant réellement VU par le joueur au lieu d'être
+calculé pour rien. À la fermeture (auto ou manuelle), le plateau déjà
+coloré en dessous (tuiles/cartes/liens/points/curseur — calculé en même
+temps, juste masqué derrière la popup entre-temps) redevient visible sans
+code supplémentaire. Décision produit qui accompagne ce choix : pas
+d'effort particulier pour ajouter un résumé texte détaillé (liste
+carte-par-carte, mini-carte de zone...) pour Rangement/Image — le texte
+nuancé + le plateau après fermeture suffisent ; l'explication/image/son
+restent disponibles pour ces types mais peu d'intérêt à les utiliser en
+pratique dessus (retour utilisateur), rien de spécial à coder pour ça.
+- `index.js` : retrait de `REVEAL_SPATIAL_FEEDBACK_TYPES`/`hasRevealExtras`/
+  `shouldOpenRevealPopup` (introduits en v3) — `openRevealPopup()` de
+  nouveau inconditionnel en tête du handler `question:reveal`, badge/fond
+  teinté et minuteur de fermeture de nouveau inconditionnels en fin de
+  handler. `node --check` → OK.
+
 ## Tests manuels recommandés
 - Lancer une partie de test avec plusieurs types de question (au moins un
   à tuiles comme QCM, un texte libre comme "free"/"indice", un type "riche"
@@ -297,11 +330,11 @@ comportement inchangé (popup toujours ouverte).
 - Fermeture manuelle (croix ou clic à l'extérieur de la carte) pendant
   qu'un son de révélation joue : le son doit s'arrêter net, pas continuer
   en arrière-plan popup fermée.
-- Question "Rangement"/"Association"/"Timeline"/"Image"/"Graduation"/
-  "Order" SANS explication/image/son configurés : la popup ne doit PAS
-  s'ouvrir, le plateau coloré doit rester visible immédiatement à la
-  révélation. La même question AVEC une explication ajoutée : la popup
-  doit s'ouvrir normalement pour la montrer.
+- Question "Rangement"/"Association"/"Timeline"/"Image" avec un résultat
+  partiel (ni 100% juste, ni tout faux) : la popup doit afficher le texte
+  nuancé ("Presque ! X/Y ... (+N points)"), pas juste "Bonne réponse !".
+- QCM à plusieurs bonnes réponses, résultat partiel : même vérification
+  ("Presque ! X/Y bonnes réponses (+N points)").
 - Reconnexion pile pendant qu'une popup de révélation aurait dû se fermer
   (cas limite) : ne doit pas laisser une popup fantôme bloquée à l'écran
   à la question suivante.
