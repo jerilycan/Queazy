@@ -1461,13 +1461,17 @@ const wireRangementCardDrag = (el, key) => {
       }
       el.style.left = `${ev.clientX - offsetX}px`
       el.style.top = `${ev.clientY - offsetY}px`
-      // pointer-events:none le temps du elementFromPoint : sans ça, la carte
-      // elle-même (juste sous le pointeur, qui la porte) serait détectée à
-      // la place de la zone qu'elle survole.
-      el.style.pointerEvents = 'none'
-      const under = document.elementFromPoint(ev.clientX, ev.clientY)
-      el.style.pointerEvents = ''
-      const zoneEl = under?.closest('.rangement-zone') || null
+      // Détection de la zone survolée par comparaison de rects, PAS par
+      // elementFromPoint : ça demandait de désactiver puis réactiver
+      // pointer-events sur `el` à CHAQUE pointermove pour laisser passer le
+      // hit-test sous la carte portée par le pointeur. rangementState.
+      // zoneEls est une poignée de zones (2 à 5, voir RANGEMENT_MAX_ZONES) :
+      // un simple parcours + getBoundingClientRect est largement suffisant,
+      // et évite de toucher au moindre style de `el` pendant le geste.
+      const zoneEl = rangementState?.zoneEls.find(({ el: z }) => {
+        const r = z.getBoundingClientRect()
+        return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom
+      })?.el || null
       if (zoneEl !== lastZoneEl) {
         lastZoneEl?.classList.remove('drag-over')
         zoneEl?.classList.add('drag-over')
@@ -1476,14 +1480,13 @@ const wireRangementCardDrag = (el, key) => {
     }
 
     const cleanup = () => {
-      el.removeEventListener('pointermove', onMove)
-      el.removeEventListener('pointerup', onUp)
-      el.removeEventListener('pointercancel', onCancel)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onCancel)
       lastZoneEl?.classList.remove('drag-over')
     }
 
     const onUp = (ev) => {
-      try { el.releasePointerCapture(ev.pointerId) } catch {}
       cleanup()
       if (!dragStarted) {
         // Simple clic (pas de glisser) sur une carte déjà posée : retrait
@@ -1510,10 +1513,22 @@ const wireRangementCardDrag = (el, key) => {
       else originParent.appendChild(el)
     }
 
-    try { el.setPointerCapture(e.pointerId) } catch {}
-    el.addEventListener('pointermove', onMove)
-    el.addEventListener('pointerup', onUp)
-    el.addEventListener('pointercancel', onCancel)
+    // Écoute sur `document`, PAS sur `el` : `el` est reparentée en plein
+    // geste (voir activateDrag, document.body.appendChild) pour suivre le
+    // pointeur en position:fixed au-dessus de tout. setPointerCapture()
+    // posée sur `el` ne survit pas forcément à ce changement de parent
+    // pendant un geste actif — observé en test : la capture se perdait
+    // pile au moment où le pointeur entrait dans une zone (reparentage au
+    // premier mouvement significatif), le pointerup partait alors sur la
+    // zone survolée au lieu de `el`, dont le onUp n'était donc jamais
+    // appelé — carte figée en plein glisser, plus aucun cleanup (retour
+    // utilisateur : "l'item s'arrête parfois... en rapport avec l'entrée
+    // dans une zone"). Des listeners sur `document` reçoivent le geste
+    // quoi qu'il arrive, sans dépendre de la capture ni du parent courant
+    // de `el` — plus besoin de setPointerCapture/releasePointerCapture.
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onCancel)
   })
 }
 
