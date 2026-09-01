@@ -1273,12 +1273,14 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    max-width:700px — la marge gauche naturelle ne dépasse la largeur du
    badge (~162px avec son offset left:14px) qu'à partir de 700+2×162=1024px
    de large. En dessous (mais au-dessus de 640px, où le badge change déjà de
-   ligne), la barre glisse simplement vers la droite pour laisser la place
-   au badge sur la MÊME ligne plutôt que de dupliquer toute la mécanique
-   navbar/top offsets du bloc mobile (qui, elle, repose sur une navbar plus
-   basse — non vraie dans cette plage). */
+   ligne), max-width se réduit pour laisser 172px de marge des DEUX côtés
+   (retour utilisateur : un simple margin-left ici décalait la barre, elle
+   n'était plus centrée) — reste centrée par le même margin:auto qu'avant,
+   juste plus étroite le temps de cette plage, plutôt que de dupliquer toute
+   la mécanique navbar/top offsets du bloc mobile (qui, elle, repose sur une
+   navbar plus basse — non vraie dans cette plage). */
 @media (min-width: 641px) and (max-width: 1023px) {
-  .timer-container { margin-left: 172px; margin-right: auto; }
+  .timer-container { max-width: calc(100% - 344px); }
 }
 
 .timer-bar-wrapper {
