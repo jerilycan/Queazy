@@ -6339,11 +6339,11 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   line-height: 1.4;
 }
 
-/* Vidéos explicatives par type de question — modal lobby (chantier v1.54,
-   retour utilisateur). Grille des 13 types à gauche, lecteur à droite ;
-   empilés en colonne sous ~640px (host toujours sur PC, mais un joueur peut
-   ouvrir cette modal depuis son téléphone). Voir index.js
-   openTutoVideosModal/selectTutoVideoType. */
+/* GIFs de démo par type de question — modal lobby (chantier v1.54, retour
+   utilisateur ; passé en GIFs locaux au chantier v2.14). Grille des 16
+   types à gauche, lecteur à droite ; empilés en colonne sous ~640px (host
+   toujours sur PC, mais un joueur peut ouvrir cette modal depuis son
+   téléphone). Voir index.js openTutoVideosModal/selectTutoVideoType. */
 .tuto-videos-card { max-height: 85vh; overflow-y: auto; }
 .tuto-videos-layout {
   display: flex;
@@ -6388,7 +6388,14 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .tuto-video-player-area {
   flex: 1;
   min-width: 0;
-  aspect-ratio: 16 / 9;
+  /* Portrait (écran de jeu tel qu'affiché à un joueur), pas 16/9 : c'était
+     pensé pour d'anciennes vidéos de démo potentiellement en paysage (jamais
+     déposées en pratique) — les GIFs réels (chantier v2.14, un par type de
+     question) sont tous des captures d'écran de jeu au format téléphone
+     (380x820). Un ratio 16/9 les affichait minuscules avec d'énormes bandes
+     noires de chaque côté (retour utilisateur, capture mobile). */
+  aspect-ratio: 380 / 820;
+  max-height: 60vh;
   border-radius: var(--radius-md, 10px);
   background: rgba(5, 5, 15, 0.35);
   display: flex;
