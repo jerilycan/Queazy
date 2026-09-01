@@ -6388,13 +6388,22 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .tuto-video-player-area {
   flex: 1;
   min-width: 0;
+  /* Sans ça, l'alignement par défaut du flex row (.tuto-videos-layout,
+     align-items: stretch) étire ce panneau à la hauteur de la grille de
+     types à sa gauche (8 rangées ≈ 700px) au lieu de respecter aspect-ratio
+     ci-dessous — le lecteur se retrouvait large et plat, GIF minuscule avec
+     bandes noires en haut/bas (retour utilisateur, capture desktop). */
+  align-self: flex-start;
   /* Portrait (écran de jeu tel qu'affiché à un joueur), pas 16/9 : c'était
      pensé pour d'anciennes vidéos de démo potentiellement en paysage (jamais
-     déposées en pratique) — les GIFs réels (chantier v2.14, un par type de
-     question) sont tous des captures d'écran de jeu au format téléphone
-     (380x820). Un ratio 16/9 les affichait minuscules avec d'énormes bandes
-     noires de chaque côté (retour utilisateur, capture mobile). */
-  aspect-ratio: 380 / 820;
+     déposées en pratique). Les GIFs réels (chantier v2.14, un par type de
+     question) sont des captures d'écran de jeu au format téléphone, rognées
+     à 372x695 (bandeau logo/roue crantée/pastille Récap retiré — redondant
+     avec l'appli qui les affiche déjà tout autour de cette modal, voir
+     .design-work/gif-tools/postprocess_crop.py, outillage non versionné).
+     Un ratio 16/9 les affichait minuscules avec d'énormes bandes noires de
+     chaque côté (retour utilisateur, capture mobile). */
+  aspect-ratio: 372 / 695;
   max-height: 60vh;
   border-radius: var(--radius-md, 10px);
   background: rgba(5, 5, 15, 0.35);
@@ -6402,6 +6411,27 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* Petit "cadre" pour que le lecteur se lise comme un composant dessiné à
+     dessein plutôt qu'une simple boîte noire (retour utilisateur : "ça fait
+     pas très pro") — même traitement que .card (bordure + liseré clair en
+     haut + ombre), pas de nouvelle couleur inventée. */
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, var(--shadow-md);
+}
+@media (max-width: 640px) {
+  /* En colonne (voir .tuto-videos-layout ci-dessus), flex:1 grandit sur
+     l'axe VERTICAL et non plus horizontal : combiné à aspect-ratio, le
+     lecteur gonflait bien au-delà de l'écran (retour utilisateur, capture
+     mobile) — largeur fixe centrée à la place, la hauteur suit alors
+     sagement via aspect-ratio. Règle placée APRÈS la base .tuto-video-
+     player-area (même sélecteur, même spécificité : sinon la cascade la
+     fait perdre face à la règle de base plus bas dans le fichier, piège
+     vécu ici — jamais compter sur l'ordre des @media pour l'emporter).
+     order:-1 : passe le lecteur AVANT la grille des 16 types (DOM inchangé,
+     juste l'ordre visuel flex) — les 16 tuiles à elles seules dépassent déjà
+     85vh sur téléphone (.tuto-videos-card), le lecteur restait hors champ
+     tant qu'on n'avait pas scrollé toute la grille pour l'atteindre. */
+  .tuto-video-player-area { flex: none; width: min(100%, 320px); margin: 0 auto 12px; max-height: none; order: -1; }
 }
 .tuto-video-player { width: 100%; height: 100%; object-fit: contain; background: #000; }
 .tuto-video-placeholder {
