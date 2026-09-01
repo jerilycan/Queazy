@@ -4617,15 +4617,15 @@ const renderLobbyGrid = (arr) => {
 }
 socket.on('lobby:list', renderLobbyGrid)
 
-// --- Vidéos explicatives par type de question (chantier v1.54, retour
-// utilisateur) : accessible depuis le lobby (bouton "Comment jouer ?"),
-// AVANT le lancement de la partie — jamais en jeu, où l'intro courte suffit
-// (voir showQuestionIntro plus haut). Contenu (fichiers .mp4) géré à la
-// main dans le bucket Supabase Storage "tuto-videos" (voir
-// supabase/schema.sql) : cette modal ne fait QUE lire, aucun upload depuis
-// l'appli. Convention de nommage stricte : "<type>.mp4" à la racine du
-// bucket, mêmes slugs que QUESTION_TYPE_META.
-const TUTO_VIDEO_BUCKET = 'tuto-videos'
+// --- GIFs de démo par type de question (chantier v1.54, retour
+// utilisateur ; passés en GIFs locaux au chantier v2.14) : accessible
+// depuis le lobby (bouton "Comment jouer ?"), AVANT le lancement de la
+// partie — jamais en jeu, où l'intro courte suffit (voir showQuestionIntro
+// plus haut). Remplace l'ancien lecteur <video> branché sur le bucket
+// Supabase Storage "tuto-videos" (jamais rempli en pratique) : un GIF par
+// type, committé en statique dans client/public/img/tuto/<type>.gif, mêmes
+// slugs que QUESTION_TYPE_META — servi comme n'importe quel autre asset,
+// aucune dépendance réseau/Supabase pour cette modal.
 const tutoVideosBtn = document.getElementById('tutoVideosBtn')
 const tutoVideosModal = document.getElementById('tutoVideosModal')
 const closeTutoVideosBtn = document.getElementById('closeTutoVideos')
@@ -4635,38 +4635,26 @@ const tutoVideoPlaceholder = document.getElementById('tutoVideoPlaceholder')
 const tutoVideoPlaceholderText = document.getElementById('tutoVideoPlaceholderText')
 let tutoVideosGridBuilt = false
 
-// getPublicUrl ne vérifie RIEN côté Supabase, elle construit juste une URL
-// (le bucket/fichier peuvent très bien ne pas exister) : c'est le <video>
-// lui-même qui nous renseigne via son événement error, voir
-// selectTutoVideoType plus bas — jamais de lecteur cassé à l'écran tant que
-// la vidéo d'un type n'a pas été déposée.
-const tutoVideoUrlFor = (type) => {
-  if (!window.supabaseClient) return null
-  return window.supabaseClient.storage.from(TUTO_VIDEO_BUCKET).getPublicUrl(`${type}.mp4`).data.publicUrl
-}
+// Construit juste un chemin, ne vérifie rien : c'est le <img> lui-même qui
+// nous renseigne via son évènement error, voir selectTutoVideoType plus bas
+// — jamais de lecteur cassé à l'écran pour un type dont le GIF manquerait
+// (ex. un futur 17e type de question pas encore illustré).
+const tutoVideoUrlFor = (type) => `/img/tuto/${type}.gif`
 const selectTutoVideoType = (type) => {
   if (!tutoVideoPlayer || !tutoVideoPlaceholder) return
   tutoVideoTypeGrid?.querySelectorAll('.tuto-video-tile').forEach(tile => {
     tile.classList.toggle('active', tile.dataset.type === type)
   })
-  const url = tutoVideoUrlFor(type)
-  if (!url) {
-    if (tutoVideoPlaceholderText) tutoVideoPlaceholderText.textContent = 'Vidéos pas encore configurées.'
-    tutoVideoPlayer.classList.add('d-none')
-    tutoVideoPlaceholder.classList.remove('d-none')
-    return
-  }
   tutoVideoPlaceholder.classList.add('d-none')
   tutoVideoPlayer.classList.remove('d-none')
   tutoVideoPlayer.onerror = () => {
-    // Fichier pas encore déposé pour CE type dans le bucket (voir
-    // supabase/schema.sql) : message dédié plutôt qu'un lecteur cassé.
-    if (tutoVideoPlaceholderText) tutoVideoPlaceholderText.textContent = `Vidéo bientôt disponible pour ${QUESTION_TYPE_META[type]?.label || 'ce type'}.`
+    // Pas (encore) de GIF pour CE type : message dédié plutôt qu'un lecteur
+    // cassé.
+    if (tutoVideoPlaceholderText) tutoVideoPlaceholderText.textContent = `Démo bientôt disponible pour ${QUESTION_TYPE_META[type]?.label || 'ce type'}.`
     tutoVideoPlayer.classList.add('d-none')
     tutoVideoPlaceholder.classList.remove('d-none')
   }
-  tutoVideoPlayer.src = url
-  tutoVideoPlayer.load()
+  tutoVideoPlayer.src = tutoVideoUrlFor(type)
 }
 const buildTutoVideosGrid = () => {
   if (tutoVideosGridBuilt || !tutoVideoTypeGrid) return
@@ -4688,9 +4676,9 @@ const openTutoVideosModal = () => {
 }
 const closeTutoVideosModal = () => {
   tutoVideosModal?.classList.add('d-none')
-  // Coupe le son/la lecture en fermant — sinon la vidéo continue en fond,
-  // invisible mais toujours audible.
-  if (tutoVideoPlayer) { tutoVideoPlayer.pause(); tutoVideoPlayer.removeAttribute('src'); tutoVideoPlayer.load() }
+  // Stoppe le GIF en fermant (un <img> animé continue de tourner en fond
+  // sinon, invisible mais toujours actif) en retirant sa source.
+  if (tutoVideoPlayer) tutoVideoPlayer.removeAttribute('src')
 }
 if (tutoVideosBtn) tutoVideosBtn.onclick = openTutoVideosModal
 if (closeTutoVideosBtn) closeTutoVideosBtn.onclick = closeTutoVideosModal

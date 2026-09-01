@@ -543,13 +543,15 @@
         </div>
       </div>
 
-      <!-- Vidéos explicatives par type de question (chantier v1.54, retour
-           utilisateur) : grille des 13 types à gauche, lecteur vidéo à
-           droite — voir openTutoVideosModal/selectTutoVideoType côté
-           index.js. Contenu (fichiers .mp4) géré à la main dans le bucket
-           Supabase Storage "tuto-videos" (voir supabase/schema.sql), pas
-           d'upload depuis l'appli : un type sans vidéo affiche juste un
-           message plutôt qu'un lecteur cassé. -->
+      <!-- GIFs de démo par type de question (chantier v2.14, retour
+           utilisateur) : grille des 16 types à gauche, lecteur à droite —
+           voir openTutoVideosModal/selectTutoVideoType côté index.js.
+           Remplace l'ancien lecteur <video> branché sur le bucket Supabase
+           Storage "tuto-videos" (jamais rempli) : GIFs committés en statique
+           dans client/public/img/tuto/<type>.gif, un par type de
+           QUESTION_TYPE_META, servis comme n'importe quel autre asset —
+           un type sans GIF affiche juste un message plutôt qu'un lecteur
+           cassé (voir tutoVideoPlayer.onerror). -->
       <div id="tutoVideosModal" class="modal-overlay d-none">
         <div class="modal-content card max-w-700 tuto-videos-card">
           <div class="d-flex justify-between align-center mb-lg">
@@ -559,7 +561,7 @@
           <div class="tuto-videos-layout">
             <div id="tutoVideoTypeGrid" class="tuto-video-type-grid"></div>
             <div class="tuto-video-player-area">
-              <video id="tutoVideoPlayer" class="tuto-video-player d-none" controls playsinline></video>
+              <img id="tutoVideoPlayer" class="tuto-video-player d-none" alt="" />
               <div id="tutoVideoPlaceholder" class="tuto-video-placeholder">
                 <span class="tuto-video-placeholder-icon">🎬</span>
                 <span id="tutoVideoPlaceholderText">Choisis un type de question à gauche.</span>
