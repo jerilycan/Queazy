@@ -161,9 +161,13 @@
    (voir .btn.btn-nav-main de base) — même identité de marque dans les deux
    thèmes, au lieu du bleu isolé d'avant qui ne collait à rien d'autre dans
    la palette claire. */
+/* Même changement cyan->indigo que le thème sombre (voir .btn.btn-nav-main
+   :nth-child(even) plus bas) — assez vif sur le verre clair pour rester
+   lisible en bouton plein, pas besoin d'un jeu de couleurs distinct comme
+   c'était le cas pour l'ancien rouge. */
 :root[data-theme="light"] .btn.btn-nav-main:nth-child(even) {
-  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
-  box-shadow: 0 3px 0 #be123c;
+  background: linear-gradient(135deg, #2fe3ff 0%, #5865f2 100%) !important;
+  box-shadow: 0 3px 0 #2f3aa8;
 }
 /* Classement/podium (tâche 004) : même correctif que body ci-dessous — le
    halo dur codé en dur (#3a1450/#200a38) est propre au thème sombre, sans
@@ -682,11 +686,18 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* "Rejoindre" : retour utilisateur, le rouge (--tile-red, partagé avec les
+   tuiles QCM/badges ailleurs — jamais touché ici) lisait comme un signal
+   d'alerte plutôt qu'un CTA. Dégradé cyan->indigo à la place (exploré en
+   plusieurs pistes de couleur avec l'utilisateur, celle-ci retenue) —
+   couleurs en dur ici plutôt que via --tile-red, exactement comme le fait
+   déjà l'override thème clair juste en dessous (ce bouton a toujours eu ses
+   propres valeurs, jamais celles des tuiles). */
 .btn.btn-nav-main:nth-child(even) {
   transform: none;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--tile-red) 0%, var(--tile-red-deep) 100%) !important;
-  box-shadow: 0 3px 0 var(--tile-red-deep), 0 8px 20px rgba(var(--tile-red-rgb),0.35);
+  background: linear-gradient(135deg, #2fe3ff 0%, #5865f2 100%) !important;
+  box-shadow: 0 3px 0 #2f3aa8, 0 8px 20px rgba(47,227,255,0.35);
 }
 
 .btn.btn-nav-main:hover {
@@ -700,7 +711,7 @@ h1, h2, h3 { margin: 0; font-family: 'Baloo 2', 'Nunito', sans-serif; font-weigh
 }
 
 .btn.btn-nav-main:nth-child(even):active {
-  box-shadow: 0 1px 0 var(--tile-red-deep) !important;
+  box-shadow: 0 1px 0 #2f3aa8 !important;
 }
 
 /* Pastille translucide (nouvelle DA, Menu.dc.html) au lieu du contour plein
