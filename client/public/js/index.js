@@ -659,18 +659,24 @@ if (rechercheWrap) {
 }
 // Question "halo" (tâche 020) : jusqu'à 5 clics discrets, chacun laissant un
 // halo PERMANENT et CUMULATIF (contrairement à la lampe torche "recherche"
-// juste au-dessus, continue et jamais cumulative). Le calque noir est troué
-// par un <mask> SVG (#haloMask, voir index.html) plutôt que plusieurs
-// dégradés CSS mask-image empilés : le composite par défaut entre couches de
-// masque ferait une INTERSECTION des trous (visible seulement là où TOUS les
-// clics se recouvrent) au lieu de l'UNION voulue (visible dès qu'AU MOINS un
-// clic couvre la zone) — un <mask> SVG où chaque clic ajoute un <circle>
-// union naturellement les zones révélées, sans réglage de compositing à
-// vérifier entre navigateurs (voir Plan tâche 020).
+// juste au-dessus, continue et jamais cumulative).
+// Correctif post-review : la 1ère implémentation utilisait un <mask> SVG
+// (un <circle> ajouté en JS par clic) pour éviter le piège du compositing
+// par défaut entre couches mask-image CSS (INTERSECTION des trous au lieu
+// de l'UNION voulue) — abandonné après un bug jamais élucidé (calque figé
+// plein/noir en permanence dans l'appli réelle malgré un DOM/CSS
+// irréprochables, alors que la structure identique fonctionnait
+// parfaitement isolée dans une page minimale). Repasse par plusieurs
+// couches mask-image CSS (radial-gradient), une par clic — même recette que
+// .recherche-overlay (style.css) par couche — mais résout le piège
+// UNION/INTERSECTION autrement : chaque couche est INVERSÉE (opaque PARTOUT
+// SAUF dans son propre trou, pas transparent partout sauf dedans), combinées
+// avec mask-composite:intersect. L'intersection de plusieurs "tout sauf mon
+// trou" équivaut exactement à l'union des trous (loi de De Morgan) — sans
+// dépendre d'un <mask> SVG ni de son bug non résolu.
 const haloArea = document.getElementById('haloArea')
 const haloWrap = document.getElementById('haloWrap')
 const haloImg = document.getElementById('haloImg')
-const haloMaskCircles = document.getElementById('haloMaskCircles')
 const haloOverlay = document.getElementById('haloOverlay')
 const haloCounter = document.getElementById('haloCounter')
 const HALO_MAX_CLICKS = 5
@@ -682,22 +688,47 @@ const HALO_DEFAULT_RADIUS_PCT = 15
 let haloClicksState = [] // [{x, y}] normalisés 0-1, dans l'ordre des clics
 let haloRadiusPct = HALO_DEFAULT_RADIUS_PCT
 
-// Reconstruit entièrement le contenu du masque à partir de haloClicksState —
-// coordonnées stockées NORMALISÉES (0-1, comme les zones de "image"/le point
-// de zoom "zoomguess") plutôt qu'en pixels bruts : reconverties en pixels
-// RÉELS à chaque appel (getBoundingClientRect), pour rester justes même si
-// la fenêtre est redimensionnée entre deux clics (voir ResizeObserver
-// plus bas). Rayon en px = haloRadiusPct% de la LARGEUR de la boîte (choix
-// simple et suffisant, pas un calcul par diagonale/hauteur).
+// Reconstruit entièrement le(s) dégradé(s) du masque à partir de
+// haloClicksState — coordonnées stockées NORMALISÉES (0-1, comme les zones
+// de "image"/le point de zoom "zoomguess") plutôt qu'en pixels bruts :
+// reconverties en pixels RÉELS à chaque appel (getBoundingClientRect), pour
+// rester justes même si la fenêtre est redimensionnée entre deux clics (voir
+// ResizeObserver plus bas). Rayon en px = haloRadiusPct% de la LARGEUR de la
+// boîte (choix simple et suffisant, pas un calcul par diagonale/hauteur).
+// 0 clic : aucun mask posé, le fond noir plein (background:#000, CSS) suffit
+// déjà tel quel — inutile de construire quoi que ce soit.
 const renderHaloMask = () => {
-  if (!haloWrap || !haloMaskCircles) return
+  if (!haloWrap || !haloOverlay) return
+  if (haloClicksState.length === 0) {
+    haloOverlay.style.maskImage = ''
+    haloOverlay.style.webkitMaskImage = ''
+    haloOverlay.style.maskComposite = ''
+    haloOverlay.style.webkitMaskComposite = ''
+    return
+  }
   const rect = haloWrap.getBoundingClientRect()
   const w = rect.width || 1
   const h = rect.height || 1
   const rPx = (haloRadiusPct / 100) * w
-  haloMaskCircles.innerHTML = haloClicksState
-    .map(c => `<circle cx="${c.x * w}" cy="${c.y * h}" r="${rPx}" fill="url(#haloGradient)" />`)
-    .join('')
+  // Chaque couche : opaque (noir) PARTOUT, SAUF un trou transparent (adouci
+  // sur les 16 derniers px, même feather que .recherche-overlay) autour de
+  // CE clic — jamais l'inverse (voir commentaire au-dessus, c'est cette
+  // inversion + mask-composite:intersect qui donne l'union des trous).
+  const layers = haloClicksState.map(c => {
+    const cx = c.x * w
+    const cy = c.y * h
+    return `radial-gradient(circle ${rPx}px at ${cx}px ${cy}px, transparent 0, transparent calc(${rPx}px - 16px), black ${rPx}px)`
+  })
+  haloOverlay.style.maskImage = layers.join(', ')
+  haloOverlay.style.webkitMaskImage = layers.join(', ')
+  // 1 seule couche : pas de composite à spécifier (rien à intersecter).
+  // Sinon, "intersect" répété pour chaque couche APRÈS la 1ère (ignoré sur la
+  // 1ère, voir spec CSS Masking) — -webkit-mask-composite utilise l'ancien
+  // vocabulaire Safari/WebKit (source-in = équivalent non standard
+  // d'"intersect", jamais "intersect" tel quel).
+  const n = layers.length
+  haloOverlay.style.maskComposite = n > 1 ? Array(n).fill('intersect').join(', ') : ''
+  haloOverlay.style.webkitMaskComposite = n > 1 ? Array(n).fill('source-in').join(', ') : ''
 }
 // Même pattern qu'ensureAssociationResizeObserver plus bas : les coordonnées
 // stockées sont normalisées, mais le <mask> SVG raisonne en pixels réels

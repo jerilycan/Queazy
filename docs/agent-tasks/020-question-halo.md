@@ -459,36 +459,79 @@ là-bas). Rien ci-dessous ne touche donc une zone listée dans les
 - Vérifier en devtools réseau qu'aucun `correct` n'est visible dans
   `question:show` pour une question "halo".
 
+## Correctif post-review : le masque ne révélait RIEN en jeu réel (v2.16.1)
+Retour utilisateur ("lance le test") — le calque noir restait plein en
+permanence dès le premier chargement (aucun clic pourtant enregistré côté
+compteur), contrairement à ce que la review précédente affirmait avoir
+vérifié visuellement. Deux bugs empilés, trouvés par test live (room +
+question "halo" simulées via sockets bruts, clics réels dans le Browser
+pane) :
+
+1. **Bug réel n°1** : `.halo-mask-svg` était à `width:0;height:0` (pensé
+   "invisible, ne sert qu'à porter un `<defs>`") — mais avec
+   `maskContentUnits="userSpaceOnUse"`, le `<rect width="100%" height="100%">`
+   de fond du masque se résout contre CE viewport 0x0, pas contre la taille
+   réelle de `#haloOverlay`. Masque vide en permanence → calque noir
+   invisible dès l'affichage, avant même le premier clic. Corrigé une
+   première fois en donnant une vraie taille CSS au `<svg>`.
+2. **Faux positif ensuite** : même après ce correctif, les `<circle>`
+   ajoutés en JS par clic restaient invisibles, alors qu'une reproduction
+   isolée à l'identique (page minimale, même DOM/CSS/JS) fonctionnait
+   parfaitement. Cause réelle trouvée après une longue session de
+   debug : le harnais de TEST (image de démo en data URI SVG encodée via
+   `encodeURIComponent` + préfixe `data:image/svg+xml;utf8,`) était
+   lui-même invalide — les navigateurs ne décodent PAS automatiquement le
+   pourcentage-encodage pour ce préfixe `;utf8,` non standard, donc les
+   `#` des couleurs (`fill="#ffd23f"`) restaient littéralement encodés en
+   `%23...` dans le SVG final, un attribut `fill` invalide retombant par
+   défaut sur noir — la "case cachée" par un clic révélait donc bien la
+   vraie image... qui n'affichait jamais aucune couleur, juste du noir sur
+   noir. Corrigé en repassant en `;base64,` pour la suite des tests. Le
+   `<mask>` SVG (post-correctif n°1) fonctionnait donc peut-être déjà
+   correctement — jamais reconfirmé, voir décision ci-dessous.
+3. **Changement d'implémentation, par prudence plutôt que par bug avéré** :
+   plutôt que de revalider le `<mask>` SVG (déjà chronophage et une fois
+   déjà pris en défaut sur ce chantier), remplacé par plusieurs couches CSS
+   `mask-image` (radial-gradient), une par clic — même recette que
+   `.recherche-overlay` par couche. Le piège UNION/INTERSECTION déjà
+   identifié au Plan (composite par défaut = intersection des trous) est
+   résolu autrement qu'envisagé à l'origine : chaque couche est INVERSÉE
+   (opaque partout SAUF son propre trou, pas l'inverse) puis combinée avec
+   `mask-composite:intersect` — l'intersection de plusieurs "tout sauf mon
+   trou" équivaut à l'union des trous (loi de De Morgan), sans dépendre
+   d'un `<mask>` SVG ni de `maskContentUnits`/`maskUnits`. Le `<mask>` SVG,
+   `<radialGradient>` et `<g id="haloMaskCircles">` sont retirés
+   d'index.html (plus utilisés).
+
+**Revérifié en conditions réelles avec une image correctement encodée** :
+calque plein à 0 clic, 1 clic = halo visible avec bord adouci, 2e et 3e
+clics = halos supplémentaires TOUS visibles simultanément (union confirmée,
+pas d'intersection), 6e clic = no-op confirmé (`haloClicksState.length`
+reste à 5), soumission de réponse → file de modération hôte reçue avec le
+bon texte, approbation → `score:update` avec un delta cohérent (pénalité
+pleine de 1000 pour 5 clics correctement déduite du score de vitesse).
+
 ## Risques restants
-- **Scoring serveur (pénalité par clic) relu attentivement mais jamais
-  exécuté en conditions réelles dans cette session** (pas de compte pour
-  passer par l'éditeur/une vraie partie, et ajouter `socket.io-client`
-  pour scripter un test de bout en bout aurait été une nouvelle dépendance
-  npm — hors périmètre sans validation explicite, voir `CLAUDE.md`) : la
-  logique suit fidèlement le pattern déjà en place (`pointsFor`/
-  `pointsFloor`, `Math.max(0, ...)`), mais un vrai test de bout en bout
-  (voir Tests manuels recommandés) reste la meilleure garantie avant mise
-  en avant du type auprès des utilisateurs.
 - Rayon du halo par défaut (15%) et bornes (5-35%) choisis arbitrairement
-  (voir Plan) — à ajuster après un premier test visuel réel EN JEU (le
-  harnais de test de cette session vérifiait le mécanisme, pas
-  l'équilibrage exact du gameplay).
+  (voir Plan) — à ajuster après un premier test visuel réel EN JEU.
 - Support tactile mobile : `pointerdown` seul (pas de `touchstart` dédié,
   volontairement — même convention que "recherche"/`wireOrderDrag") jamais
-  testé sur un vrai téléphone dans cette session (Browser pane = desktop).
-- `mask: url(#haloMask)` : support Safari via `-webkit-mask: url(#haloMask)`
-  posé en CSS (voir style.css), jamais testé en pratique sur un vrai
-  Safari/iOS dans cette session (même point de vigilance que le préfixe
-  `-webkit-mask-image` de "recherche", tâche 009).
+  testé sur un vrai téléphone.
+- `mask-composite`/`-webkit-mask-composite` (couches multiples) : testé en
+  pratique uniquement sur le Chromium de cette session — jamais vérifié sur
+  Safari/iOS ni Firefox (le vocabulaire `-webkit-mask-composite` est
+  l'ancien non-standard WebKit, `source-in` comme équivalent d'"intersect" —
+  à confirmer sur un vrai Safari).
+- Éditeur (formulaire "Halo") non testé de bout en bout faute de compte
+  utilisateur disponible dans cet environnement.
 - Écran hôte entièrement noir pendant toute la question "halo" (décision
   actée dans le Plan, différente de "recherche" où l'hôte a sa propre lampe
   torche) — à confirmer avec l'utilisateur que ce choix convient à l'usage
-  réel (IRL notamment), un futur besoin "l'hôte veut suivre visuellement
-  les halos" resterait à cadrer séparément si besoin.
+  réel (IRL notamment).
 
 ## Statut
-`en review` — étapes 1 à 8 (fonctionnelles) faites, mécanisme de
-révélation vérifié visuellement pour de vrai (bug d'inversion du masque
-trouvé ET corrigé avant commit). Scoring serveur et éditeur non vérifiés
-en conditions réelles faute de compte utilisateur disponible dans cet
-environnement — voir Risques restants et Tests manuels recommandés.
+`en review` — mécanisme de révélation maintenant vérifié visuellement pour
+de vrai, avec une image correctement encodée (cumulatif, union, limite de
+5, soumission, pénalité de score). Éditeur non vérifié en conditions
+réelles faute de compte utilisateur — voir Risques restants et Tests
+manuels recommandés.

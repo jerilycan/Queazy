@@ -1001,38 +1001,21 @@
                juste au-dessus (balayage continu, gratuit, jamais cumulatif),
                ici jusqu'à 5 clics discrets, chacun laissant un halo PERMANENT
                et CUMULATIF (voir index.js renderHaloMask/style.css
-               .halo-overlay). Le masque est un <mask> SVG (union naturelle de
-               plusieurs <circle>, contrairement à plusieurs couches
-               mask-image CSS empilées qui feraient une INTERSECTION des trous
-               au lieu d'une union, voir Plan tâche 020) — jamais affiché lui-
-               même (width/height 0), il ne sert que de source à
-               #haloOverlay. #haloCounter affiche le nombre de clics
-               restants. -->
+               .halo-overlay). Correctif post-review : la 1ère version
+               utilisait un <mask> SVG (union naturelle de plusieurs <circle>)
+               pour éviter le piège des couches mask-image CSS empilées, qui
+               ferait par défaut une INTERSECTION des trous au lieu d'une
+               union — mais le <mask> SVG ne s'affichait jamais dans l'appli
+               réelle malgré un DOM/CSS irréprochables à l'inspection (bug non
+               élucidé, reproductible uniquement ici, jamais en isolation).
+               Remplacé par des couches mask-image CSS après tout, en
+               résolvant le piège différemment (voir style.css .halo-overlay
+               pour le détail : intersection de plusieurs "tout sauf mon
+               trou" = union des trous). #haloCounter affiche le nombre de
+               clics restants. -->
           <div id="haloArea" class="halo-area d-none">
             <div id="haloWrap" class="halo-wrap">
               <img id="haloImg" class="halo-img" alt="" draggable="false" />
-              <!-- <mask> SVG : LUMINANCE (pas alpha) qui pilote la visibilité
-                   de #haloOverlay — blanc = overlay affiché (calque noir =
-                   image cachée), noir = overlay masqué (image visible). D'où
-                   le rect de fond BLANC (calque noir partout par défaut) et
-                   les <circle> (ajoutés en JS, un par clic) qui vont du NOIR
-                   (trou = image visible) au BLANC (bord adouci, image
-                   cachée) — l'inverse semblerait plus intuitif au premier
-                   abord (cercle "blanc" pour une zone qui devient claire)
-                   mais donnerait exactement l'effet inverse de celui voulu. -->
-              <svg class="halo-mask-svg" aria-hidden="true">
-                <defs>
-                  <radialGradient id="haloGradient">
-                    <stop offset="0%" stop-color="#000" />
-                    <stop offset="75%" stop-color="#000" />
-                    <stop offset="100%" stop-color="#fff" />
-                  </radialGradient>
-                  <mask id="haloMask" maskContentUnits="userSpaceOnUse">
-                    <rect width="100%" height="100%" fill="white" />
-                    <g id="haloMaskCircles"></g>
-                  </mask>
-                </defs>
-              </svg>
               <div id="haloOverlay" class="halo-overlay"></div>
             </div>
             <div id="haloCounter" class="halo-counter"></div>

@@ -2765,14 +2765,26 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 
 /* Question "halo" (tâche 020) : même gabarit de boîte fixe que
    .recherche-wrap ci-dessus (cohérence visuelle entre types "image à
-   deviner"), mais le calque est troué par un <mask> SVG (#haloMask, voir
-   index.html/index.js) plutôt qu'un dégradé CSS radial — un OU logique
-   (union) entre plusieurs <circle> ajoutés au fil des clics, PERMANENT et
-   CUMULATIF (contrairement à --spot-r ci-dessus, qui retombe à 0 dès que le
-   pointeur s'éloigne). Le <svg> qui héberge le <mask> n'est jamais affiché
-   lui-même (juste une source de masque référencée par mask:url(#haloMask)),
-   d'où width/height à 0 et position absolute pour ne prendre aucune place
-   dans le flux. */
+   deviner"), mais les trous sont PERMANENTS et CUMULATIFS (contrairement à
+   --spot-r ci-dessus, qui retombe à 0 dès que le pointeur s'éloigne).
+   Correctif post-review : la 1ère implémentation utilisait un <mask> SVG
+   (#haloMask, un <circle> ajouté en JS par clic) — abandonné après un bug
+   jamais élucidé malgré des tests exhaustifs (structure identique isolée
+   dans une page minimale : fonctionne parfaitement ; dans l'appli réelle :
+   le calque restait plein/noir en permanence, les <circle> ajoutés en JS
+   sans le moindre effet visuel malgré un DOM/CSS irréprochables à
+   l'inspection). Remplacé par plusieurs COUCHES de mask-image CSS
+   (radial-gradient), une par clic — voir renderHaloMask côté index.js, même
+   recette que .recherche-overlay ci-dessus par couche. Le piège de cette
+   approche (déjà identifié puis écarté à tort en faveur du <mask> SVG) :
+   composite par défaut ENTRE couches = INTERSECTION des trous (visible
+   seulement là où TOUS les clics se recouvrent) au lieu de l'UNION voulue.
+   Résolu en inversant la logique de CHAQUE couche (opaque PARTOUT SAUF dans
+   son propre trou, au lieu de transparent partout sauf dans le trou) et en
+   combinant les couches avec mask-composite:intersect — l'intersection de
+   plusieurs "tout sauf mon trou" équivaut exactement à l'union des trous
+   (De Morgan). Voir renderHaloMask côté index.js pour la construction des
+   couches. */
 .halo-area { max-width: 640px; margin: var(--space-lg) auto 0; }
 .halo-wrap {
   position: relative;
@@ -2796,13 +2808,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   -webkit-user-drag: none;
   user-drag: none;
 }
-.halo-mask-svg { position: absolute; width: 0; height: 0; }
 .halo-overlay {
   position: absolute;
   inset: 0;
   background: #000;
-  mask: url(#haloMask);
-  -webkit-mask: url(#haloMask);
+  /* mask-image/-webkit-mask-image ET mask-composite/-webkit-mask-composite
+     posés en JS (voir renderHaloMask côté index.js) : autant de couches que
+     de clics, jamais un nombre fixe déclarable ici à l'avance. Sans mask
+     posé (0 clic), le calque reste plein — comportement par défaut d'un
+     simple background, rien à déclarer ici pour ce cas. */
 }
 /* Compteur de clics restants (retour utilisateur, doit rester visible côté
    joueur) — même gabarit que .image-error-msg, pas de nouveau pattern
