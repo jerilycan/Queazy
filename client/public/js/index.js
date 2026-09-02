@@ -4634,6 +4634,30 @@ const tutoVideoPlayer = document.getElementById('tutoVideoPlayer')
 const tutoVideoPlaceholder = document.getElementById('tutoVideoPlaceholder')
 const tutoVideoPlaceholderText = document.getElementById('tutoVideoPlaceholderText')
 let tutoVideosGridBuilt = false
+// Chaque GIF pèse plusieurs Mo (jusqu'à ~5-6 Mo) : sans rien de prévu, changer
+// de type coupait par un temps de chargement bien sensible à chaque clic
+// (retour utilisateur). Précharge les 16 en arrière-plan, un par un (jamais
+// tous en parallèle : ça ralentirait le tout premier GIF, celui affiché
+// immédiatement), dès l'ouverture de la modal — une fois en cache HTTP
+// navigateur, reselectionner un type revient à charger depuis le disque,
+// quasi instantané. Lancée une seule fois (tutoVideosPrefetchStarted).
+let tutoVideosPrefetchStarted = false
+const prefetchTutoVideosInBackground = () => {
+  if (tutoVideosPrefetchStarted) return
+  tutoVideosPrefetchStarted = true
+  const types = Object.keys(QUESTION_TYPE_META)
+  let i = 0
+  const next = () => {
+    if (i >= types.length) return
+    const type = types[i]
+    i += 1
+    const img = new Image()
+    img.onload = next
+    img.onerror = next
+    img.src = `/img/tuto/${type}.gif`
+  }
+  next()
+}
 
 // Construit juste un chemin, ne vérifie rien : c'est le <img> lui-même qui
 // nous renseigne via son évènement error, voir selectTutoVideoType plus bas
@@ -4673,6 +4697,11 @@ const openTutoVideosModal = () => {
   buildTutoVideosGrid()
   tutoVideosModal?.classList.remove('d-none')
   selectTutoVideoType(Object.keys(QUESTION_TYPE_META)[0])
+  // Léger différé : laisse le tout premier GIF (déjà demandé juste
+  // au-dessus) démarrer son propre chargement avant de lancer la file de
+  // préchargement des 15 autres derrière, plutôt que de lui faire
+  // concurrence dès la même frame.
+  setTimeout(prefetchTutoVideosInBackground, 400)
 }
 const closeTutoVideosModal = () => {
   tutoVideosModal?.classList.add('d-none')

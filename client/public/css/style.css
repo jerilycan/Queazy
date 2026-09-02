@@ -6402,8 +6402,11 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
      avec l'appli qui les affiche déjà tout autour de cette modal, voir
      .design-work/gif-tools/postprocess_crop.py, outillage non versionné).
      Un ratio 16/9 les affichait minuscules avec d'énormes bandes noires de
-     chaque côté (retour utilisateur, capture mobile). */
-  aspect-ratio: 372 / 695;
+     chaque côté (retour utilisateur, capture mobile). 372/663 (pas 695) :
+     un fin bandeau résiduel de la barre de temps dépassait encore du
+     rognage initial (retour utilisateur, capture modal — voir
+     trim_top_sliver.py, 25px de plus retirés en haut sur les 16 GIFs). */
+  aspect-ratio: 372 / 663;
   max-height: 60vh;
   border-radius: var(--radius-md, 10px);
   background: rgba(5, 5, 15, 0.35);
