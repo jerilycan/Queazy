@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.16.1'
+const APP_VERSION = '2.16.2'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -2168,14 +2168,22 @@ const start = async () => {
       // recherche/indice). Pénalité = somme des N premières valeurs de
       // HALO_CLICK_PENALTIES (1er clic gratuit), appliquée identiquement que
       // la réponse soit auto-validée juste en dessous OU mise en file de
-      // modération (voir le "else" plus bas) — dans les deux cas sur le
-      // score de VITESSE déjà calculé par pointsFor(), jamais un montant
-      // absolu indépendant.
+      // modération (voir le "else" plus bas).
+      // Retour utilisateur : PAS de composante vitesse pour "halo" (score
+      // gagné = 475 alors que la seule variable annoncée était le nombre de
+      // clics — décompte de vitesse jugé peu lisible ici, contrairement aux
+      // autres types où répondre vite EST tout le jeu). haloBasePoints
+      // remplace pointsFor() pour ce type uniquement : un score plein FIXE
+      // (même base que pointsFor, 1000), qui ne décroît jamais avec le
+      // temps — seule la pénalité de clics fait varier le score final.
       const haloClicks = q.type === 'halo' ? Math.max(0, Math.min(HALO_MAX_CLICKS, Number(payload?.clicks) || 0)) : 0
       const haloPenalty = HALO_CLICK_PENALTIES.slice(0, haloClicks).reduce((sum, p) => sum + p, 0)
+      const haloBasePoints = 1000
 
       if (res.ok && res.exact) {
-        const delta = Math.max(0, pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) - haloPenalty)
+        const delta = q.type === 'halo'
+          ? Math.max(0, haloBasePoints - haloPenalty)
+          : Math.max(0, pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) - haloPenalty)
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
@@ -2216,9 +2224,13 @@ const start = async () => {
           room.pending.delete(prevId)
         }
         const submitTs = Date.now()
-        // haloPenalty (voir juste au-dessus, calculée une seule fois pour
-        // les deux branches) : 0 pour tout type autre que "halo".
-        const delta = Math.max(0, pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor) - haloPenalty)
+        // haloPenalty/haloBasePoints (voir juste au-dessus, calculés une
+        // seule fois pour les deux branches) : haloPenalty vaut 0 pour tout
+        // type autre que "halo", donc cette branche reste inchangée
+        // (pointsFor) pour tous les autres types texte-libre-modérés.
+        const delta = q.type === 'halo'
+          ? Math.max(0, haloBasePoints - haloPenalty)
+          : Math.max(0, pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor) - haloPenalty)
         const answerId = `${socket.id}:${submitTs}`
         const p = room.players.get(socket.id)
         if (p?.token && q.historyEntry) q.historyEntry.answers[p.token] = payload?.content || ''
