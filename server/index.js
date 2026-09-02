@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.15.0'
+const APP_VERSION = '2.16.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -975,6 +975,18 @@ const start = async () => {
   // l'image), la proximité ne rapporte plus rien.
   const IMAGE_PROXIMITY_MAX_DIST = 0.3
 
+  // "halo" (tâche 020) : jusqu'à 5 clics pour révéler l'image (cumulatif,
+  // voir index.js), chacun laissant un halo permanent — barème DÉGRESSIF
+  // FIXE (même barème pour tous les quiz, décidé avec l'utilisateur, pas un
+  // réglage par question comme le rayon du halo), 1er clic gratuit puis
+  // -100/-200/-300/-400. HALO_CLICK_PENALTIES[i] = coût du (i+1)-ème clic ;
+  // la pénalité totale pour n clics = la somme des n premières valeurs. La
+  // pénalité s'applique en la RETRANCHANT du score obtenu (pointsFor(...)),
+  // jamais comme un montant absolu indépendant de la vitesse de réponse —
+  // voir answer:submit plus bas, juste après `const res = fuzzy(...)`.
+  const HALO_MAX_CLICKS = 5
+  const HALO_CLICK_PENALTIES = [0, 100, 200, 300, 400]
+
   // Une zone stockée est soit un polygone { points:[{x,y},...] } (nouveau
   // format, tracé à main levée), soit un rectangle legacy { x0,y0,x1,y1 }
   // (anciens quiz) — ramené à une liste de points communs pour que le reste
@@ -1533,6 +1545,9 @@ const start = async () => {
       // devine visuellement (ici en balayant l'image cachée), q.correct ne
       // doit jamais être lisible en devtools avant même d'avoir commencé à
       // explorer l'image.
+      // 'halo' (tâche 020) : même raison que 'recherche' — la réponse se
+      // devine visuellement (image cachée, révélée par clics), q.correct ne
+      // doit jamais être lisible en devtools avant même le premier clic.
       // revealImage/revealAudio/revealPos/revealBg (tâche 017/018) : même
       // raison qu'explanation — déjà copiés sur l'objet question ci-dessus
       // (et sur question.revealPayload, voir revealQuestion) pour la
@@ -1546,7 +1561,7 @@ const start = async () => {
       // laisser la réponse en clair dès le départ (devtools) viderait le
       // gameplay de son sens. Même traitement que zoomguess/recherche/reveal,
       // qui devinent aussi progressivement.
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'rangement' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal' || payload?.type === 'recherche' || payload?.type === 'indice')
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'rangement' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal' || payload?.type === 'recherche' || payload?.type === 'indice' || payload?.type === 'halo')
         ? payloadWithoutCorrectOrExplanation
         : { ...payloadWithoutCorrectOrExplanation, correct }
 
@@ -2146,8 +2161,21 @@ const start = async () => {
 
       const res = fuzzy(payload?.content || '', q.correct)
 
+      // "halo" (tâche 020) : nombre de clics REÇU DU CLIENT à cet instant
+      // (jamais fait confiance pour le delta final, seulement pour le
+      // compte de clics, clampé ici) — 0 pour tous les autres types, qui
+      // partagent cette même branche générique (free/zoomguess/reveal/
+      // recherche/indice). Pénalité = somme des N premières valeurs de
+      // HALO_CLICK_PENALTIES (1er clic gratuit), appliquée identiquement que
+      // la réponse soit auto-validée juste en dessous OU mise en file de
+      // modération (voir le "else" plus bas) — dans les deux cas sur le
+      // score de VITESSE déjà calculé par pointsFor(), jamais un montant
+      // absolu indépendant.
+      const haloClicks = q.type === 'halo' ? Math.max(0, Math.min(HALO_MAX_CLICKS, Number(payload?.clicks) || 0)) : 0
+      const haloPenalty = HALO_CLICK_PENALTIES.slice(0, haloClicks).reduce((sum, p) => sum + p, 0)
+
       if (res.ok && res.exact) {
-        const delta = pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor)
+        const delta = Math.max(0, pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) - haloPenalty)
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
@@ -2188,7 +2216,9 @@ const start = async () => {
           room.pending.delete(prevId)
         }
         const submitTs = Date.now()
-        const delta = pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor)
+        // haloPenalty (voir juste au-dessus, calculée une seule fois pour
+        // les deux branches) : 0 pour tout type autre que "halo".
+        const delta = Math.max(0, pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor) - haloPenalty)
         const answerId = `${socket.id}:${submitTs}`
         const p = room.players.get(socket.id)
         if (p?.token && q.historyEntry) q.historyEntry.answers[p.token] = payload?.content || ''

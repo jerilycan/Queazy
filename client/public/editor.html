@@ -280,6 +280,7 @@
                 <option value="recherche">🔦 Recherche</option>
                 <option value="rangement">🗂️ Rangement</option>
                 <option value="indice">💡 Indice</option>
+                <option value="halo">✨ Halo</option>
               </select>
               <!-- Aperçu de la mécanique (retour utilisateur : réutiliser la
                    démo joueur ici aussi) — même texte que la popup montrée
@@ -400,6 +401,32 @@
               <button type="button" id="removeRechercheBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
             </div>
             <p class="text-muted font-13 mt-8">Les joueurs devinent en balayant l'image avec le curseur (ou le doigt) pour la révéler zone par zone.</p>
+          </div>
+
+          <!-- "Halo" (tâche 020) : contrairement à "Recherche" juste au-dessus
+               (balayage continu, gratuit, jamais cumulatif), ici la
+               révélation se fait par un nombre LIMITÉ de clics (5 max),
+               chacun laissant un halo lumineux PERMANENT et CUMULATIF, et
+               chaque clic après le 1er coûte des points (barème fixe, non
+               réglable ici — voir server/index.js HALO_CLICK_PENALTIES). Le
+               rayon du halo, lui, est réglable par question (comme le
+               niveau de zoom de "ZoomOut Devinette" juste au-dessus). -->
+          <div id="haloSection" class="detail-section d-none">
+            <label for="haloUpload">Image à révéler par halos</label>
+            <input type="file" id="haloUpload" accept="image/*" class="cursor-pointer" />
+            <div id="haloPreviewWrap" class="illustration-preview-wrap d-none mt-8">
+              <img id="haloPreviewImg" class="illustration-preview-img" alt="" />
+              <button type="button" id="removeHaloBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+            </div>
+            <p class="text-muted font-13 mt-8">Les joueurs cliquent jusqu'à 5 fois sur l'image (entièrement noire au départ) pour révéler des halos de lumière permanents — chaque clic après le premier coûte des points.</p>
+            <div class="detail-section mt-8">
+              <label for="haloRadiusInput">Rayon du halo (% de la largeur de l'image)</label>
+              <div class="timer-controls">
+                <button id="haloRadiusMinus" class="btn-timer" type="button">-</button>
+                <input type="number" id="haloRadiusInput" class="stepper-input" value="15" min="5" max="35" />
+                <button id="haloRadiusPlus" class="btn-timer" type="button">+</button>
+              </div>
+            </div>
           </div>
 
           <!-- "Révélation" : deux images DISTINCTES (contrairement à

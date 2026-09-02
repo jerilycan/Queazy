@@ -324,13 +324,18 @@ const QUESTION_TYPE_META = {
   intrus: { icon: '🎯', label: 'Intrus', color: '#b34bf5', rgb: '179,75,245', hint: 'Repère la photo qui n\'a rien à voir avec les autres.' },
   pbac: { icon: '🎩', label: 'Petit Bac', color: '#c8f542', rgb: '200,245,66', hint: 'Tape ta réponse — elle sera jugée par l\'hôte, comme au vrai Petit Bac !' },
   recherche: { icon: '🔦', label: 'Recherche', color: '#ff6a1a', rgb: '255,106,26', hint: 'Balaie l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, puis valide ta réponse.' },
-  indice: { icon: '💡', label: 'Indice', color: '#f2c94c', rgb: '242,201,76', hint: 'Devine la réponse en texte libre à l\'aide des indices qui apparaissent progressivement, puis valide.' }
+  indice: { icon: '💡', label: 'Indice', color: '#f2c94c', rgb: '242,201,76', hint: 'Devine la réponse en texte libre à l\'aide des indices qui apparaissent progressivement, puis valide.' },
+  // "Halo" (tâche 020) : hint rédigé pour bien distinguer du type "recherche"
+  // juste au-dessus (retour utilisateur, pour un MJ qui hésiterait entre les
+  // deux) — ici la révélation est LIMITÉE (5 clics max, permanents) et COÛTE
+  // des points au-delà du 1er clic, pas un balayage continu et gratuit.
+  halo: { icon: '✨', label: 'Halo', color: '#c4b5fd', rgb: '196,181,253', hint: 'Clique jusqu\'à 5 fois sur l\'image noire pour révéler des halos de lumière permanents (chaque clic après le 1er coûte des points), puis valide ta réponse.' }
 }
 // Types dont la mécanique n'est pas évidente au premier coup d'œil (retour
 // utilisateur) : l'intro reste affichée un peu plus longtemps pour ceux-là
 // avant de lancer le décompte (voir INTRO_DURATION_COMPLEX_MS). Les autres
 // (QCM, Vrai/Faux, texte libre...) sont auto-explicites, intro plus courte.
-const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche', 'rangement', 'indice'])
+const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche', 'rangement', 'indice', 'halo'])
 const questionTypeBadge = document.getElementById('questionTypeBadge')
 const questionTypeBadgeIcon = document.getElementById('questionTypeBadgeIcon')
 const questionTypeBadgeLabel = document.getElementById('questionTypeBadgeLabel')
@@ -651,6 +656,78 @@ if (rechercheWrap) {
   rechercheWrap.addEventListener('pointerleave', hideRechercheSpot)
   rechercheWrap.addEventListener('pointerup', hideRechercheSpot)
   rechercheWrap.addEventListener('pointercancel', hideRechercheSpot)
+}
+// Question "halo" (tâche 020) : jusqu'à 5 clics discrets, chacun laissant un
+// halo PERMANENT et CUMULATIF (contrairement à la lampe torche "recherche"
+// juste au-dessus, continue et jamais cumulative). Le calque noir est troué
+// par un <mask> SVG (#haloMask, voir index.html) plutôt que plusieurs
+// dégradés CSS mask-image empilés : le composite par défaut entre couches de
+// masque ferait une INTERSECTION des trous (visible seulement là où TOUS les
+// clics se recouvrent) au lieu de l'UNION voulue (visible dès qu'AU MOINS un
+// clic couvre la zone) — un <mask> SVG où chaque clic ajoute un <circle>
+// union naturellement les zones révélées, sans réglage de compositing à
+// vérifier entre navigateurs (voir Plan tâche 020).
+const haloArea = document.getElementById('haloArea')
+const haloWrap = document.getElementById('haloWrap')
+const haloImg = document.getElementById('haloImg')
+const haloMaskCircles = document.getElementById('haloMaskCircles')
+const haloOverlay = document.getElementById('haloOverlay')
+const haloCounter = document.getElementById('haloCounter')
+const HALO_MAX_CLICKS = 5
+const HALO_DEFAULT_RADIUS_PCT = 15
+// État de la question "halo" EN COURS uniquement — réinitialisé à chaque
+// nouvelle question (voir emitQuestion), jamais persistant entre deux
+// questions de ce type (piège déjà rencontré sur "recherche", voir son
+// commentaire de reset à l'affichage).
+let haloClicksState = [] // [{x, y}] normalisés 0-1, dans l'ordre des clics
+let haloRadiusPct = HALO_DEFAULT_RADIUS_PCT
+
+// Reconstruit entièrement le contenu du masque à partir de haloClicksState —
+// coordonnées stockées NORMALISÉES (0-1, comme les zones de "image"/le point
+// de zoom "zoomguess") plutôt qu'en pixels bruts : reconverties en pixels
+// RÉELS à chaque appel (getBoundingClientRect), pour rester justes même si
+// la fenêtre est redimensionnée entre deux clics (voir ResizeObserver
+// plus bas). Rayon en px = haloRadiusPct% de la LARGEUR de la boîte (choix
+// simple et suffisant, pas un calcul par diagonale/hauteur).
+const renderHaloMask = () => {
+  if (!haloWrap || !haloMaskCircles) return
+  const rect = haloWrap.getBoundingClientRect()
+  const w = rect.width || 1
+  const h = rect.height || 1
+  const rPx = (haloRadiusPct / 100) * w
+  haloMaskCircles.innerHTML = haloClicksState
+    .map(c => `<circle cx="${c.x * w}" cy="${c.y * h}" r="${rPx}" fill="url(#haloGradient)" />`)
+    .join('')
+}
+// Même pattern qu'ensureAssociationResizeObserver plus bas : les coordonnées
+// stockées sont normalisées, mais le <mask> SVG raisonne en pixels réels
+// (userSpaceOnUse) — sans redessin au resize, les halos dériveraient de leur
+// point réel après un redimensionnement de fenêtre en cours de question.
+let haloResizeObserver = null
+const ensureHaloResizeObserver = () => {
+  if (haloResizeObserver || !haloWrap || typeof ResizeObserver === 'undefined') return
+  haloResizeObserver = new ResizeObserver(() => renderHaloMask())
+  haloResizeObserver.observe(haloWrap)
+}
+const updateHaloCounter = () => {
+  if (!haloCounter) return
+  const remaining = Math.max(0, HALO_MAX_CLICKS - haloClicksState.length)
+  haloCounter.textContent = remaining > 0 ? `${remaining} clic${remaining > 1 ? 's' : ''} restant${remaining > 1 ? 's' : ''}` : 'Plus aucun clic disponible'
+}
+if (haloWrap) {
+  haloWrap.addEventListener('pointerdown', (e) => {
+    // Une fois les 5 clics épuisés, plus aucun effet — pas d'erreur, juste
+    // no-op (périmètre explicite de la tâche 020).
+    if (haloClicksState.length >= HALO_MAX_CLICKS) return
+    const rect = haloWrap.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+    haloClicksState.push({
+      x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+    })
+    renderHaloMask()
+    updateHaloCounter()
+  })
 }
 // Illustration optionnelle (tous les types SAUF "image", qui affiche déjà sa
 // propre image cliquable via imageWrap/imageImg ci-dessus) : simple photo
@@ -5047,7 +5124,13 @@ const emitQuestion = (index) => {
     // {x, y, startScale}. Purement cosmétique côté client, aucun impact sur
     // le scoring (qui reste le texte libre générique) — pas besoin que le
     // serveur en sache quoi que ce soit, transmis tel quel.
-    zoom: q.type === 'zoomguess' ? (q.zoom || { x: 0.5, y: 0.5, startScale: 4 }) : undefined
+    zoom: q.type === 'zoomguess' ? (q.zoom || { x: 0.5, y: 0.5, startScale: 4 }) : undefined,
+    // "halo" (tâche 020) : rayon du halo réglable par question (comme le
+    // niveau de zoom de "zoomguess" ci-dessus), en % de la largeur de
+    // .halo-wrap côté jeu — purement cosmétique, aucun impact serveur (la
+    // pénalité de clics, elle, dépend seulement de leur NOMBRE, pas du
+    // rayon, voir server/index.js).
+    haloRadius: q.type === 'halo' ? (q.haloRadius || HALO_DEFAULT_RADIUS_PCT) : undefined
   }
   // L'image ("image" cliquable, "zoomguess" à deviner, ou simple illustration
   // au-dessus de la question pour les autres types) et l'extrait audio du
@@ -5055,7 +5138,7 @@ const emitQuestion = (index) => {
   // on les dépose d'abord via une requête HTTP classique, puis on démarre la
   // question avec juste leur URL. Si un upload échoue, on ne démarre pas la
   // question plutôt que de l'afficher sans média à personne.
-  const imageToUpload = (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche') ? q.image : (q.type === 'reveal' ? q.enigmeImage : q.illustration)
+  const imageToUpload = (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche' || q.type === 'halo') ? q.image : (q.type === 'reveal' ? q.enigmeImage : q.illustration)
   const audioToUpload = q.type === 'blindtest' ? q.audio : null
   // "révélation" : l'image réponse ne passe JAMAIS par uploadRoomImage (relais
   // à GET public) — voir uploadRoomRevealAnswer plus haut, qui la dépose sans
@@ -5069,12 +5152,12 @@ const emitQuestion = (index) => {
   // pour une simple URL). Un vieux quiz jamais resauvegardé garde son
   // base64 et passe toujours par le relais, inchangé.
   if (imageToUpload && /^https?:\/\//.test(imageToUpload)) {
-    if (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche') payload.imageUrl = imageToUpload
+    if (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche' || q.type === 'halo') payload.imageUrl = imageToUpload
     else if (q.type === 'reveal') payload.enigmeImageUrl = imageToUpload
     else payload.illustrationUrl = imageToUpload
   } else if (imageToUpload) {
     uploads.push(uploadRoomImage(roomCode, imageToUpload).then(url => {
-      if (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche') payload.imageUrl = url
+      if (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche' || q.type === 'halo') payload.imageUrl = url
       else if (q.type === 'reveal') payload.enigmeImageUrl = url
       else payload.illustrationUrl = url
     }))
@@ -5398,6 +5481,26 @@ socket.on('question:show', payload => {
       }
     }
   }
+  if (haloArea) {
+    haloArea.classList.toggle('d-none', payload.type !== 'halo')
+    if (payload.type === 'halo') {
+      // Remis à zéro à CHAQUE question "halo" (même piège que "recherche" —
+      // voir son commentaire équivalent juste au-dessus) : sinon une
+      // question "halo" qui suit une AUTRE question "halo" démarrerait avec
+      // les halos de la précédente encore affichés/déjà cliqués.
+      haloClicksState = []
+      haloRadiusPct = Number(payload.haloRadius) || HALO_DEFAULT_RADIUS_PCT
+      if (haloImg) {
+        haloImg.onerror = () => { haloImg.classList.add('d-none') }
+        haloImg.src = payload.imageUrl || ''
+        haloImg.classList.remove('d-none')
+      }
+      if (haloOverlay) haloOverlay.classList.remove('d-none')
+      renderHaloMask()
+      updateHaloCounter()
+      ensureHaloResizeObserver()
+    }
+  }
   if (blindtestArea) {
     blindtestArea.classList.toggle('d-none', payload.type !== 'blindtest')
   }
@@ -5534,7 +5637,7 @@ socket.on('question:show', payload => {
     // answerInput). Uniquement sur pointeur fin (souris/trackpad) — sur
     // mobile, focus() ferait surgir le clavier virtuel par-dessus l'écran
     // avant même que le joueur ait vu la question.
-    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac' || payload.type === 'reveal' || payload.type === 'recherche' || payload.type === 'indice') && window.matchMedia('(pointer: fine)').matches) {
+    if ((payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'pbac' || payload.type === 'reveal' || payload.type === 'recherche' || payload.type === 'indice' || payload.type === 'halo') && window.matchMedia('(pointer: fine)').matches) {
       answerInput.focus()
     }
   }
@@ -5978,7 +6081,13 @@ const submitCurrentAnswer = () => {
   }
 
   if (sendBtn.disabled) return
-  socket.emit('answer:submit', { roomCode, content })
+  // "halo" (tâche 020) : seul type dont la soumission embarque un champ en
+  // plus du texte libre — le nombre de clics REÇUS À CET INSTANT, pour que
+  // le serveur calcule la pénalité dégressive (jamais fait confiance au
+  // client pour le montant final, voir server/index.js). Absent (undefined)
+  // pour tous les autres types, ignoré côté serveur dans ce cas.
+  const extraPayload = currentQuestionType === 'halo' ? { clicks: haloClicksState.length } : {}
+  socket.emit('answer:submit', { roomCode, content, ...extraPayload })
   hasAnsweredThisQuestion = true
 
   // Verrouillage systématique après envoi (retour utilisateur : le toggle
@@ -7073,12 +7182,15 @@ socket.on('question:reveal', payload => {
     } else {
       showMyResultBanner()
     }
-  } else if (payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'reveal' || payload.type === 'recherche' || payload.type === 'indice') {
+  } else if (payload.type === 'free' || payload.type === 'zoomguess' || payload.type === 'reveal' || payload.type === 'recherche' || payload.type === 'indice' || payload.type === 'halo') {
     // "recherche" en plus : retire le calque noir en entier (pas juste un
     // trou local) pour que le joueur voie enfin l'image complète — sinon la
     // question se terminerait sans jamais montrer ce qu'il cherchait,
     // contrairement à "zoomguess"/"reveal" qui finissent déjà nets.
     if (payload.type === 'recherche' && rechercheOverlay) rechercheOverlay.classList.add('d-none')
+    // "halo" (tâche 020) : même raison — un joueur qui n'a pas épuisé ses 5
+    // clics ne verrait sinon jamais l'image complète.
+    if (payload.type === 'halo' && haloOverlay) haloOverlay.classList.add('d-none')
     revealFreeAnswer((payload.correct || [])[0] || '')
     showMyResultBanner()
   } else if (payload.type === 'pbac') {

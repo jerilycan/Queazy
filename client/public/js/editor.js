@@ -351,6 +351,18 @@ const rechercheUploadInput = document.getElementById('rechercheUpload')
 const recherchePreviewWrap = document.getElementById('recherchePreviewWrap')
 const recherchePreviewImg = document.getElementById('recherchePreviewImg')
 const removeRechercheBtn = document.getElementById('removeRechercheBtn')
+// Type "Halo" (tâche 020) : image révélée par halos permanents/cumulatifs au
+// clic côté jeu (voir index.js), rayon réglable par question comme le niveau
+// de zoom de "ZoomOut Devinette" ci-dessus (mêmes bornes de contrôle
+// -/valeur/+, voir HALO_RADIUS_MIN/MAX/DEFAULT plus bas).
+const haloSection = document.getElementById('haloSection')
+const haloUploadInput = document.getElementById('haloUpload')
+const haloPreviewWrap = document.getElementById('haloPreviewWrap')
+const haloPreviewImg = document.getElementById('haloPreviewImg')
+const removeHaloBtn = document.getElementById('removeHaloBtn')
+const haloRadiusInput = document.getElementById('haloRadiusInput')
+const haloRadiusMinusBtn = document.getElementById('haloRadiusMinus')
+const haloRadiusPlusBtn = document.getElementById('haloRadiusPlus')
 const ZOOM_GUESS_MIN = 2
 // Plafond relevé de 8 à 25 (demande explicite) : à 8x, une zone assez unie
 // de l'image (peau, cheveux...) reste souvent reconnaissable — l'idée du
@@ -358,6 +370,14 @@ const ZOOM_GUESS_MIN = 2
 // couleur au tout début, pas déjà un trait du visage.
 const ZOOM_GUESS_MAX = 25
 const ZOOM_GUESS_DEFAULT = 4
+// Bornes du rayon du halo (% de la largeur de l'image, voir index.js
+// renderHaloMask) : 5% minimum pour qu'un halo seul reste identifiable,
+// 35% maximum pour que 5 clics ne révèlent jamais la quasi-totalité de
+// l'image d'un coup (le jeu perdrait son intérêt). Défaut 15%, ajustable
+// après premier test visuel réel (voir Plan, étape 8).
+const HALO_RADIUS_MIN = 5
+const HALO_RADIUS_MAX = 35
+const HALO_RADIUS_DEFAULT = 15
 
 // Type "Révélation" : deux images distinctes (q.enigmeImage / q.reponseImage,
 // jamais mélangées avec q.image/q.illustration des autres types) — l'énigme
@@ -465,6 +485,7 @@ const applyReadOnly = () => {
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn, zoomGuessZoomInput,
     rechercheUploadInput, removeRechercheBtn,
+    haloUploadInput, removeHaloBtn, haloRadiusMinusBtn, haloRadiusPlusBtn, haloRadiusInput,
     revealEnigmeUploadInput, removeRevealEnigmeBtn, revealReponseUploadInput, removeRevealReponseBtn,
     revealImageUploadInput, removeRevealImageBtn, revealAudioUploadInput, removeRevealAudioBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
@@ -665,7 +686,7 @@ const QTYPE_ICON = {
   free: '📝', mcq: '🔘', truefalse: '✅', graduation: '↔️', order: '↕️',
   image: '📍', zoomguess: '🔍', reveal: '🖼️', blindtest: '🎵',
   association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩', recherche: '🔦',
-  rangement: '🗂️', indice: '💡'
+  rangement: '🗂️', indice: '💡', halo: '✨'
 }
 
 // Miroir JS des règles .question-item.type-* de style.css (--qt-color) —
@@ -688,7 +709,12 @@ const QTYPE_COLOR = {
   // ci-dessus) — nouveau token dédié --color-gold, ajouté à style.css à
   // l'étape 9 du plan (pas encore fait à ce stade : la variable CSS
   // n'existe pas tant que style.css n'est pas touché).
-  indice: 'var(--color-gold)'
+  indice: 'var(--color-gold)',
+  // "Halo" (tâche 020) : 17e type, tous les tokens ci-dessus déjà pris par
+  // un des 16 précédents — nouveau token dédié --color-halo (lavande pâle,
+  // évoque une lueur/halo doux, distinct des violets déjà pris par
+  // intrus/zoomguess/rangement).
+  halo: 'var(--color-halo)'
 }
 
 // Écran "aucune question" (nouvelle DA, tâche 003, décision validée) : un
@@ -733,7 +759,7 @@ const openTypePicker = () => {
 
 // Grille de choix de type (voir #typePickerGrid dans editor.html) — générée
 // depuis les <option> de #qType, seule source de vérité pour la liste des
-// 16 types et leurs libellés (même principe que updateSidebar plus bas pour
+// types et leurs libellés (même principe que updateSidebar plus bas pour
 // la sidebar). Choisir un type ici ajoute directement la nouvelle question
 // DANS ce type plutôt que de forcer un passage par le type "Texte libre" par
 // défaut (createDefaultQuestion) puis un changement de type manuel.
@@ -1308,6 +1334,80 @@ if (removeRechercheBtn) {
       populateRechercheFields(questions[activeIndex])
     })
   }
+}
+
+// --- Question "Halo" : image révélée par halos permanents/cumulatifs au clic
+// (tâche 020) — upload d'image identique à "Recherche" juste au-dessus, PLUS
+// un réglage de rayon (q.haloRadius) sur le modèle du niveau de zoom de
+// "ZoomOut Devinette".
+const populateHaloFields = (q) => {
+  if (!haloPreviewWrap) return
+  if (q.type !== 'halo') return
+  if (q.image) {
+    haloPreviewImg.src = q.image
+    haloPreviewWrap.classList.remove('d-none')
+  } else {
+    haloPreviewWrap.classList.add('d-none')
+  }
+  // Même pattern que populateZoomGuessFields (q.zoom) : pose la valeur par
+  // défaut directement sur la question si absente, plutôt qu'un simple
+  // repli d'affichage — une question créée via la tuile #typePickerGrid
+  // (addQuestionOfType) ne passe jamais par qType.onchange (qui, lui, pose
+  // déjà ce défaut), donc q.haloRadius y resterait sinon undefined jusqu'au
+  // premier réglage manuel du créateur.
+  if (!Number.isFinite(q.haloRadius)) q.haloRadius = HALO_RADIUS_DEFAULT
+  if (haloRadiusInput) haloRadiusInput.value = q.haloRadius
+}
+
+if (haloUploadInput) {
+  haloUploadInput.onchange = () => {
+    const file = haloUploadInput.files && haloUploadInput.files[0]
+    haloUploadInput.value = ''
+    if (!file || !questions[activeIndex]) return
+    compressImageFile(file, (dataUrl) => {
+      const q = questions[activeIndex]
+      q.image = dataUrl
+      populateHaloFields(q)
+    })
+  }
+}
+
+if (removeHaloBtn) {
+  removeHaloBtn.onclick = () => {
+    if (!questions[activeIndex]) return
+    QzUI.confirm({
+      title: 'Retirer cette image ?',
+      message: 'Il faudra réimporter une image pour en remettre une.',
+      confirmLabel: 'Retirer',
+      danger: true
+    }).then((ok) => {
+      if (!ok || !questions[activeIndex]) return
+      questions[activeIndex].image = null
+      populateHaloFields(questions[activeIndex])
+    })
+  }
+}
+
+// Même garde-fou/pattern que commitZoomGuessLevel : clampe entre les bornes,
+// répercute sur l'input ET sur la question active.
+const commitHaloRadius = (val) => {
+  const q = questions[activeIndex]
+  if (!q) return
+  const clamped = Math.min(HALO_RADIUS_MAX, Math.max(HALO_RADIUS_MIN, Math.round(val)))
+  q.haloRadius = clamped
+  if (haloRadiusInput) haloRadiusInput.value = clamped
+}
+if (haloRadiusMinusBtn) {
+  haloRadiusMinusBtn.onclick = () => commitHaloRadius((Number(haloRadiusInput?.value) || HALO_RADIUS_DEFAULT) - 1)
+}
+if (haloRadiusPlusBtn) {
+  haloRadiusPlusBtn.onclick = () => commitHaloRadius((Number(haloRadiusInput?.value) || HALO_RADIUS_DEFAULT) + 1)
+}
+// onchange (au blur/Enter), pas oninput : même raison que zoomGuessZoomInput
+// juste au-dessus (sinon le clampage à HALO_RADIUS_MIN dès la première
+// frappe empêcherait de jamais taper la suite d'une valeur à 2 chiffres).
+if (haloRadiusInput) {
+  haloRadiusInput.onchange = () => commitHaloRadius(Number(haloRadiusInput.value) || HALO_RADIUS_DEFAULT)
 }
 
 // --- Question "Révélation" : deux images (énigme / réponse) --------------
@@ -2225,6 +2325,7 @@ const selectQuestion = (index) => {
   populateIllustrationFields(q)
   populateZoomGuessFields(q)
   populateRechercheFields(q)
+  populateHaloFields(q)
   populateRevealFields(q)
   populateRevealMediaFields(q)
   populateAudioFields(q)
@@ -2292,7 +2393,12 @@ const QTYPE_HINTS = {
   intrus: { icon: '🎯', text: 'Les joueurs repèrent la photo qui n\'a rien à voir avec les autres.', color: '#b34bf5', rgb: '179,75,245' },
   pbac: { icon: '🎩', text: 'Les joueurs tapent une réponse libre, jugée par toi pendant la partie — pas de liste à préparer.', color: '#c8f542', rgb: '200,245,66' },
   recherche: { icon: '🔦', text: 'Les joueurs balaient l\'image cachée avec le curseur (ou le doigt) pour la révéler zone par zone, façon lampe torche.', color: '#ff6a1a', rgb: '255,106,26' },
-  indice: { icon: '💡', text: 'Les joueurs devinent la réponse en texte libre à l\'aide d\'indices (texte ou image) qui apparaissent progressivement.', color: '#f2c94c', rgb: '242,201,76' }
+  indice: { icon: '💡', text: 'Les joueurs devinent la réponse en texte libre à l\'aide d\'indices (texte ou image) qui apparaissent progressivement.', color: '#f2c94c', rgb: '242,201,76' },
+  // Distinction explicite avec "recherche" juste au-dessus (retour
+  // utilisateur, pour un MJ qui hésiterait entre les deux) : ici la
+  // révélation est LIMITÉE (5 clics max) et COÛTE des points, pas un
+  // balayage continu et gratuit.
+  halo: { icon: '✨', text: 'Les joueurs cliquent jusqu\'à 5 fois (chaque clic après le 1er coûte des points) pour révéler des halos de lumière permanents sur l\'image cachée.', color: '#c4b5fd', rgb: '196,181,253' }
 }
 const qTypeHint = document.getElementById('qTypeHint')
 const updateQTypeHint = () => {
@@ -2314,6 +2420,7 @@ const toggleTypeSections = () => {
   if (imageSection) imageSection.classList.toggle('d-none', qType.value !== 'image')
   if (zoomGuessSection) zoomGuessSection.classList.toggle('d-none', qType.value !== 'zoomguess')
   if (rechercheSection) rechercheSection.classList.toggle('d-none', qType.value !== 'recherche')
+  if (haloSection) haloSection.classList.toggle('d-none', qType.value !== 'halo')
   if (revealSection) revealSection.classList.toggle('d-none', qType.value !== 'reveal')
   if (blindtestSection) blindtestSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
@@ -2324,10 +2431,10 @@ const toggleTypeSections = () => {
   if (indiceSection) indiceSection.classList.toggle('d-none', qType.value !== 'indice')
   // L'illustration optionnelle n'a de sens que pour les types qui n'ont pas
   // déjà leur propre image (le type "image" utilise la sienne comme cible
-  // cliquable, "zoomguess"/"recherche" la sienne comme photo à deviner,
-  // "reveal" ses deux images énigme/réponse, "indice" une image PAR indice
-  // — pas comme simple décoration).
-  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice')
+  // cliquable, "zoomguess"/"recherche"/"halo" la sienne comme photo à
+  // deviner, "reveal" ses deux images énigme/réponse, "indice" une image
+  // PAR indice — pas comme simple décoration).
+  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice' || qType.value === 'halo')
   // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
   // blindtestSection ci-dessus) au lieu de la liste générique "correct".
   // "mcq" a aussi sa propre façon de désigner la bonne réponse : la case à
@@ -2341,7 +2448,10 @@ const toggleTypeSections = () => {
   // ci-dessus. "indice" réutilise directement cette liste générique pour la
   // réponse à deviner (même chemin que "free" côté serveur, fuzzy()) — pas
   // de nouveau champ, la section indices ci-dessus ne gère QUE les indices.
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess' && qType.value !== 'reveal' && qType.value !== 'recherche' && qType.value !== 'indice')
+  // "halo" (tâche 020) en plus : même raison que "recherche" (deviner à
+  // partir d'une image cachée), la section haloSection ci-dessus ne gère
+  // QUE l'image et le rayon, pas la réponse.
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess' && qType.value !== 'reveal' && qType.value !== 'recherche' && qType.value !== 'indice' && qType.value !== 'halo')
   correctLabel.textContent = 'Réponses acceptées'
 }
 
@@ -3933,6 +4043,11 @@ document.addEventListener('paste', (e) => {
       q.image = dataUrl
       populateRechercheFields(q)
     })
+  } else if (q.type === 'halo' && haloSection && !haloSection.classList.contains('d-none')) {
+    compressImageFile(files[0], (dataUrl) => {
+      q.image = dataUrl
+      populateHaloFields(q)
+    })
   } else if (illustrationSection && !illustrationSection.classList.contains('d-none')) {
     compressImageFile(files[0], (dataUrl) => {
       q.illustration = dataUrl
@@ -4036,6 +4151,13 @@ qType.onchange = () => {
     // qui partagent la même forme).
     if (!Array.isArray(q.correct)) q.correct = ['']
     populateRechercheFields(q)
+  } else if (qType.value === 'halo') {
+    // Même logique que "recherche" juste au-dessus. haloRadius : valeur par
+    // défaut posée seulement si absente (ex. retour sur ce type, la valeur
+    // choisie par le créateur ne doit pas être écrasée à chaque sélection).
+    if (!Array.isArray(q.correct)) q.correct = ['']
+    if (!Number.isFinite(q.haloRadius)) q.haloRadius = HALO_RADIUS_DEFAULT
+    populateHaloFields(q)
   } else if (qType.value === 'reveal') {
     // Même logique que "zoomguess" juste au-dessus (q.correct venant d'un
     // autre type peut être un objet/une forme spécifique) : on repart sur
@@ -4457,6 +4579,20 @@ const validateQuestion = (q, i) => {
     if (!q.image) {
       selectQuestion(i)
       showToast(`La question ${i + 1} : importe une image à faire chercher`, 'error')
+      return false
+    }
+    const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
+    if (!hasAnswer) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
+      return false
+    }
+  } else if (q.type === 'halo') {
+    // Même règle que "recherche"/"zoomguess" ci-dessus : une image à
+    // révéler ET au moins une réponse acceptée sont obligatoires.
+    if (!q.image) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : importe une image à révéler`, 'error')
       return false
     }
     const hasAnswer = (q.correct || []).some(c => c && c.trim() !== '')
@@ -4964,7 +5100,7 @@ const EDITOR_TOUR_STEPS = [
   // 15 types au total (retour utilisateur, tâche 013 : "recherche" et
   // "rangement" manquaient déjà à l'appel — "recherche" (tâche 009) n'avait
   // jamais été ajouté ici, le compte "13" datait donc d'avant lui).
-  { target: '#qType', title: 'Type de question', text: '16 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, Révélation, blind test, association, timeline, rangement, intrus, Petit Bac, recherche, indice, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
+  { target: '#qType', title: 'Type de question', text: '17 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, Révélation, blind test, association, timeline, rangement, intrus, Petit Bac, recherche, indice, halo, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
   { target: '#qTimer', title: 'Temps imparti', text: 'Règle en secondes le temps laissé aux joueurs pour répondre, avec les boutons - et +.' },
   { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
   { target: '#illustrationUpload', title: 'Illustration (optionnelle)', text: 'Ajoute une image au-dessus de la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },

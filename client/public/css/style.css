@@ -55,6 +55,12 @@
      thème "ampoule". Décision validée avec l'utilisateur. */
   --color-gold: #f2c94c;
   --color-gold-rgb: 242,201,76;
+  /* "halo" (tâche 020) : 17e type, tous les tokens de couleur ci-dessus
+     étaient déjà pris par un des 16 précédents (vérifié dans editor.js
+     QTYPE_COLOR) — nouveau token dédié, lavande pâle évoquant une lueur
+     douce, distinct des violets déjà pris par intrus/zoomguess/rangement. */
+  --color-halo: #c4b5fd;
+  --color-halo-rgb: 196,181,253;
   --color-accent-soft: rgba(255,47,176,0.14);
   --color-accent-rgb: 255,47,176;
   --color-border: rgba(255,255,255,0.10);
@@ -130,6 +136,10 @@
      variante distincte nécessaire pour ce token. */
   --color-gold: #f2c94c;
   --color-gold-rgb: 242,201,76;
+  /* Même valeur que le thème sombre (déjà lisible sur fond clair, comme
+     --color-gold juste au-dessus) — présent dans les deux blocs :root. */
+  --color-halo: #c4b5fd;
+  --color-halo-rgb: 196,181,253;
   --shadow-sm: 0 4px 12px rgba(35,25,65,0.08);
   --shadow-md: 0 16px 40px rgba(35,25,65,0.16);
   --shadow-lg: 0 20px 48px rgba(35,25,65,0.22);
@@ -1870,7 +1880,8 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 .answers-locked .order-item,
 .answers-locked .assoc-item,
 .answers-locked .timeline-item,
-.answers-locked .image-click-layer {
+.answers-locked .image-click-layer,
+.answers-locked .halo-wrap {
   pointer-events: none;
 }
 /* .recherche-wrap n'est PAS dans cette liste, volontairement : contrairement
@@ -1880,7 +1891,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
    emitQuestion, "if (!isHost)"). Explorer l'image un peu avant startTs est
    un effet de bord mineur assumé (pure exploration visuelle, aucun impact
    sur le score) plutôt que de complexifier la choreographie de verrouillage
-   existante pour un cas à faible enjeu. */
+   existante pour un cas à faible enjeu.
+   .halo-wrap (tâche 020) fait le choix INVERSE, volontairement : l'hôte n'a
+   PAS de zone interactive pour ce type (voir index.js, son écran reste
+   entièrement noir), donc pas le même risque de blocage permanent — et
+   chaque clic ayant un COÛT réel sur le score (contrairement à la lampe
+   torche gratuite de "recherche"), le bloquer après la fin du chrono est au
+   contraire cohérent avec le reste des types listés ci-dessus. */
 /* Grisage après un envoi en mode "une seule tentative" (voir index.js
    submitCurrentAnswer/is-locked) — AVANT la fin du chrono (.answers-locked
    ci-dessus ne s'applique qu'APRÈS). Seuls mcq/truefalse/intrus grisaient
@@ -2744,6 +2761,57 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
      Safari (jamais testé en pratique dans cette session, voir Risques). */
   mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
   -webkit-mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
+}
+
+/* Question "halo" (tâche 020) : même gabarit de boîte fixe que
+   .recherche-wrap ci-dessus (cohérence visuelle entre types "image à
+   deviner"), mais le calque est troué par un <mask> SVG (#haloMask, voir
+   index.html/index.js) plutôt qu'un dégradé CSS radial — un OU logique
+   (union) entre plusieurs <circle> ajoutés au fil des clics, PERMANENT et
+   CUMULATIF (contrairement à --spot-r ci-dessus, qui retombe à 0 dès que le
+   pointeur s'éloigne). Le <svg> qui héberge le <mask> n'est jamais affiché
+   lui-même (juste une source de masque référencée par mask:url(#haloMask)),
+   d'où width/height à 0 et position absolute pour ne prendre aucune place
+   dans le flux. */
+.halo-area { max-width: 640px; margin: var(--space-lg) auto 0; }
+.halo-wrap {
+  position: relative;
+  width: min(640px, 100%);
+  height: min(70vh, 420px);
+  margin: 0 auto var(--space-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  background: var(--color-surface);
+  /* Même raison que .recherche-wrap : sans ça, cliquer/glisser sur l'image
+     pour révéler un halo déclenche aussi le défilement de la page mobile. */
+  touch-action: none;
+}
+.halo-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+.halo-mask-svg { position: absolute; width: 0; height: 0; }
+.halo-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  mask: url(#haloMask);
+  -webkit-mask: url(#haloMask);
+}
+/* Compteur de clics restants (retour utilisateur, doit rester visible côté
+   joueur) — même gabarit que .image-error-msg, pas de nouveau pattern
+   visuel pour un simple badge texte. */
+.halo-counter {
+  text-align: center;
+  margin-top: var(--space-sm);
+  font-size: 14px;
+  color: var(--color-text-muted);
 }
 
 /* Question "indice" (tâche 014, animation revue via canvas de design —
@@ -5007,6 +5075,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .question-item.type-reveal { --qt-color: var(--tile-silver); }
 .question-item.type-recherche { --qt-color: var(--color-flame); }
 .question-item.type-indice { --qt-color: var(--color-gold); }
+.question-item.type-halo { --qt-color: var(--color-halo); }
 
 /* Même rappel de couleur que la sidebar, mais sur la grande tuile d'édition
    (.question-detail) — option "C" retenue après maquette (bordure teintée +
@@ -5031,6 +5100,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .question-detail[data-qtype="reveal"] { --qt-color: var(--tile-silver); }
 .question-detail[data-qtype="recherche"] { --qt-color: var(--color-flame); }
 .question-detail[data-qtype="indice"] { --qt-color: var(--color-gold); }
+.question-detail[data-qtype="halo"] { --qt-color: var(--color-halo); }
 
 .question-item:hover {
   background: var(--color-accent-soft);
