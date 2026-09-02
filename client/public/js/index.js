@@ -4630,17 +4630,49 @@ const tutoVideosBtn = document.getElementById('tutoVideosBtn')
 const tutoVideosModal = document.getElementById('tutoVideosModal')
 const closeTutoVideosBtn = document.getElementById('closeTutoVideos')
 const tutoVideoTypeGrid = document.getElementById('tutoVideoTypeGrid')
-const tutoVideoPlayer = document.getElementById('tutoVideoPlayer')
+const tutoVideoPlayerArea = document.getElementById('tutoVideoPlayerArea')
 const tutoVideoPlaceholder = document.getElementById('tutoVideoPlaceholder')
 const tutoVideoPlaceholderText = document.getElementById('tutoVideoPlaceholderText')
 let tutoVideosGridBuilt = false
-// Chaque GIF pèse plusieurs Mo (jusqu'à ~5-6 Mo) : sans rien de prévu, changer
-// de type coupait par un temps de chargement bien sensible à chaque clic
-// (retour utilisateur). Précharge les 16 en arrière-plan, un par un (jamais
-// tous en parallèle : ça ralentirait le tout premier GIF, celui affiché
-// immédiatement), dès l'ouverture de la modal — une fois en cache HTTP
-// navigateur, reselectionner un type revient à charger depuis le disque,
-// quasi instantané. Lancée une seule fois (tutoVideosPrefetchStarted).
+// Retour utilisateur : un <img> UNIQUE dont on changeait le src (même après
+// avoir préchargé les 16 GIFs en arrière-plan côté cache HTTP, voir git
+// blame) restait perceptiblement lent à chaque clic — le cache HTTP évite le
+// re-téléchargement, mais le navigateur redécode quand même l'animation à
+// chaque affectation de src. Un <img> PERSISTANT par type (créé une seule
+// fois, jamais recyclé) élimine ce redécodage : une fois chargé, changer de
+// type ne fait plus que basculer une classe d-none, aucun travail réseau ni
+// décodage à refaire. Coût accepté en échange : jusqu'à 16 GIFs décodés
+// vivent en mémoire tant que la page reste ouverte (le navigateur suspend
+// de lui-même l'animation de ceux qui sont display:none, donc pas de coût
+// CPU supplémentaire une fois cachés — seule la mémoire reste occupée).
+const tutoVideoImgs = {} // type -> <img>
+const getOrCreateTutoVideoImg = (type) => {
+  let img = tutoVideoImgs[type]
+  if (img) return img
+  img = document.createElement('img')
+  img.className = 'tuto-video-player d-none'
+  img.alt = ''
+  img.loading = 'eager'
+  img.onerror = () => {
+    // Pas (encore) de GIF pour CE type : message dédié plutôt qu'un lecteur
+    // cassé — seulement pertinent si ce type est celui affiché à l'instant.
+    img.dataset.broken = 'true'
+    if (img.classList.contains('active') && tutoVideoPlaceholderText) {
+      tutoVideoPlaceholderText.textContent = `Démo bientôt disponible pour ${QUESTION_TYPE_META[type]?.label || 'ce type'}.`
+      img.classList.add('d-none')
+      tutoVideoPlaceholder?.classList.remove('d-none')
+    }
+  }
+  img.src = `/img/tuto/${type}.gif`
+  tutoVideoImgs[type] = img
+  tutoVideoPlayerArea?.appendChild(img)
+  return img
+}
+// Précharge les 15 GIFs restants en arrière-plan, un par un (jamais tous en
+// parallèle : ça ralentirait le tout premier, celui affiché immédiatement à
+// l'ouverture) — dès qu'ils existent comme <img> réels dans le DOM (voir
+// getOrCreateTutoVideoImg), plus aucune latence en les sélectionnant
+// ensuite. Lancée une seule fois (tutoVideosPrefetchStarted).
 let tutoVideosPrefetchStarted = false
 const prefetchTutoVideosInBackground = () => {
   if (tutoVideosPrefetchStarted) return
@@ -4651,34 +4683,31 @@ const prefetchTutoVideosInBackground = () => {
     if (i >= types.length) return
     const type = types[i]
     i += 1
-    const img = new Image()
-    img.onload = next
-    img.onerror = next
-    img.src = `/img/tuto/${type}.gif`
+    if (tutoVideoImgs[type]) { next(); return }
+    const img = getOrCreateTutoVideoImg(type)
+    img.addEventListener('load', next, { once: true })
+    img.addEventListener('error', next, { once: true })
   }
   next()
 }
 
-// Construit juste un chemin, ne vérifie rien : c'est le <img> lui-même qui
-// nous renseigne via son évènement error, voir selectTutoVideoType plus bas
-// — jamais de lecteur cassé à l'écran pour un type dont le GIF manquerait
-// (ex. un futur 17e type de question pas encore illustré).
-const tutoVideoUrlFor = (type) => `/img/tuto/${type}.gif`
 const selectTutoVideoType = (type) => {
-  if (!tutoVideoPlayer || !tutoVideoPlaceholder) return
+  if (!tutoVideoPlayerArea || !tutoVideoPlaceholder) return
   tutoVideoTypeGrid?.querySelectorAll('.tuto-video-tile').forEach(tile => {
     tile.classList.toggle('active', tile.dataset.type === type)
   })
-  tutoVideoPlaceholder.classList.add('d-none')
-  tutoVideoPlayer.classList.remove('d-none')
-  tutoVideoPlayer.onerror = () => {
-    // Pas (encore) de GIF pour CE type : message dédié plutôt qu'un lecteur
-    // cassé.
-    if (tutoVideoPlaceholderText) tutoVideoPlaceholderText.textContent = `Démo bientôt disponible pour ${QUESTION_TYPE_META[type]?.label || 'ce type'}.`
-    tutoVideoPlayer.classList.add('d-none')
+  Object.entries(tutoVideoImgs).forEach(([t, img]) => {
+    img.classList.toggle('active', t === type)
+    if (t !== type) img.classList.add('d-none')
+  })
+  const img = getOrCreateTutoVideoImg(type)
+  if (img.dataset.broken === 'true') {
+    tutoVideoPlaceholderText.textContent = `Démo bientôt disponible pour ${QUESTION_TYPE_META[type]?.label || 'ce type'}.`
     tutoVideoPlaceholder.classList.remove('d-none')
+    return
   }
-  tutoVideoPlayer.src = tutoVideoUrlFor(type)
+  tutoVideoPlaceholder.classList.add('d-none')
+  img.classList.remove('d-none')
 }
 const buildTutoVideosGrid = () => {
   if (tutoVideosGridBuilt || !tutoVideoTypeGrid) return
@@ -4700,14 +4729,16 @@ const openTutoVideosModal = () => {
   // Léger différé : laisse le tout premier GIF (déjà demandé juste
   // au-dessus) démarrer son propre chargement avant de lancer la file de
   // préchargement des 15 autres derrière, plutôt que de lui faire
-  // concurrence dès la même frame.
+  // concurrence dès la même frame. Sans effet les fois suivantes (tous déjà
+  // chargés, tutoVideosPrefetchStarted coupe court immédiatement).
   setTimeout(prefetchTutoVideosInBackground, 400)
 }
 const closeTutoVideosModal = () => {
   tutoVideosModal?.classList.add('d-none')
-  // Stoppe le GIF en fermant (un <img> animé continue de tourner en fond
-  // sinon, invisible mais toujours actif) en retirant sa source.
-  if (tutoVideoPlayer) tutoVideoPlayer.removeAttribute('src')
+  // Les <img> restent EN VIE dans le DOM (voir tutoVideoImgs) — c'est tout
+  // l'intérêt : une réouverture bascule instantanément, rien à recharger.
+  // Rien à couper ici : display:none suffit au navigateur pour suspendre
+  // l'animation des GIFs cachés (pas de coût CPU en arrière-plan).
 }
 if (tutoVideosBtn) tutoVideosBtn.onclick = openTutoVideosModal
 if (closeTutoVideosBtn) closeTutoVideosBtn.onclick = closeTutoVideosModal

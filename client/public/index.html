@@ -560,8 +560,12 @@
           </div>
           <div class="tuto-videos-layout">
             <div id="tutoVideoTypeGrid" class="tuto-video-type-grid"></div>
-            <div class="tuto-video-player-area">
-              <img id="tutoVideoPlayer" class="tuto-video-player d-none" alt="" />
+            <div id="tutoVideoPlayerArea" class="tuto-video-player-area">
+              <!-- Un <img> par type (rempli par buildTutoVideoImages côté
+                   index.js), jamais un <img> unique dont on change le src :
+                   voir le commentaire sur buildTutoVideoImages pour le
+                   pourquoi (retour utilisateur : changer de type restait
+                   perceptiblement lent malgré le préchargement réseau). -->
               <div id="tutoVideoPlaceholder" class="tuto-video-placeholder">
                 <span class="tuto-video-placeholder-icon">🎬</span>
                 <span id="tutoVideoPlaceholderText">Choisis un type de question.</span>
