@@ -244,6 +244,11 @@ const params = new URLSearchParams(location.search)
 const preRoom = params.get('room')
 const autoCreate = params.get('create')
 const autoJoin = params.get('join')
+// "Jouer" (tâche 021) : même famille que ?create=/?join= — ?play=true crée
+// une salle directement, mode 'auto' (config du quiz automatique dans le
+// lobby, voir room:created plus bas), jamais de préchargement de quiz
+// manuel contrairement à ?create=true + ?quiz=.
+const autoPlay = params.get('play')
 // Bouton "▶ Jouer ce quiz" de l'onglet "Quiz publics" (select.js) : lance
 // une salle hôte directement avec ce quiz préchargé, sans repasser par la
 // popup "Sélectionner un Quiz" — voir plus bas, loadQuizById() fait déjà
@@ -283,11 +288,21 @@ window.addEventListener('DOMContentLoaded', () => {
       return
     }
     resetUI()
-    createRoom()
+    createRoom('present')
     // .catch() obligatoire depuis que loadQuizById relance l'erreur (voir sa
     // définition plus bas) — sinon rejet de promesse non géré ici, ce chemin
     // n'ayant pas de bouton à réactiver comme le popup "Sélectionner un Quiz".
     if (preQuizId) loadQuizById(preQuizId).catch(() => { showAnnounce('Impossible de charger ce quiz.', 'error') })
+  } else if (autoPlay === 'true') {
+    // "Jouer" (tâche 021) : même garde de connexion que "Présenter" — créer
+    // une salle nécessite un compte, quel que soit le mode. Jamais de
+    // préchargement de quiz manuel ici (voir commentaire sur autoPlay).
+    if (!canCreate) {
+      window.location.href = '/login.html?reason=create'
+      return
+    }
+    resetUI()
+    createRoom('auto')
   } else if (autoJoin === 'true') {
     resetUI()
     showJoinPanel(false)
@@ -354,6 +369,19 @@ const updateQuestionTypeBadge = (type) => {
   questionTypeBadge.classList.remove('d-none')
 }
 const hideQuestionTypeBadge = () => { questionTypeBadge?.classList.add('d-none') }
+
+// Badge catégorie (tâche 021, mode "Jouer") : au-dessus du prompt, jamais
+// annoncé à l'avance pour la question suivante (mis à jour uniquement ici,
+// à chaque question:show — voir plus bas). Masqué si category absent
+// (parcours "Présenter", quiz manuel) — zéro régression visuelle.
+const questionCategoryBadge = document.getElementById('questionCategoryBadge')
+const updateQuestionCategoryBadge = (category) => {
+  if (!questionCategoryBadge) return
+  if (!category) { questionCategoryBadge.classList.add('d-none'); return }
+  questionCategoryBadge.textContent = '🏷️ ' + category.toUpperCase()
+  questionCategoryBadge.classList.remove('d-none')
+}
+const hideQuestionCategoryBadge = () => { questionCategoryBadge?.classList.add('d-none') }
 
 // Transition "sortie du lobby -> écran de jeu", extraite de question:show
 // pour être appelable AUSSI dès l'arrivée de tuto:show/l'écran d'attente
@@ -3464,8 +3492,11 @@ if (savedAvatarPreview) {
   }
 }
 
-const createRoom = () => {
-  socket.emit('room:create', { token: getToken() })
+// mode (tâche 021) : 'present' (défaut, comportement historique de "Créer")
+// ou 'auto' (mode "Jouer") — transmis tel quel au serveur, voir room.mode
+// côté server/index.js (room:create).
+const createRoom = (mode = 'present') => {
+  socket.emit('room:create', { token: getToken(), mode })
 }
 
 createBtn.onclick = async () => {
@@ -3474,7 +3505,7 @@ createBtn.onclick = async () => {
     window.location.href = '/login.html?reason=create'
     return
   }
-  createRoom()
+  createRoom('present')
 }
 
 const showJoinPanel = (showCreateRoomButton = true) => {
@@ -3510,6 +3541,7 @@ const showJoinPanel = (showCreateRoomButton = true) => {
     timerContainer.style.display = 'none'
   }
   hideQuestionTypeBadge()
+  hideQuestionCategoryBadge()
   nameInput.focus()
 }
 navCreate.onclick = async (e) => {
@@ -3525,7 +3557,28 @@ navCreate.onclick = async (e) => {
     socket.emit('room:close', { roomCode: roomInput.value })
   }
   resetUI()
-  createRoom()
+  createRoom('present')
+}
+
+// "Jouer" (tâche 021) : même garde de connexion que "Présenter" juste
+// au-dessus, seul le mode transmis à createRoom() change.
+const navPlay = document.getElementById('navPlay')
+if (navPlay) {
+  navPlay.onclick = async (e) => {
+    e.preventDefault()
+
+    const { data: { session } } = await window.supabaseClient.auth.getSession()
+    if (!session) {
+      window.location.href = '/login.html?reason=create'
+      return
+    }
+
+    if (isHost && roomInput.value) {
+      socket.emit('room:close', { roomCode: roomInput.value })
+    }
+    resetUI()
+    createRoom('auto')
+  }
 }
 
 if (navMyQuizzes) {
@@ -3587,6 +3640,10 @@ const resetUI = () => {
   quizIndex = 0
   loadedInfo.textContent = 'Aucun quiz sélectionné'
   qrDiv.innerHTML = ''
+  // room.mode (tâche 021) : retombe sur 'present' par défaut, comme
+  // server/index.js le fait déjà côté salle — évite qu'un ancien
+  // #hostAutoPanel affiché reste visible après avoir quitté la salle.
+  applyRoomMode('present', null)
 }
 
 socket.on('room:closed', ({ message }) => {
@@ -3704,12 +3761,251 @@ const loadQuizById = (id) => {
     })
 }
  
-socket.on('room:created', ({ roomCode, serverUrl, hostToken }) => {
+// ============================================================
+// Mode "Jouer" (tâche 021) : room.mode ('present' par défaut ou 'auto') +
+// config du quiz automatique — mêmes conventions que room.speedLevel/
+// room.gameMode (éphémère, en mémoire côté serveur, jamais persisté).
+// ============================================================
+let roomMode = 'present'
+const hostAutoPanel = document.getElementById('hostAutoPanel')
+const autoCategoryList = document.getElementById('autoCategoryList')
+const autoTypeList = document.getElementById('autoTypeList')
+const autoDifficultyFacile = document.getElementById('autoDifficultyFacile')
+const autoDifficultyMoyen = document.getElementById('autoDifficultyMoyen')
+const autoDifficultyDifficile = document.getElementById('autoDifficultyDifficile')
+const autoCountTotal = document.getElementById('autoCountTotal')
+const autoConfigError = document.getElementById('autoConfigError')
+
+// Catégories distinctes de bank_questions (tâche 021) : la banque n'a pas de
+// liste de catégories fixée en dur (voir Hors périmètre de la tâche) — on
+// interroge Supabase une seule fois par arrivée en mode 'auto', pas à
+// chaque frappe. Vide tant que personne n'a publié de question depuis
+// l'éditeur (voir editor.js #addToBankBtn) : le panneau affiche alors un
+// message plutôt qu'une liste de cases vide, sans jamais bloquer.
+let bankCategoriesLoaded = false
+const loadBankCategories = async () => {
+  if (bankCategoriesLoaded || !autoCategoryList) return
+  bankCategoriesLoaded = true
+  const { data, error } = await window.supabaseClient.from('bank_questions').select('category')
+  if (error) {
+    console.error('[bank] chargement des catégories impossible :', error)
+    autoCategoryList.innerHTML = '<p class="text-muted font-13">Catégories indisponibles pour le moment.</p>'
+    return
+  }
+  const categories = Array.from(new Set((data || []).map(r => r.category).filter(Boolean))).sort()
+  if (categories.length === 0) {
+    autoCategoryList.innerHTML = '<p class="text-muted font-13">Aucune catégorie pour l\'instant — la banque de questions est vide.</p>'
+    return
+  }
+  // Toutes cochées par défaut : case décochée = catégorie exclue, cohérent
+  // avec "toutes les catégories" comme réglage de départ (voir Objectif).
+  autoCategoryList.innerHTML = categories.map(c => `
+    <label class="auto-config-check">
+      <input type="checkbox" class="auto-category-check" value="${c.replace(/"/g, '&quot;')}" checked />
+      <span>${c}</span>
+    </label>
+  `).join('')
+  autoCategoryList.querySelectorAll('.auto-category-check').forEach(cb => { cb.onchange = scheduleAutoConfigSync })
+}
+
+// Types cochés par défaut (tâche 021) : réutilise QUESTION_TYPE_META tel
+// quel — seule source de vérité des 17 types, jamais dupliquée ici.
+const renderAutoTypeList = () => {
+  if (!autoTypeList) return
+  autoTypeList.innerHTML = Object.entries(QUESTION_TYPE_META).map(([type, meta]) => `
+    <label class="auto-config-check">
+      <input type="checkbox" class="auto-type-check" value="${type}" checked />
+      <span>${meta.icon} ${meta.label}</span>
+    </label>
+  `).join('')
+  autoTypeList.querySelectorAll('.auto-type-check').forEach(cb => { cb.onchange = scheduleAutoConfigSync })
+}
+
+// Non-hôte : panneau visible mais verrouillé (mêmes contrôles, disabled) —
+// même patron que le reste du lobby (l'hôte a des contrôles que les autres
+// n'ont pas), voir applyRoomMode.
+const setAutoPanelReadOnly = (readOnly) => {
+  if (!hostAutoPanel) return
+  hostAutoPanel.querySelectorAll('input').forEach(el => { el.disabled = readOnly })
+}
+
+// Applique une config reçue (room:created ou room:autoConfig) aux contrôles
+// du panneau, sans redéclencher d'émission vers le serveur (voir l'appelant
+// socket.on('room:autoConfig') plus bas, qui coupe court à scheduleAutoConfigSync
+// pendant cet appel).
+const applyAutoConfigToUi = (config) => {
+  if (!config) return
+  if (autoDifficultyFacile) autoDifficultyFacile.value = config.difficulty?.facile ?? 10
+  if (autoDifficultyMoyen) autoDifficultyMoyen.value = config.difficulty?.moyen ?? 10
+  if (autoDifficultyDifficile) autoDifficultyDifficile.value = config.difficulty?.difficile ?? 0
+  updateAutoCountTotal()
+  if (Array.isArray(config.categories) && config.categories.length > 0 && autoCategoryList) {
+    autoCategoryList.querySelectorAll('.auto-category-check').forEach(cb => { cb.checked = config.categories.includes(cb.value) })
+  }
+  if (Array.isArray(config.types) && config.types.length > 0 && autoTypeList) {
+    autoTypeList.querySelectorAll('.auto-type-check').forEach(cb => { cb.checked = config.types.includes(cb.value) })
+  }
+}
+
+const updateAutoCountTotal = () => {
+  if (!autoCountTotal) return
+  const total = (Number(autoDifficultyFacile?.value) || 0) + (Number(autoDifficultyMoyen?.value) || 0) + (Number(autoDifficultyDifficile?.value) || 0)
+  autoCountTotal.textContent = String(total)
+}
+
+// Bascule le panneau hôte selon room.mode — appelée à room:created (hôte),
+// room:mode (tout le monde, y compris un joueur qui rejoint après coup) et
+// resetUI (retour à l'état neutre). selectQuizBtn (sélection manuelle,
+// parcours "Présenter") et hostAutoPanel (parcours "Jouer") sont mutuellement
+// exclusifs — le reste du panneau hôte (joueurs, partage du code, LANCER)
+// ne change jamais, voir Périmètre de la tâche.
+const applyRoomMode = (mode, autoConfig) => {
+  roomMode = mode === 'auto' ? 'auto' : 'present'
+  const selectQuizBtnEl = document.getElementById('selectQuizBtn')
+  if (roomMode === 'auto') {
+    if (selectQuizBtnEl) selectQuizBtnEl.classList.add('d-none')
+    if (hostAutoPanel) {
+      hostAutoPanel.classList.remove('d-none')
+      // 'block' (pas 'flex' comme #hostPanel) : hostAutoPanel empile ses
+      // sections verticalement (catégories/types, puis difficulté), pas la
+      // même mise en page horizontale que le panneau hôte historique.
+      hostAutoPanel.style.display = 'block'
+    }
+    renderAutoTypeList()
+    loadBankCategories()
+    applyAutoConfigToUi(autoConfig)
+    setAutoPanelReadOnly(!isHost)
+  } else {
+    if (selectQuizBtnEl) selectQuizBtnEl.classList.remove('d-none')
+    if (hostAutoPanel) {
+      hostAutoPanel.classList.add('d-none')
+      hostAutoPanel.style.display = 'none'
+    }
+  }
+}
+
+// Debounce (tâche 021) : évite une rafale de room:setAutoConfig sur une
+// saisie clavier (nombre total notamment) — même seuil que d'autres
+// synchronisations "à la frappe" déjà en place dans ce fichier.
+let autoConfigSyncTimer = null
+let suppressAutoConfigSync = false
+const scheduleAutoConfigSync = () => {
+  if (!isHost || roomMode !== 'auto' || suppressAutoConfigSync) return
+  updateAutoCountTotal()
+  clearTimeout(autoConfigSyncTimer)
+  autoConfigSyncTimer = setTimeout(() => {
+    const roomCode = roomInput.value.trim()
+    if (!roomCode) return
+    socket.emit('room:setAutoConfig', {
+      roomCode,
+      categories: autoCategoryList ? Array.from(autoCategoryList.querySelectorAll('.auto-category-check:checked')).map(cb => cb.value) : [],
+      types: autoTypeList ? Array.from(autoTypeList.querySelectorAll('.auto-type-check:checked')).map(cb => cb.value) : [],
+      difficulty: {
+        facile: Number(autoDifficultyFacile?.value) || 0,
+        moyen: Number(autoDifficultyMoyen?.value) || 0,
+        difficile: Number(autoDifficultyDifficile?.value) || 0
+      }
+    })
+  }, 300)
+}
+;[autoDifficultyFacile, autoDifficultyMoyen, autoDifficultyDifficile].forEach(el => {
+  if (el) el.oninput = scheduleAutoConfigSync
+})
+
+socket.on('room:mode', ({ mode }) => { applyRoomMode(mode, null) })
+socket.on('room:autoConfig', (config) => {
+  // Rejoué à soi-même après room:setAutoConfig (io.to(code), l'hôte y est
+  // aussi) — suppressAutoConfigSync évite de renvoyer aussitôt un nouvel
+  // événement en boucle à cause des .onchange/.oninput déclenchés par
+  // applyAutoConfigToUi() en repositionnant les cases/valeurs.
+  suppressAutoConfigSync = true
+  applyAutoConfigToUi(config)
+  setAutoPanelReadOnly(!isHost)
+  suppressAutoConfigSync = false
+})
+
+// Génération du quiz auto (tâche 021) : appelée depuis startQuiz.onclick
+// (voir plus bas) quand roomMode === 'auto', à la place de la sélection
+// manuelle. Retourne true si loadedQuiz a bien été construit (partie peut
+// démarrer), false sinon (banque insuffisante — message déjà affiché).
+const DIFFICULTY_LABELS = { facile: 'facile', moyen: 'moyenne', difficile: 'difficile' }
+const generateAutoQuiz = async () => {
+  if (autoConfigError) { autoConfigError.classList.add('d-none'); autoConfigError.textContent = '' }
+  const categories = autoCategoryList ? Array.from(autoCategoryList.querySelectorAll('.auto-category-check:checked')).map(cb => cb.value) : []
+  const types = autoTypeList ? Array.from(autoTypeList.querySelectorAll('.auto-type-check:checked')).map(cb => cb.value) : []
+  const tiers = [
+    ['facile', Number(autoDifficultyFacile?.value) || 0],
+    ['moyen', Number(autoDifficultyMoyen?.value) || 0],
+    ['difficile', Number(autoDifficultyDifficile?.value) || 0]
+  ]
+  const showBankError = (message) => {
+    if (autoConfigError) {
+      autoConfigError.textContent = message
+      autoConfigError.classList.remove('d-none')
+    } else {
+      showAnnounce(message, 'error')
+    }
+  }
+  const picked = []
+  for (const [difficulty, count] of tiers) {
+    if (count <= 0) continue
+    // Une requête PAR PALIER (plutôt qu'une requête globale + tri en
+    // mémoire) : permet un message d'erreur précis ("pas assez de facile")
+    // et évite qu'un palier bien fourni compense un palier vide.
+    let query = window.supabaseClient.from('bank_questions').select('id,category,type,question').eq('difficulty', difficulty)
+    if (categories.length > 0) query = query.in('category', categories)
+    if (types.length > 0) query = query.in('type', types)
+    const { data, error } = await query
+    if (error) {
+      console.error('[bank] génération du quiz auto impossible :', error)
+      showBankError('Impossible d\'interroger la banque de questions. Réessaie dans un instant.')
+      return false
+    }
+    const rows = data || []
+    if (rows.length < count) {
+      showBankError(`Banque insuffisante : seulement ${rows.length} question${rows.length > 1 ? 's' : ''} de difficulté ${DIFFICULTY_LABELS[difficulty]} disponible${rows.length > 1 ? 's' : ''} pour ces critères (${count} demandée${count > 1 ? 's' : ''}).`)
+      return false
+    }
+    picked.push(...shuffleArray(rows).slice(0, count))
+  }
+  if (picked.length === 0) {
+    showBankError('Choisis au moins une question (répartition facile/moyen/difficile) avant de lancer.')
+    return false
+  }
+  // Dédoublonnage par id (filet de sécurité, ne devrait pas arriver vu les
+  // requêtes séparées par palier) puis mélange FINAL de l'ordre — jamais
+  // pendant la sélection par palier, pour ne jamais grouper "facile x10"
+  // avant "moyen x10" (voir Rappels de convention de la tâche).
+  const dedup = Array.from(new Map(picked.map(r => [r.id, r])).values())
+  const shuffled = shuffleArray(dedup)
+  loadedQuiz = {
+    id: 'auto-' + Date.now(),
+    title: 'Quiz aléatoire',
+    // Même forme que loadQuizById() plus haut : q.question est déjà
+    // normalisée à l'identique d'une question de quizzes.questions[i] (voir
+    // editor.js #addToBankBtn), on y ajoute juste id/category — le badge
+    // catégorie (voir emitQuestion) lit directement ce champ.
+    questions: shuffled.map((r, i) => ({
+      ...r.question,
+      id: r.question?.id || ('q' + (i + 1)),
+      type: r.type,
+      category: r.category
+    }))
+  }
+  quizIndex = 0
+  return true
+}
+
+socket.on('room:created', ({ roomCode, serverUrl, hostToken, mode, autoConfig }) => {
   isHost = true
   roomInput.value = roomCode
   if (logDiv) { logDiv.style.display = 'none' }
   hostPanel.classList.remove('d-none')
   hostPanel.style.display = 'flex'
+  // room.mode (tâche 021) : reçu directement à la création (voir
+  // server/index.js room:create), pas besoin d'attendre un aller-retour
+  // supplémentaire pour afficher le bon panneau hôte dès le lobby.
+  applyRoomMode(mode, autoConfig)
   showLobby()
   hideBuilder()
   const jc = document.getElementById('joinCard')
@@ -3857,6 +4153,7 @@ const showLobby = () => {
     timerContainer.style.display = 'none'
   }
   hideQuestionTypeBadge()
+  hideQuestionCategoryBadge()
   syncLobbyColumnHeight()
 }
 
@@ -5045,6 +5342,13 @@ const emitQuestion = (index) => {
     roomCode,
     id: q.id || ('q' + (index + 1)),
     type: q.type || 'free',
+    // Badge catégorie (tâche 021) : présent seulement pour un quiz généré
+    // par le mode "Jouer" (voir generateAutoQuiz) — absent pour un quiz
+    // manuel du mode "Présenter", le badge reste alors caché (aucune
+    // régression visuelle, voir socket.on('question:show') plus bas).
+    // Passthrough garanti côté serveur (question:show, server/index.js) :
+    // seuls correct/explanation/reponseImageUrl/revealImage* sont retirés.
+    category: q.category || undefined,
     prompt: q.prompt || 'Question',
     timerMs: q.timerMs || 15000,
     // "blindtest" range ses réponses acceptées dans un objet {title, artist},
@@ -5343,7 +5647,7 @@ const updateHostControls = () => {
   }
 }
 
-startQuizBtn.onclick = () => {
+startQuizBtn.onclick = async () => {
   if (startQuizBtn.classList.contains('is-disabled')) {
     const players = document.querySelectorAll('.player-tile')
     if (players.length === 0) {
@@ -5360,11 +5664,22 @@ startQuizBtn.onclick = () => {
     }
     return
   }
+  // Mode "Jouer" (tâche 021) : génère loadedQuiz depuis bank_questions à la
+  // place de la sélection manuelle — reste bloqué sur l'écran de lancement
+  // (message déjà affiché dans #autoConfigError) si la banque ne suffit
+  // pas aux critères choisis, plutôt que de démarrer une partie tronquée
+  // sans prévenir (voir Objectif de la tâche).
+  if (roomMode === 'auto') {
+    startQuizBtn.classList.add('is-loading')
+    const ok = await generateAutoQuiz()
+    startQuizBtn.classList.remove('is-loading')
+    if (!ok) return
+  }
   if (!loadedQuiz || !loadedQuiz.questions || loadedQuiz.questions.length === 0) {
     showAnnounce('Charge un quiz avant de lancer la partie !')
     return
   }
-  
+
   // Hide setup buttons
   startQuizBtn.classList.add('d-none')
   startQuizBtn.style.display = 'none'
@@ -5448,6 +5763,7 @@ socket.on('question:show', payload => {
     timerContainer.style.display = 'flex'
   }
   updateQuestionTypeBadge(payload.type)
+  updateQuestionCategoryBadge(payload.category)
   qDiv.textContent = payload.prompt
   qDiv.style.animation = 'none'
   void qDiv.offsetWidth
