@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.16.2'
+const APP_VERSION = '2.17.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1069,6 +1069,30 @@ const start = async () => {
     socket.on('room:create', async payload => {
       const code = generateRoomCode()
       const hostToken = payload?.token || uid()
+      // room.mode (tâche 021) : intention choisie dans la navbar — 'present'
+      // (défaut, comportement actuel si absent — rétrocompatible) reproduit
+      // EXACTEMENT le parcours "Créer" historique (sélection manuelle d'un
+      // quiz, jamais touché ici) ; 'auto' déclenche côté client la
+      // génération d'un quiz depuis bank_questions (voir generateAutoQuiz
+      // dans index.js) à la place de la popup "Sélectionner un Quiz".
+      // Comme room.speedLevel/room.gameMode : purement en mémoire, jamais
+      // persisté, jamais lu par le serveur pour une règle de jeu — seule la
+      // diffusion à la salle (room:created ici, room:mode/room:autoConfig à
+      // chaque room:join plus bas) compte.
+      const mode = payload?.mode === 'auto' ? 'auto' : 'present'
+      // Config du quiz auto (tâche 021) : valeurs par défaut actées avec
+      // l'utilisateur — l'hôte doit pouvoir lancer immédiatement sans rien
+      // toucher. categories/types vides = "aucun filtre" (pas de liste en
+      // dur ici, voir QUESTION_TYPE_META côté client pour les 17 types et
+      // les catégories distinctes de bank_questions pour les catégories) —
+      // évite de dupliquer ces listes côté serveur, qui n'a de toute façon
+      // aucun accès Supabase.
+      const autoConfig = {
+        categories: [],
+        types: [],
+        difficulty: { facile: 10, moyen: 10, difficile: 0 },
+        count: 20
+      }
       rooms.set(code, {
         hostId: socket.id,
         hostToken: hostToken,
@@ -1086,12 +1110,19 @@ const start = async () => {
         lastActivityAt: Date.now(), // voir sweepAbandonedRooms plus bas
         speedLevel: 'normal', // voir game:setSpeedLevel / floorForSpeedLevel
         leaderboardShown: false, // voir leaderboard:show / question:show / room:join
-        gameMode: 'irl' // voir game:setMode ; 'irl' (par défaut) ou 'remote'
+        gameMode: 'irl', // voir game:setMode ; 'irl' (par défaut) ou 'remote'
+        mode, // voir commentaire ci-dessus ; 'present' (défaut) ou 'auto'
+        autoConfig // voir commentaire ci-dessus ; modifiable via room:setAutoConfig
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
       await socket.join(code)
       const serverUrl = getBaseUrl(socket.handshake.headers)
-      socket.emit('room:created', { roomCode: code, serverUrl, hostToken })
+      // mode/autoConfig inclus directement ici (contrairement à
+      // speedLevel/gameMode, jamais renvoyés à room:created) : le panneau
+      // hôte auto (voir index.js) doit s'afficher avec ses valeurs par
+      // défaut DÈS l'arrivée dans le lobby, sans attendre un aller-retour
+      // supplémentaire.
+      socket.emit('room:created', { roomCode: code, serverUrl, hostToken, mode, autoConfig })
     })
 
     socket.on('room:close', async payload => {
@@ -1207,6 +1238,12 @@ const start = async () => {
       io.to(code).emit('team:list', { teamMode: room.teamMode, teams: buildTeamList(room) })
       io.to(code).emit('game:speedLevel', { level: room.speedLevel })
       io.to(code).emit('game:mode', { mode: room.gameMode })
+      // room.mode/autoConfig (tâche 021) : rejoué à CHAQUE room:join, même
+      // patron que speedLevel/gameMode juste au-dessus — un joueur qui
+      // rejoint après coup (ou se reconnecte) doit voir la config auto déjà
+      // choisie par l'hôte, en lecture seule côté client.
+      io.to(code).emit('room:mode', { mode: room.mode || 'present' })
+      io.to(code).emit('room:autoConfig', room.autoConfig || null)
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
 
@@ -1366,6 +1403,30 @@ const start = async () => {
       const mode = payload?.mode === 'remote' ? 'remote' : 'irl'
       room.gameMode = mode
       io.to(code).emit('game:mode', { mode })
+    })
+
+    // Config du quiz auto (tâche 021) : hôte uniquement, verrouillé dès que
+    // la partie est lancée — même garde que game:setSpeedLevel/game:setMode
+    // juste au-dessus. Validation a minima côté serveur (types/tableaux,
+    // nombres positifs) : le serveur ne connaît ni la liste des types ni
+    // celle des catégories (aucun accès Supabase), donc pas de validation
+    // plus fine possible ici — la vraie garde (banque insuffisante) est
+    // côté client, au moment de la génération (voir generateAutoQuiz).
+    socket.on('room:setAutoConfig', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || room.hostId !== socket.id || gameStarted(room) || room.mode !== 'auto') return
+      const d = payload?.difficulty || {}
+      const toCount = v => Math.max(0, Math.min(200, Math.floor(Number(v)) || 0))
+      const difficulty = { facile: toCount(d.facile), moyen: toCount(d.moyen), difficile: toCount(d.difficile) }
+      const count = difficulty.facile + difficulty.moyen + difficulty.difficile
+      room.autoConfig = {
+        categories: Array.isArray(payload?.categories) ? payload.categories.filter(c => typeof c === 'string') : [],
+        types: Array.isArray(payload?.types) ? payload.types.filter(t => typeof t === 'string') : [],
+        difficulty,
+        count
+      }
+      io.to(code).emit('room:autoConfig', room.autoConfig)
     })
 
     socket.on('player:ready', payload => {
