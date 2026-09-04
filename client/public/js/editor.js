@@ -8,6 +8,7 @@ const checkAuth = async () => {
 
   const navLogin = document.getElementById('navLogin')
   const navCreateEl = document.getElementById('navCreate')
+  const navPlayEl = document.getElementById('navPlay')
   const profileAvatar = document.getElementById('profileAvatar')
   const profileNameEl = document.getElementById('profileName')
 
@@ -21,6 +22,14 @@ const checkAuth = async () => {
     // navCreate.onclick dans index.js.
     if (!canCreate) {
       navCreateEl.onclick = (e) => { e.preventDefault(); window.location.href = '/login.html?reason=create' }
+    }
+  }
+  // navPlay (tâche 021) : même garde que navCreate juste au-dessus.
+  if (navPlayEl) {
+    navPlayEl.classList.toggle('is-disabled', !canCreate)
+    navPlayEl.title = canCreate ? '' : 'Connecte-toi pour jouer'
+    if (!canCreate) {
+      navPlayEl.onclick = (e) => { e.preventDefault(); window.location.href = '/login.html?reason=create' }
     }
   }
 
@@ -114,6 +123,21 @@ const toastsEl = document.getElementById('toasts')
 const qDraftToggle = document.getElementById('qDraftToggle')
 const qPrompt = document.getElementById('qPrompt')
 const qExplanation = document.getElementById('qExplanation')
+// Catégorie/difficulté + "Ajouter à la banque" (tâche 021, mode "Jouer") :
+// jamais obligatoires pour sauvegarder le quiz normalement (voir saveQuizBtn
+// plus bas, inchangé) — seulement exigés par addToBankBtn.onclick.
+const qCategoryInput = document.getElementById('qCategoryInput')
+const qCategorySuggestions = document.getElementById('qCategorySuggestions')
+const qDifficultySelect = document.getElementById('qDifficultySelect')
+const addToBankBtn = document.getElementById('addToBankBtn')
+// Suggestions de catégorie (tâche 021) : dérivées des catégories déjà
+// utilisées DANS CE quiz — jamais une liste imposée en dur (voir Hors
+// périmètre de la tâche), juste un confort de saisie.
+const refreshCategorySuggestions = () => {
+  if (!qCategorySuggestions) return
+  const cats = Array.from(new Set(questions.map(q => (q.category || '').trim()).filter(Boolean))).sort()
+  qCategorySuggestions.innerHTML = cats.map(c => `<option value="${c.replace(/"/g, '&quot;')}"></option>`).join('')
+}
 const qType = document.getElementById('qType')
 // Rendu "maison" (voir js/ui-widgets.js) au lieu du <select> natif — le
 // reste du code ci-dessous continue de lire/écrire qType.value, d'écouter
@@ -2312,6 +2336,9 @@ const selectQuestion = (index) => {
   if (qDraftToggle) qDraftToggle.checked = !!q.draft
   qPrompt.value = q.prompt || ''
   if (qExplanation) qExplanation.value = q.explanation || ''
+  if (qCategoryInput) qCategoryInput.value = q.category || ''
+  if (qDifficultySelect) qDifficultySelect.value = q.difficulty || ''
+  refreshCategorySuggestions()
   qType.value = q.type || 'free'
   // Rappel de couleur sur la tuile elle-même (voir [data-qtype] et
   // .question-detail dans style.css, option "C" retenue après maquette) —
@@ -2363,6 +2390,8 @@ const saveCurrentQuestionState = () => {
   if (qDraftToggle) q.draft = qDraftToggle.checked
   q.prompt = qPrompt.value.trim()
   if (qExplanation) q.explanation = qExplanation.value.trim()
+  if (qCategoryInput) q.category = qCategoryInput.value.trim()
+  if (qDifficultySelect) q.difficulty = qDifficultySelect.value
   q.type = qType.value
   q.timerMs = parseInt(qTimer.value) * 1000 || 15000
   if (q.type === 'graduation') {
@@ -4267,6 +4296,12 @@ qPrompt.oninput = () => {
 if (qExplanation) {
   qExplanation.oninput = () => { questions[activeIndex].explanation = qExplanation.value }
 }
+if (qCategoryInput) {
+  qCategoryInput.oninput = () => { questions[activeIndex].category = qCategoryInput.value }
+}
+if (qDifficultySelect) {
+  qDifficultySelect.onchange = () => { questions[activeIndex].difficulty = qDifficultySelect.value }
+}
 
 // Le "+" rouvre désormais le choix du type (nouvelle DA, sur demande
 // explicite) au lieu d'ajouter directement un "Texte libre" par défaut —
@@ -4307,6 +4342,8 @@ const deleteQuestionAt = (index) => {
     if (qDraftToggle) qDraftToggle.checked = !!q.draft
     qPrompt.value = q.prompt || ''
     if (qExplanation) qExplanation.value = q.explanation || ''
+    if (qCategoryInput) qCategoryInput.value = q.category || ''
+    if (qDifficultySelect) qDifficultySelect.value = q.difficulty || ''
     qType.value = q.type || 'free'
     qTimer.value = (q.timerMs || 15000) / 1000
     populateGradFields(q)
@@ -4989,6 +5026,52 @@ saveQuizBtn.onclick = async () => {
 const saveQuestionBtn = document.getElementById('saveQuestion')
 if (saveQuestionBtn) {
   saveQuestionBtn.onclick = (...args) => saveQuizBtn.onclick(...args)
+}
+
+// "Ajouter à la banque" (tâche 021, mode "Jouer") : publie une COPIE de la
+// question active dans bank_questions — jamais liée au quiz d'origine
+// ensuite (pas d'id partagé, pas de mise à jour en cascade si la question
+// change plus tard dans l'éditeur). uploadQuestionMedia réutilisé tel quel
+// (même fonction qui uploade déjà les médias base64 au save d'un quiz
+// entier, appelée ici sur un tableau à 1 élément) — la banque ne doit
+// jamais contenir de data URI, même règle que quizzes.questions.
+if (addToBankBtn) {
+  addToBankBtn.onclick = async () => {
+    if (readOnly || activeIndex < 0 || !questions[activeIndex]) return
+    saveCurrentQuestionState()
+    const q = questions[activeIndex]
+    const category = (q.category || '').trim()
+    const difficulty = q.difficulty || ''
+    if (!category || !difficulty) {
+      showToast('Renseigne catégorie ET difficulté avant d\'ajouter à la banque', 'error')
+      return
+    }
+    if (!validateQuestion(q, activeIndex)) return
+    const { data: { session } } = await sb.auth.getSession()
+    if (!session) {
+      showToast('Connecte-toi pour publier dans la banque', 'error')
+      return
+    }
+    addToBankBtn.disabled = true
+    try {
+      await uploadQuestionMedia(sb, session.user.id, [q])
+      const { error } = await sb.from('bank_questions').insert([{
+        category,
+        difficulty,
+        type: q.type,
+        question: q,
+        created_by: session.user.id
+      }])
+      if (error) throw error
+      refreshCategorySuggestions()
+      showToast('Question ajoutée à la banque !', 'success')
+    } catch (err) {
+      console.error('[bank_questions] ajout impossible :', err)
+      showToast(err?.isMediaUploadError ? err.message : 'Erreur lors de l\'ajout à la banque', 'error')
+    } finally {
+      addToBankBtn.disabled = false
+    }
+  }
 }
 
 // Dupliquer le quiz d'un autre créateur dans mes propres quiz (copie privée éditable)

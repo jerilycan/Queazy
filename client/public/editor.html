@@ -163,8 +163,9 @@
         </span>
       </a>
       <div class="nav-group">
-        <a href="/?create=true" id="navCreate" class="btn btn-nav-main">Créer</a>
-        <a href="/?join=true" id="navJoin" class="btn btn-nav-main">Rejoindre</a>
+        <a href="/?play=true" id="navPlay" class="btn btn-nav-main">🎮 Jouer</a>
+        <a href="/?create=true" id="navCreate" class="btn btn-nav-main">🎤 Présenter</a>
+        <a href="/?join=true" id="navJoin" class="btn btn-nav-main">🔗 Rejoindre</a>
       </div>
       <div class="nav-group">
         <a href="/select.html" class="btn btn-nav-secondary">Mes Quiz</a>
@@ -253,6 +254,33 @@
               🚧 Brouillon (work in progress)
             </label>
             <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
+          </div>
+
+          <!-- Catégorie + difficulté (tâche 021) : tags libres, jamais
+               obligatoires pour sauvegarder le quiz normalement — utilisés
+               UNIQUEMENT par "Ajouter à la banque" juste en dessous, qui les
+               exige avant de publier dans bank_questions (mode "Jouer").
+               Aucune catégorie n'est imposée en dur : qCategorySuggestions
+               n'est qu'une liste de suggestions (voir editor.js). -->
+          <div class="d-grid grid-cols-split gap-lg">
+            <div class="detail-section">
+              <label for="qCategoryInput">Catégorie</label>
+              <input id="qCategoryInput" list="qCategorySuggestions" placeholder="Ex : Cinéma" maxlength="60" />
+              <datalist id="qCategorySuggestions"></datalist>
+            </div>
+            <div class="detail-section">
+              <label for="qDifficultySelect">Difficulté</label>
+              <select id="qDifficultySelect">
+                <option value="">— Non définie —</option>
+                <option value="facile">Facile</option>
+                <option value="moyen">Moyenne</option>
+                <option value="difficile">Difficile</option>
+              </select>
+            </div>
+          </div>
+          <div class="detail-section">
+            <button type="button" id="addToBankBtn" class="btn h-40 px-20 font-13">➕ Ajouter à la banque</button>
+            <p class="text-muted font-13 mt-8">Publie une copie de cette question dans la banque du mode "Jouer" — nécessite d'être connecté et d'avoir renseigné catégorie + difficulté ci-dessus.</p>
           </div>
 
           <!-- Type + minuteur remontés tout en haut (juste sous Brouillon,

@@ -8,6 +8,7 @@ const checkAuth = async () => {
 
   const navLogin = document.getElementById('navLogin')
   const navCreateEl = document.getElementById('navCreate')
+  const navPlayEl = document.getElementById('navPlay')
   const profileAvatar = document.getElementById('profileAvatar')
   const profileNameEl = document.getElementById('profileName')
 
@@ -23,6 +24,15 @@ const checkAuth = async () => {
     // en trop. Même garde que navCreate.onclick dans index.js.
     if (!canCreate) {
       navCreateEl.onclick = (e) => { e.preventDefault(); window.location.href = '/login.html?reason=create' }
+    }
+  }
+  // navPlay (tâche 021) : même garde que navCreate juste au-dessus — créer
+  // une salle "Jouer" nécessite d'être connecté, exactement comme "Présenter".
+  if (navPlayEl) {
+    navPlayEl.classList.toggle('is-disabled', !canCreate)
+    navPlayEl.title = canCreate ? '' : 'Connecte-toi pour jouer'
+    if (!canCreate) {
+      navPlayEl.onclick = (e) => { e.preventDefault(); window.location.href = '/login.html?reason=create' }
     }
   }
 
