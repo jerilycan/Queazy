@@ -328,3 +328,34 @@ drop policy if exists "tuto-videos: lecture publique" on storage.objects;
 create policy "tuto-videos: lecture publique"
   on storage.objects for select
   using (bucket_id = 'tuto-videos');
+
+-- ============================================================
+-- 7. TABLE bank_questions (tâche 021 — banque de questions curatée du
+--    mode "Jouer", DÉDIÉE et distincte des quiz publics existants,
+--    validée avec l'utilisateur : pas d'agrégation de quizzes.questions).
+--    `question` jsonb reprend EXACTEMENT la forme d'une question dans
+--    quizzes.questions[i] (même normalisation que loadQuizById côté
+--    index.js), pour réutiliser tout le rendu/scoring existant sans
+--    traitement spécial par type. Peuplée depuis l'éditeur (bouton
+--    "Ajouter à la banque", voir editor.js) — vide au départ, voir Risques
+--    restants dans docs/agent-tasks/021-mode-jouer-presenter-navbar.md.
+-- ============================================================
+create table if not exists public.bank_questions (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,
+  difficulty text not null check (difficulty in ('facile','moyen','difficile')),
+  type text not null,
+  question jsonb not null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.bank_questions enable row level security;
+drop policy if exists "bank_questions: lecture publique" on public.bank_questions;
+create policy "bank_questions: lecture publique" on public.bank_questions
+  for select using (true);
+drop policy if exists "bank_questions: ajout par un utilisateur connecte" on public.bank_questions;
+create policy "bank_questions: ajout par un utilisateur connecte" on public.bank_questions
+  for insert with check (auth.uid() = created_by);
+create index if not exists bank_questions_category_idx on public.bank_questions (category);
+create index if not exists bank_questions_difficulty_idx on public.bank_questions (difficulty);
+create index if not exists bank_questions_type_idx on public.bank_questions (type);
