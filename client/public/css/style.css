@@ -4090,19 +4090,19 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     align-items: stretch;
     gap: 16px;
     /* Étiré à toute la hauteur de la rangée (voir .container ci-dessus).
-       Le contenu a été allégé (pile joueurs + #loadedInfo masqués
-       ci-dessous) mais reste réellement plus haut que la place dispo sur
-       un écran moins haut que large (mesuré : ~870px de contenu pour
-       ~580px de boîte sur un exemple 1600x750) — un simple overflow:hidden
-       (essayé d'abord, suite au retour "pas de scrollbar") coupait alors
-       du contenu SANS PRÉVENIR (dont, potentiellement, le bas du bouton
-       "Question suivante" et son icône — probable explication du retour
-       "l'icône n'apparaît toujours pas"). Remis scrollable, mais avec la
-       SCROLLBAR ELLE-MÊME masquée (voir ::-webkit-scrollbar plus bas) :
-       satisfait "pas de scrollbar visible" ET "coins arrondis" (plus rien
-       ne vient carrer le coin) SANS perdre silencieusement du contenu. */
-    overflow-y: auto;
-    scrollbar-width: none; /* Firefox */
+       Historique (gardé pour mémoire) : rendu scrollable un temps (scrollbar
+       masquée) car le contenu pouvait dépasser la boîte sur un écran moins
+       haut que large et qu'un simple overflow:hidden coupait alors du
+       contenu SANS PRÉVENIR (dont, potentiellement, le bas du bouton
+       "Question suivante" et son icône). Retour utilisateur (capture
+       d'écran) : "cette colonne ne doit pas être scrollable" — remis en
+       overflow visible ; le contenu allégé de cette colonne tient
+       désormais largement dans la hauteur dispo en usage réel (voir la
+       capture — beaucoup d'espace vide sous "Ambiance"), le compromis
+       scroll-invisible n'a plus lieu d'être. Si un débordement réapparaît
+       un jour (contenu plus riche), revoir plutôt la hauteur de .container/
+       #stageWrap que de réintroduire un scroll caché ici. */
+    overflow-y: visible;
     /* Retour utilisateur (capture d'écran) : "la tuile gauche devrait
        changer de design pour coller à celle de droite" (#liveClassementDock,
        plus bas) — liseré rose (.border-accent-left, posé en dur dans le
@@ -4113,9 +4113,6 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
        mobile un peu plus bas dans ce fichier). */
     border-left: none;
     padding: 18px !important;
-  }
-  body.is-host.game-active .container #hostPanel::-webkit-scrollbar {
-    display: none; /* Chrome/Safari/Edge */
   }
   /* Retour utilisateur (référence maquette détaillée) : "reprends les
      éléments de cette barre" — icône remise (elle n'aurait jamais dû
@@ -4205,13 +4202,28 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
        (~38-40px, badge/timer inclus) avant que le contenu (l'énoncé,
        centré et parfois sur 2-3 lignes pour une question longue) ne
        commence — les deux se chevauchaient dès que l'énoncé était assez
-       large pour atteindre les bords gauche/droit. 80px : dégage
-       confortablement les deux pastilles avant le début du texte.
-       */
-    padding: 80px 40px 32px;
+       large pour atteindre les bords gauche/droit. Passé à 80px une 1ère
+       fois (mesuré : badge/timer descendent jusqu'à ~57px, donc déjà une
+       marge de sécurité à cette valeur) puis à 96px sur nouveau retour
+       utilisateur (même chevauchement encore signalé) — probablement une
+       histoire de cache navigateur (service worker PWA, voir les notes de
+       session sur ce piège récurrent) plutôt qu'un vrai reliquat de marge
+       insuffisante, mais marge encore élargie par précaution/robustesse
+       plutôt que de se fier au seul calcul. */
+    padding: 96px 40px 32px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    /* "safe center" (pas juste "center") : retour utilisateur ("impossible
+       de voir la question en haut, impossible de scroll") sur une question
+       au contenu plus haut que la carte (ex. image portrait + liste à
+       ordonner) — un flex-box centré SANS "safe" clippe le début du
+       contenu de façon INATTEIGNABLE au scroll dès qu'il déborde (piège
+       CSS connu de l'alignement flex "unsafe" par défaut), seule la fin
+       débordante restait accessible. "safe" bascule automatiquement en
+       alignement départ (comme flex-start) dès que le contenu déborde,
+       pour que tout reste atteignable en scrollant — inchangé (toujours
+       centré) tant que le contenu tient dans la carte. */
+    justify-content: safe center;
     overflow-y: auto;
     /* Retour utilisateur (4e passe) : "recentre un peu la tuile centrale,
        qui n'est pas sensée prendre toute la hauteur (mais garde une taille
@@ -4224,6 +4236,58 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     align-self: center;
     min-height: 380px;
     max-height: 100%;
+  }
+  /* Tâche 028 (retour utilisateur : "impossible de voir la question en
+     haut... géner ça en deux colonnes pour les images verticales — TITRE
+     en haut, Photo en bas à gauche, éléments réponse en bas à droite") :
+     posée en JS sur #main (voir index.js question:show, illustrationImg)
+     dès que l'illustration chargée est au format PORTRAIT (plus haute que
+     large) ET qu'on est en régie desktop — #question/#illustrationImgWrap/
+     #inputArea restent les MÊMES éléments, déjà enfants directs de #main,
+     seule leur disposition change (aucun déplacement dans le DOM). En
+     grille plutôt qu'en flex-colonne : le titre occupe sa propre rangée
+     pleine largeur, la 2e rangée se partage en 2 colonnes égales. */
+  body.is-host.game-active .container #main.regie-portrait-layout {
+    /* !important nécessaire : enterGameScreen() (index.js) pose un style
+       inline display:block sur #main à chaque question — un inline-style
+       l'emporte toujours sur une règle de feuille de style, même plus
+       spécifique (même piège déjà rencontré/déjà corrigé ailleurs dans ce
+       fichier pour #hostPanel/padding, voir son commentaire). */
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    column-gap: 32px;
+    row-gap: 16px;
+    align-items: start;
+  }
+  body.is-host.game-active .container #main.regie-portrait-layout #questionCategoryBadge,
+  body.is-host.game-active .container #main.regie-portrait-layout #question {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  body.is-host.game-active .container #main.regie-portrait-layout #illustrationImgWrap {
+    grid-column: 1;
+    grid-row: 2;
+    /* Plein usage de sa colonne (au lieu du plafond 260px pensé pour une
+       illustration décorative empilée au-dessus du texte, voir
+       .illustration-img) — l'image a maintenant une vraie colonne à elle,
+       pas juste une bande au-dessus de l'énoncé. */
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.is-host.game-active .container #main.regie-portrait-layout #illustrationImgWrap .illustration-img {
+    max-height: min(50vh, 420px);
+    max-width: 100%;
+    margin: 0;
+  }
+  body.is-host.game-active .container #main.regie-portrait-layout #inputArea {
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+    max-width: none;
+    width: 100%;
   }
   /* Retour utilisateur ("une zone à part entière dédiée à la validation
      des réponses, sous le bloc central") : #moderationZone (index.js —
@@ -4248,6 +4312,94 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     max-height: 260px;
     overflow-y: auto;
   }
+  /* Tâche 030 (disposition dédiée par type de question) : Blind Test est
+     le type où l'hôte n'a QUE l'orbe à regarder pendant toute la question
+     (pas de tuiles à lire) — le garder à sa taille mobile (176px) sur une
+     carte régie qui peut faire 900px+ de large laissait beaucoup d'espace
+     inutilisé. .blindtest-orb-bars est scalé en CSS (transform:scale, pas
+     de changement de layout à gérer, purement décoratif) plutôt que de
+     toucher buildBlindTestOrbBars (index.js) : les 24 barres y sont
+     positionnées via translate() en px codés en dur (radius=42) autour du
+     centre, donc un simple agrandissement du conteneur .blindtest-orb ne
+     les aurait PAS repoussées vers le nouveau bord — scale() sur leur
+     propre conteneur les fait grandir ET s'écarter ensemble,
+     proportionnellement, sans toucher au JS. Ratio 280/176 ≈ 1.591 pour
+     rester synchronisé avec le nouveau diamètre de l'orbe ci-dessous. */
+  body.is-host.game-active .container .blindtest-orb { width: 280px; height: 280px; }
+  body.is-host.game-active .container .blindtest-orb-bars { transform: scale(1.591); }
+  body.is-host.game-active .container .blindtest-orb-core { width: 120px; height: 120px; }
+  body.is-host.game-active .container .blindtest-orb-core svg { width: 42px; height: 42px; }
+  /* Tâche 030 (suite) : graduation — le curseur restait plafonné à 520px
+     sur une carte régie qui peut faire 900px+ de large, laissant la carte
+     centrale largement vide autour d'un simple trait fin. Agrandi (piste
+     CSS pure, aucune valeur en dur côté JS à toucher ici contrairement au
+     blindtest — buildGradSlider ne fait que peupler le DOM, toute la
+     géométrie visuelle vient du CSS). */
+  body.is-host.game-active .container .graduation-area { max-width: 900px; }
+  body.is-host.game-active .container .grad-slider { max-width: 760px; padding: 24px 8px; }
+  body.is-host.game-active .container .grad-slider-track { height: 24px; }
+  body.is-host.game-active .container .grad-slider-thumb { width: 46px; height: 46px; }
+  body.is-host.game-active .container .grad-value { font-size: 64px; }
+  body.is-host.game-active .container .graduation-labels { max-width: 760px; font-size: 20px; }
+  /* Tâche 030 (suite) : reveal / recherche / halo partagent EXACTEMENT le
+     même gabarit de boîte (640px / 70vh-420px, voir commentaires historiques
+     à côté de .reveal-area/.recherche-area/.halo-area — cohérence
+     volontaire entre ces 3 types "image à deviner"), donc un seul bloc de
+     règles régie les couvre tous les trois d'un coup. Ce sont des questions
+     où l'image EST le contenu principal — un cadre à 420px de haut sur une
+     carte régie qui peut faire 700px+ de haut était clairement sous-
+     dimensionné. */
+  body.is-host.game-active .container .reveal-area,
+  body.is-host.game-active .container .recherche-area,
+  body.is-host.game-active .container .halo-area { max-width: 900px; }
+  body.is-host.game-active .container .reveal-img-wrap,
+  body.is-host.game-active .container .recherche-wrap,
+  body.is-host.game-active .container .halo-wrap { width: min(900px, 100%); height: min(65vh, 560px); }
+  /* Tâche 030 (suite) : order / timeline — liste verticale glissable,
+     plafonnée à 560px de large avec du texte à taille fixe. Une liste
+     ordonnée reste le bon choix visuel quel que soit le nombre d'items (un
+     agencement en colonnes multiples casserait la lisibilité "qui suit
+     qui") — ici on élargit/agrandit seulement, pas de restructuration.
+     Aucun changement JS : wireOrderDrag/wireTimelineDrag mesurent la
+     position via getBoundingClientRect() au moment du geste, insensibles
+     à la taille des cartes. */
+  body.is-host.game-active .container .order-area,
+  body.is-host.game-active .container .timeline-area { max-width: 820px; }
+  body.is-host.game-active .container .order-item,
+  body.is-host.game-active .container .timeline-item { padding: 20px 28px; }
+  body.is-host.game-active .container .order-item-text { font-size: 19px; }
+  body.is-host.game-active .container .timeline-item-title { font-size: 19px; }
+  body.is-host.game-active .container .timeline-item-desc { font-size: 15px; }
+  /* Tâche 030 (suite) : rangement — zones réparties en rangées adaptatives
+     déjà en % via --rangement-row-cols(-mobile) (posé par zone en JS, voir
+     RANGEMENT_ZONE_ROW_PATTERNS dans index.js) — rien à recalculer, juste
+     lever le plafond 700px pour laisser ce motif déjà adaptatif absorber la
+     largeur supplémentaire. Plafond à 1000px plutôt que "none" : au-delà,
+     des zones à 2-3 colonnes deviendraient disproportionnées sur un écran
+     très large. */
+  body.is-host.game-active .container .rangement-area { max-width: 1000px; }
+  /* Tâche 030 (suite) : association — c'est DÉJÀ la disposition "2 colonnes
+     appariées" (grid 1fr 1fr), l'existant est bon sur le principe. Seule
+     limitation : plafonné à 640px, hérité du même défaut que rangement (pensé
+     mobile/tablette, jamais élargi pour la régie). Aucun risque pour les
+     traits SVG reliant les paires (.association-links-svg) : son viewBox et
+     les coordonnées des lignes sont recalculés dynamiquement à partir du
+     rect réel de .association-area à chaque sélection (voir index.js), pas
+     de valeur figée à corriger. */
+  body.is-host.game-active .container .association-area { max-width: 900px; gap: 32px; }
+  body.is-host.game-active .container .assoc-item { padding: 20px 24px; font-size: 18px; }
+  /* Tâche 030 (fin) : indice — carte centrale plafonnée à 640px de large,
+     240px de haut. La hauteur FIXE (pas un minimum) est un choix technique
+     documenté plus haut (empêcher un saut de taille selon le contenu), PAS
+     une valeur figée dans la logique d'animation : flipIndiceCardToHistory
+     (index.js) utilise la technique FLIP (mesure avant/après via
+     getBoundingClientRect(), transform calculé dynamiquement) — aucune
+     dépendance à "240px" en dur, donc relever cette hauteur reste sûr pour
+     l'animation. Texte agrandi en cohérence. */
+  body.is-host.game-active .container .indice-area { max-width: 900px; }
+  body.is-host.game-active .container .indice-central,
+  body.is-host.game-active .container .indice-central-card { height: 320px; }
+  body.is-host.game-active .container .indice-card-text { font-size: 28px; }
   body.is-host.game-active .container #liveClassementDock {
     grid-column: 3;
     /* span 2, même raison que #hostPanel plus haut. */

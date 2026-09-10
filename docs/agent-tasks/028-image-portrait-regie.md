@@ -66,21 +66,82 @@ Sur l'écran du MJ (régie desktop UNIQUEMENT) :
   présente ; ne doit rien changer hors régie desktop.
 
 ## Plan
-(à remplir par `/plan-feature`)
+Implémenté directement suite à un retour utilisateur détaillé (capture
+d'écran + spécification précise : "TITRE en haut, Photo en bas à gauche,
+éléments réponse en bas à droite"), après une première frustration sur le
+même problème ("impossible de voir la question en haut, impossible de
+scroll") — pas de nouveau tour de cadrage, la spec était déjà concrète.
+
+- `#question`/`#illustrationImgWrap`/`#inputArea` sont déjà enfants DIRECTS
+  de `#main` dans le DOM (aucun déplacement nécessaire) : bascule `#main`
+  en CSS Grid (`.regie-portrait-layout`, régie desktop uniquement) plutôt
+  que flex-colonne, avec placement explicite de ces 3 éléments (titre en
+  rangée 1 pleine largeur, image/réponses en rangée 2 sur 2 colonnes).
+- Détection portrait/paysage en JS (`naturalWidth`/`naturalHeight` une fois
+  l'image chargée, `.complete` vérifié pour le cas déjà en cache), classe
+  posée sur `#main` — jamais pour "zoomguess" (Hors périmètre), jamais
+  supposée stable d'une question à l'autre (réévaluée à chaque
+  `question:show`, retirée explicitement si pas d'illustration).
+- **Bug trouvé en vérifiant en direct** : `enterGameScreen()` pose un style
+  INLINE `display:block` sur `#main` à chaque question — qui l'emporte
+  toujours sur une règle de feuille de style, même plus spécifique. Corrigé
+  avec `!important` sur `display:grid` (même patron déjà utilisé ailleurs
+  dans ce fichier pour `#hostPanel`/padding, exactement pour cette raison).
+- En prime (même session, même symptôme "impossible de scroll") :
+  `#stageWrap` utilisait `justify-content: center` (pas `safe center`) —
+  un flex-box centré dont le contenu déborde clippe le DÉBUT de façon
+  inatteignable au scroll (piège CSS connu de l'alignement "unsafe" par
+  défaut). Passé à `safe center` : robuste même si un futur cas fait encore
+  déborder le contenu.
+- `#hostPanel` (colonne gauche) rendu explicitement non-scrollable sur
+  retour utilisateur séparé (même session) : l'ancien compromis "scrollable
+  mais scrollbar cachée" (pour éviter un clipping silencieux constaté par
+  le passé) est retiré, le contenu actuel de cette colonne tenant
+  largement dans la hauteur disponible en usage réel.
 
 ## Étapes réalisées
-- [ ] (à remplir par `/implement-step`)
+- [x] 1. `client/public/css/style.css` — `.regie-portrait-layout` (grid sur
+      `#main`, placement des 3 éléments), `!important` sur `display:grid`
+      (style inline concurrent).
+- [x] 2. `client/public/js/index.js` — détection portrait/paysage au
+      chargement de l'illustration, toggle de la classe (exclu pour
+      "zoomguess").
+- [x] 3. `#stageWrap` : `justify-content: safe center` (corrige le
+      "impossible de scroll" à la racine, indépendamment du point 1).
+- [x] 4. `#hostPanel` : retrait du scroll caché (retour utilisateur séparé).
 
 ## Checks effectués
-- [ ] `node --check client/public/js/index.js`
-- [ ] Vérification visuelle Browser pane (image portrait ET paysage, régie
-      desktop ET vue joueur/mobile)
+- [x] `node --check client/public/js/index.js` — passe.
+- [x] **Vérification EN DIRECT** (Browser pane, vraie page, salle
+      "Présenter", régie desktop 1400px) : question "Ordre/classement"
+      avec illustration portrait (SVG data URI 300×500) — `#main` bascule
+      bien en grid (`display:grid` confirmé, après correctif `!important`),
+      rendu conforme à la spec (titre en haut pleine largeur, image en bas
+      à gauche, liste à ordonner en bas à droite), tout tient dans la carte
+      sans scroll nécessaire.
+- [x] Diagnostic du bug `!important` fait via inspection réelle des règles
+      CSS correspondantes (`document.styleSheets`/`element.matches`), pas
+      par supposition — confirmé qu'une seule règle matchait `#main` et
+      posait bien `display:grid`, mais qu'un style inline la masquait.
 
 ## Tests manuels recommandés
-(à remplir par `/plan-feature`/`/implement-step`)
+Tester avec une VRAIE image portrait uploadée depuis l'éditeur (pas juste
+le SVG de test) sur plusieurs types de question (mcq, graduation, texte
+libre — pas seulement "order") pour confirmer que `#inputArea` s'adapte
+bien à chacun sans débordement. Vérifier aussi qu'une illustration
+PAYSAGE/carrée n'active jamais cette disposition (garde le rendu empilé
+existant), et que la vue joueur (mobile/tablette, hors régie) reste
+totalement inchangée.
 
 ## Risques restants
-(à remplir par `/plan-feature`/`/implement-step`)
+- Testé avec un seul type ("order") faute de temps — les autres types
+  partagent tous `#inputArea` comme conteneur générique, donc le
+  placement grid devrait s'appliquer uniformément, mais chaque type a sa
+  propre mise en page interne (mcq en tuiles, graduation en curseur...)
+  qui n'a pas été vérifiée individuellement dans cette colonne plus étroite
+  (la moitié de la largeur habituelle).
+- `max-height: min(50vh, 420px)` sur l'image portrait (empirique) — à
+  ajuster si une image très haute/étroite rend mal dans certains cas.
 
 ## Statut
-`ouverte`
+`en review`

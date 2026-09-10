@@ -6047,6 +6047,10 @@ const isLastQuestion = () => !!loadedQuiz && quizIndex >= loadedQuiz.questions.l
 // (un minuteur ici, un clic hôte en mode "Présenter", inchangé).
 const AUTO_ADVANCE_REVEAL_DELAY_MS = 4500 // temps laissé pour lire la correction avant le classement
 const AUTO_ADVANCE_LEADERBOARD_DELAY_MS = 3500 // temps laissé sur le classement avant la question suivante
+// Petite marge après la fin d'un son de révélation (voir question:reveal,
+// revealExtendedDelayMs) avant de couper/enchaîner — jamais pile sur la
+// dernière milliseconde du clip.
+const REVEAL_AUDIO_EXTEND_MARGIN_MS = 500
 let autoAdvanceTimer = null
 const clearAutoAdvanceTimer = () => { if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null } }
 const scheduleAutoAdvance = (delayMs, action) => {
@@ -6221,6 +6225,46 @@ startQuizBtn.onclick = async () => {
   await launchQuiz()
 }
 
+// Tâche 028 bis (retour utilisateur, capture d'écran : Blind Test qui
+// déborde de la carte régie — image + orb + slider + bandeau "Bonne
+// réponse" à la révélation, plus haut que la place disponible sur un
+// écran moins haut que large) : "trouve une astuce pour ne pas avoir à
+// scroller en présentation". Solution GÉNÉRIQUE (marche pour n'importe
+// quel type, pas juste Blind Test, pas de réglage par type à maintenir) :
+// mesure la hauteur réelle du contenu (#main) après chaque affichage/
+// révélation de question, et le réduit avec `zoom` (PAS `transform:scale`,
+// qui ne change que le RENDU visuel — le calcul de débordement/scroll d'un
+// ancêtre continue de se baser sur la taille non transformée, donc
+// n'aurait rien résolu ; `zoom` modifie réellement la taille de mise en
+// page prise en compte) tout juste assez pour tenir dans la carte, jamais
+// plus (jamais agrandi au-delà de 100%). Uniquement en régie desktop —
+// sans effet ailleurs (joueur/mobile gardent leur propre mise en page,
+// jamais grande au point de déborder).
+const STAGE_FIT_MIN_ZOOM = 0.55
+const fitStageContent = () => {
+  if (!window.matchMedia('(min-width: 1100px)').matches) return
+  if (!document.body.classList.contains('is-host') || !document.body.classList.contains('game-active')) return
+  const stageWrap = document.getElementById('stageWrap')
+  const mainEl = document.getElementById('main')
+  if (!stageWrap || !mainEl) return
+  // Repart de zoom:1 avant de remesurer — sinon un zoom déjà appliqué à la
+  // question précédente fausserait la mesure de scrollHeight (un contenu
+  // déjà réduit semble toujours "tenir", même si le contenu RÉEL, à taille
+  // normale, ne tiendrait plus). Pas besoin de `requestAnimationFrame` pour
+  // laisser ce reset "prendre" avant de remesurer : lire scrollHeight/
+  // clientHeight juste après une modif de style force déjà un recalcul de
+  // mise en page synchrone dans le navigateur — et rAF a en prime le
+  // défaut d'être suspendu tant que l'onglet n'est pas au premier plan
+  // (jamais déclenché si la fenêtre de présentation perd le focus).
+  mainEl.style.zoom = ''
+  const stageCs = getComputedStyle(stageWrap)
+  const available = stageWrap.clientHeight - parseFloat(stageCs.paddingTop || 0) - parseFloat(stageCs.paddingBottom || 0)
+  const contentHeight = mainEl.scrollHeight
+  if (available > 40 && contentHeight > available) {
+    mainEl.style.zoom = Math.max(STAGE_FIT_MIN_ZOOM, Math.min(1, available / contentHeight))
+  }
+}
+
 socket.on('question:show', payload => {
   inActiveGame = true
   // Renfort (retour utilisateur : "il n'est plus visible") — déjà posé
@@ -6387,9 +6431,40 @@ socket.on('question:show', payload => {
     // illustrationUrl), jamais zoomée.
     const isZoomGuess = payload.type === 'zoomguess'
     const mediaUrl = isZoomGuess ? payload.imageUrl : payload.illustrationUrl
+    // Tâche 028 (retour utilisateur, capture d'écran : "impossible de voir
+    // la question en haut... géner ça en deux colonnes pour les images
+    // verticales") : une illustration au format PORTRAIT réservait
+    // jusqu'ici la même bande plafonnée à 260px que n'importe quelle
+    // illustration paysage, empilée AU-DESSUS de l'énoncé — sur la carte
+    // large de la régie desktop, ça laissait un gros bloc d'espace
+    // horizontal inutilisé à côté d'elle, et sur une question au contenu
+    // par ailleurs long, ça pouvait pousser l'énoncé hors de la zone
+    // visible (voir aussi le correctif "safe center" juste au-dessus de ce
+    // fichier CSS pour le symptôme "impossible de scroll"). Détecté ici à
+    // chaque question (jamais supposé stable d'une question à l'autre) :
+    // le sens réel de l'image n'est connu qu'une fois ses dimensions
+    // chargées (naturalWidth/naturalHeight) — .complete vérifié tout de
+    // suite pour une image déjà en cache (même piège que
+    // revealImageDisplay/applyCropTransform plus haut dans ce fichier, qui
+    // ne redéclenche jamais onload dans ce cas). Explicitement EXCLU pour
+    // "zoomguess" (voir Hors périmètre de la tâche 028) : son image est le
+    // MÉCANISME du jeu (zoom actif, boîte de taille fixe), pas une
+    // illustration décorative — sans effet hors régie desktop de toute
+    // façon (voir la portée de la règle CSS .regie-portrait-layout).
+    const mainEl = document.getElementById('main')
+    const applyPortraitLayout = () => {
+      if (!mainEl) return
+      const isPortrait = !isZoomGuess && illustrationImg.naturalWidth > 0 && illustrationImg.naturalHeight > illustrationImg.naturalWidth
+      mainEl.classList.toggle('regie-portrait-layout', isPortrait)
+      // L'image vient de charger (ou d'échouer) : sa vraie taille peut
+      // changer la hauteur totale du contenu, voir fitStageContent.
+      fitStageContent()
+    }
     if (mediaUrl) {
-      illustrationImg.onerror = () => { illustrationImg.classList.add('d-none') }
+      illustrationImg.onerror = () => { illustrationImg.classList.add('d-none'); if (mainEl) mainEl.classList.remove('regie-portrait-layout'); fitStageContent() }
+      illustrationImg.onload = applyPortraitLayout
       illustrationImg.src = mediaUrl
+      if (illustrationImg.complete && illustrationImg.naturalWidth) applyPortraitLayout()
       illustrationImg.classList.remove('d-none')
       // L'animation d'entrée (tileRevealIn) anime elle-même "transform" —
       // posée directement sur <img>, elle écraserait en continu (tant
@@ -6404,6 +6479,7 @@ socket.on('question:show', payload => {
     } else {
       illustrationImg.classList.add('d-none')
       illustrationImg.removeAttribute('src')
+      if (mainEl) mainEl.classList.remove('regie-portrait-layout')
     }
     // Zoom initial posé tout de suite (avant même startTs) : la question
     // révélée doit apparaître déjà zoomée, pas dézoomée puis re-zoomée une
@@ -6846,6 +6922,13 @@ socket.on('question:show', payload => {
       applyTileReveal(el, i)
     })
   }
+  // Ajustement générique "tient dans la carte" (voir sa définition plus
+  // haut) : appelé ici en fin de question:show (tuiles/zones déjà
+  // construites) ET une seconde fois après un court délai (certaines
+  // images des tuiles — association, intrus... — continuent de charger de
+  // façon asynchrone après ce point, voir setTimeout ci-dessous).
+  fitStageContent()
+  setTimeout(fitStageContent, 400)
 })
 
 // Extrait en fonction nommée (au lieu d'un simple sendBtn.onclick) : "order"
@@ -8039,6 +8122,23 @@ socket.on('question:reveal', payload => {
     // leur historique d'interaction, verront le son bloqué silencieusement.
     revealAudioPlayer.play().catch(() => {})
   }
+  // Retour utilisateur : "la révélation doit durer plus longtemps... si il
+  // y a un extrait sonore, que ça dure tout ce temps-là" — le délai de base
+  // (AUTO_ADVANCE_REVEAL_DELAY_MS) coupait court le passage au classement
+  // en mode "Jouer" (scheduleAutoAdvance plus bas) même quand un son de
+  // révélation plus long était encore en train de jouer : la popup, elle,
+  // savait déjà s'étendre pour l'attendre (voir revealPopupDelay tout en
+  // bas de ce handler), mais ce minuteur-ci, complètement indépendant,
+  // l'ignorait et enchaînait quand même vers le classement à l'heure fixe.
+  // Calculé ICI (un seul calcul, réutilisé pour les deux minuteries plus
+  // bas) plutôt que dupliqué : même mesure de la durée réelle du clip
+  // (souvent pas encore connue de façon synchrone à ce stade — métadonnées
+  // pas chargées —, auquel cas on garde simplement le délai de base, comme
+  // déjà accepté pour la popup).
+  let revealExtendedDelayMs = AUTO_ADVANCE_REVEAL_DELAY_MS
+  if (revealAudioPlayer && payload.revealAudio && Number.isFinite(revealAudioPlayer.duration) && revealAudioPlayer.duration > 0) {
+    revealExtendedDelayMs = Math.max(AUTO_ADVANCE_REVEAL_DELAY_MS, revealAudioPlayer.duration * 1000 + REVEAL_AUDIO_EXTEND_MARGIN_MS)
+  }
   if ((payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus') && optionsDiv) {
     Array.from(optionsDiv.children).forEach(el => {
       // "intrus" (photos) : la tuile n'a plus de texte à comparer, l'id de
@@ -8201,8 +8301,12 @@ socket.on('question:reveal', payload => {
     hostPhase = 'revealed'
     updateHostControls()
     // Mode "Jouer" : personne ne clique "Suivant" — voir scheduleAutoAdvance.
+    // revealExtendedDelayMs (calculé plus haut) plutôt que la constante fixe
+    // AUTO_ADVANCE_REVEAL_DELAY_MS : sans ça, une question avec un son de
+    // révélation plus long que 4.5s se voyait couper court, le classement
+    // s'affichant PAR-DESSUS un son encore en train de jouer.
     if (roomMode === 'auto') {
-      scheduleAutoAdvance(AUTO_ADVANCE_REVEAL_DELAY_MS, () => {
+      scheduleAutoAdvance(revealExtendedDelayMs, () => {
         const roomCode = roomInput.value.trim()
         if (roomCode) socket.emit('leaderboard:show', { roomCode })
       })
@@ -8257,6 +8361,13 @@ socket.on('question:reveal', payload => {
     if (revealPopupCloseTimer) clearTimeout(revealPopupCloseTimer)
     revealPopupCloseTimer = setTimeout(() => { revealPopupCloseTimer = null; closeRevealPopup() }, revealPopupDelay)
   }
+  // Ajustement générique "tient dans la carte" (voir sa définition plus
+  // haut) : la révélation ajoute souvent du contenu (surlignage correct/
+  // incorrect, bandeau "Bonne réponse", orb + slider de Blind Test qui
+  // n'existaient pas encore pendant la question) — peut faire déborder une
+  // carte qui tenait pourtant pendant la phase de réponse.
+  fitStageContent()
+  setTimeout(fitStageContent, 400)
 })
 
 socket.on('leaderboard:show', () => {
