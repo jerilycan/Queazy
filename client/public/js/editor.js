@@ -126,17 +126,31 @@ const qExplanation = document.getElementById('qExplanation')
 // Catégorie/difficulté + "Ajouter à la banque" (tâche 021, mode "Jouer") :
 // jamais obligatoires pour sauvegarder le quiz normalement (voir saveQuizBtn
 // plus bas, inchangé) — seulement exigés par addToBankBtn.onclick.
-const qCategoryInput = document.getElementById('qCategoryInput')
-const qCategorySuggestions = document.getElementById('qCategorySuggestions')
+const qCategorySelect = document.getElementById('qCategorySelect')
 const qDifficultySelect = document.getElementById('qDifficultySelect')
 const addToBankBtn = document.getElementById('addToBankBtn')
-// Suggestions de catégorie (tâche 021) : dérivées des catégories déjà
-// utilisées DANS CE quiz — jamais une liste imposée en dur (voir Hors
-// périmètre de la tâche), juste un confort de saisie.
-const refreshCategorySuggestions = () => {
-  if (!qCategorySuggestions) return
-  const cats = Array.from(new Set(questions.map(q => (q.category || '').trim()).filter(Boolean))).sort()
-  qCategorySuggestions.innerHTML = cats.map(c => `<option value="${c.replace(/"/g, '&quot;')}"></option>`).join('')
+// Catégories (tâche 024) : liste FIXE gérée par un super admin
+// (bank_categories, voir admin-bank.html) — remplace l'ancien texte libre
+// à suggestions (tâche 021). Chargée une seule fois (comme
+// bankCategoriesLoaded côté index.js pour le mode "Jouer", même patron) :
+// la liste ne change pas pendant une session d'édition.
+let categoryOptionsLoaded = false
+const loadCategoryOptions = async () => {
+  if (categoryOptionsLoaded || !qCategorySelect) return
+  categoryOptionsLoaded = true
+  const { data, error } = await sb.from('bank_categories').select('name').order('name')
+  if (error) {
+    console.error('[bank_categories] chargement impossible :', error)
+    return
+  }
+  const current = qCategorySelect.value
+  ;(data || []).forEach(row => {
+    const opt = document.createElement('option')
+    opt.value = row.name
+    opt.textContent = row.name
+    qCategorySelect.appendChild(opt)
+  })
+  qCategorySelect.value = current
 }
 const qType = document.getElementById('qType')
 // Rendu "maison" (voir js/ui-widgets.js) au lieu du <select> natif — le
@@ -2336,9 +2350,9 @@ const selectQuestion = (index) => {
   if (qDraftToggle) qDraftToggle.checked = !!q.draft
   qPrompt.value = q.prompt || ''
   if (qExplanation) qExplanation.value = q.explanation || ''
-  if (qCategoryInput) qCategoryInput.value = q.category || ''
+  loadCategoryOptions().then(() => { if (qCategorySelect) qCategorySelect.value = q.category || '' })
+  if (qCategorySelect) qCategorySelect.value = q.category || ''
   if (qDifficultySelect) qDifficultySelect.value = q.difficulty || ''
-  refreshCategorySuggestions()
   qType.value = q.type || 'free'
   // Rappel de couleur sur la tuile elle-même (voir [data-qtype] et
   // .question-detail dans style.css, option "C" retenue après maquette) —
@@ -2390,7 +2404,7 @@ const saveCurrentQuestionState = () => {
   if (qDraftToggle) q.draft = qDraftToggle.checked
   q.prompt = qPrompt.value.trim()
   if (qExplanation) q.explanation = qExplanation.value.trim()
-  if (qCategoryInput) q.category = qCategoryInput.value.trim()
+  if (qCategorySelect) q.category = qCategorySelect.value
   if (qDifficultySelect) q.difficulty = qDifficultySelect.value
   q.type = qType.value
   q.timerMs = parseInt(qTimer.value) * 1000 || 15000
@@ -4296,8 +4310,8 @@ qPrompt.oninput = () => {
 if (qExplanation) {
   qExplanation.oninput = () => { questions[activeIndex].explanation = qExplanation.value }
 }
-if (qCategoryInput) {
-  qCategoryInput.oninput = () => { questions[activeIndex].category = qCategoryInput.value }
+if (qCategorySelect) {
+  qCategorySelect.onchange = () => { questions[activeIndex].category = qCategorySelect.value }
 }
 if (qDifficultySelect) {
   qDifficultySelect.onchange = () => { questions[activeIndex].difficulty = qDifficultySelect.value }
@@ -4342,7 +4356,8 @@ const deleteQuestionAt = (index) => {
     if (qDraftToggle) qDraftToggle.checked = !!q.draft
     qPrompt.value = q.prompt || ''
     if (qExplanation) qExplanation.value = q.explanation || ''
-    if (qCategoryInput) qCategoryInput.value = q.category || ''
+    loadCategoryOptions().then(() => { if (qCategorySelect) qCategorySelect.value = q.category || '' })
+    if (qCategorySelect) qCategorySelect.value = q.category || ''
     if (qDifficultySelect) qDifficultySelect.value = q.difficulty || ''
     qType.value = q.type || 'free'
     qTimer.value = (q.timerMs || 15000) / 1000
@@ -5063,8 +5078,10 @@ if (addToBankBtn) {
         created_by: session.user.id
       }])
       if (error) throw error
-      refreshCategorySuggestions()
-      showToast('Question ajoutée à la banque !', 'success')
+      // Message adapté (tâche 022) : la question part désormais en attente
+      // ('pending', voir migration bank_questions.status) plutôt que d'être
+      // jouable immédiatement — reflète l'ajout ET l'attente de validation.
+      showToast('Question envoyée à la banque, en attente de validation !', 'success')
     } catch (err) {
       console.error('[bank_questions] ajout impossible :', err)
       showToast(err?.isMediaUploadError ? err.message : 'Erreur lors de l\'ajout à la banque', 'error')

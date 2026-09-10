@@ -256,17 +256,20 @@
             <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
           </div>
 
-          <!-- Catégorie + difficulté (tâche 021) : tags libres, jamais
-               obligatoires pour sauvegarder le quiz normalement — utilisés
-               UNIQUEMENT par "Ajouter à la banque" juste en dessous, qui les
-               exige avant de publier dans bank_questions (mode "Jouer").
-               Aucune catégorie n'est imposée en dur : qCategorySuggestions
-               n'est qu'une liste de suggestions (voir editor.js). -->
+          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
+               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
+               normalement — utilisés UNIQUEMENT par "Ajouter à la banque"
+               juste en dessous, qui les exige avant de publier dans
+               bank_questions (mode "Jouer"). Catégorie choisie dans
+               bank_categories (table gérée par un super admin depuis
+               admin-bank.html), plus de texte libre — voir
+               loadCategoryOptions côté editor.js. -->
           <div class="d-grid grid-cols-split gap-lg">
             <div class="detail-section">
-              <label for="qCategoryInput">Catégorie</label>
-              <input id="qCategoryInput" list="qCategorySuggestions" placeholder="Ex : Cinéma" maxlength="60" />
-              <datalist id="qCategorySuggestions"></datalist>
+              <label for="qCategorySelect">Catégorie</label>
+              <select id="qCategorySelect">
+                <option value="">— Choisir —</option>
+              </select>
             </div>
             <div class="detail-section">
               <label for="qDifficultySelect">Difficulté</label>
