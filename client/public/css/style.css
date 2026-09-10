@@ -4400,6 +4400,24 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   body.is-host.game-active .container .indice-central,
   body.is-host.game-active .container .indice-central-card { height: 320px; }
   body.is-host.game-active .container .indice-card-text { font-size: 28px; }
+  /* Tâche 031 : en IRL, l'hôte présentateur ne montre plus le gameplay
+     (#inputArea masqué, voir body.irl-presenter-mode plus haut dans ce
+     fichier) — l'illustration décorative (normalement plafonnée à 260px,
+     pensée mobile, voir .illustration-img) peut alors occuper largement la
+     carte régie. Portrait (grid 2 colonnes, .regie-portrait-layout, tâche
+     028) : avec #inputArea masqué (display:none, donc retiré du calcul de
+     grille), la 2e colonne resterait un espace vide réservé pour rien —
+     repassée à une seule colonne pour que l'image profite de toute la
+     largeur. */
+  body.is-host.game-active.irl-presenter-mode .container #main .illustration-img {
+    max-height: min(65vh, 620px);
+  }
+  body.is-host.game-active.irl-presenter-mode .container #main.regie-portrait-layout {
+    grid-template-columns: 1fr;
+  }
+  body.is-host.game-active.irl-presenter-mode .container #main.regie-portrait-layout #illustrationImgWrap .illustration-img {
+    max-height: min(65vh, 620px);
+  }
   body.is-host.game-active .container #liveClassementDock {
     grid-column: 3;
     /* span 2, même raison que #hostPanel plus haut. */
@@ -8005,6 +8023,16 @@ body.irl-player-mode #illustrationImgWrap { display: none; }
    illustration décorative — elle doit rester visible sur le téléphone du
    joueur même en IRL, contrairement aux autres types. */
 body.irl-player-mode #illustrationImgWrap.zoomguess-visible { display: block; }
+/* Retour utilisateur : en IRL, l'hôte PRÉSENTATEUR (jamais joueur, voir
+   isPresenterHost() côté index.js — n'inclut jamais le mode "Jouer", où
+   l'hôte répond comme un joueur) n'a plus RIEN à montrer du gameplay/des
+   réponses sur son écran : la salle répond de vive voix/à main levée, pas
+   besoin des tuiles. Toute taille d'écran (pas juste régie desktop) —
+   voir updateIrlPlayerUI, qui pose body.irl-presenter-mode. !important :
+   #inputArea reçoit display:block en inline à CHAQUE question (voir
+   index.js, question:show) — même patron déjà utilisé pour #main/
+   #hostPanel plus haut dans ce fichier, pour la même raison. */
+body.irl-presenter-mode #inputArea { display: none !important; }
 .irl-menu-btn {
   display: none;
   /* z-index 1200 (pas 200) : au-dessus de #recapSidebarToggle (1100,
