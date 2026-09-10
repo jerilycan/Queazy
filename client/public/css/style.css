@@ -774,6 +774,35 @@ input, textarea {
 }
 input:focus, textarea:focus { outline: none; border-color: var(--color-accent); background: var(--color-surface-2); box-shadow: 0 0 0 4px var(--color-accent-soft), 0 4px 12px rgba(var(--color-accent-rgb),0.15); }
 
+/* <select> natif — jusqu'ici sans règle globale (seuls input/textarea en
+   avaient une), donc tout <select> nouvellement ajouté sans classe dédiée
+   retombait sur le rendu par défaut du navigateur (fond blanc, flèche
+   système) en pleine interface sombre (retour utilisateur : "le bouton
+   difficulté dénote", #qDifficultySelect côté editor.html tâche 021,
+   #newAdminRole côté admin-bank.html tâche 022). Reprend exactement la
+   même recette que #qType (déjà en place plus bas dans ce fichier, laissé
+   tel quel) — même flèche SVG, mêmes tokens — pour que tout futur <select>
+   sans classe particulière s'intègre par défaut, sans avoir à y repenser. */
+select {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239d98c9'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+select:focus { outline: none; border-color: var(--color-accent); background-color: var(--color-surface-2); box-shadow: 0 0 0 4px var(--color-accent-soft), 0 4px 12px rgba(var(--color-accent-rgb),0.15); }
+
 /* Lobby Specifics */
 .lobby-header { text-align: center; margin-bottom: var(--space-lg); }
 /* Carte organisateur (design décidé, canvas "Écran hôte" — artboard
@@ -798,6 +827,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
 /* Pastille "ORGANISATEUR" (remplace le 👑 qui flottait au-dessus de
    l'avatar, voir .avatar-main plus bas) — même recette que les autres
    pastilles teintées accent de l'appli (.btn-nav-secondary, .team-badge). */
+/* Mode "Jouer" (tâche 021 bis) : #hostPanel ("Contrôles de l'hôte") est
+   entièrement caché — le bouton LANCER (id="startQuiz", même élément DOM,
+   juste déplacé — voir renderLobbyGrid côté index.js) atterrit ici, sous le
+   badge Organisateur, au lieu d'un panneau séparé en dessous. */
+.auto-launch-btn { margin-top: 18px; }
+
 .host-organizer-badge {
   display: inline-flex;
   align-items: center;
@@ -1309,33 +1344,180 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   text-align: center;
 }
 
-/* Panneau config du quiz auto (tâche 021) — grille de cases à cocher
-   catégories/types, mêmes tokens que le reste du panneau hôte. */
-.auto-config-check-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  max-height: 160px;
-  overflow-y: auto;
-  margin-top: 6px;
-}
-.auto-config-check {
-  display: flex;
+/* Panneau config du quiz auto (tâche 021, refonte "ligne compacte +
+   accordéons" — retour utilisateur : cacher vitesse/équipe/à-distance
+   inutiles en mode Jouer + rendre le nombre total de questions modifiable
+   directement, pas seulement en somme des 3 paliers). Voir index.js
+   (setAutoTotal/setAutoTier) et index.html (#hostAutoPanel). */
+
+/* Repère "lecture seule" pour un non-hôte (retour utilisateur : le panneau
+   doit être visible par tous mais modifiable seulement par l'hôte — les
+   <input>/boutons natifs disabled ne se voyaient pas assez). Pastille dans
+   l'en-tête + léger assombrissement des contrôles (pas du texte/labels,
+   qui doivent rester lisibles) pour renforcer le signal sans dupliquer
+   l'état disabled déjà posé en JS. */
+.auto-panel-lock-badge {
+  margin-left: auto;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
 }
-.auto-config-num {
-  width: 70px;
-  padding: 6px 8px;
+#hostAutoPanel.is-readonly .auto-field,
+#hostAutoPanel.is-readonly .auto-accordion {
+  opacity: 0.6;
+}
+#hostAutoPanel.is-readonly .auto-mini-btn,
+#hostAutoPanel.is-readonly .auto-field-input,
+#hostAutoPanel.is-readonly .auto-config-check {
+  cursor: not-allowed;
+}
+
+/* Ligne des 4 réglages (faciles/moyennes/difficiles/total), chacun un
+   stepper -/+ autour d'un <input type="number"> — mêmes tokens que
+   .auto-field-input plus bas, cohérent avec le reste du panneau hôte. */
+.auto-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr) 1.15fr;
+  gap: 10px;
+  /* Retour utilisateur : le titre "Config du quiz automatique" restait
+     collé à cette ligne malgré le mb-12 de .host-panel-eyebrow (déjà
+     partagé avec #hostPanel, pas touché ici). */
+  margin-top: 8px;
+}
+.auto-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+/* Total : mise en avant en dégradé accent (même recette que .btn-primary)
+   — c'est le nouveau réglage le plus important du panneau (retour
+   utilisateur), il doit se voir en premier. */
+.auto-field-total {
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  border-color: transparent;
+  box-shadow: 0 5px 0 var(--color-accent-deep), 0 10px 22px rgba(var(--color-accent-rgb),0.35);
+}
+.auto-field-dot { width: 8px; height: 8px; border-radius: 50%; }
+.auto-field-dot-facile { background: var(--tile-green); }
+.auto-field-dot-moyen { background: var(--tile-yellow); }
+.auto-field-dot-difficile { background: var(--tile-red); }
+.auto-field-label {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+.auto-field-total .auto-field-label { color: rgba(255,255,255,0.85); }
+.auto-field-row { display: flex; align-items: center; gap: 8px; }
+.auto-mini-btn {
+  width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--color-border);
+  background: var(--color-surface-2); color: var(--color-text); font-family: 'Baloo 2', sans-serif;
+  font-weight: 800; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.auto-mini-btn:hover { transform: translateY(-1px); }
+.auto-mini-btn:active { transform: translateY(1px); }
+.auto-field-total .auto-mini-btn { background: rgba(255,255,255,0.22); border-color: transparent; color: #fff; }
+.auto-field-input {
+  width: 42px;
+  padding: 4px 2px;
   border-radius: 8px;
   border: 1px solid var(--color-border);
   background: var(--color-surface, transparent);
   color: inherit;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  text-align: center;
+  /* Les steppers +/- suffisent au clic ; les flèches natives du input
+     number doublonnent et débordent dans ce gabarit étroit. */
+  -moz-appearance: textfield;
+}
+.auto-field-input::-webkit-outer-spin-button, .auto-field-input::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.auto-field-total .auto-field-input { background: rgba(255,255,255,0.14); border-color: transparent; color: #fff; }
+
+/* Catégories/types : repliés par défaut dans un accordéon (retour
+   utilisateur — la liste des 17 types prenait trop de hauteur affichée en
+   permanence). */
+.auto-accordion {
+  margin-top: 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+.auto-accordion-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: inherit;
   font-family: inherit;
-  font-size: 14px;
+  text-align: left;
+}
+.auto-accordion-head-left { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; }
+.auto-accordion-count {
+  font-size: 11px; font-weight: 800; color: var(--color-accent);
+  background: var(--color-accent-soft); border-radius: 999px; padding: 2px 9px;
+}
+.auto-chevron { color: var(--color-text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
+.auto-chevron.open { transform: rotate(180deg); }
+.auto-accordion-body { padding: 0 16px 14px; }
+
+/* Grille de pastilles catégories/types — remplace les cases à cocher nues
+   d'avant. Les <input type="checkbox"> restent dans le DOM (voir
+   loadBankCategories/renderAutoTypeList côté index.js, inchangés) pour ne
+   pas toucher à la logique de sélection : seul le LABEL autour est stylé en
+   pastille, la case elle-même est masquée visuellement (voir .auto-chip-list
+   input plus bas), :has() déjà utilisé ailleurs dans ce fichier
+   (.option-row) pour ce même genre de bascule visuelle sur un input caché. */
+.auto-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-top: 10px;
+  padding-right: 4px;
+}
+.auto-config-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.auto-config-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.auto-config-check:has(input:checked) {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+  box-shadow: 0 3px 10px rgba(var(--color-accent-rgb),0.35);
 }
 /* Retour utilisateur (revu sur un écran ~800px, hors du cas mobile déjà
    traité juste au-dessus) : le chevauchement persistait en fait bien
@@ -3533,6 +3715,76 @@ input:focus, textarea:focus { outline: none; border-color: var(--color-accent); 
   animation: fadeIn 0.3s ease;
 }
 
+/* Page admin-bank.html (tâche 022/023) : questions en attente affichées en
+   CARTES empilées, une par question (retour utilisateur — un tableau à 8
+   colonnes, énoncé + catégorie + type + difficulté + auteur + images +
+   timer + 3 boutons, n'a jamais assez de place dans une carte de largeur
+   normale : en-têtes/contenus se compressaient lettre par lettre quel que
+   soit le réglage de table-layout tenté). Une carte réutilise .card
+   implicitement via son conteneur parent (#pendingSection est déjà une
+   .card) — chaque question a juste besoin d'un fond légèrement distinct +
+   séparation, voir .admin-bank-question-card ci-dessous. */
+.admin-bank-question-list { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.admin-bank-question-card {
+  padding: 16px; border-radius: var(--radius-md);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+}
+.admin-bank-card-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.admin-bank-meta-pill {
+  padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  background: rgba(var(--color-accent-rgb),0.12); color: var(--color-accent);
+  border: 1px solid rgba(var(--color-accent-rgb),0.3);
+}
+.admin-bank-meta-pill-muted { background: var(--color-surface-2); color: var(--color-text-muted); border-color: var(--color-border); }
+/* Difficulté + Timer côte à côte sur assez de largeur, empilés sinon —
+   chacun garde sa propre étiquette/valeur/bouton, jamais de compression
+   façon tableau : un flex-wrap standard, chaque bloc a une largeur mini
+   confortable plutôt qu'une fraction rigide de la largeur totale. */
+.admin-bank-card-row { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 14px; }
+/* Largeurs mini différentes (retour utilisateur : le bloc Difficulté se
+   compressait sous sa largeur naturelle, faisant passer son bouton à la
+   ligne, contrairement au bloc Timer plus étroit) — select + bouton
+   demandent plus de place que le petit champ numérique + "s" + bouton du
+   timer. */
+.admin-bank-card-difficulty { min-width: 260px; }
+.admin-bank-card-timer { min-width: 160px; }
+/* Énoncé + réponse côte à côte (retour utilisateur : repérer une erreur
+   dans la réponse sans avoir à ouvrir l'aperçu jouable) — l'énoncé prend
+   deux fois plus de place que la réponse (flex-grow 2 vs 1), les deux
+   passent l'un sous l'autre si la carte est trop étroite (même
+   .admin-bank-card-row flex-wrap que Difficulté/Timer juste en dessous). */
+.admin-bank-card-prompt { flex: 2 1 280px; }
+.admin-bank-card-answer { flex: 1 1 200px; }
+.admin-bank-answer-value {
+  padding: 10px 12px; border-radius: var(--radius-md);
+  border: 1px solid var(--color-border); background: var(--color-card);
+  font-size: 14px; line-height: 1.4; color: var(--tile-green);
+  font-weight: 700; min-height: 20px;
+}
+.admin-bank-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-bank-thumb {
+  width: 56px; height: 56px; object-fit: cover; border-radius: 8px;
+  border: 1px solid var(--color-border); cursor: zoom-in;
+}
+.admin-bank-timer-input {
+  width: 56px; padding: 6px 8px; border-radius: 8px;
+  border: 1px solid var(--color-border); background: var(--color-card);
+  color: inherit; font-family: inherit; font-size: 14px;
+}
+.admin-bank-timer-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.admin-bank-prompt-input {
+  width: 100%; resize: vertical;
+  padding: 10px 12px; font-size: 14px; line-height: 1.4;
+}
+/* width:auto (pas les 100% du <select> global) : partage sa ligne avec le
+   bouton Enregistrer (voir .admin-bank-timer-row) au lieu de la remplir
+   entièrement et de pousser le bouton à la ligne suivante. */
+.admin-bank-difficulty-select { width: auto; min-width: 130px; }
+/* Barre d'actions : conteneur flex avec gap resserré (les boutons n'ont pas
+   besoin du même espacement que les blocs difficulté/timer ci-dessus), les
+   3 boutons à la même taille (h-36 px-12 font-13, voir renderPending). */
+.admin-bank-actions-row { align-items: center; gap: 8px; }
+
 /* Table Styles */
 .table-custom {
   width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed;
@@ -4135,6 +4387,25 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
 .live-classement-row:nth-child(3) .live-classement-rank { background: var(--tile-red); }
 .live-classement-name { flex: 1; font-weight: 700; font-size: 13px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-classement-score { font-weight: 700; font-size: 13px; color: var(--color-accent); font-family: 'Baloo 2', sans-serif; }
+/* Tâche 025 : bouton "+" d'ajustement manuel de score (MJ, mode
+   "Présenter" seulement — voir renderLiveClassementDock). Compact, aligné
+   à droite du score sur la même ligne. */
+.live-classement-adjust-btn {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-accent);
+  color: white;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.live-classement-adjust-btn:hover { transform: scale(1.1); filter: brightness(1.1); }
 
 .cursor-pointer { cursor: pointer; }
 .resize-v { resize: vertical; min-height: 80px; }
@@ -4320,6 +4591,15 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   .container:has(#lobby:not(.d-none)) #lobby { display: contents !important; }
   .container:has(#lobby:not(.d-none)) #lobbySalon { grid-column: 1; grid-row: 1; }
   .container:has(#lobby:not(.d-none)) #hostPanel { grid-column: 1; grid-row: 2; margin-top: 0; }
+  /* #hostAutoPanel (mode "Jouer", tâche 021) : même correction que
+     #hostPanel juste au-dessus — sans ce margin-top:0, son mt-20 (voir
+     index.html) s'ADDITIONNAIT au gap:20px de la grille, doublant
+     l'espace visible entre "Contrôles de l'hôte" et "Config du quiz
+     automatique" par rapport à l'espace au-dessus (retour utilisateur :
+     "l'espace est différent entre chaque bloc"). Pas de grid-row fixe
+     nécessaire : seul item restant, l'auto-placement le pose déjà en
+     colonne 1 à la suite de #hostPanel. */
+  .container:has(#lobby:not(.d-none)) #hostAutoPanel { grid-column: 1; margin-top: 0; }
   /* Retour utilisateur ("disposition un peu cassée, les joueurs devraient
      être juste en dessous du partage d'accès") : avant, #roomInfo et
      #lobbyPlayersCard étaient deux items de grille séparés sur les LIGNES
@@ -7585,6 +7865,98 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
   font-weight: 700; font-size: 14px; color: var(--color-text);
 }
 .irl-menu-item:hover { background: rgba(255,255,255,0.08); }
+
+/* Tâche 025 : popup d'ajustement manuel de score (MJ, mode "Présenter"
+   seulement — voir #scoreAdjustOverlay dans index.html, ouvert par le
+   bouton "+" de renderLiveClassementDock). Overlay/carte plus sobres que
+   .reveal-popup-* (pas un "moment" de jeu, juste un petit outil MJ) mais
+   même famille visuelle (fond assombri, carte .gradient-card, croix de
+   fermeture en cercle sombre haut-droit). */
+.score-adjust-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  box-sizing: border-box;
+  background: rgba(6, 7, 14, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.score-adjust-card {
+  position: relative;
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: 28px var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+  border: 2px solid rgba(var(--color-accent-rgb), 0.4);
+  box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+}
+.score-adjust-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.35);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.score-adjust-close-btn:hover { background: rgba(0,0,0,0.55); transform: scale(1.06); }
+.score-adjust-title {
+  margin: 0 28px 0 0;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+.score-adjust-quick-row { display: flex; gap: 10px; }
+.score-adjust-quick-btn {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.score-adjust-quick-btn:hover { background: var(--color-surface); transform: translateY(-1px); }
+.score-adjust-custom-row { display: flex; gap: 10px; align-items: center; }
+.score-adjust-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+.score-adjust-apply-btn { flex-shrink: 0; padding: 10px 18px; font-size: 14px; }
+.score-adjust-feedback {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
 
 /* ============================================================
    Responsive — placé en fin de fichier pour primer sur les

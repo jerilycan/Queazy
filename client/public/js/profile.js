@@ -178,9 +178,28 @@ const checkAuth = async () => {
       const savedAvatar = localStorage.getItem('queazy_profile_avatar')
       if (savedAvatar) avatarUrl = savedAvatar
     }
+    // Même rattrapage que index.js checkAuth() : un utilisateur qui se
+    // CONNECTE (pas d'inscription) sur une session sans queazy_profile_name
+    // en local voyait son vrai nom ici sans jamais qu'il soit sauvegardé —
+    // createRoom() (index.js) retombait alors sur son repli littéral "Hôte".
+    localStorage.setItem('queazy_profile_name', displayName)
+    if (avatarUrl) localStorage.setItem('queazy_profile_avatar', avatarUrl)
     applyAvatar(profileAvatar, displayName, avatarUrl)
     if (profileNameEl) profileNameEl.textContent = firstNameOf(displayName)
     setupAvatarGrid(avatarUrl)
+    // Lien vers la modération de la banque (tâche 022) : requête ciblée sur
+    // cette page seulement (pas dans la navbar commune), voir le plan de la
+    // tâche pour le trade-off. Un compte non-admin ne peut lire AUCUNE ligne
+    // de bank_admins (policy de lecture réservée aux admins) : une réponse
+    // vide signifie donc "pas admin" avec certitude. Erreur réseau/RLS
+    // avalée volontairement (comme le repli avatar/pseudo juste au-dessus) :
+    // le pire cas est un lien resté caché, jamais bloquant pour le reste de
+    // la page.
+    try {
+      const { data: adminRow } = await sb.from('bank_admins').select('role').eq('email', user.email).maybeSingle()
+      const adminBankLink = document.getElementById('adminBankLink')
+      if (adminBankLink && adminRow) adminBankLink.classList.remove('d-none')
+    } catch {}
   } else if (isGuest) {
     const name = localStorage.getItem('queazy_profile_name') || 'Invité'
     nameEl.value = name

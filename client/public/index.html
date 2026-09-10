@@ -728,36 +728,83 @@
         <div class="host-panel-eyebrow d-flex align-center gap-xs mb-12">
           <span class="host-panel-icon">🎮</span>
           <h3 class="font-18">Config du quiz automatique</h3>
+          <!-- Repère visuel "lecture seule" (retour utilisateur : tout le
+               monde doit voir ce panneau, seul l'hôte doit pouvoir le
+               modifier — les <input>/boutons désactivés ne suffisaient pas
+               à le faire comprendre au premier coup d'œil) — affiché
+               uniquement pour un non-hôte, voir setAutoPanelReadOnly. -->
+          <span id="autoPanelLockBadge" class="auto-panel-lock-badge d-none">🔒 Lecture seule</span>
         </div>
-        <div class="d-grid grid-cols-split gap-lg">
-          <div class="detail-section">
-            <label class="font-14 font-bold">Catégories</label>
-            <div id="autoCategoryList" class="auto-config-check-list">
+
+        <!-- Ligne de 4 réglages (retour utilisateur, refonte du panneau) :
+             faciles/moyennes/difficiles + Total, chacun un stepper -/+ autour
+             d'un <input type="number"> — le Total est désormais MODIFIABLE
+             directement (avant : simple <span> calculé), voir setAutoTotal
+             dans index.js, qui redistribue proportionnellement sur les 3
+             paliers de difficulté. -->
+        <div class="auto-strip">
+          <div class="auto-field">
+            <span class="auto-field-dot auto-field-dot-facile"></span>
+            <span class="auto-field-label">Faciles</span>
+            <div class="auto-field-row">
+              <button type="button" class="auto-mini-btn" data-auto-tier-step="autoDifficultyFacile" data-auto-dir="-1" aria-label="Moins de questions faciles">–</button>
+              <input id="autoDifficultyFacile" type="number" min="0" max="200" value="10" class="auto-field-input" />
+              <button type="button" class="auto-mini-btn" data-auto-tier-step="autoDifficultyFacile" data-auto-dir="1" aria-label="Plus de questions faciles">+</button>
+            </div>
+          </div>
+          <div class="auto-field">
+            <span class="auto-field-dot auto-field-dot-moyen"></span>
+            <span class="auto-field-label">Moyennes</span>
+            <div class="auto-field-row">
+              <button type="button" class="auto-mini-btn" data-auto-tier-step="autoDifficultyMoyen" data-auto-dir="-1" aria-label="Moins de questions moyennes">–</button>
+              <input id="autoDifficultyMoyen" type="number" min="0" max="200" value="10" class="auto-field-input" />
+              <button type="button" class="auto-mini-btn" data-auto-tier-step="autoDifficultyMoyen" data-auto-dir="1" aria-label="Plus de questions moyennes">+</button>
+            </div>
+          </div>
+          <div class="auto-field">
+            <span class="auto-field-dot auto-field-dot-difficile"></span>
+            <span class="auto-field-label">Difficiles</span>
+            <div class="auto-field-row">
+              <button type="button" class="auto-mini-btn" data-auto-tier-step="autoDifficultyDifficile" data-auto-dir="-1" aria-label="Moins de questions difficiles">–</button>
+              <input id="autoDifficultyDifficile" type="number" min="0" max="200" value="0" class="auto-field-input" />
+              <button type="button" class="auto-mini-btn" data-auto-tier-step="autoDifficultyDifficile" data-auto-dir="1" aria-label="Plus de questions difficiles">+</button>
+            </div>
+          </div>
+          <div class="auto-field auto-field-total">
+            <span class="auto-field-label">Total</span>
+            <div class="auto-field-row">
+              <button type="button" class="auto-mini-btn" id="autoTotalDec" aria-label="Moins de questions au total">–</button>
+              <input id="autoCountTotal" type="number" min="1" max="200" value="20" class="auto-field-input" />
+              <button type="button" class="auto-mini-btn" id="autoTotalInc" aria-label="Plus de questions au total">+</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Catégories/types repliés par défaut (accordéons) : la liste des
+             17 types en particulier prenait beaucoup de hauteur affichée en
+             permanence — retour utilisateur, refonte du panneau. -->
+        <div class="auto-accordion">
+          <button type="button" class="auto-accordion-head" id="autoCatAccordionToggle">
+            <span class="auto-accordion-head-left">Catégories <span class="auto-accordion-count" id="autoCatCount">Toutes</span></span>
+            <svg class="auto-chevron open" id="autoCatChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="auto-accordion-body" id="autoCatAccordionBody">
+            <div id="autoCategoryList" class="auto-chip-grid">
               <p class="text-muted font-13">Chargement…</p>
             </div>
           </div>
-          <div class="detail-section">
-            <label class="font-14 font-bold">Types de question</label>
-            <div id="autoTypeList" class="auto-config-check-list"><!-- Rempli par JS, voir renderAutoTypeList --></div>
+        </div>
+
+        <div class="auto-accordion">
+          <button type="button" class="auto-accordion-head" id="autoTypeAccordionToggle">
+            <span class="auto-accordion-head-left">Types de question <span class="auto-accordion-count" id="autoTypeCount">Tous</span></span>
+            <svg class="auto-chevron" id="autoTypeChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="auto-accordion-body d-none" id="autoTypeAccordionBody">
+            <div id="autoTypeList" class="auto-chip-grid"><!-- Rempli par JS, voir renderAutoTypeList --></div>
           </div>
         </div>
-        <div class="d-flex gap-lg align-center flex-wrap mt-12">
-          <div class="detail-section">
-            <label for="autoDifficultyFacile" class="font-13">Faciles</label>
-            <input id="autoDifficultyFacile" type="number" min="0" max="200" value="10" class="auto-config-num" />
-          </div>
-          <div class="detail-section">
-            <label for="autoDifficultyMoyen" class="font-13">Moyennes</label>
-            <input id="autoDifficultyMoyen" type="number" min="0" max="200" value="10" class="auto-config-num" />
-          </div>
-          <div class="detail-section">
-            <label for="autoDifficultyDifficile" class="font-13">Difficiles</label>
-            <input id="autoDifficultyDifficile" type="number" min="0" max="200" value="0" class="auto-config-num" />
-          </div>
-          <div class="detail-section">
-            <span class="font-13 text-muted">Total : <span id="autoCountTotal" class="font-bold">20</span> questions</span>
-          </div>
-        </div>
+
         <p id="autoConfigError" class="font-13 mt-8 d-none" style="color: var(--color-danger);"></p>
       </div>
 
@@ -1211,6 +1258,28 @@
           <img id="revealImageDisplay" class="reveal-media-img" alt="" />
         </div>
         <audio id="revealAudioPlayer" class="d-none"></audio>
+      </div>
+    </div>
+
+    <!-- Tâche 025 : popup d'ajustement manuel de score par le MJ (mode
+         "Présenter" uniquement, voir renderLiveClassementDock côté index.js
+         pour le bouton "+" qui l'ouvre). Élément UNIQUE et persistant (pas
+         reconstruit à chaque rendu du dock, contrairement aux lignes du
+         classement live) : la cible (id/nom du joueur) est gardée dans une
+         variable JS le temps que le popup reste ouvert. -->
+    <div id="scoreAdjustOverlay" class="d-none score-adjust-overlay">
+      <div class="score-adjust-card">
+        <button type="button" id="scoreAdjustCloseBtn" class="score-adjust-close-btn" aria-label="Fermer" title="Fermer">✕</button>
+        <h3 id="scoreAdjustTitle" class="score-adjust-title">Ajuster les points</h3>
+        <div class="score-adjust-quick-row">
+          <button type="button" id="scoreAdjustMinus100" class="btn score-adjust-quick-btn">-100</button>
+          <button type="button" id="scoreAdjustPlus200" class="btn score-adjust-quick-btn">+200</button>
+        </div>
+        <div class="score-adjust-custom-row">
+          <input id="scoreAdjustInput" type="number" step="1" class="score-adjust-input" placeholder="Points" />
+          <button type="button" id="scoreAdjustApplyBtn" class="btn btn-primary score-adjust-apply-btn">Valider</button>
+        </div>
+        <div id="scoreAdjustFeedback" class="score-adjust-feedback d-none"></div>
       </div>
     </div>
 

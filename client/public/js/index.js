@@ -217,6 +217,18 @@ const checkAuth = async () => {
       const savedAvatar = localStorage.getItem('queazy_profile_avatar')
       if (savedAvatar) avatarUrl = savedAvatar
     }
+    // Retour utilisateur : "le nom de l'hôte est... Hôte" — createRoom() (plus
+    // bas) lit queazy_profile_name pour nommer l'hôte dans la salle, mais
+    // cette clé n'est posée QUE côté inscription (voir login.js signUpBtn, et
+    // seulement si un pseudo a été saisi) ou via la page profil — jamais
+    // synchronisée ici pour un utilisateur qui se CONNECTE (signInBtn) sur un
+    // navigateur/session sans cette clé en local : displayName est pourtant
+    // déjà résolu correctement juste au-dessus (profiles.username puis repli
+    // user_metadata/email), simplement jamais écrit en local. Sans ce
+    // rattrapage, createRoom() retombait sur son propre repli 'Hôte' littéral,
+    // alors même que la navbar affichait le bon nom juste à côté.
+    localStorage.setItem('queazy_profile_name', displayName)
+    if (avatarUrl) localStorage.setItem('queazy_profile_avatar', avatarUrl)
     applyAvatar(profileAvatar, displayName, avatarUrl)
     if (profileName) profileName.textContent = firstNameOf(displayName)
   } else if (isGuest) {
@@ -308,6 +320,86 @@ window.addEventListener('DOMContentLoaded', () => {
     showJoinPanel(false)
   }
 })()
+
+// Aperçu jouable d'une question de la banque (tâche 023, page
+// admin-bank.html) : ?previewBankQuestion=<id> charge UNIQUEMENT cette
+// question comme mini-quiz à une question et lance automatiquement une
+// salle solo "Présenter" — l'admin n'a rien à cliquer après l'ouverture du
+// nouvel onglet (voir bouton "Aperçu" dans admin-bank.js). Bloc totalement
+// séparé de create/join/play ci-dessus, guardé par sa propre présence dans
+// l'URL : aucun effet sur le chargement normal de la page.
+const previewBankQuestionId = params.get('previewBankQuestion')
+if (previewBankQuestionId) {
+  ;(async () => {
+    // Même garde que createBtn.onclick/navCreate.onclick plus bas : créer
+    // une salle nécessite un compte, quel que soit le mode.
+    const { data: { session } } = await window.supabaseClient.auth.getSession()
+    if (!session) {
+      window.location.href = '/login.html?reason=create'
+      return
+    }
+    // La RLS (tâche 022) filtre déjà les questions pending d'un autre
+    // auteur pour un non-admin — un résultat vide/une erreur ici couvre
+    // aussi bien ce cas qu'un id invalide, rien de plus à vérifier ici.
+    const { data, error } = await window.supabaseClient
+      .from('bank_questions')
+      .select('question')
+      .eq('id', previewBankQuestionId)
+      .single()
+    if (error || !data) {
+      console.error('[preview] question de banque introuvable :', error)
+      showAnnounce('Impossible de charger cette question.', 'error')
+      return
+    }
+    resetUI() // remet loadedQuiz à null avant de le reconstruire ci-dessous
+    // Même pattern que generateAutoQuiz (mode "Jouer") plus bas : le blob
+    // `question` stocké en banque est déjà directement jouable tel quel
+    // (il vient de questions[activeIndex] dans l'éditeur, voir
+    // addToBankBtn.onclick côté editor.js), pas besoin de repasser par la
+    // normalisation complète de loadQuizById (faite pour un quiz entier
+    // venant de la table `quizzes`, un autre format de stockage).
+    loadedQuiz = {
+      id: 'bank-preview-' + previewBankQuestionId,
+      title: 'Aperçu — banque de questions',
+      questions: [{ ...data.question, id: data.question.id || 'q1' }]
+    }
+    quizIndex = 0
+    createRoom('present')
+    // Mécanisme "prêt" (voir Plan de la tâche 023, server/index.js
+    // computeAllReady) : l'hôte est exclu du calcul de "prêt" côté serveur,
+    // donc une salle solo (aucun joueur hors l'hôte) est déjà "prête" côté
+    // serveur dès sa création — room:created émet déjà player:ready pour
+    // tout hôte (voir son handler plus bas), rien à ajouter ici sur ce
+    // point précis.
+    // MAIS (découverte en vérification live, pas dans le plan initial) :
+    // renderLobbyGrid (voir socket.on('lobby:list', ...) plus bas) grise
+    // EXPLICITEMENT startQuizBtn dès que playerCount (joueurs non-hôte) est
+    // à 0 — contrainte UX pensée pour empêcher une vraie partie multijoueur
+    // de démarrer sans joueur, mais qui bloquerait ici pour toujours (une
+    // salle d'aperçu n'a et n'aura jamais de second joueur). On appelle donc
+    // directement launchQuiz() (même flux de lancement que startQuizBtn,
+    // extrait pour cette raison — voir sa définition plus bas), sans passer
+    // par la garde is-disabled du bouton, qui ne s'applique pas à ce
+    // contexte solo.
+    socket.once('room:created', () => {
+      // Découverte en vérification live : room:join (déclenché par le
+      // handler room:created existant, juste avant) fait recevoir un ou
+      // plusieurs lobby:list AVANT que question:show n'arrive — et
+      // renderLobbyGrid réaffiche startQuizBtn/selectQuizBtn à CHAQUE
+      // lobby:list tant que inActiveGame est encore false (voir son
+      // commentaire "Reset buttons visibility when entering lobby as
+      // host"). En jeu normal, ça n'arrive jamais : l'hôte clique LANCER
+      // bien après que ce lobby:list initial soit déjà passé. Ici,
+      // launchQuiz() est déclenché immédiatement — on pose donc
+      // inActiveGame avant, comme le fera de toute façon question:show
+      // juste après (idempotent), pour ne pas laisser un lobby:list en
+      // transit annuler l'affichage qu'on vient de construire.
+      inActiveGame = true
+      launchQuiz()
+    })
+  })()
+}
+
 const qDiv = document.getElementById('question')
 const timerBarFill = document.getElementById('timerBar')
 const timerLabel = document.getElementById('timerLabel')
@@ -331,7 +423,7 @@ const QUESTION_TYPE_META = {
   order: { icon: '↕️', label: 'Ordre / classement', color: '#ff2fb0', rgb: '255,47,176', hint: 'Fais glisser les éléments pour les remettre dans le bon ordre.' },
   image: { icon: '📍', label: 'Image', color: '#2fe3ff', rgb: '47,227,255', hint: 'Touche l\'endroit sur l\'image qui correspond à la réponse.' },
   zoomguess: { icon: '🔍', label: 'ZoomOut Devinette', color: '#5865f2', rgb: '88,101,242', hint: 'Devine ce que montre l\'image avant qu\'elle ne se dézoome complètement.' },
-  reveal: { icon: '🖼️', label: 'Révélation', color: '#cfd8ea', rgb: '207,216,234', hint: 'Observe l\'image qui se révèle petit à petit et devine de quoi il s\'agit.' },
+  reveal: { icon: '🖼️', label: 'Révélation', color: '#cfd8ea', rgb: '207,216,234', hint: 'Observe l\'image (incomplète) et devine de quoi il s\'agit — la version complète apparaît à la révélation.' },
   blindtest: { icon: '🎵', label: 'Blind Test', color: '#7b2ff7', rgb: '123,47,247', hint: 'Écoute l\'extrait, puis trouve de quoi il s\'agit.' },
   association: { icon: '🔗', label: 'Association', color: '#ff9f5a', rgb: '255,159,90', hint: 'Relie chaque élément de gauche à son binôme à droite.' },
   timeline: { icon: '⏳', label: 'Timeline', color: '#14e0b8', rgb: '20,224,184', hint: 'Place les événements dans l\'ordre chronologique.' },
@@ -401,6 +493,16 @@ const enterGameScreen = () => {
     lobby.classList.add('d-none')
     lobby.style.display = 'none'
   }
+  // Tâche 024 (retour utilisateur : "la barre latérale gauche contient des
+  // catégories et le nombre de questions, c'est inutile") : #hostAutoPanel
+  // (config auto-quiz de l'hôte, mode "Jouer") n'est PAS un enfant de
+  // #lobby (voir index.html) — le masquer ci-dessus ne suffit donc pas, il
+  // restait affiché pendant la partie alors que l'hôte doit avoir un écran
+  // strictement identique à un joueur une fois la partie lancée.
+  if (hostAutoPanel) {
+    hostAutoPanel.classList.add('d-none')
+    hostAutoPanel.style.display = 'none'
+  }
   // Symétrique du masquage dans resetUI (voir son commentaire) : remet la
   // zone de jeu au premier plan si un Créer/Rejoindre l'avait cachée entre
   // deux parties dans le même onglet.
@@ -440,6 +542,18 @@ const INTRO_READ_COMPLEX_MS = 5000
 const INTRO_COUNTDOWN_MS = 3000
 const INTRO_DURATION_MS = INTRO_READ_MS + INTRO_COUNTDOWN_MS
 const INTRO_DURATION_COMPLEX_MS = INTRO_READ_COMPLEX_MS + INTRO_COUNTDOWN_MS
+// Retour utilisateur : "si on a déjà découvert une première fois un type de
+// question, ne garde pas la partie lecture de la mécanique, passe direct au
+// compteur". Un type déjà vu DANS CETTE PARTIE n'a plus besoin de sa phase de
+// lecture (INTRO_READ_MS/INTRO_READ_COMPLEX_MS) — seul le décompte
+// (INTRO_COUNTDOWN_MS) est encore affiché, voir emitQuestionShow. Rempli/vidé
+// seulement côté hôte (lui seul décide de durationMs, voir tuto:begin — les
+// joueurs, eux, ne font que suivre la valeur reçue via tuto:show, pas besoin
+// de dupliquer ce suivi de leur côté). Vidé à chaque nouvelle partie (voir
+// emitQuestionShow, index===0) plutôt qu'à la création du socket : un hôte
+// qui enchaîne plusieurs quiz dans la même salle sans recharger la page ne
+// doit pas hériter des types déjà vus lors de la partie précédente.
+const seenQuestionTypesThisGame = new Set()
 // Durée de l'animation de sortie (voir @keyframes introBannerOut côté CSS)
 // — déclenchée CE délai avant la fin réelle (durationMs), pour que le
 // bandeau ait fini de glisser hors-écran au moment où tuto:done le masque
@@ -547,7 +661,16 @@ const emitQuestionShow = (payload) => {
   if (leaderOverlay) leaderOverlay.style.display = 'none'
   enterGameScreen()
   updateQuestionTypeBadge(payload.type)
-  const durationMs = COMPLEX_TYPES.has(payload.type) ? INTRO_DURATION_COMPLEX_MS : INTRO_DURATION_MS
+  // Type déjà rencontré dans CETTE partie (voir seenQuestionTypesThisGame
+  // plus haut) : on saute la phase de lecture, seul le décompte final
+  // (INTRO_COUNTDOWN_MS) reste affiché — showQuestionIntro n'affiche de
+  // toute façon le chiffre que durant les INTRO_COUNTDOWN_MS dernières ms de
+  // durationMs, donc lui passer directement cette durée-là suffit.
+  const alreadySeen = seenQuestionTypesThisGame.has(payload.type)
+  seenQuestionTypesThisGame.add(payload.type)
+  const durationMs = alreadySeen
+    ? INTRO_COUNTDOWN_MS
+    : (COMPLEX_TYPES.has(payload.type) ? INTRO_DURATION_COMPLEX_MS : INTRO_DURATION_MS)
   socket.emit('tuto:begin', { roomCode: payload.roomCode, type: payload.type, durationMs })
   return new Promise(resolve => {
     resolveTutoWait = () => {
@@ -952,16 +1075,6 @@ let currentIllustrationZoom = null
 // dézoom atteint scale(1).
 const zoomGuessBlurPx = (startScale) => Math.min(24, Math.max(0, (startScale - 1) * 1.1))
 
-// Révélation progressive de l'énigme (type "reveal", design décidé — voir
-// QUESTION_TYPE_META.reveal.hint : "l'image qui se révèle petit à petit").
-// Même principe que le dézoom de "zoomguess" ci-dessus (flou qui retombe à 0
-// au même tick que la barre de temps), mais appliqué à revealEnigmeImg —
-// jamais à revealReponseImg : cette dernière n'arrive côté client qu'à
-// timer:end (voir server/index.js, anti-triche), impossible et non voulu de
-// l'animer pendant le décompte. true seulement pour une question "reveal"
-// avec une image d'énigme réellement chargée (voir emitQuestion plus bas).
-let revealEnigmeActive = false
-const REVEAL_ENIGME_BLUR_MAX_PX = 20
 let selectedMcqOptions = []
 let currentQuestionType = 'free'
 let isGameEnded = false
@@ -1742,11 +1855,13 @@ const revealRangementArea = (correctItems) => {
     const correctZone = correctItems[key]?.zone
     if (!Number.isInteger(correctZone)) return
     rangementState.zoneEls[correctZone]?.drop.appendChild(el)
-    // Le MJ ne joue jamais la question (myRangementSubmission reste vide
-    // côté hôte) : ne pas colorier ses tuiles en rouge à la révélation, ça
-    // donnait l'impression qu'il avait "raté" alors qu'il ne participe pas
-    // (retour utilisateur). Juste le placement dans la bonne zone suffit.
-    if (isHost) {
+    // Le MJ ne joue jamais la question en mode "Présenter" (myRangementSubmission
+    // reste vide côté hôte) : ne pas colorier ses tuiles en rouge à la révélation,
+    // ça donnait l'impression qu'il avait "raté" alors qu'il ne participe pas
+    // (retour utilisateur). Juste le placement dans la bonne zone suffit. En
+    // mode "Jouer" (tâche 024), l'hôte est un joueur comme les autres : sa
+    // vraie soumission existe, la coloration doit s'appliquer normalement.
+    if (isPresenterHost()) {
       el.classList.remove('correct-reveal', 'incorrect-reveal')
       return
     }
@@ -2999,6 +3114,73 @@ if (revealPopupOverlay) {
   })
 }
 
+// --- Tâche 025 : popup d'ajustement manuel de score (MJ, mode "Présenter") ---
+// Élément UNIQUE et persistant (voir index.html) : contrairement aux lignes
+// du dock classement live (reconstruites à chaque renderLiveClassementDock,
+// voir plus bas — un popup posé DEDANS serait détruit en cours de saisie),
+// ce popup vit en dehors, la cible actuelle est gardée dans cette variable
+// le temps qu'il reste ouvert.
+const scoreAdjustOverlay = document.getElementById('scoreAdjustOverlay')
+const scoreAdjustTitle = document.getElementById('scoreAdjustTitle')
+const scoreAdjustInput = document.getElementById('scoreAdjustInput')
+const scoreAdjustFeedback = document.getElementById('scoreAdjustFeedback')
+const scoreAdjustCloseBtn = document.getElementById('scoreAdjustCloseBtn')
+const scoreAdjustApplyBtn = document.getElementById('scoreAdjustApplyBtn')
+const scoreAdjustPlus200Btn = document.getElementById('scoreAdjustPlus200')
+const scoreAdjustMinus100Btn = document.getElementById('scoreAdjustMinus100')
+let scoreAdjustTargetId = null
+
+const openScoreAdjustPopup = (playerId, playerName) => {
+  if (!scoreAdjustOverlay) return
+  scoreAdjustTargetId = playerId
+  if (scoreAdjustTitle) scoreAdjustTitle.textContent = `Ajuster les points de ${playerName}`
+  if (scoreAdjustInput) scoreAdjustInput.value = ''
+  if (scoreAdjustFeedback) { scoreAdjustFeedback.classList.add('d-none'); scoreAdjustFeedback.textContent = '' }
+  scoreAdjustOverlay.classList.remove('d-none')
+  scoreAdjustInput?.focus()
+}
+const closeScoreAdjustPopup = () => {
+  scoreAdjustOverlay?.classList.add('d-none')
+  scoreAdjustTargetId = null
+}
+// Envoie l'ajustement au serveur (voir server/index.js score:adjust) — le
+// popup reste OUVERT après (retour utilisateur : "à la volée", un MJ qui
+// enchaîne plusieurs ajustements sur le même joueur ne doit pas avoir à le
+// rouvrir à chaque fois), seul un petit retour visuel confirme l'envoi —
+// utile en particulier pour +200/-100, qui n'ont sinon aucun accusé de
+// réception avant que le classement bouge (score:adjust reçu en retour).
+const applyScoreAdjust = (delta) => {
+  const roomCode = roomInput.value.trim()
+  if (!roomCode || !scoreAdjustTargetId || !Number.isFinite(delta) || delta === 0) return
+  socket.emit('score:adjust', { roomCode, playerId: scoreAdjustTargetId, delta: Math.round(delta) })
+  if (scoreAdjustFeedback) {
+    scoreAdjustFeedback.textContent = `${delta > 0 ? '+' : ''}${Math.round(delta)} envoyé…`
+    scoreAdjustFeedback.classList.remove('d-none')
+  }
+}
+if (scoreAdjustCloseBtn) scoreAdjustCloseBtn.onclick = () => closeScoreAdjustPopup()
+if (scoreAdjustOverlay) {
+  scoreAdjustOverlay.addEventListener('click', (e) => {
+    if (e.target === scoreAdjustOverlay) closeScoreAdjustPopup()
+  })
+}
+if (scoreAdjustApplyBtn) scoreAdjustApplyBtn.onclick = () => applyScoreAdjust(Number(scoreAdjustInput?.value))
+if (scoreAdjustPlus200Btn) scoreAdjustPlus200Btn.onclick = () => applyScoreAdjust(200)
+if (scoreAdjustMinus100Btn) scoreAdjustMinus100Btn.onclick = () => applyScoreAdjust(-100)
+// Retour serveur : évènement DISTINCT de score:update (voir son commentaire
+// plus bas, volontairement silencieux jusqu'à la révélation) — celui-ci doit
+// au contraire se répercuter tout de suite partout, sans les effets de bord
+// propres à la mécanique de question (son de révélation, questionDeltas...).
+socket.on('score:adjust', ({ playerId, total }) => {
+  const s = scores.get(playerId) || { name: playerId, total: 0 }
+  s.total = total
+  scores.set(playerId, s)
+  renderLeaderboard()
+  if (scoreAdjustFeedback && scoreAdjustTargetId === playerId) {
+    scoreAdjustFeedback.textContent = `Score mis à jour : ${total} pts`
+  }
+})
+
 const clearRevealState = () => {
   closeRevealPopup()
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
@@ -3047,7 +3229,9 @@ const clearRevealState = () => {
 // intermédiaire "Presque !" (variant 'is-close') peut être imposé — sinon
 // déduit de myAnsweredCorrectlyThisQuestion (bon points gagnés = vert).
 const showMyResultBanner = (text, variant) => {
-  if (!myResultBanner || isHost) return
+  // Tâche 024 : en mode "Jouer", l'hôte a aussi son propre bandeau de résultat
+  // (il joue). Réservé au mode "Présenter" comme avant, voir isPresenterHost().
+  if (!myResultBanner || isPresenterHost()) return
   myResultBanner.classList.remove('d-none', 'is-correct', 'is-incorrect', 'is-close')
   if (text) {
     myResultBanner.classList.add(variant || 'is-correct')
@@ -3767,6 +3951,14 @@ const loadQuizById = (id) => {
 // room.gameMode (éphémère, en mémoire côté serveur, jamais persisté).
 // ============================================================
 let roomMode = 'present'
+// Tâche 024 : en mode "Jouer" (roomMode === 'auto'), l'hôte doit se comporter
+// comme un joueur normal pour tout ce qui concerne JOUER la partie (répondre,
+// apparaître au classement, sons/confettis de bonne réponse...) — seul le
+// mode "Présenter" garde le comportement historique où l'hôte ne joue jamais
+// (exclu des réponses/du classement, panneau de modération manuelle). Centralise
+// ce calcul plutôt que de répéter `isHost && roomMode !== 'auto'` à chaque
+// endroit concerné.
+const isPresenterHost = () => isHost && roomMode !== 'auto'
 const hostAutoPanel = document.getElementById('hostAutoPanel')
 const autoCategoryList = document.getElementById('autoCategoryList')
 const autoTypeList = document.getElementById('autoTypeList')
@@ -3775,6 +3967,16 @@ const autoDifficultyMoyen = document.getElementById('autoDifficultyMoyen')
 const autoDifficultyDifficile = document.getElementById('autoDifficultyDifficile')
 const autoCountTotal = document.getElementById('autoCountTotal')
 const autoConfigError = document.getElementById('autoConfigError')
+// Accordéons catégories/types + steppers -/+ (refonte du panneau, retour
+// utilisateur) : voir updateAutoAccordionSummaries / setAutoTier / setAutoTotal.
+const autoCatAccordionToggle = document.getElementById('autoCatAccordionToggle')
+const autoCatAccordionBody = document.getElementById('autoCatAccordionBody')
+const autoCatChevron = document.getElementById('autoCatChevron')
+const autoCatCount = document.getElementById('autoCatCount')
+const autoTypeAccordionToggle = document.getElementById('autoTypeAccordionToggle')
+const autoTypeAccordionBody = document.getElementById('autoTypeAccordionBody')
+const autoTypeChevron = document.getElementById('autoTypeChevron')
+const autoTypeCount = document.getElementById('autoTypeCount')
 
 // Catégories distinctes de bank_questions (tâche 021) : la banque n'a pas de
 // liste de catégories fixée en dur (voir Hors périmètre de la tâche) — on
@@ -3805,7 +4007,8 @@ const loadBankCategories = async () => {
       <span>${c}</span>
     </label>
   `).join('')
-  autoCategoryList.querySelectorAll('.auto-category-check').forEach(cb => { cb.onchange = scheduleAutoConfigSync })
+  autoCategoryList.querySelectorAll('.auto-category-check').forEach(cb => { cb.onchange = () => { scheduleAutoConfigSync(); updateAutoAccordionSummaries() } })
+  updateAutoAccordionSummaries()
 }
 
 // Types cochés par défaut (tâche 021) : réutilise QUESTION_TYPE_META tel
@@ -3818,15 +4021,59 @@ const renderAutoTypeList = () => {
       <span>${meta.icon} ${meta.label}</span>
     </label>
   `).join('')
-  autoTypeList.querySelectorAll('.auto-type-check').forEach(cb => { cb.onchange = scheduleAutoConfigSync })
+  autoTypeList.querySelectorAll('.auto-type-check').forEach(cb => { cb.onchange = () => { scheduleAutoConfigSync(); updateAutoAccordionSummaries() } })
+  updateAutoAccordionSummaries()
 }
+
+// Résumé affiché dans l'en-tête de chaque accordéon (retour utilisateur,
+// refonte du panneau) : "Toutes"/"Tous" quand rien n'est décoché (ou tout
+// décoché — vide = "aucun filtre" côté generateAutoQuiz, jamais "aucune
+// question", donc pas de distinction à faire visuellement), sinon le compte
+// précis. Appelé après chargement des listes et à chaque case cochée.
+const updateAutoAccordionSummaries = () => {
+  if (autoCatCount && autoCategoryList) {
+    const boxes = autoCategoryList.querySelectorAll('.auto-category-check')
+    const checked = autoCategoryList.querySelectorAll('.auto-category-check:checked').length
+    autoCatCount.textContent = (boxes.length === 0 || checked === 0 || checked === boxes.length) ? 'Toutes' : `${checked} sélectionnées`
+  }
+  if (autoTypeCount && autoTypeList) {
+    const boxes = autoTypeList.querySelectorAll('.auto-type-check')
+    const checked = autoTypeList.querySelectorAll('.auto-type-check:checked').length
+    autoTypeCount.textContent = (boxes.length === 0 || checked === 0 || checked === boxes.length) ? 'Tous' : `${checked} sélectionnés`
+  }
+}
+
+// Accordéons catégories/types : repliés par défaut pour les types (17
+// entrées, beaucoup de hauteur), ouvert par défaut pour les catégories (peu
+// nombreuses) — voir index.html pour l'état initial des classes d-none/open.
+const toggleAutoAccordion = (body, chevron) => {
+  if (!body) return
+  const willOpen = body.classList.contains('d-none')
+  body.classList.toggle('d-none', !willOpen)
+  if (chevron) chevron.classList.toggle('open', willOpen)
+}
+if (autoCatAccordionToggle) autoCatAccordionToggle.onclick = () => toggleAutoAccordion(autoCatAccordionBody, autoCatChevron)
+if (autoTypeAccordionToggle) autoTypeAccordionToggle.onclick = () => toggleAutoAccordion(autoTypeAccordionBody, autoTypeChevron)
 
 // Non-hôte : panneau visible mais verrouillé (mêmes contrôles, disabled) —
 // même patron que le reste du lobby (l'hôte a des contrôles que les autres
-// n'ont pas), voir applyRoomMode.
+// n'ont pas), voir applyRoomMode. Inclut désormais les steppers -/+ (pas
+// seulement les <input>, voir refonte du panneau) — un <button disabled>
+// ignore déjà les clics nativement, aucun garde supplémentaire nécessaire
+// dans setAutoTier/setAutoTotal. Les boutons d'accordéon (ouvrir/fermer)
+// restent volontairement exclus : un non-hôte doit pouvoir déplier les
+// catégories/types pour les CONSULTER, seule la sélection elle-même est
+// verrouillée (via les <input> désactivés ci-dessous).
 const setAutoPanelReadOnly = (readOnly) => {
   if (!hostAutoPanel) return
-  hostAutoPanel.querySelectorAll('input').forEach(el => { el.disabled = readOnly })
+  hostAutoPanel.querySelectorAll('input, .auto-mini-btn').forEach(el => { el.disabled = readOnly })
+  // Repère visuel (retour utilisateur) : pastille "Lecture seule" + léger
+  // assombrissement des contrôles (voir style.css #hostAutoPanel.is-readonly)
+  // — les <input>/boutons désactivés seuls ne suffisaient pas à le faire
+  // comprendre au premier coup d'œil à un joueur non-hôte.
+  hostAutoPanel.classList.toggle('is-readonly', readOnly)
+  const lockBadge = document.getElementById('autoPanelLockBadge')
+  if (lockBadge) lockBadge.classList.toggle('d-none', !readOnly)
 }
 
 // Applique une config reçue (room:created ou room:autoConfig) aux contrôles
@@ -3845,13 +4092,78 @@ const applyAutoConfigToUi = (config) => {
   if (Array.isArray(config.types) && config.types.length > 0 && autoTypeList) {
     autoTypeList.querySelectorAll('.auto-type-check').forEach(cb => { cb.checked = config.types.includes(cb.value) })
   }
+  updateAutoAccordionSummaries()
 }
 
+// autoCountTotal est un <input type="number"> depuis la refonte du panneau
+// (retour utilisateur : le nombre total de questions doit être modifiable
+// directement, pas seulement affiché en somme des 3 paliers) — .value, plus
+// .textContent comme avant (c'était un <span>). Reste la source de vérité
+// "recalculée depuis les 3 paliers" à chaque appel : voir setAutoTotal
+// ci-dessous pour le sens inverse (total → paliers).
 const updateAutoCountTotal = () => {
   if (!autoCountTotal) return
   const total = (Number(autoDifficultyFacile?.value) || 0) + (Number(autoDifficultyMoyen?.value) || 0) + (Number(autoDifficultyDifficile?.value) || 0)
-  autoCountTotal.textContent = String(total)
+  autoCountTotal.value = String(total)
 }
+
+// Paliers de difficulté : +1/-1 borné à [0, 200] (même borne que les
+// <input> d'origine) — utilisé par les steppers -/+ de chaque case (voir
+// index.html, data-auto-tier-step) à la place d'un clic direct sur le champ.
+const setAutoTier = (inputEl, delta) => {
+  if (!inputEl) return
+  const next = Math.max(0, Math.min(200, (Number(inputEl.value) || 0) + delta))
+  inputEl.value = String(next)
+  scheduleAutoConfigSync()
+}
+
+// Total (retour utilisateur, refonte du panneau) : redistribue
+// PROPORTIONNELLEMENT sur les 3 paliers plutôt que d'ajouter/retirer
+// arbitrairement sur un seul — garde la répartition facile/moyen/difficile
+// choisie par l'hôte à peu près stable quand il ajuste juste le total.
+// Si les 3 paliers sont à 0 (cas limite), le total part entièrement sur
+// "facile" plutôt que de ne rien pouvoir faire.
+// Méthode du plus fort reste (et pas un Math.round indépendant par palier,
+// testé et bogué : deux paliers arrondis au-dessus au même clic pouvaient
+// ajouter 2 questions pour un seul "+") — plancher (floor) sur les 3 parts
+// exactes, puis distribue les questions manquantes une par une aux paliers
+// ayant le plus grand reste, jusqu'à retomber PILE sur le total demandé.
+const setAutoTotal = (nextTotalRaw) => {
+  const nextTotal = Math.max(1, Math.min(200, Math.round(Number(nextTotalRaw)) || 0))
+  const f = Number(autoDifficultyFacile?.value) || 0
+  const m = Number(autoDifficultyMoyen?.value) || 0
+  const d = Number(autoDifficultyDifficile?.value) || 0
+  const cur = f + m + d
+  let nf, nm, nd
+  if (cur <= 0) {
+    nf = nextTotal; nm = 0; nd = 0
+  } else {
+    const ratio = nextTotal / cur
+    const exact = [f * ratio, m * ratio, d * ratio]
+    const floored = exact.map(Math.floor)
+    let remaining = nextTotal - floored.reduce((a, b) => a + b, 0)
+    const byRemainderDesc = exact.map((v, i) => [v - floored[i], i]).sort((a, b) => b[0] - a[0])
+    for (let k = 0; k < byRemainderDesc.length && remaining > 0; k++, remaining--) floored[byRemainderDesc[k][1]]++
+    ;[nf, nm, nd] = floored
+  }
+  if (autoDifficultyFacile) autoDifficultyFacile.value = String(nf)
+  if (autoDifficultyMoyen) autoDifficultyMoyen.value = String(nm)
+  if (autoDifficultyDifficile) autoDifficultyDifficile.value = String(nd)
+  scheduleAutoConfigSync()
+}
+
+if (autoCountTotal) {
+  autoCountTotal.oninput = () => setAutoTotal(autoCountTotal.value)
+}
+const autoTotalDecBtn = document.getElementById('autoTotalDec')
+const autoTotalIncBtn = document.getElementById('autoTotalInc')
+if (autoTotalDecBtn) autoTotalDecBtn.onclick = () => setAutoTotal((Number(autoCountTotal?.value) || 0) - 1)
+if (autoTotalIncBtn) autoTotalIncBtn.onclick = () => setAutoTotal((Number(autoCountTotal?.value) || 0) + 1)
+hostAutoPanel?.querySelectorAll('[data-auto-tier-step]').forEach(btn => {
+  const target = document.getElementById(btn.getAttribute('data-auto-tier-step'))
+  const dir = Number(btn.getAttribute('data-auto-dir')) || 0
+  btn.onclick = () => setAutoTier(target, dir)
+})
 
 // Bascule le panneau hôte selon room.mode — appelée à room:created (hôte),
 // room:mode (tout le monde, y compris un joueur qui rejoint après coup) et
@@ -3862,6 +4174,14 @@ const updateAutoCountTotal = () => {
 const applyRoomMode = (mode, autoConfig) => {
   roomMode = mode === 'auto' ? 'auto' : 'present'
   const selectQuizBtnEl = document.getElementById('selectQuizBtn')
+  // teamModePanel/speedLevelPanel/gameModePanel (tâche 021 bis) : n'ont de
+  // sens que côté "Présenter" (mode équipe, importance de la rapidité, choix
+  // sur place/à distance) — retour utilisateur, mode "Jouer" : "importance
+  // de la rapidité" restait affiché, tout comme le bouton "Quiz à distance"
+  // (coché sans effet visible, gameMode étant déjà forcé à 'remote' côté
+  // serveur en mode auto, voir room:create). Repris ici plutôt que dans
+  // lobby:list (voir plus bas) car applyRoomMode est aussi ce qui s'exécute
+  // en dernier, après le rendu du salon.
   if (roomMode === 'auto') {
     if (selectQuizBtnEl) selectQuizBtnEl.classList.add('d-none')
     if (hostAutoPanel) {
@@ -3875,6 +4195,9 @@ const applyRoomMode = (mode, autoConfig) => {
     loadBankCategories()
     applyAutoConfigToUi(autoConfig)
     setAutoPanelReadOnly(!isHost)
+    if (teamModePanel) teamModePanel.classList.add('d-none')
+    if (speedLevelPanel) speedLevelPanel.classList.add('d-none')
+    if (gameModePanel) gameModePanel.classList.add('d-none')
   } else {
     if (selectQuizBtnEl) selectQuizBtnEl.classList.remove('d-none')
     if (hostAutoPanel) {
@@ -3952,7 +4275,11 @@ const generateAutoQuiz = async () => {
     // Une requête PAR PALIER (plutôt qu'une requête globale + tri en
     // mémoire) : permet un message d'erreur précis ("pas assez de facile")
     // et évite qu'un palier bien fourni compense un palier vide.
-    let query = window.supabaseClient.from('bank_questions').select('id,category,type,question').eq('difficulty', difficulty)
+    // status='approved' (tâche 022) : défense en profondeur, la RLS
+    // bank_questions filtre déjà les questions non approuvées pour un
+    // utilisateur non-admin, mais le code ne fait jamais confiance qu'à elle
+    // seule (voir CLAUDE.md).
+    let query = window.supabaseClient.from('bank_questions').select('id,category,type,question').eq('difficulty', difficulty).eq('status', 'approved')
     if (categories.length > 0) query = query.in('category', categories)
     if (types.length > 0) query = query.in('type', types)
     const { data, error } = await query
@@ -4186,7 +4513,19 @@ const syncLobbyColumnHeight = () => {
     if (playersCardEl) playersCardEl.style.height = ''
     return
   }
-  const bottomEl = (hostPanel && !hostPanel.classList.contains('d-none')) ? hostPanel : salon
+  // Mode "Jouer" (tâche 021 bis) : #hostPanel reste caché en permanence,
+  // remplacé par #hostAutoPanel en bas de la colonne gauche — sans ce
+  // repli, ce calcul retombait sur #lobbySalon SEUL (sans le panneau
+  // config auto en dessous), sous-estimant la hauteur réelle de la colonne
+  // gauche et écrasant "Joueurs connectés" dans une colonne droite trop
+  // courte (retour utilisateur : chevauchement visible avec "Partager
+  // l'accès" juste au-dessus).
+  const hostAutoPanelEl = document.getElementById('hostAutoPanel')
+  const bottomEl = (hostPanel && !hostPanel.classList.contains('d-none'))
+    ? hostPanel
+    : (hostAutoPanelEl && !hostAutoPanelEl.classList.contains('d-none'))
+      ? hostAutoPanelEl
+      : salon
   const total = bottomEl.getBoundingClientRect().bottom - salon.getBoundingClientRect().top
   // "height" et pas "min-height" : un min-height ne plafonne rien, la
   // grille CSS regonflait quand même (voir commentaire style.css) à
@@ -4832,12 +5171,37 @@ const renderLobbyGrid = (arr) => {
     // CSS body.is-host #hostPanel) — retour utilisateur : au centre, ce
     // panneau gênait une présentation IRL projetée, la place centrale doit
     // rester pour la question/l'image, pas les boutons de contrôle.
-    document.body.classList.toggle('is-host', isHost)
+    // Tâche 024 (retour utilisateur : "on a toujours la vue présentateur") :
+    // toute la mise en page "régie" (body.is-host.game-active en CSS —
+    // colonne hôte, dock de classement live, zone de modération...) ne doit
+    // s'appliquer qu'en mode "Présenter". En mode "Jouer" (roomMode==='auto'),
+    // l'hôte est un joueur comme un autre à l'écran, donc jamais cette classe
+    // même s'il est bien isHost côté serveur — voir isPresenterHost().
+    document.body.classList.toggle('is-host', isPresenterHost())
     updateIrlPlayerUI() // isHost vient de changer, la bascule navbar/roue crantée doit suivre
 
     if (isMe && p.isHost) {
-      hostPanel.classList.remove('d-none')
-      hostPanel.style.display = 'flex'
+      // Mode "Jouer" (tâche 021 bis, retour utilisateur : "enlève
+      // complètement le bloc contrôle de l'hôte") : #hostPanel ("Contrôles
+      // de l'hôte" — nom du quiz, avatars, LANCER/Suivant) n'a plus lieu
+      // d'être en mode auto, le seul geste de l'hôte (LANCER) est déplacé
+      // dans la carte "Hôte" du salon (#lobbyHost) — voir plus bas dans
+      // cette même fonction, où startQuizBtn est physiquement déplacé dans
+      // le DOM. Inchangé pour "Présenter" (roomMode 'present').
+      if (roomMode === 'auto') {
+        hostPanel.classList.add('d-none')
+        hostPanel.style.display = 'none'
+      } else {
+        hostPanel.classList.remove('d-none')
+        hostPanel.style.display = 'flex'
+        // Retour au panneau hôte d'origine si ce navigateur avait
+        // précédemment déplacé startQuiz dans #lobbyHost (mode "Jouer")
+        // sans recharger la page entre deux salles créées d'affilée —
+        // insertBefore garde l'ordre [Sélectionner un Quiz, LANCER,
+        // Suivant] même après un aller-retour.
+        startQuizBtn.classList.remove('auto-launch-btn')
+        if (nextQuestionBtn.parentElement) nextQuestionBtn.parentElement.insertBefore(startQuizBtn, nextQuestionBtn)
+      }
 
       // Même cause que le panneau lien+QR juste en dessous (voir commentaire
       // !inActiveGame) : lobby:list se redéclenche pour tout le monde à
@@ -4848,15 +5212,27 @@ const renderLobbyGrid = (arr) => {
       // recharger la page (retour utilisateur, un seul joueur reconnecté a
       // suffi à déclencher le bug).
       if (!inActiveGame) {
-        if (teamModePanel) teamModePanel.classList.remove('d-none')
-        if (speedLevelPanel) speedLevelPanel.classList.remove('d-none')
-        if (gameModePanel) gameModePanel.classList.remove('d-none')
+        // Mode "Jouer" (tâche 021 bis) : ces 3 panneaux restent cachés (voir
+        // applyRoomMode, qui les masque déjà) — lobby:list se redéclenche à
+        // chaque (re)connexion d'un joueur et les réaffichait ici sans
+        // condition, écrasant le masquage fait par applyRoomMode.
+        if (roomMode !== 'auto') {
+          if (teamModePanel) teamModePanel.classList.remove('d-none')
+          if (speedLevelPanel) speedLevelPanel.classList.remove('d-none')
+          if (gameModePanel) gameModePanel.classList.remove('d-none')
+        }
 
         // Reset buttons visibility when entering lobby as host
         startQuizBtn.classList.remove('d-none')
         startQuizBtn.style.display = 'inline-flex'
-        selectQuizBtn.classList.remove('d-none')
-        selectQuizBtn.style.display = 'inline-flex'
+        // selectQuizBtn : jamais en mode "Jouer" (tâche 021 bis) — sinon ce
+        // bloc réaffichait "Sélectionner un Quiz" à chaque lobby:list (une
+        // reconnexion de joueur suffit), écrasant le masquage fait par
+        // applyRoomMode juste après room:created.
+        if (roomMode !== 'auto') {
+          selectQuizBtn.classList.remove('d-none')
+          selectQuizBtn.style.display = 'inline-flex'
+        }
         nextQuestionBtn.classList.add('d-none')
         nextQuestionBtn.style.display = 'none'
       }
@@ -4915,6 +5291,16 @@ const renderLobbyGrid = (arr) => {
         <div style="font-weight:800; font-size:20px; margin-top:12px">${p.name || 'Hôte'}</div>
         <div class="host-organizer-badge">👑 Organisateur</div>
       `
+      // Mode "Jouer" (tâche 021 bis) : LANCER déplacé ici (même bouton DOM
+      // que dans #hostPanel, pas une copie — voir applyRoomMode/hostPanel
+      // ci-dessus pour le retour en mode "Présenter") — hostArea.innerHTML
+      // vient d'être réécrit juste au-dessus, donc réappliqué à CHAQUE
+      // lobby:list (déconnexion/reconnexion d'un joueur incluse), pas
+      // seulement au premier rendu.
+      if (roomMode === 'auto' && isHost) {
+        startQuizBtn.classList.add('auto-launch-btn')
+        hostArea.appendChild(startQuizBtn)
+      }
     } else {
       const tile = document.createElement('div')
       // Un joueur déconnecté reste dans la liste (voir server/index.js) plutôt
@@ -5009,6 +5395,13 @@ const renderLobbyGrid = (arr) => {
         <div style="font-weight:800; font-size:20px; margin-top:12px">${hName}</div>
         <div class="host-organizer-badge">👑 Organisateur</div>
       `
+      // Mode "Jouer" : même déplacement que dans le rendu principal
+      // ci-dessus, ce repli ("hôte pas trouvé dans la liste serveur")
+      // reconstruit aussi hostArea.innerHTML from scratch.
+      if (roomMode === 'auto' && isHost) {
+        startQuizBtn.classList.add('auto-launch-btn')
+        hostArea.appendChild(startQuizBtn)
+      }
     } else {
         hostArea.innerHTML = `
         <div class="avatar-main is-host">👑</div>
@@ -5597,8 +5990,32 @@ nextQuestionBtn.onclick = goNext
 let hostPhase = 'answering'
 const isLastQuestion = () => !!loadedQuiz && quizIndex >= loadedQuiz.questions.length
 
+// Enchaînement automatique (tâche 021 bis, mode "Jouer") : en mode auto, le
+// seul geste de l'hôte est de cliquer LANCER — pas de "Suivant"/"Question
+// suivante" à cliquer ensuite, voir Objectif. On réutilise TEL QUEL le
+// mécanisme existant (émettre 'leaderboard:show', puis goNext()/showResults())
+// plutôt que de dupliquer la logique d'avancement : seul le déclencheur change
+// (un minuteur ici, un clic hôte en mode "Présenter", inchangé).
+const AUTO_ADVANCE_REVEAL_DELAY_MS = 4500 // temps laissé pour lire la correction avant le classement
+const AUTO_ADVANCE_LEADERBOARD_DELAY_MS = 3500 // temps laissé sur le classement avant la question suivante
+let autoAdvanceTimer = null
+const clearAutoAdvanceTimer = () => { if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null } }
+const scheduleAutoAdvance = (delayMs, action) => {
+  clearAutoAdvanceTimer()
+  autoAdvanceTimer = setTimeout(() => { autoAdvanceTimer = null; action() }, delayMs)
+}
+
 const updateHostControls = () => {
   if (!isHost) return
+  // Mode "Jouer" (tâche 021 bis) : aucune interaction hôte après LANCER (voir
+  // scheduleAutoAdvance) — ni "Suivant" ni "Question suivante" n'ont de
+  // raison d'être visibles, l'enchaînement se fait tout seul.
+  if (roomMode === 'auto') {
+    nextQuestionBtn.classList.add('d-none')
+    nextQuestionBtn.style.display = 'none'
+    if (leaderNextBtn) leaderNextBtn.classList.add('d-none')
+    return
+  }
   // Barre de l'hôte (en haut de page) : reste affichée pendant TOUTE la
   // question, pas seulement à la révélation (retour utilisateur — un bouton
   // qui apparaît/disparaît est moins lisible qu'un repère visuel constant) —
@@ -5647,23 +6064,15 @@ const updateHostControls = () => {
   }
 }
 
-startQuizBtn.onclick = async () => {
-  if (startQuizBtn.classList.contains('is-disabled')) {
-    const players = document.querySelectorAll('.player-tile')
-    if (players.length === 0) {
-      showAnnounce('Il faut au moins un joueur pour lancer le quiz !')
-    } else {
-      // Retour utilisateur : le message générique ne disait ni QUI bloquait
-      // ni comment débloquer — seul recours jusqu'ici, repérer soi-même la
-      // bonne tuile dans le salon et l'exclure, sans qu'aucun texte ne le
-      // suggère. lastLobbyArr (voir renderLobbyGrid) donne directement les
-      // noms des joueurs encore en "Attente".
-      const notReady = (lastLobbyArr || []).filter(p => !p.isHost && p.connected !== false && !p.ready).map(p => p.name)
-      const names = notReady.length ? ` : ${notReady.join(', ')}` : ''
-      showAnnounce(`Tous les joueurs ne sont pas prêts${names}. Tu peux exclure un joueur bloqué depuis sa tuile dans le salon.`)
-    }
-    return
-  }
+// Extrait du onclick ci-dessous (tâche 023) : la partie qui lance
+// RÉELLEMENT la partie (génération auto-quiz si besoin, émission de la
+// première question), séparée de la garde "bouton grisé" qui la précède.
+// Permet à l'aperçu banque de questions (voir previewBankQuestionId plus
+// haut) de réutiliser exactement ce même flux de lancement sans passer par
+// la garde is-disabled, qui exige normalement au moins un joueur non-hôte
+// (voir renderLobbyGrid) — une contrainte pensée pour une vraie partie
+// multijoueur, pas pour cette salle solo d'aperçu.
+const launchQuiz = async () => {
   // Mode "Jouer" (tâche 021) : génère loadedQuiz depuis bank_questions à la
   // place de la sélection manuelle — reste bloqué sur l'écran de lancement
   // (message déjà affiché dans #autoConfigError) si la banque ne suffit
@@ -5680,16 +6089,27 @@ startQuizBtn.onclick = async () => {
     return
   }
 
+  // Nouvelle partie : aucun type de question "déjà découvert" pour l'instant
+  // (voir seenQuestionTypesThisGame/emitQuestionShow) — sinon un hôte qui
+  // relance un nouveau quiz dans la même salle sans recharger la page
+  // hériterait à tort des types vus lors de la partie précédente.
+  seenQuestionTypesThisGame.clear()
+
   // Hide setup buttons
   startQuizBtn.classList.add('d-none')
   startQuizBtn.style.display = 'none'
   selectQuizBtn.classList.add('d-none')
   selectQuizBtn.style.display = 'none'
   
-  // Show navigation buttons
-  nextQuestionBtn.classList.remove('d-none')
-  nextQuestionBtn.style.display = 'inline-flex'
-  nextQuestionBtn.textContent = 'Suivant'
+  // Show navigation buttons — sauf en mode "Jouer" (tâche 021 bis), où
+  // updateHostControls les garde cachés en permanence (pas de clic hôte à
+  // faire une fois lancé, voir scheduleAutoAdvance) : les afficher ici les
+  // ferait clignoter un instant avant le premier question:show.
+  if (roomMode !== 'auto') {
+    nextQuestionBtn.classList.remove('d-none')
+    nextQuestionBtn.style.display = 'inline-flex'
+    nextQuestionBtn.textContent = 'Suivant'
+  }
 
   quizIndex = 0
   qrDiv.style.display = 'none'
@@ -5727,6 +6147,26 @@ startQuizBtn.onclick = async () => {
   nextQuestionBtn.onclick = null
 }
 
+startQuizBtn.onclick = async () => {
+  if (startQuizBtn.classList.contains('is-disabled')) {
+    const players = document.querySelectorAll('.player-tile')
+    if (players.length === 0) {
+      showAnnounce('Il faut au moins un joueur pour lancer le quiz !')
+    } else {
+      // Retour utilisateur : le message générique ne disait ni QUI bloquait
+      // ni comment débloquer — seul recours jusqu'ici, repérer soi-même la
+      // bonne tuile dans le salon et l'exclure, sans qu'aucun texte ne le
+      // suggère. lastLobbyArr (voir renderLobbyGrid) donne directement les
+      // noms des joueurs encore en "Attente".
+      const notReady = (lastLobbyArr || []).filter(p => !p.isHost && p.connected !== false && !p.ready).map(p => p.name)
+      const names = notReady.length ? ` : ${notReady.join(', ')}` : ''
+      showAnnounce(`Tous les joueurs ne sont pas prêts${names}. Tu peux exclure un joueur bloqué depuis sa tuile dans le salon.`)
+    }
+    return
+  }
+  await launchQuiz()
+}
+
 socket.on('question:show', payload => {
   inActiveGame = true
   // Renfort (retour utilisateur : "il n'est plus visible") — déjà posé
@@ -5750,7 +6190,9 @@ socket.on('question:show', payload => {
   clearRevealState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
-  preQuestionOrder = computeOrder().filter(([id, s]) => !s.isHost).map(([id]) => id)
+  // Tâche 024 : en mode "Jouer", l'hôte fait partie du classement comme un
+  // joueur normal — ne l'exclure de ce snapshot qu'en mode "Présenter".
+  preQuestionOrder = computeOrder().filter(([id, s]) => !(s.isHost && roomMode !== 'auto')).map(([id]) => id)
   // Remis à zéro à chaque question (voir score:update) : sert au "+XXX"
   // affiché sur chaque tuile du classement (retour utilisateur), un par
   // joueur plutôt qu'un seul (myLastDelta, réservé à MON propre bandeau de
@@ -5854,11 +6296,6 @@ socket.on('question:show', payload => {
   if (indiceArea) {
     indiceArea.classList.toggle('d-none', payload.type !== 'indice')
   }
-  // Réinitialisé pour CHAQUE question (comme currentIllustrationZoom plus
-  // haut) — sinon resterait vrai après une question "reveal" suivie d'un
-  // autre type, et le tick du chrono continuerait d'essayer de flouter
-  // revealEnigmeImg (masqué mais toujours dans le DOM) pour rien.
-  revealEnigmeActive = payload.type === 'reveal' && !!payload.enigmeImageUrl
   if (revealArea) {
     revealArea.classList.toggle('d-none', payload.type !== 'reveal')
     if (payload.type === 'reveal') {
@@ -5871,14 +6308,15 @@ socket.on('question:show', payload => {
         if (payload.enigmeImageUrl) {
           revealEnigmeImg.src = payload.enigmeImageUrl
           revealEnigmeImg.classList.remove('d-none')
-          // Flou maximal au départ (design décidé) — le tick du chrono
-          // (timerInt plus bas) le fait progressivement retomber à 0,
-          // atteint pile en même temps que le décompte affiche 0.
-          revealEnigmeImg.style.filter = `blur(${REVEAL_ENIGME_BLUR_MAX_PX}px)`
+          // Image FIXE dès l'affichage, jamais floutée (retour utilisateur —
+          // corrige un ancien flou décroissant animé sur le décompte, qui ne
+          // correspondait pas au mécanisme voulu) : l'image elle-même est
+          // incomplète (élément manquant, choisi par le créateur du quiz),
+          // c'est ça que le joueur doit deviner — pas une image qui se
+          // "précise" avec le temps.
         } else {
           revealEnigmeImg.classList.add('d-none')
           revealEnigmeImg.removeAttribute('src')
-          revealEnigmeImg.style.filter = ''
         }
       }
       // La réponse n'arrive JAMAIS ici (voir server/index.js) — vidée pour
@@ -5961,14 +6399,16 @@ socket.on('question:show', payload => {
   if (blindtestArtistInput) blindtestArtistInput.classList.toggle('d-none', payload.type === 'blindtest' && !!payload.titleOnly)
   // Tout le monde démarre verrouillé : la question puis les tuiles se
   // révèlent d'abord (ci-dessous), le chrono et les réponses ne s'activent
-  // qu'à startTs. L'hôte, lui, reste verrouillé en permanence — il ne répond
-  // jamais, ce n'est que son écran à partager avec la salle.
+  // qu'à startTs. L'hôte, lui, reste verrouillé en permanence EN MODE
+  // "PRÉSENTER" — il ne répond jamais, ce n'est que son écran à partager
+  // avec la salle. En mode "Jouer" (tâche 024), l'hôte est un joueur comme
+  // les autres et suit le même déverrouillage qu'eux, voir isPresenterHost().
   inputArea.classList.add('answers-locked')
   hideAnswerStatus()
 
   const freeTextEl = document.getElementById('freeText')
   freeTextEl.classList.add('d-none')
-  if (!isHost) {
+  if (!isPresenterHost()) {
     const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association' || payload.type === 'timeline' || payload.type === 'rangement'
     const isBlindtest = payload.type === 'blindtest'
     freeTextEl.classList.toggle('mcq-mode', isTileType)
@@ -6044,7 +6484,9 @@ socket.on('question:show', payload => {
   // revealToken évite qu'un déverrouillage tardif ne s'applique après le
   // passage à une autre question (hôte qui enchaîne très vite).
   const myRevealToken = ++revealToken
-  if (!isHost) {
+  // Tâche 024 : déverrouillage réservé au mode "Présenter" pour l'hôte —
+  // en mode "Jouer" il suit le même chemin que n'importe quel joueur.
+  if (!isPresenterHost()) {
     setTimeout(() => {
       if (revealToken !== myRevealToken) return
       inputArea.classList.remove('answers-locked')
@@ -6104,13 +6546,6 @@ socket.on('question:show', payload => {
       illustrationImg.style.filter = `blur(${zoomGuessBlurPx(currentIllustrationZoom.startScale) * (1 - progress)}px)`
     }
 
-    // Révélation progressive de l'énigme (type "reveal", design décidé) —
-    // même tick, même calcul de progress que le dézoom "zoomguess" ci-dessus.
-    if (revealEnigmeActive && revealEnigmeImg) {
-      const progress = Math.min(1, 1 - remaining / total)
-      revealEnigmeImg.style.filter = `blur(${REVEAL_ENIGME_BLUR_MAX_PX * (1 - progress)}px)`
-    }
-
     // Apparition progressive des indices (type "indice", tâche 014) — voir
     // updateIndiceArea, appelé à chaque tick avec le temps écoulé depuis
     // start. Jamais de setTimeout isolé par indice : ce recalcul systématique
@@ -6150,7 +6585,9 @@ socket.on('question:show', payload => {
     // donc attemptAutoSubmit() ne soumet jamais deux fois même appelé deux
     // fois (voir plus bas, filet de sécurité en fin de chrono).
     const attemptAutoSubmit = () => {
-      if (isHost || hasAnsweredThisQuestion) return
+      // Tâche 024 : filet de sécurité aussi pour l'hôte en mode "Jouer" (il
+      // répond comme tout le monde) — réservé au mode "Présenter" avant.
+      if (isPresenterHost() || hasAnsweredThisQuestion) return
       if ((currentQuestionType === 'free' || currentQuestionType === 'pbac' || currentQuestionType === 'reveal' || currentQuestionType === 'indice') && answerInput.value.trim()) {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'blindtest' && ((blindtestTitleInput?.value || '').trim() || (blindtestArtistInput?.value || '').trim())) {
@@ -6711,7 +7148,13 @@ socket.on('moderation:allApproved', ({ answerIds }) => {
 
 let isModerationPending = false
 socket.on('answer:queue', ({ answerId, playerId, playerName, content, blindtest, fields, pbac }) => {
-  if (!isHost) {
+  // Tâche 024 : en mode "Jouer", il n'y a pas de MJ — personne (host compris)
+  // n'affiche jamais le panneau de modération manuelle, la correction reste
+  // 100% automatique. Voir la section Risques du fichier de tâche 024 : le
+  // serveur peut malgré tout mettre une réponse ambiguë en attente
+  // (room.pending) indépendamment de room.mode — non traité ici, voir le
+  // blocage documenté (pas de modification de server/index.js sans validation).
+  if (!isHost || roomMode === 'auto') {
     const isMcq = !optionsDiv.classList.contains('d-none')
     if (!isMcq) {
       isModerationPending = true
@@ -7044,7 +7487,9 @@ const animateScoreGain = (row, oldTotal, newTotal, delta) => {
 const LEADERBOARD_MAX_ROWS = 15
 
 const renderBoard = () => {
-  const fullOrder = computeOrder().filter(([id, s]) => !s.isHost)
+  // Tâche 024 : l'hôte apparaît au classement en mode "Jouer" (il joue),
+  // reste exclu en mode "Présenter" comme avant.
+  const fullOrder = computeOrder().filter(([id, s]) => !(s.isHost && roomMode !== 'auto'))
   // Rang RÉEL de chacun, calculé sur la liste complète — même tronqué à
   // l'affichage, le numéro affiché doit rester le vrai classement, pas la
   // position dans la liste réduite.
@@ -7263,9 +7708,11 @@ const LIVE_DOCK_MAX_ROWS = 5
 const renderLiveClassementDock = () => {
   if (!liveClassementList) return
   if (teamModeActive) { liveClassementList.textContent = ''; return }
-  const ordered = computeOrder().filter(([, s]) => !s.isHost).slice(0, LIVE_DOCK_MAX_ROWS)
+  // Tâche 024 : même règle que renderBoard() — l'hôte apparaît dans le dock
+  // en mode "Jouer", reste exclu en mode "Présenter".
+  const ordered = computeOrder().filter(([, s]) => !(s.isHost && roomMode !== 'auto')).slice(0, LIVE_DOCK_MAX_ROWS)
   liveClassementList.textContent = ''
-  ordered.forEach(([, s], idx) => {
+  ordered.forEach(([id, s], idx) => {
     const row = document.createElement('div')
     row.className = 'live-classement-row'
     const rank = document.createElement('span')
@@ -7280,6 +7727,19 @@ const renderLiveClassementDock = () => {
     row.appendChild(rank)
     row.appendChild(name)
     row.appendChild(score)
+    // Tâche 025 : ajustement manuel du score par le MJ, réservé au mode
+    // "Présenter" (isPresenterHost() — jamais visible pour un simple
+    // joueur, ni en mode "Jouer" où l'hôte est un joueur comme les autres).
+    if (isPresenterHost()) {
+      const adjustBtn = document.createElement('button')
+      adjustBtn.type = 'button'
+      adjustBtn.className = 'live-classement-adjust-btn'
+      adjustBtn.textContent = '+'
+      adjustBtn.setAttribute('aria-label', `Ajuster le score de ${s.name}`)
+      adjustBtn.title = `Ajuster le score de ${s.name}`
+      adjustBtn.onclick = () => openScoreAdjustPopup(id, s.name)
+      row.appendChild(adjustBtn)
+    }
     liveClassementList.appendChild(row)
   })
 }
@@ -7336,10 +7796,6 @@ socket.on('timer:end', (payload) => {
   // (tout le monde a répondu en avance) — on force l'image complète tout de
   // suite pour rester cohérent avec la révélation qui s'affiche en dessous.
   if (currentIllustrationZoom && illustrationImg) { illustrationImg.style.transform = 'scale(1)'; illustrationImg.style.filter = '' }
-  // Même filet de sécurité que juste au-dessus, pour le flou progressif de
-  // l'énigme "reveal" (voir revealEnigmeActive) — l'image doit être nette
-  // au moment précis où la réponse apparaît par-dessus juste en dessous.
-  if (revealEnigmeActive && revealEnigmeImg) { revealEnigmeImg.style.filter = '' }
   // "révélation" : timer:end est le SEUL moment où l'image réponse arrive
   // enfin du serveur (voir server/index.js, jamais transmise avant) — pour
   // TOUT LE MONDE, hôte compris (c'est souvent son écran qui est projeté en
@@ -7354,7 +7810,9 @@ socket.on('timer:end', (payload) => {
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).
   if (currentQuestionType === 'blindtest') stopBlindTestAudio()
-  if (!isHost) {
+  // Tâche 024 : verrouillage de révélation appliqué à l'hôte aussi en mode
+  // "Jouer" (il répond comme un joueur) — réservé au mode "Présenter" avant.
+  if (!isPresenterHost()) {
     // Ne PAS masquer inputArea : la révélation (surbrillance QCM, règle,
     // réponse acceptée) s'affiche dedans. On verrouille juste les interactions.
     inputArea.classList.add('answers-locked')
@@ -7656,20 +8114,34 @@ socket.on('question:reveal', payload => {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }
   }
-  if (!isHost) {
+  // Tâche 024 : l'hôte entend/ressent aussi le retour bonne/mauvaise réponse
+  // en mode "Jouer" (il joue) — réservé au mode "Présenter" avant.
+  if (!isPresenterHost()) {
     playSound(myAnsweredCorrectlyThisQuestion ? 'correct' : 'wrong')
     vibrate(myAnsweredCorrectlyThisQuestion ? VIBRATE_CORRECT : VIBRATE_INCORRECT)
   }
-  if (isHost) { hostPhase = 'revealed'; updateHostControls() }
+  if (isHost) {
+    hostPhase = 'revealed'
+    updateHostControls()
+    // Mode "Jouer" : personne ne clique "Suivant" — voir scheduleAutoAdvance.
+    if (roomMode === 'auto') {
+      scheduleAutoAdvance(AUTO_ADVANCE_REVEAL_DELAY_MS, () => {
+        const roomCode = roomInput.value.trim()
+        if (roomCode) socket.emit('leaderboard:show', { roomCode })
+      })
+    }
+  }
   // Badge + fond teinté de la popup (tâche 019, uniquement si elle s'est
   // ouverte — v5, hasRevealExtras) : posés ICI, une fois TOUTES les branches
   // par type ci-dessus passées, en miroir de l'état déjà posé par
   // showMyResultBanner sur #myResultBanner (is-correct/is-incorrect/
   // is-close) — aucune nouvelle logique de détermination, juste un second
-  // affichage de la même donnée. Absent côté hôte : showMyResultBanner
-  // s'arrête tout de suite pour lui (voir plus haut, `if (!myResultBanner ||
-  // isHost) return`), #myResultBanner ne porte donc jamais ces classes chez
-  // lui -> popup neutre, badge caché (d-none posé par openRevealPopup).
+  // affichage de la même donnée. Absent côté hôte en mode "Présenter" :
+  // showMyResultBanner s'arrête tout de suite pour lui (voir plus haut,
+  // `if (!myResultBanner || isPresenterHost()) return`), #myResultBanner ne
+  // porte donc jamais ces classes chez lui -> popup neutre, badge caché
+  // (d-none posé par openRevealPopup). En mode "Jouer", l'hôte a son propre
+  // bandeau comme un joueur normal, ce badge s'applique donc à lui aussi.
   if (hasRevealExtras && revealPopupOverlay && myResultBanner) {
     const resultState = ['is-correct', 'is-incorrect', 'is-close'].find(c => myResultBanner.classList.contains(c))
     if (resultState) {
@@ -7682,11 +8154,13 @@ socket.on('question:reveal', payload => {
   }
   // Confettis (tâche 019) : réutilisation TELLE QUELLE du déclencheur déjà en
   // place en fin de partie (voir results.js, mêmes réglages) — jamais côté
-  // hôte (n'a jamais de réponse personnelle, voir tâche 019 "Hors périmètre").
+  // hôte en mode "Présenter" (n'a jamais de réponse personnelle, voir tâche
+  // 019 "Hors périmètre"). En mode "Jouer" (tâche 024), l'hôte joue et a
+  // droit aux mêmes confettis qu'un joueur normal, voir isPresenterHost().
   // Indépendant de hasRevealExtras à dessein : décoratif, ne cache rien du
   // plateau, aucune raison de le priver d'une bonne réponse sous prétexte
   // que la popup, elle, ne s'ouvre pas faute d'explication/image/son.
-  if (!isHost && myAnsweredCorrectlyThisQuestion && window.confetti) {
+  if (!isPresenterHost() && myAnsweredCorrectlyThisQuestion && window.confetti) {
     window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.55 } })
   }
   // Fermeture automatique de la popup (tâche 019) : délai de base ~4.5s,
@@ -7732,7 +8206,18 @@ socket.on('leaderboard:show', () => {
   // saute simplement en mode équipe plutôt que d'afficher un message
   // individuel incohérent avec le classement par équipe affiché à l'écran.
   if (!teamModeActive) setTimeout(() => revealMyPositionChange(beforeOrder), 1300)
-  if (isHost) { hostPhase = 'leaderboard'; updateHostControls() }
+  if (isHost) {
+    hostPhase = 'leaderboard'
+    updateHostControls()
+    // Mode "Jouer" : enchaîne seul sur la question suivante (ou les résultats
+    // à la dernière) — voir scheduleAutoAdvance.
+    if (roomMode === 'auto') {
+      scheduleAutoAdvance(AUTO_ADVANCE_LEADERBOARD_DELAY_MS, () => {
+        if (isLastQuestion()) showResults()
+        else goNext()
+      })
+    }
+  }
 })
 
 // (plus de handler 'moderation:finished' : le serveur ne l'émet plus — une
@@ -7743,7 +8228,7 @@ socket.on('leaderboard:show', () => {
 socket.on('question:show', () => {
   leaderOverlay.style.display = 'none'
   hideModerationWait()
-  if (isHost) { hostPhase = 'answering'; updateHostControls() }
+  if (isHost) { hostPhase = 'answering'; clearAutoAdvanceTimer(); updateHostControls() }
 })
 
 socket.on('score:update', ({ playerId, total, delta }) => {
@@ -7784,7 +8269,8 @@ socket.on('score:update', ({ playerId, total, delta }) => {
 const revealMyPositionChange = (beforeOrder) => {
   const myId = window.myId
   if (!myId || !beforeOrder || beforeOrder.length === 0) return
-  const afterOrder = computeOrder().filter(([id, s]) => !s.isHost).map(([id]) => id)
+  // Tâche 024 : même règle que preQuestionOrder plus haut.
+  const afterOrder = computeOrder().filter(([id, s]) => !(s.isHost && roomMode !== 'auto')).map(([id]) => id)
   const prevPos = beforeOrder.indexOf(myId) >= 0 ? beforeOrder.indexOf(myId) + 1 : null
   const newPos = afterOrder.indexOf(myId) >= 0 ? afterOrder.indexOf(myId) + 1 : null
   if (!newPos) return

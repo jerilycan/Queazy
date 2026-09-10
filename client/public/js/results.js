@@ -146,6 +146,14 @@ let teamModeActive = false
 let teamsById = {}
 const TEAM_EMOJI = { red: '🔴', blue: '🔵', yellow: '🟡', green: '🟢', cyan: '🩵', purple: '🟣' }
 
+// Tâche 024 (retour utilisateur : "le classement final n'intègre pas
+// l'hôte") : en mode "Jouer" (roomMode==='auto'), l'hôte est un joueur
+// comme un autre côté jeu (voir index.js isPresenterHost) — le classement
+// final doit donc l'inclure aussi, contrairement au mode "Présenter" où il
+// n'a jamais joué. Reçu via room:mode (voir server/index.js, émis aussi à
+// ce viewer désormais).
+let roomMode = 'present'
+
 // ---------------------------------------------------------------------
 // Podium final "course arcade néon" : chaque barre grimpe question par
 // question au rythme des points RÉELLEMENT gagnés à chaque tour (voir
@@ -708,8 +716,12 @@ socket.on('team:list', ({ teamMode, teams }) => {
   tryStartRace()
 })
 
+socket.on('room:mode', ({ mode }) => { roomMode = mode === 'auto' ? 'auto' : 'present' })
+
 socket.on('lobby:list', (list) => {
-  const players = (list || []).filter(p => !p.isHost).map(p => ({ id: p.id, name: p.name, score: p.score || 0, avatar: p.avatar || '', teamId: p.teamId || null }))
+  const players = (list || [])
+    .filter(p => roomMode === 'auto' || !p.isHost)
+    .map(p => ({ id: p.id, name: p.name, score: p.score || 0, avatar: p.avatar || '', teamId: p.teamId || null }))
   render(players)
 })
 

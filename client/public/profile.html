@@ -192,6 +192,10 @@
             </div>
 
             <button id="save" class="btn btn-primary h-50 mt-8">Sauvegarder le profil</button>
+            <!-- Modération banque de questions (tâche 022) : révélé par
+                 profile.js uniquement si le compte connecté est présent dans
+                 bank_admins — voir checkAuth(). -->
+            <a id="adminBankLink" href="/admin-bank.html" class="btn h-50 mt-8 d-none">🛡️ Modération banque de questions</a>
             <button id="logout" class="btn btn-danger-outline h-50 mt-8">Se déconnecter</button>
           </div>
         </div>

@@ -1110,7 +1110,11 @@ const start = async () => {
         lastActivityAt: Date.now(), // voir sweepAbandonedRooms plus bas
         speedLevel: 'normal', // voir game:setSpeedLevel / floorForSpeedLevel
         leaderboardShown: false, // voir leaderboard:show / question:show / room:join
-        gameMode: 'irl', // voir game:setMode ; 'irl' (par défaut) ou 'remote'
+        // gameMode toujours 'remote' en mode "Jouer" (tâche 021 bis) : pas de
+        // présentateur pour montrer les questions sur un écran commun, chacun
+        // est forcément sur son propre écran — voir game:setMode, qui reste
+        // inchangé et continue de s'appliquer normalement en mode "Présenter".
+        gameMode: mode === 'auto' ? 'remote' : 'irl', // voir game:setMode ; 'irl' (par défaut) ou 'remote'
         mode, // voir commentaire ci-dessus ; 'present' (défaut) ou 'auto'
         autoConfig // voir commentaire ci-dessus ; modifiable via room:setAutoConfig
       })
@@ -1157,6 +1161,15 @@ const start = async () => {
         await socket.join(code)
         if (room.history.length > 0) socket.emit('history:sync', { history: buildHistorySync(room) })
         socket.emit('team:list', { teamMode: room.teamMode, teams: buildTeamList(room) })
+        // Tâche 024 (retour utilisateur : "le classement lors de la révélation
+        // finale n'intègre pas l'hôte") : ce viewer ne rejoint qu'après la
+        // partie (result.html), donc jamais avant qu'un VRAI joueur ne
+        // (re)rejoigne pour de bon — le seul autre point d'émission de
+        // room:mode (plus bas, hors branche viewer) ne le concerne donc
+        // jamais. Sans lui, results.js ne connaît jamais room.mode et exclut
+        // l'hôte inconditionnellement (comme si on était toujours en mode
+        // "Présenter"). Émis avant lobby:list, comme pour un vrai joueur.
+        socket.emit('room:mode', { mode: room.mode || 'present' })
         socket.emit('lobby:list', buildPlayerList(room))
         return
       }
@@ -1468,6 +1481,43 @@ const start = async () => {
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
     })
 
+    // Tâche 025 : le MJ (mode "Présenter" uniquement) peut ajuster
+    // manuellement le score d'un joueur — ex. il pose une question bonus à
+    // l'oral, hors du système de questions/réponses du quiz. Évènement
+    // DISTINCT de 'score:update' (voir index.js answer:submit et son
+    // commentaire) : celui-ci reste volontairement silencieux côté joueur
+    // jusqu'à la révélation, alors qu'un ajustement manuel doit au contraire
+    // se répercuter tout de suite partout (voir le handler client dédié).
+    socket.on('score:adjust', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room) return
+      // Seul l'hôte peut ajuster un score, jamais le sien (il n'apparaît de
+      // toute façon jamais dans room.scores en mode "Présenter" — défensif
+      // en cas d'état transitoire, ex. juste après un changement de mode).
+      if (socket.id !== room.hostId) return
+      if (payload?.playerId === room.hostId) return
+      // Réservé au mode "Présenter" (tâche 024) : en mode "Jouer", l'hôte
+      // est un joueur comme un autre, sans outils de MJ.
+      if (room.mode === 'auto') return
+      const target = room.players.get(payload?.playerId)
+      if (!target) return
+      // Entier fini, arrondi — un client buggé/modifié ne doit pas pouvoir
+      // pousser NaN/Infinity dans room.scores. Amplitude bornée large
+      // (±100000) : pure sécurité anti-abus, pas une règle métier de
+      // plafond (explicitement hors périmètre de la tâche).
+      const delta = Math.round(Number(payload?.delta))
+      if (!Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 100000) return
+
+      const total = (room.scores.get(target.id) || 0) + delta
+      room.scores.set(target.id, total)
+      if (target.token) {
+        room.tokens.set(target.token, { id: target.id, name: target.name, score: total, teamId: target.teamId || null })
+      }
+      room.lastActivityAt = Date.now()
+      io.to(code).emit('score:adjust', { playerId: target.id, delta, total })
+    })
+
     // "Intro par type de question" (retour utilisateur, chantier v1.53) :
     // courte phase AVANT question:show, affichée à TOUT LE MONDE (hôte +
     // joueurs, plus de distinction entre popup joueur et écran d'attente
@@ -1557,6 +1607,12 @@ const start = async () => {
       // cause d'une déconnexion, temporaire ou non : au pire, l'optimisation
       // "clore dès que tout le monde a répondu" ne se déclenche pas et on
       // attend la fin normale du chrono, jamais de fin prématurée.
+      // +1 en mode "Jouer" (room.mode==='auto', tâche 024) : activePlayers()
+      // exclut TOUJOURS l'hôte (conçu pour "Présenter", où il ne joue
+      // jamais) — mais en mode "Jouer" l'hôte répond aussi. Sans ce +1,
+      // "tout le monde a répondu" devenait vrai dès que les joueurs NON-hôte
+      // avaient tous répondu, révélant la question avant même que l'hôte
+      // ait pu soumettre sa propre réponse (bug reproduit en direct).
       // options : uniquement gardé pour "intrus" (liste ordonnée des id de
       // tuiles envoyée aux joueurs, voir emitQuestion côté index.js) — sert à
       // retraduire l'id opaque stocké dans he.answers en "Image N" lisible
@@ -1590,7 +1646,7 @@ const start = async () => {
       // bien. revealPos/revealBg purement cosmétiques (cadrage choisi côté
       // éditeur, voir editor.js openImageCropModal), jamais validés ici —
       // même traitement que pair.aPos/bPos pour "association".
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length, options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined }
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length + (room.mode === 'auto' ? 1 : 0), options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -1927,12 +1983,19 @@ const start = async () => {
         const fullDelta = pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor)
         const halfDelta = Math.round(fullDelta / 2)
 
+        // Mode "Jouer" (room.mode==='auto', tâche 024) : jamais de 'pending'
+        // — personne ne peut plus le trancher (le panneau de modération
+        // n'existe plus pour personne, voir index.js). Une réponse "proche"
+        // (res.ok, pas forcément exact) est validée directement ; sans liste
+        // de réponses officielle, ou sans match du tout, marquée fausse
+        // plutôt que laissée en attente indéfiniment. Comportement
+        // "Présenter" INCHANGÉ (toujours 'pending' dans ces deux cas).
         const evalField = (input, accepted) => {
           if (!input.trim()) return 'incorrect'
-          if (!accepted.length) return 'pending' // pas de réponse "officielle" définie : à l'hôte de juger
+          if (!accepted.length) return room.mode === 'auto' ? 'incorrect' : 'pending' // pas de réponse "officielle" définie : à l'hôte de juger
           const res = fuzzy(input, accepted)
-          if (res.ok && res.exact) return 'correct'
-          return 'pending'
+          if (res.ok && (res.exact || room.mode === 'auto')) return 'correct'
+          return room.mode === 'auto' ? 'incorrect' : 'pending'
         }
         const titleStatus = evalField(titleInput, acceptedTitle)
         // 'na' (non applicable) plutôt que de réutiliser evalField('') qui
@@ -2203,6 +2266,34 @@ const start = async () => {
           emitProgress()
           return
         }
+        // Mode "Jouer" : pas de MJ pour regrouper les réponses similaires
+        // (voir moderation:pbacGroup, basé sur une comparaison ENTRE
+        // joueurs — inapplicable sans hôte pour trancher). Simplification
+        // assumée : toute réponse non vide est validée directement au plein
+        // barème (PBAC_BASE_POINTS + vitesse), sans partage de points entre
+        // réponses similaires — mieux qu'une question bloquée indéfiniment
+        // (tâche 024). Comportement "Présenter" INCHANGÉ (toujours en
+        // attente de regroupement par l'hôte).
+        if (room.mode === 'auto') {
+          const submitTs = Date.now()
+          const delta = Math.max(0, pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor))
+          const total = (room.scores.get(socket.id) || 0) + delta
+          room.scores.set(socket.id, total)
+          if (p?.token) {
+            room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
+            if (q.historyEntry) {
+              q.historyEntry.results[p.token] = 'correct'
+              q.historyEntry.deltas[p.token] = delta
+              q.historyEntry.answers[p.token] = text
+            }
+          }
+          q.answered?.add(token)
+          q.submissions?.set(token, 'correct')
+          io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+          emitProgress()
+          return
+        }
+
         // Une réponse encore en attente peut être corrigée avant la fin du
         // temps (mode multi-tentatives) — même principe que "free" juste
         // au-dessus : on retire l'ancienne entrée de la file plutôt que d'en
@@ -2241,7 +2332,14 @@ const start = async () => {
       const haloPenalty = HALO_CLICK_PENALTIES.slice(0, haloClicks).reduce((sum, p) => sum + p, 0)
       const haloBasePoints = 1000
 
-      if (res.ok && res.exact) {
+      // Mode "Jouer" (room.mode==='auto', tâche 024) : aucun MJ pour trancher
+      // une réponse ambiguë — une réponse "proche" (res.ok, pas forcément
+      // exact) est donc validée directement, jamais mise en file de
+      // modération (voir la branche "else" plus bas, qui applique le même
+      // principe pour une réponse qui ne matche pas du tout : incorrect
+      // immédiat plutôt que pending). Comportement "Présenter" INCHANGÉ
+      // (res.exact seul y décide toujours du passage direct en correct).
+      if (res.ok && (res.exact || room.mode === 'auto')) {
         const delta = q.type === 'halo'
           ? Math.max(0, haloBasePoints - haloPenalty)
           : Math.max(0, pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) - haloPenalty)
@@ -2270,6 +2368,22 @@ const start = async () => {
         // requis là-bas. "mcq" a désormais sa propre branche dédiée plus
         // haut (voir q.requireAllCorrect) : n'atteint jamais ce code-ci.
         if (q.type === 'truefalse' || q.type === 'intrus') {
+          q.submissions?.set(token, 'incorrect')
+          const p = room.players.get(socket.id)
+          if (p?.token && q.historyEntry) {
+            q.historyEntry.results[p.token] = 'incorrect'
+            q.historyEntry.answers[p.token] = payload?.content || ''
+          }
+          emitProgress()
+          return
+        }
+
+        // Mode "Jouer" : si on atteint ce point, res.ok est forcément faux
+        // (un res.ok vrai, même flou, serait déjà passé par la branche
+        // "correct" juste au-dessus) — donc une réponse qui ne matche
+        // vraiment pas du tout. Incorrect immédiat, jamais de file de
+        // modération que personne ne peut plus trancher (voir tâche 024).
+        if (room.mode === 'auto') {
           q.submissions?.set(token, 'incorrect')
           const p = room.players.get(socket.id)
           if (p?.token && q.historyEntry) {
