@@ -4409,6 +4409,32 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
 
 .cursor-pointer { cursor: pointer; }
 .resize-v { resize: vertical; min-height: 80px; }
+.position-relative { position: relative; }
+
+/* Tâche 025 bis : case "Ajouter à la banque" (éditeur de quiz), remplace
+   l'ancien gros bouton — posée dans le coin haut-droit de la grille
+   catégorie/difficulté (voir editor.html, position-relative sur le
+   conteneur parent). Compacte, jamais plus large que son contenu. */
+.add-to-bank-checkbox {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  user-select: none;
+}
+.add-to-bank-checkbox input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  margin: 0;
+}
 
 /* New Specific Styles */
 .avatar-profile-link {

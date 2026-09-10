@@ -450,7 +450,15 @@ const start = async () => {
   const buildRecap = (room, question) => {
     const he = question?.historyEntry
     if (!he) return null
-    const entries = Object.entries(he.results || {}).filter(([tok]) => tok !== room.hostToken)
+    // Tâche 024/026 (retour utilisateur : "il faut aussi voir le récap de
+    // l'hôte" en mode "Jouer") : l'hôte n'est exclu du récap qu'en mode
+    // "Présenter" (il n'y joue jamais) — en mode "Jouer" (room.mode ===
+    // 'auto'), il répond comme un joueur normal et doit donc apparaître
+    // dans le récap comme n'importe qui d'autre. Ce filtre avait été
+    // oublié lors de l'audit initial de la tâche 024 (buildRecap n'est
+    // jamais appelé depuis index.js, seulement depuis server/index.js).
+    const excludeHost = room.mode !== 'auto'
+    const entries = Object.entries(he.results || {}).filter(([tok]) => !excludeHost || tok !== room.hostToken)
     const total = entries.length
     if (total === 0) return null
     const correct = entries.filter(([, v]) => v === 'correct').length
@@ -473,7 +481,7 @@ const start = async () => {
     let topAnswer = null
     const counts = new Map() // clé normalisée -> { text, count }
     for (const [tok, raw] of Object.entries(he.answers || {})) {
-      if (tok === room.hostToken) continue
+      if (excludeHost && tok === room.hostToken) continue
       if (typeof raw !== 'string') continue
       const trimmed = raw.trim()
       if (!trimmed) continue

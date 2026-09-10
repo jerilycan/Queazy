@@ -258,13 +258,26 @@
 
           <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
                fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
-               normalement — utilisés UNIQUEMENT par "Ajouter à la banque"
-               juste en dessous, qui les exige avant de publier dans
-               bank_questions (mode "Jouer"). Catégorie choisie dans
-               bank_categories (table gérée par un super admin depuis
-               admin-bank.html), plus de texte libre — voir
-               loadCategoryOptions côté editor.js. -->
-          <div class="d-grid grid-cols-split gap-lg">
+               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
+               banque" juste au-dessus (coin haut-droit), qui les exige avant
+               de publier dans bank_questions (mode "Jouer") AU PROCHAIN
+               SAUVEGARDE. Catégorie choisie dans bank_categories (table
+               gérée par un super admin depuis admin-bank.html), plus de
+               texte libre — voir loadCategoryOptions côté editor.js. -->
+          <div class="d-grid grid-cols-split gap-lg position-relative">
+            <!-- Tâche 025 bis (retour utilisateur : "le bouton est beaucoup trop
+                 gros") : remplace l'ancien bouton "Ajouter à la banque" (clic
+                 = publication immédiate) par une case à cocher, COCHÉE PAR
+                 DÉFAUT (même sur une question déjà existante sans ce champ,
+                 voir editor.js addToBankCheckbox.checked = q.addToBank !==
+                 false) — la publication réelle n'a lieu qu'au prochain
+                 SAUVEGARDE du quiz (voir persistQuiz), pas au clic sur cette
+                 case, même patron que la case "Brouillon" juste au-dessus
+                 (un état du modèle, appliqué à la sauvegarde). -->
+            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées.">
+              <input id="addToBankCheckbox" type="checkbox" checked />
+              <span>🏦 Banque</span>
+            </label>
             <div class="detail-section">
               <label for="qCategorySelect">Catégorie</label>
               <select id="qCategorySelect">
@@ -280,10 +293,6 @@
                 <option value="difficile">Difficile</option>
               </select>
             </div>
-          </div>
-          <div class="detail-section">
-            <button type="button" id="addToBankBtn" class="btn h-40 px-20 font-13">➕ Ajouter à la banque</button>
-            <p class="text-muted font-13 mt-8">Publie une copie de cette question dans la banque du mode "Jouer" — nécessite d'être connecté et d'avoir renseigné catégorie + difficulté ci-dessus.</p>
           </div>
 
           <!-- Type + minuteur remontés tout en haut (juste sous Brouillon,

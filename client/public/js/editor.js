@@ -125,10 +125,15 @@ const qPrompt = document.getElementById('qPrompt')
 const qExplanation = document.getElementById('qExplanation')
 // Catégorie/difficulté + "Ajouter à la banque" (tâche 021, mode "Jouer") :
 // jamais obligatoires pour sauvegarder le quiz normalement (voir saveQuizBtn
-// plus bas, inchangé) — seulement exigés par addToBankBtn.onclick.
+// plus bas, inchangé) — seulement exigés pour la publication en banque (voir
+// publishFlaggedQuestionsToBank, tâche 025 bis).
 const qCategorySelect = document.getElementById('qCategorySelect')
 const qDifficultySelect = document.getElementById('qDifficultySelect')
-const addToBankBtn = document.getElementById('addToBankBtn')
+// Tâche 025 bis (retour utilisateur : "le bouton est beaucoup trop gros") :
+// case à cocher (état du modèle, q.addToBank) à la place de l'ancien bouton
+// "Ajouter à la banque" (action immédiate au clic) — la publication réelle
+// n'a lieu qu'au prochain SAUVEGARDE du quiz, voir persistQuiz.
+const addToBankCheckbox = document.getElementById('addToBankCheckbox')
 // Catégories (tâche 024) : liste FIXE gérée par un super admin
 // (bank_categories, voir admin-bank.html) — remplace l'ancien texte libre
 // à suggestions (tâche 021). Chargée une seule fois (comme
@@ -153,6 +158,23 @@ const loadCategoryOptions = async () => {
   qCategorySelect.value = current
 }
 const qType = document.getElementById('qType')
+// Tâche 026 (retour utilisateur : "n'apporte rien") : #qType n'est pas
+// qu'un affichage passif du type déjà choisi — c'est aussi le mécanisme
+// pour CHANGER le type d'une question EXISTANTE (voir qType.onchange plus
+// bas), donc retirer "reveal" seulement de la grille de tuiles de création
+// (renderTypePicker) laisserait une porte dérobée : ce menu permettrait
+// quand même de RETYPER n'importe quelle autre question en "reveal".
+// L'<option> reste dans le DOM (une question "reveal" déjà existante doit
+// encore s'afficher/s'éditer normalement) mais devient invisible dans la
+// liste DÉROULÉE sauf quand c'est déjà le type de la question active —
+// `hidden` (pas `disabled` ni un retrait de nœud) : un <option hidden>
+// déjà sélectionné reste affiché tel quel dans le select FERMÉ, seule la
+// liste déroulée le masque. Synchronisé à chaque question chargée dans
+// l'éditeur (voir les 2 appels de syncRevealOptionAvailability plus bas).
+const qTypeRevealOption = qType.querySelector('option[value="reveal"]')
+const syncRevealOptionAvailability = (q) => {
+  if (qTypeRevealOption) qTypeRevealOption.hidden = q?.type !== 'reveal'
+}
 // Rendu "maison" (voir js/ui-widgets.js) au lieu du <select> natif — le
 // reste du code ci-dessous continue de lire/écrire qType.value, d'écouter
 // 'change'/.onchange et de basculer .disabled (applyReadOnly) sans rien
@@ -516,7 +538,7 @@ let readOnly = false // true si on ouvre le quiz d'un autre créateur (lecture s
 const applyReadOnly = () => {
   readOnly = true
   const controls = [
-    titleEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, qType, qTimer, timerMinus, timerPlus,
+    titleEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, addToBankCheckbox, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
     addAssociationPairBtn, addTimelineEventBtn, addRangementZoneBtn, addRangementItemBtn, intrusPhotosUploadInput, addIndiceBtn, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
@@ -805,6 +827,12 @@ const renderTypePicker = () => {
   if (!typePickerGridEl || typePickerGridEl.childElementCount) return
   ;[...qType.options].forEach(opt => {
     const type = opt.value
+    // Tâche 026 (retour utilisateur : "n'apporte rien") : "reveal" retiré
+    // de la sélection pour une NOUVELLE question — l'<option> reste dans
+    // #qType (une question "reveal" déjà existante doit encore pouvoir
+    // s'afficher/s'éditer, voir syncRevealOptionAvailability plus bas),
+    // seule cette grille de création l'exclut.
+    if (type === 'reveal') return
     const tile = document.createElement('div')
     tile.className = 'type-picker-tile'
     tile.setAttribute('role', 'button')
@@ -1698,7 +1726,17 @@ const renderWaveform = (audioBuffer) => {
   const data = audioBuffer.getChannelData(0)
   const bucketSize = Math.max(1, Math.floor(data.length / WAVEFORM_BARS))
   waveformBucketDuration = audioBuffer.duration / WAVEFORM_BARS
-  const frag = document.createDocumentFragment()
+  // Retour utilisateur : "elle ne marque aucun bruit musical" sur un
+  // morceau au volume naturellement bas — les crêtes étaient affichées en
+  // ABSOLU (0 à 100% = pleine échelle théorique -1..1), donc un extrait
+  // mal normalisé/enregistré doucement restait plat au plancher (6%) sur
+  // toute sa longueur, même si son propre rythme (fort/faible) était bien
+  // là. Normalisé ici par rapport à la crête RÉELLE la plus forte du
+  // morceau (1er passage) : ce pic devient 100%, le reste s'étire
+  // proportionnellement — même principe qu'un éditeur audio classique,
+  // rend le rythme lisible quel que soit le volume d'origine.
+  const peaks = new Array(WAVEFORM_BARS)
+  let maxPeak = 0
   for (let i = 0; i < WAVEFORM_BARS; i++) {
     let peak = 0
     const start = i * bucketSize
@@ -1707,13 +1745,22 @@ const renderWaveform = (audioBuffer) => {
       const abs = Math.abs(data[j])
       if (abs > peak) peak = abs
     }
+    peaks[i] = peak
+    if (peak > maxPeak) maxPeak = peak
+  }
+  // maxPeak proche de 0 (morceau quasi silencieux en entier) : pas de
+  // normalisation possible/utile, on retombe sur l'échelle absolue plutôt
+  // que de diviser par une valeur infime (amplifierait du bruit numérique).
+  const scale = maxPeak > 0.02 ? 1 / maxPeak : 1
+  const frag = document.createDocumentFragment()
+  peaks.forEach(peak => {
     const bar = document.createElement('span')
     bar.className = 'bar'
     // Plancher à 6% : une barre à 0% (silence) redevient un point invisible,
     // perd toute lisibilité du rythme de la forme d'onde.
-    bar.style.setProperty('--h', `${Math.max(6, Math.round(peak * 100))}%`)
+    bar.style.setProperty('--h', `${Math.max(6, Math.round(Math.min(1, peak * scale) * 100))}%`)
     frag.appendChild(bar)
-  }
+  })
   audioWaveformBarsEl.appendChild(frag)
   updateWaveformSelection()
 }
@@ -2348,12 +2395,18 @@ const selectQuestion = (index) => {
 
   // Mettre à jour les champs
   if (qDraftToggle) qDraftToggle.checked = !!q.draft
+  // Tâche 025 bis : coché par défaut — y compris pour une question déjà
+  // existante qui n'a jamais eu ce champ (quiz sauvegardé avant cette
+  // tâche), donc `!== false` plutôt que `!!` (qui traiterait `undefined`
+  // comme décoché).
+  if (addToBankCheckbox) addToBankCheckbox.checked = q.addToBank !== false
   qPrompt.value = q.prompt || ''
   if (qExplanation) qExplanation.value = q.explanation || ''
   loadCategoryOptions().then(() => { if (qCategorySelect) qCategorySelect.value = q.category || '' })
   if (qCategorySelect) qCategorySelect.value = q.category || ''
   if (qDifficultySelect) qDifficultySelect.value = q.difficulty || ''
   qType.value = q.type || 'free'
+  syncRevealOptionAvailability(q)
   // Rappel de couleur sur la tuile elle-même (voir [data-qtype] et
   // .question-detail dans style.css, option "C" retenue après maquette) —
   // sinon la tuile gardait la couleur de la question précédente en changeant
@@ -2402,6 +2455,7 @@ const saveCurrentQuestionState = () => {
 
   const q = questions[activeIndex]
   if (qDraftToggle) q.draft = qDraftToggle.checked
+  if (addToBankCheckbox) q.addToBank = addToBankCheckbox.checked
   q.prompt = qPrompt.value.trim()
   if (qExplanation) q.explanation = qExplanation.value.trim()
   if (qCategorySelect) q.category = qCategorySelect.value
@@ -4354,12 +4408,14 @@ const deleteQuestionAt = (index) => {
     const q = questions[activeIndex]
 
     if (qDraftToggle) qDraftToggle.checked = !!q.draft
+    if (addToBankCheckbox) addToBankCheckbox.checked = q.addToBank !== false
     qPrompt.value = q.prompt || ''
     if (qExplanation) qExplanation.value = q.explanation || ''
     loadCategoryOptions().then(() => { if (qCategorySelect) qCategorySelect.value = q.category || '' })
     if (qCategorySelect) qCategorySelect.value = q.category || ''
     if (qDifficultySelect) qDifficultySelect.value = q.difficulty || ''
     qType.value = q.type || 'free'
+    syncRevealOptionAvailability(q)
     qTimer.value = (q.timerMs || 15000) / 1000
     populateGradFields(q)
     populateTrueFalseFields(q)
@@ -4941,6 +4997,48 @@ const uploadQuestionMedia = async (sb, ownerId, qs) => {
   await Promise.all(uploads)
 }
 
+// Tâche 025 bis : publie dans bank_questions toute question cochée "Ajouter à
+// la banque" (q.addToBank !== false — coché par défaut, voir editor.html)
+// pas encore publiée (q.bankPublished), avec catégorie ET difficulté
+// renseignées. Remplace l'ancien bouton "Ajouter à la banque" (action
+// immédiate au clic) : appelé ici depuis persistQuiz, à CHAQUE sauvegarde
+// réussie du quiz — q.bankPublished est ensuite posé à true AVANT que
+// `questions` ne soit écrit en base par persistQuiz (cet appel a lieu AVANT
+// la construction de `body`, voir plus bas), pour ne jamais republier deux
+// fois la même question à la sauvegarde suivante. Questions sans catégorie/
+// difficulté : ignorées silencieusement (pas d'erreur bloquante — une case
+// cochée par défaut sur une question qui n'a pas vocation à rejoindre la
+// banque ne doit pas gêner une sauvegarde par ailleurs normale), plutôt que
+// le message d'erreur explicite de l'ancien bouton (action délibérée du
+// créateur avant, simple état par défaut maintenant).
+const publishFlaggedQuestionsToBank = async (sb, session) => {
+  const toPublish = questions.filter(q =>
+    q.addToBank !== false &&
+    !q.bankPublished &&
+    (q.category || '').trim() &&
+    q.difficulty
+  )
+  if (toPublish.length === 0) return
+  try {
+    await uploadQuestionMedia(sb, session.user.id, toPublish)
+    const { error } = await sb.from('bank_questions').insert(toPublish.map(q => ({
+      category: q.category.trim(),
+      difficulty: q.difficulty,
+      type: q.type,
+      question: q,
+      created_by: session.user.id
+    })))
+    if (error) throw error
+    toPublish.forEach(q => { q.bankPublished = true })
+    showToast(`${toPublish.length} question${toPublish.length > 1 ? 's envoyées' : ' envoyée'} à la banque, en attente de validation !`, 'success')
+  } catch (err) {
+    // N'empêche jamais la sauvegarde du quiz elle-même (déjà réussie à ce
+    // stade, voir l'appelant) — seule la publication en banque a échoué.
+    console.error('[bank_questions] publication automatique impossible :', err)
+    showToast(err?.isMediaUploadError ? err.message : 'Quiz sauvegardé, mais l\'envoi à la banque a échoué', 'error')
+  }
+}
+
 // Écriture réseau proprement dite — QUEL que soit le déclencheur ("Sauvegarder"
 // en haut, valide TOUT le quiz, ou "Sauvegarder cette question" en bas, ne
 // valide QUE la question active), la ligne Supabase est toujours réécrite en
@@ -4963,6 +5061,11 @@ const persistQuiz = async (successMessage) => {
       return
     }
     await uploadQuestionMedia(sb, session.user.id, questions)
+    // Tâche 025 bis : AVANT la construction de `body` ci-dessous, pour que
+    // q.bankPublished (posé si la publication réussit) soit bien inclus
+    // dans CETTE écriture de `questions` — sinon la sauvegarde suivante
+    // republierait la même question une deuxième fois.
+    await publishFlaggedQuestionsToBank(sb, session)
     const body = {
       title,
       questions,
@@ -5043,53 +5146,10 @@ if (saveQuestionBtn) {
   saveQuestionBtn.onclick = (...args) => saveQuizBtn.onclick(...args)
 }
 
-// "Ajouter à la banque" (tâche 021, mode "Jouer") : publie une COPIE de la
-// question active dans bank_questions — jamais liée au quiz d'origine
-// ensuite (pas d'id partagé, pas de mise à jour en cascade si la question
-// change plus tard dans l'éditeur). uploadQuestionMedia réutilisé tel quel
-// (même fonction qui uploade déjà les médias base64 au save d'un quiz
-// entier, appelée ici sur un tableau à 1 élément) — la banque ne doit
-// jamais contenir de data URI, même règle que quizzes.questions.
-if (addToBankBtn) {
-  addToBankBtn.onclick = async () => {
-    if (readOnly || activeIndex < 0 || !questions[activeIndex]) return
-    saveCurrentQuestionState()
-    const q = questions[activeIndex]
-    const category = (q.category || '').trim()
-    const difficulty = q.difficulty || ''
-    if (!category || !difficulty) {
-      showToast('Renseigne catégorie ET difficulté avant d\'ajouter à la banque', 'error')
-      return
-    }
-    if (!validateQuestion(q, activeIndex)) return
-    const { data: { session } } = await sb.auth.getSession()
-    if (!session) {
-      showToast('Connecte-toi pour publier dans la banque', 'error')
-      return
-    }
-    addToBankBtn.disabled = true
-    try {
-      await uploadQuestionMedia(sb, session.user.id, [q])
-      const { error } = await sb.from('bank_questions').insert([{
-        category,
-        difficulty,
-        type: q.type,
-        question: q,
-        created_by: session.user.id
-      }])
-      if (error) throw error
-      // Message adapté (tâche 022) : la question part désormais en attente
-      // ('pending', voir migration bank_questions.status) plutôt que d'être
-      // jouable immédiatement — reflète l'ajout ET l'attente de validation.
-      showToast('Question envoyée à la banque, en attente de validation !', 'success')
-    } catch (err) {
-      console.error('[bank_questions] ajout impossible :', err)
-      showToast(err?.isMediaUploadError ? err.message : 'Erreur lors de l\'ajout à la banque', 'error')
-    } finally {
-      addToBankBtn.disabled = false
-    }
-  }
-}
+// Tâche 025 bis : l'ancien bouton "Ajouter à la banque" (action immédiate au
+// clic) est remplacé par la case à cocher addToBankCheckbox — voir
+// publishFlaggedQuestionsToBank, appelée depuis persistQuiz à chaque
+// sauvegarde du quiz plutôt que déclenchée séparément ici.
 
 // Dupliquer le quiz d'un autre créateur dans mes propres quiz (copie privée éditable)
 if (duplicateQuizBtn) {

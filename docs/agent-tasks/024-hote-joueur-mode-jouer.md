@@ -418,5 +418,23 @@ l'hôte).
   par un en direct faute de temps, seul "rangement" (L.1819, coloration
   au reveal) a un `isHost` dédié et corrigé.
 
+## Étape 7 (retour utilisateur ultérieur)
+
+"Dans le récap d'une partie en mode quizz aléatoire, il faut aussi voir le
+récap de l'hôte, vu que c'est un joueur dans ce mode-là." `buildRecap()`
+côté serveur (~L.450, jamais audité lors de l'étape 1 — il n'est appelé
+QUE depuis `server/index.js`, invisible depuis un grep sur `index.js`
+client) excluait inconditionnellement `room.hostToken` de `entries` (total/
+pourcentage de bonnes réponses) ET de `he.answers` (réponse la plus
+donnée/détail par joueur), quel que soit `room.mode`. **Corrigé** : les
+deux filtres ne s'appliquent plus qu'en mode "Présenter"
+(`excludeHost = room.mode !== 'auto'`).
+
+Vérifié en direct : salle "Jouer" (hôte + 1 joueur, tous deux répondent
+"Paris" à une question texte libre) -> récap `total:2`, `perPlayer`
+contient bien "Hôte" ET "Player" ; salle "Présenter" (même scénario, sans
+réponse de l'hôte) -> récap `total:1`, "Hôte" absent, comportement
+historique inchangé.
+
 ## Statut
 `en review`
