@@ -724,6 +724,10 @@ const bonusAudioPlayer = document.getElementById('bonusAudioPlayer')
 const revealPopupOverlay = document.getElementById('revealPopupOverlay')
 const revealPopupCard = document.getElementById('revealPopupCard')
 const revealPopupBadge = document.getElementById('revealPopupBadge')
+// Tâche 032 : copie de #revealAnswerText affichée EN PLUS à l'intérieur de
+// la popup (voir index.html) — #revealAnswerText reste la source de vérité,
+// remplie par revealFreeAnswer/revealBlindTestAnswer plus bas.
+const revealPopupAnswerTitle = document.getElementById('revealPopupAnswerTitle')
 const revealPopupCloseBtn = document.getElementById('revealPopupCloseBtn')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
@@ -3233,8 +3237,13 @@ socket.on('score:adjust', ({ playerId, total }) => {
 
 const clearRevealState = () => {
   closeRevealPopup()
+  // Tâche 032 bis : retire l'exception posée à la révélation précédente
+  // (voir question:reveal) — #inputArea redevient masqué pour la NOUVELLE
+  // question tant qu'elle n'est pas elle-même révélée.
+  if (inputArea) inputArea.classList.remove('irl-reveal-answer')
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
+  if (revealPopupAnswerTitle) { revealPopupAnswerTitle.classList.add('d-none'); revealPopupAnswerTitle.innerHTML = '' }
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
   if (revealExplanationText) { revealExplanationText.classList.add('d-none'); revealExplanationText.textContent = '' }
   // Wrapper masqué en plus de l'<img> elle-même (tâche 018, voir
@@ -6054,7 +6063,7 @@ const isLastQuestion = () => !!loadedQuiz && quizIndex >= loadedQuiz.questions.l
 // mécanisme existant (émettre 'leaderboard:show', puis goNext()/showResults())
 // plutôt que de dupliquer la logique d'avancement : seul le déclencheur change
 // (un minuteur ici, un clic hôte en mode "Présenter", inchangé).
-const AUTO_ADVANCE_REVEAL_DELAY_MS = 4500 // temps laissé pour lire la correction avant le classement
+const AUTO_ADVANCE_REVEAL_DELAY_MS = 10000 // temps laissé pour lire la correction avant le classement (tâche 032, même durée que la popup de révélation joueur, REVEAL_POPUP_BASE_DELAY_MS)
 const AUTO_ADVANCE_LEADERBOARD_DELAY_MS = 3500 // temps laissé sur le classement avant la question suivante
 // Petite marge après la fin d'un son de révélation (voir question:reveal,
 // revealExtendedDelayMs) avant de couper/enchaîner — jamais pile sur la
@@ -8078,20 +8087,33 @@ socket.on('question:reveal', payload => {
   // désormais le SEUL signal de fin de question, pour tous les types).
   isModerationPending = false
   hideModerationWait()
+  // Tâche 032 bis (retour utilisateur, en réaction directe à la tâche 031) :
+  // #inputArea masqué pendant toute la question en IRL présentateur (voir
+  // body.irl-presenter-mode) mais la RÉPONSE doit quand même apparaître une
+  // fois les joueurs passés — .irl-reveal-answer lève ce masquage
+  // spécifiquement ici (voir style.css), réutilisant TEL QUEL le rendu de
+  // révélation déjà construit par type (tuiles correct-reveal/incorrect-
+  // reveal, etc.) plutôt que de dupliquer un résumé texte générique par
+  // type. Retirée à la question suivante par clearRevealState (voir
+  // question:show, qui l'appelle en tout début de handler).
+  if (inputArea) inputArea.classList.add('irl-reveal-answer')
   // Popup plein écran (tâche 019) : ouverte ICI, tout en haut du handler,
   // AVANT toutes les branches par type ci-dessous. Historique : v3 la
   // réservait aux types sans feedback spatial riche ; v4 l'a rouverte
   // inconditionnellement pour tous les types (texte de résultat nuancé
   // affiché dedans) ; v5 (retour utilisateur) revient sur CE point précis —
-  // la popup ne s'ouvre plus que s'il y a une explication/image/son à
-  // montrer sur CETTE question (hasRevealExtras). Le bandeau résultat
-  // (#myResultBanner/#revealAnswerText) n'est PLUS dans la popup depuis
-  // cette même v5 (voir index.html) : il reste à plat dans la page, donc
+  // la popup ne s'ouvre que s'il y a une explication/image à montrer sur
+  // CETTE question (hasRevealPopupContent). Tâche 032 (retour utilisateur) :
+  // un son SEUL (sans explication ni image) ne justifie PLUS l'ouverture de
+  // la popup — il joue directement (voir plus bas, indépendant de cette
+  // variable), simplement en fond, sans rien couper à l'écran. Le bandeau
+  // résultat (#myResultBanner/#revealAnswerText) n'est PLUS dans la popup
+  // depuis v5 (voir index.html) : il reste à plat dans la page, donc
   // toujours visible que la popup s'ouvre ou non — seul le contenu
-  // "en plus" (explication/image/son) justifie encore la coupure plein
-  // écran. Fermeture programmée tout en bas de ce handler (voir plus bas).
-  const hasRevealExtras = !!(payload.explanation || payload.revealImage || payload.revealAudio)
-  if (hasRevealExtras) openRevealPopup()
+  // "en plus" (explication/image) justifie encore la coupure plein écran.
+  // Fermeture programmée tout en bas de ce handler (voir plus bas).
+  const hasRevealPopupContent = !!(payload.explanation || payload.revealImage)
+  if (hasRevealPopupContent) openRevealPopup()
   if (revealExplanationText && payload.explanation) {
     revealExplanationText.textContent = payload.explanation
     revealExplanationText.classList.remove('d-none')
@@ -8185,6 +8207,15 @@ socket.on('question:reveal', payload => {
     // "halo" (tâche 020) : même raison — un joueur qui n'a pas épuisé ses 5
     // clics ne verrait sinon jamais l'image complète.
     if (payload.type === 'halo' && haloOverlay) haloOverlay.classList.add('d-none')
+    // "indice" en plus (retour utilisateur) : la question peut se terminer
+    // (timer épuisé, ou révélation anticipée par l'hôte) avant que tous les
+    // indices programmés (payload.hints, triés par delayS) n'aient eu le
+    // temps d'apparaître — réutilise TEL QUEL updateIndiceArea (même
+    // condition `delayS*1000 > elapsedMs`, jamais vraie face à Infinity)
+    // plutôt que de dupliquer sa logique de bascule central/historique :
+    // force l'affichage de tous les indices encore non montrés, dans le
+    // même ordre et avec la même animation qu'en cours de partie.
+    if (payload.type === 'indice') updateIndiceArea(Infinity)
     revealFreeAnswer((payload.correct || [])[0] || '')
     showMyResultBanner()
   } else if (payload.type === 'pbac') {
@@ -8322,8 +8353,8 @@ socket.on('question:reveal', payload => {
     }
   }
   // Badge + fond teinté de la popup (tâche 019, uniquement si elle s'est
-  // ouverte — v5, hasRevealExtras) : posés ICI, une fois TOUTES les branches
-  // par type ci-dessus passées, en miroir de l'état déjà posé par
+  // ouverte — v5, hasRevealPopupContent) : posés ICI, une fois TOUTES les
+  // branches par type ci-dessus passées, en miroir de l'état déjà posé par
   // showMyResultBanner sur #myResultBanner (is-correct/is-incorrect/
   // is-close) — aucune nouvelle logique de détermination, juste un second
   // affichage de la même donnée. Absent côté hôte en mode "Présenter" :
@@ -8332,7 +8363,7 @@ socket.on('question:reveal', payload => {
   // porte donc jamais ces classes chez lui -> popup neutre, badge caché
   // (d-none posé par openRevealPopup). En mode "Jouer", l'hôte a son propre
   // bandeau comme un joueur normal, ce badge s'applique donc à lui aussi.
-  if (hasRevealExtras && revealPopupOverlay && myResultBanner) {
+  if (hasRevealPopupContent && revealPopupOverlay && myResultBanner) {
     const resultState = ['is-correct', 'is-incorrect', 'is-close'].find(c => myResultBanner.classList.contains(c))
     if (resultState) {
       revealPopupOverlay.classList.add(resultState)
@@ -8342,26 +8373,46 @@ socket.on('question:reveal', payload => {
       }
     }
   }
+  // Titre réponse de la popup (tâche 032, "mettre la réponse dans la
+  // révélation, comme un titre") : même miroir que le badge juste au-dessus
+  // — copie du contenu déjà calculé sur #revealAnswerText par les branches
+  // par type (revealFreeAnswer/revealBlindTestAnswer...), qui reste la
+  // source de vérité. #revealAnswerText ne porte ce contenu que pour
+  // certains types (texte libre, indice, blind test, pbac — voir son
+  // commentaire dans index.html) ; pour les autres (mcq, association...),
+  // le plateau déjà coloré en dessous de la popup fait cet office, cette
+  // copie reste alors vide/masquée, ce qui est le comportement voulu.
+  if (hasRevealPopupContent && revealPopupAnswerTitle && revealAnswerText && !revealAnswerText.classList.contains('d-none')) {
+    revealPopupAnswerTitle.innerHTML = revealAnswerText.innerHTML
+    revealPopupAnswerTitle.classList.remove('d-none')
+  }
   // Confettis (tâche 019) : réutilisation TELLE QUELLE du déclencheur déjà en
   // place en fin de partie (voir results.js, mêmes réglages) — jamais côté
   // hôte en mode "Présenter" (n'a jamais de réponse personnelle, voir tâche
   // 019 "Hors périmètre"). En mode "Jouer" (tâche 024), l'hôte joue et a
   // droit aux mêmes confettis qu'un joueur normal, voir isPresenterHost().
-  // Indépendant de hasRevealExtras à dessein : décoratif, ne cache rien du
-  // plateau, aucune raison de le priver d'une bonne réponse sous prétexte
-  // que la popup, elle, ne s'ouvre pas faute d'explication/image/son.
+  // Indépendant de hasRevealPopupContent à dessein : décoratif, ne cache
+  // rien du plateau, aucune raison de le priver d'une bonne réponse sous
+  // prétexte que la popup, elle, ne s'ouvre pas faute d'explication/image.
   if (!isPresenterHost() && myAnsweredCorrectlyThisQuestion && window.confetti) {
     window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.55 } })
   }
-  // Fermeture automatique de la popup (tâche 019) : délai de base ~4.5s,
-  // étendu pour ne jamais couper net un son de révélation plus long (petite
-  // marge après sa fin) — jamais raccourci en dessous du délai de base. La
-  // durée du son n'est pas toujours connue de façon synchrone ici (métadonnées
-  // pas encore chargées) : si c'est le cas, on garde simplement le délai de
-  // base, comme prévu au plan de la tâche. Rien à programmer si la popup n'a
-  // pas été ouverte (hasRevealExtras faux, v5).
-  if (hasRevealExtras) {
-    const REVEAL_POPUP_BASE_DELAY_MS = 4500
+  // Fermeture automatique de la popup (tâche 019) : délai de base 10s
+  // (tâche 032), étendu pour ne jamais couper net un son de révélation plus
+  // long (petite marge après sa fin) — jamais raccourci en dessous du délai
+  // de base. La durée du son n'est pas toujours connue de façon synchrone
+  // ici (métadonnées pas encore chargées) : si c'est le cas, on garde
+  // simplement le délai de base, comme prévu au plan de la tâche. Rien à
+  // programmer si la popup n'a pas été ouverte (hasRevealPopupContent
+  // faux, v5) — y compris le cas "son seul" (tâche 032), qui joue sans
+  // jamais ouvrir de popup à fermer.
+  if (hasRevealPopupContent) {
+    // Tâche 032 : 4.5s -> 10s (retour utilisateur explicite), toujours
+    // étendu si un son de révélation dure plus longtemps (jamais raccourci
+    // en dessous de 10s même pour un son plus court : le temps de LIRE le
+    // texte/l'explication de révélation reste garanti, indépendamment de
+    // la durée d'un éventuel son).
+    const REVEAL_POPUP_BASE_DELAY_MS = 10000
     const REVEAL_POPUP_AUDIO_MARGIN_MS = 500
     let revealPopupDelay = REVEAL_POPUP_BASE_DELAY_MS
     if (revealAudioPlayer && payload.revealAudio && Number.isFinite(revealAudioPlayer.duration) && revealAudioPlayer.duration > 0) {

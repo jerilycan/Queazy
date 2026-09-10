@@ -4053,7 +4053,14 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     width: 100%;
     padding: 0 24px;
     margin: 0;
-    grid-template-columns: 280px minmax(0, 1fr) 280px;
+    /* Tâche 033 (retour utilisateur) : "les 3 encarts doivent être de la
+       même taille" — remplace l'ancien 280px minmax(0,1fr) 280px (centre
+       dominant, docks latéraux étroits à taille fixe) par 3 tiers stricts
+       et égaux. Les docks latéraux (#hostPanel/#liveClassementDock) et
+       leur contenu interne n'avaient pas de largeur en dur dépendant de
+       280px (déjà en %/flex, voir leurs règles plus bas) : ce changement
+       de grille ne demande pas d'ajustement supplémentaire de leur côté. */
+    grid-template-columns: 1fr 1fr 1fr;
     /* Retour utilisateur (2e passe) : "les blocs gauche et droite doivent
        prendre la hauteur, comme le design décidé ensemble" — une seule
        rangée explicite (1fr) qui occupe TOUTE la hauteur disponible
@@ -5301,6 +5308,23 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .reveal-popup-overlay.is-incorrect .reveal-popup-badge { background: var(--color-danger); }
 .reveal-popup-overlay.is-close .reveal-popup-badge { background: var(--tile-yellow); color: #3a2e00; }
 
+/* Tâche 032 : "réponse comme un titre" dans la popup — même fond vert que
+   .reveal-answer (cohérence visuelle avec le bandeau à plat que cette copie
+   reprend), mais posée comme un VRAI titre en tête de carte (police plus
+   grande, gras, pas de max-width contraint comme le bandeau à plat qui
+   devait rester discret sous les tuiles). */
+.reveal-popup-answer-title {
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--tile-green);
+  color: white;
+  font-weight: 800;
+  font-size: 20px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  box-sizing: border-box;
+}
+
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
 
 .bg-accent { background: var(--color-accent) !important; }
@@ -5470,6 +5494,13 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   }
   .icon-grid { grid-template-columns: repeat(4, 1fr); }
   .question-text { font-size: 26px; margin-bottom: 24px; }
+  /* Retour utilisateur : "la barre de temps est trop proche de la question"
+     — sur mobile, l'écart ne venait que de la marge basse symétrique de
+     .timer-container (var(--space-lg), 24px), trop serré une fois la
+     question en gras 26px juste en dessous. Marge basse propre au mobile,
+     plus généreuse, sans toucher au top (sticky, déjà réglé pour la navbar/
+     le badge type juste au-dessus) ni à la disposition desktop/régie. */
+  .timer-container { margin-bottom: 40px; }
   /* Barre hôte : contrôles empilés et pleine largeur */
   #hostPanel { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px !important; }
   #hostPanel .d-flex.gap-sm { flex-wrap: wrap; justify-content: center; }
@@ -7161,14 +7192,26 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 
 /* "Œil" du panneau de modération, tous types de question confondus (voir
    index.js moderationEyeBtn, retour utilisateur — copie possible si l'écran
-   de l'hôte est projeté/partagé en IRL) : masque le TEXTE des réponses sans
-   changer la mise en page (aucun saut de largeur des lignes) — flou façon
-   "spoiler" plutôt qu'un remplacement par des points, qui aurait fixé une
-   fausse longueur. user-select:none : inutile de pouvoir sélectionner/copier
-   un texte volontairement illisible. */
+   de l'hôte est projeté/partagé en IRL, notamment "petit bac") : masque le
+   TEXTE des réponses. Tâche 034 (retour utilisateur, corrige un défaut de
+   la 1re version) : l'ancien flou "spoiler" (color:transparent +
+   text-shadow) gardait la largeur NATURELLE du texte réel — la lueur
+   floutée dessinait toujours le contour des vraies lettres, donnant un
+   indice bien réel sur la longueur du mot (justement ce que ce masquage
+   doit éviter en petit bac). Remplacé par un bandeau plein de largeur FIXE
+   (indépendante du contenu réel) : plus aucune information de longueur ne
+   fuite, quel que soit le mot cité. user-select:none : inutile de pouvoir
+   sélectionner/copier un texte volontairement illisible. */
 .moderation-answers-hidden .moderation-answer-text {
+  display: inline-block;
+  width: 96px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: middle;
   color: transparent;
-  text-shadow: 0 0 9px rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.18);
+  border-radius: 4px;
   user-select: none;
 }
 /* Enveloppe barre œil + panneau (voir index.js moderationZone) : porte le
@@ -8026,13 +8069,23 @@ body.irl-player-mode #illustrationImgWrap.zoomguess-visible { display: block; }
 /* Retour utilisateur : en IRL, l'hôte PRÉSENTATEUR (jamais joueur, voir
    isPresenterHost() côté index.js — n'inclut jamais le mode "Jouer", où
    l'hôte répond comme un joueur) n'a plus RIEN à montrer du gameplay/des
-   réponses sur son écran : la salle répond de vive voix/à main levée, pas
-   besoin des tuiles. Toute taille d'écran (pas juste régie desktop) —
-   voir updateIrlPlayerUI, qui pose body.irl-presenter-mode. !important :
-   #inputArea reçoit display:block en inline à CHAQUE question (voir
-   index.js, question:show) — même patron déjà utilisé pour #main/
-   #hostPanel plus haut dans ce fichier, pour la même raison. */
+   réponses sur son écran PENDANT la question : la salle répond de vive
+   voix/à main levée, pas besoin des tuiles. Toute taille d'écran (pas
+   juste régie desktop) — voir updateIrlPlayerUI, qui pose
+   body.irl-presenter-mode. !important : #inputArea reçoit display:block en
+   inline à CHAQUE question (voir index.js, question:show) — même patron
+   déjà utilisé pour #main/#hostPanel plus haut dans ce fichier, pour la
+   même raison. */
 body.irl-presenter-mode #inputArea { display: none !important; }
+/* Tâche 032 bis (retour utilisateur, juste après la tâche 031 ci-dessus) :
+   "il nous faut quand même avoir la réponse à la fin des réponses
+   joueurs" — .irl-reveal-answer (posée par index.js à question:reveal,
+   retirée à la question suivante) lève le masquage ci-dessus une fois la
+   question terminée, pour que le rendu de révélation déjà construit par
+   type (tuiles correct-reveal/incorrect-reveal, etc.) redevienne visible.
+   Spécificité (ID + 2 classes > ID + 1 classe) suffit à l'emporter sur la
+   règle !important ci-dessus sans avoir besoin d'un second !important. */
+body.irl-presenter-mode #inputArea.irl-reveal-answer { display: block !important; }
 .irl-menu-btn {
   display: none;
   /* z-index 1200 (pas 200) : au-dessus de #recapSidebarToggle (1100,

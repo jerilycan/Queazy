@@ -1147,11 +1147,15 @@
                où certains types (texte libre, indice, blind test, pbac...)
                montrent "Bonne réponse : X"/le verdict, donc ça ne peut pas
                dépendre de l'ouverture de la popup de révélation (tâche 019,
-               retour utilisateur v5 : la popup elle-même ne s'ouvre plus que
-               s'il y a une explication/image/son à montrer — voir
-               #revealPopupOverlay plus bas). Explication/image/son (tâches
-               017/018), eux, restent dans la popup : c'est justement le
-               contenu qui la justifie. -->
+               retour utilisateur v5 : la popup ne s'ouvre que s'il y a une
+               explication/image à montrer — un son SEUL, lui, joue sans
+               ouvrir de popup depuis la tâche 032, voir hasRevealPopupContent
+               dans socket.on('question:reveal'), index.js). Explication/
+               image (tâches 017/018), elles, restent dans la popup : c'est
+               justement le contenu qui la justifie — #revealPopupAnswerTitle
+               plus bas en reprend une copie (tâche 032, "la réponse comme un
+               titre"), pour que la réponse reste visible même quand cette
+               popup masque le plateau. -->
           <div id="revealAnswerText" class="reveal-answer d-none"></div>
           <div id="myResultBanner" class="my-result-banner d-none"></div>
         </div>
@@ -1232,8 +1236,10 @@
          "l'affichage est un peu catastrophique" — explication + image/son
          de la révélation, tâches 017/018, s'empilaient à plat dans la
          page). Retour utilisateur v5 : ne s'ouvre plus que s'il y a une
-         explication/image/son à montrer sur CETTE question (voir
-         hasRevealExtras dans socket.on('question:reveal'), index.js) — le
+         explication/image à montrer sur CETTE question (voir
+         hasRevealPopupContent dans socket.on('question:reveal'), index.js —
+         un son SEUL, sans explication ni image, joue directement sans jamais
+         ouvrir cette popup, retour utilisateur tâche 032) — le
          bandeau résultat/réponse (#myResultBanner/#revealAnswerText), lui,
          est resté à plat plus haut dans la page (voir juste après
          #freeText/#answer) : il doit rester visible MÊME sans popup, c'est
@@ -1253,6 +1259,16 @@
       <div id="revealPopupCard" class="reveal-popup-card">
         <button type="button" id="revealPopupCloseBtn" class="reveal-popup-close-btn" aria-label="Fermer la révélation" title="Fermer">✕</button>
         <div id="revealPopupBadge" class="reveal-popup-badge d-none"></div>
+        <!-- Tâche 032 : la popup masque le plateau (tuiles/bandeau) pendant
+             qu'elle est ouverte — retour utilisateur, "mettre la réponse dans
+             la révélation, comme un titre" : reprend TEL QUEL le contenu déjà
+             calculé sur #revealAnswerText (voir revealFreeAnswer/
+             revealBlindTestAnswer, index.js), copié ici une fois toutes les
+             branches par type passées (même patron que #revealPopupBadge
+             juste au-dessus, qui fait déjà ce miroir pour l'état correct/
+             incorrect). #revealAnswerText reste la source de vérité, cette
+             copie est juste un second affichage. -->
+        <div id="revealPopupAnswerTitle" class="reveal-popup-answer-title d-none"></div>
         <div id="revealExplanationText" class="reveal-explanation d-none"></div>
         <div id="revealImageDisplayWrap" class="reveal-media-img-wrap d-none">
           <img id="revealImageDisplay" class="reveal-media-img" alt="" />

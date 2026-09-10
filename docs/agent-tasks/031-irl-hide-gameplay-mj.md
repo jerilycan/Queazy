@@ -111,5 +111,13 @@ bon état une fois la partie lancée.
   question) — pas d'amélioration demandée pour ce cas précis, mais à
   surveiller si jugé trop sobre à l'usage réel.
 
+## Suite (tâche 032 bis)
+Retour utilisateur juste après le premier `push`/`merge` : "il nous faut
+quand même avoir la réponse à la fin des réponses joueurs" — `#inputArea`
+reste masqué PENDANT la question, mais redevient visible (classe
+`.irl-reveal-answer`) à `question:reveal`, retiré à la question suivante
+(`clearRevealState`). Voir [032-multi-sujets.md](032-multi-sujets.md) pour
+le détail et la vérification en direct.
+
 ## Statut
 `en review`
