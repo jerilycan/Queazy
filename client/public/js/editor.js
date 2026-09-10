@@ -139,13 +139,28 @@ const addToBankCheckbox = document.getElementById('addToBankCheckbox')
 // à suggestions (tâche 021). Chargée une seule fois (comme
 // bankCategoriesLoaded côté index.js pour le mode "Jouer", même patron) :
 // la liste ne change pas pendant une session d'édition.
-let categoryOptionsLoaded = false
+// Deux drapeaux distincts (retour utilisateur : "la catégorie ne se
+// sauvegarde pas correctement", bug de course avec le 1er correctif —
+// categoryOptionsLoaded seul passait à true AVANT même la fin du vrai appel
+// réseau, ne protégeait donc rien) : categoryOptionsLoading empêche deux
+// appels réseau concurrents (posé tout de suite), categoryOptionsReady ne
+// passe à true qu'une fois les <option> RÉELLEMENT dans le DOM (posé à la
+// toute fin, succès ou échec réseau confondus) — c'est LUI que
+// selectQuestion/saveCurrentQuestionState doivent vérifier avant de faire
+// confiance à qCategorySelect.value.
+let categoryOptionsLoading = false
+let categoryOptionsReady = false
 const loadCategoryOptions = async () => {
-  if (categoryOptionsLoaded || !qCategorySelect) return
-  categoryOptionsLoaded = true
+  if (categoryOptionsLoading || !qCategorySelect) return
+  categoryOptionsLoading = true
   const { data, error } = await sb.from('bank_categories').select('name').order('name')
   if (error) {
     console.error('[bank_categories] chargement impossible :', error)
+    // Réseau en échec : la liste ne contiendra jamais que le placeholder
+    // vide pour cette session — "prêt" quand même (voir commentaire
+    // ci-dessus) plutôt que de bloquer indéfiniment toute sauvegarde de
+    // catégorie à cause d'un accroc réseau temporaire.
+    categoryOptionsReady = true
     return
   }
   const current = qCategorySelect.value
@@ -156,6 +171,7 @@ const loadCategoryOptions = async () => {
     qCategorySelect.appendChild(opt)
   })
   qCategorySelect.value = current
+  categoryOptionsReady = true
 }
 const qType = document.getElementById('qType')
 // Tâche 026 (retour utilisateur : "n'apporte rien") : #qType n'est pas
@@ -468,10 +484,16 @@ const revealAudioPreviewPlayer = document.getElementById('revealAudioPreviewPlay
 const removeRevealAudioBtn = document.getElementById('removeRevealAudioBtn')
 const REVEAL_AUDIO_MAX_DURATION = 15 // secondes — plafond dur, refusé (pas tronqué) au-delà
 
-// Question "blind test" : upload du morceau + recadrage (début/durée) en un
-// extrait court, encodé en WAV mono côté client (voir plus bas) — q.audio
-// stocke directement l'extrait déjà coupé, jamais le fichier complet importé.
-const blindtestSection = document.getElementById('blindtestSection')
+// Son (Blind Test + tâche 027, facultatif sur les autres types) : upload du
+// morceau + recadrage (début/durée) en un extrait court, encodé en WAV mono
+// côté client (voir plus bas) — q.audio stocke directement l'extrait déjà
+// coupé, jamais le fichier complet importé. Un seul champ modèle pour les
+// deux usages (Blind Test ET son facultatif) : une question n'a jamais
+// qu'un seul type actif à la fois, aucun risque de collision.
+const bonusAudioSection = document.getElementById('bonusAudioSection')
+// Réponses titre/artiste — reste strictement propre à Blind Test (voir
+// bonusAudioSection ci-dessus pour le bloc audio partagé).
+const blindtestAnswersSection = document.getElementById('blindtestAnswersSection')
 const audioUploadInput = document.getElementById('audioUpload')
 const audioTrimWrap = document.getElementById('audioTrimWrap')
 const audioTrimPlayer = document.getElementById('audioTrimPlayer')
@@ -2402,7 +2424,20 @@ const selectQuestion = (index) => {
   if (addToBankCheckbox) addToBankCheckbox.checked = q.addToBank !== false
   qPrompt.value = q.prompt || ''
   if (qExplanation) qExplanation.value = q.explanation || ''
-  loadCategoryOptions().then(() => { if (qCategorySelect) qCategorySelect.value = q.category || '' })
+  // Retour utilisateur ("la catégorie ne se sauvegarde pas correctement") :
+  // loadCategoryOptions() fait un vrai appel réseau la 1ère fois (voir sa
+  // définition) — si l'utilisateur change de question AVANT que ça résolve,
+  // cette closure appliquait quand même la valeur au select maintenant
+  // affiché pour une AUTRE question (q figé au moment de CET appel, jamais
+  // revérifié) — vérifié ici via questions[activeIndex] === q avant
+  // d'écrire quoi que ce soit. saveCurrentQuestionState() (plus bas) est
+  // corrigé symétriquement : tant que les catégories ne sont pas chargées,
+  // le select ne peut de toute façon représenter aucun vrai choix, donc il
+  // ne doit jamais écraser q.category avec ce qu'il affiche (le placeholder
+  // vide) pendant cette fenêtre.
+  loadCategoryOptions().then(() => {
+    if (qCategorySelect && questions[activeIndex] === q) qCategorySelect.value = q.category || ''
+  })
   if (qCategorySelect) qCategorySelect.value = q.category || ''
   if (qDifficultySelect) qDifficultySelect.value = q.difficulty || ''
   qType.value = q.type || 'free'
@@ -2458,7 +2493,15 @@ const saveCurrentQuestionState = () => {
   if (addToBankCheckbox) q.addToBank = addToBankCheckbox.checked
   q.prompt = qPrompt.value.trim()
   if (qExplanation) q.explanation = qExplanation.value.trim()
-  if (qCategorySelect) q.category = qCategorySelect.value
+  // categoryOptionsReady (pas categoryOptionsLoading) : tant que la vraie
+  // liste n'est pas RÉELLEMENT arrivée dans le DOM (voir loadCategoryOptions/
+  // selectQuestion), le select ne peut afficher que son option
+  // "— Choisir —" (vide) quelle que soit la vraie catégorie de la question
+  // — écrire cette valeur écraserait silencieusement une catégorie déjà
+  // enregistrée si l'utilisateur change de question/sauvegarde pendant
+  // cette (courte) fenêtre de chargement réseau (retour utilisateur :
+  // "la catégorie ne se sauvegarde pas correctement").
+  if (qCategorySelect && categoryOptionsReady) q.category = qCategorySelect.value
   if (qDifficultySelect) q.difficulty = qDifficultySelect.value
   q.type = qType.value
   q.timerMs = parseInt(qTimer.value) * 1000 || 15000
@@ -2519,7 +2562,14 @@ const toggleTypeSections = () => {
   if (rechercheSection) rechercheSection.classList.toggle('d-none', qType.value !== 'recherche')
   if (haloSection) haloSection.classList.toggle('d-none', qType.value !== 'halo')
   if (revealSection) revealSection.classList.toggle('d-none', qType.value !== 'reveal')
-  if (blindtestSection) blindtestSection.classList.toggle('d-none', qType.value !== 'blindtest')
+  // Tâche 027 : le son facultatif (bonusAudioSection) est désormais
+  // disponible pour N'IMPORTE QUEL type — contrairement à l'illustration
+  // optionnelle juste en dessous, le son n'entre en conflit avec aucune
+  // mécanique de type (jamais de "propre son" en cœur de type, sauf Blind
+  // Test qui réutilise ce même bloc partagé). Seules les réponses titre/
+  // artiste restent réservées à "blindtest".
+  if (bonusAudioSection) bonusAudioSection.classList.remove('d-none')
+  if (blindtestAnswersSection) blindtestAnswersSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
   if (rangementSection) rangementSection.classList.toggle('d-none', qType.value !== 'rangement')
@@ -2533,7 +2583,7 @@ const toggleTypeSections = () => {
   // PAR indice — pas comme simple décoration).
   if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice' || qType.value === 'halo')
   // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
-  // blindtestSection ci-dessus) au lieu de la liste générique "correct".
+  // blindtestAnswersSection ci-dessus) au lieu de la liste générique "correct".
   // "mcq" a aussi sa propre façon de désigner la bonne réponse : la case à
   // cocher sur chaque option (voir renderOptions), qui alimente déjà
   // entièrement q.correct — la liste "correct" générique ci-dessous ferait
@@ -4411,7 +4461,12 @@ const deleteQuestionAt = (index) => {
     if (addToBankCheckbox) addToBankCheckbox.checked = q.addToBank !== false
     qPrompt.value = q.prompt || ''
     if (qExplanation) qExplanation.value = q.explanation || ''
-    loadCategoryOptions().then(() => { if (qCategorySelect) qCategorySelect.value = q.category || '' })
+    // Même correctif de course que selectQuestion (voir son commentaire) :
+    // ne réapplique la catégorie que si cette question est toujours celle
+    // affichée une fois le chargement réseau terminé.
+    loadCategoryOptions().then(() => {
+      if (qCategorySelect && questions[activeIndex] === q) qCategorySelect.value = q.category || ''
+    })
     if (qCategorySelect) qCategorySelect.value = q.category || ''
     if (qDifficultySelect) qDifficultySelect.value = q.difficulty || ''
     qType.value = q.type || 'free'

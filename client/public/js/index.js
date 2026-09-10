@@ -703,6 +703,10 @@ const revealExplanationText = document.getElementById('revealExplanationText')
 const revealImageDisplayWrap = document.getElementById('revealImageDisplayWrap')
 const revealImageDisplay = document.getElementById('revealImageDisplay')
 const revealAudioPlayer = document.getElementById('revealAudioPlayer')
+// Tâche 027 : lecteur dédié au son facultatif (n'importe quel type de
+// question) — voir playBonusAudio/stopBonusAudio plus bas, câblés depuis
+// question:show/timer:end.
+const bonusAudioPlayer = document.getElementById('bonusAudioPlayer')
 // Popup plein écran de révélation (tâche 019) : conteneur qui recouvre tout
 // l'écran pendant la révélation, contenant désormais les éléments ci-dessus
 // (voir index.html) — voir openRevealPopup/closeRevealPopup plus bas.
@@ -3046,6 +3050,30 @@ const stopBlindTestAudio = () => {
   if (blindtestAudio) blindtestAudio.pause()
   hideBlindTestUnlockPrompt()
   stopBlindTestPulse()
+}
+
+// Tâche 027 : son facultatif sur n'importe quel type de question — lecteur
+// dédié #bonusAudioPlayer, volontairement minimal (pas de visualiseur, pas
+// de pulsation, pas de prompt de déblocage dédié comme Blind Test, voir
+// Hors périmètre de la tâche) : même règle de coupure hôte/IRL-à distance
+// que #revealAudioPlayer (tâches 017/018), volume fixe, lecture tentée en
+// silence — si la politique autoplay du navigateur la bloque, tant pis,
+// même compromis déjà accepté pour revealAudioPlayer (pas de mécanique de
+// repli dédiée). Jamais sollicité pour une question "blindtest" (voir
+// question:show plus bas) : q.audio y est déjà géré par
+// buildBlindTestArea/blindtestAudio, aucun risque de double lecture.
+const BONUS_AUDIO_VOLUME_PCT = 70
+const playBonusAudio = (audioUrl, mode) => {
+  if (!bonusAudioPlayer || !audioUrl) return
+  bonusAudioPlayer.muted = mode === 'remote' ? false : !isHost
+  bonusAudioPlayer.volume = BONUS_AUDIO_VOLUME_PCT / 100
+  bonusAudioPlayer.pause()
+  bonusAudioPlayer.currentTime = 0
+  bonusAudioPlayer.src = audioUrl
+  bonusAudioPlayer.play().catch(() => {})
+}
+const stopBonusAudio = () => {
+  if (bonusAudioPlayer) bonusAudioPlayer.pause()
 }
 
 const revealBlindTestAnswer = (correctTitle, correctArtist) => {
@@ -5803,8 +5831,13 @@ const emitQuestion = (index) => {
     // Suit désormais le réglage "Quiz à distance" du salon (room.gameMode) —
     // plus de bascule séparée dans les contrôles de l'hôte : les deux
     // notions se recouvraient (retour utilisateur), inutile de les régler
-    // deux fois.
-    audioMode: q.type === 'blindtest' ? gameMode : undefined,
+    // deux fois. Tâche 027 : n'importe quel type peut porter un son
+    // facultatif (q.audio n'est plus réservé à "blindtest") — retiré la
+    // condition de type ici, sinon audioMode resterait undefined pour un
+    // son facultatif hors Blind Test et playBonusAudio() le traiterait à
+    // tort comme "IRL" (mute pour tout le monde sauf l'hôte, même en
+    // partie à distance).
+    audioMode: gameMode,
     // "Titre uniquement" (voir editor.js) : pas d'artiste attendu pour ce
     // morceau (ex. générique de dessin animé). Le champ artiste n'est alors
     // ni affiché côté joueur ni jugé côté serveur (voir answer:submit).
@@ -5867,7 +5900,11 @@ const emitQuestion = (index) => {
   // question avec juste leur URL. Si un upload échoue, on ne démarre pas la
   // question plutôt que de l'afficher sans média à personne.
   const imageToUpload = (q.type === 'image' || q.type === 'zoomguess' || q.type === 'recherche' || q.type === 'halo') ? q.image : (q.type === 'reveal' ? q.enigmeImage : q.illustration)
-  const audioToUpload = q.type === 'blindtest' ? q.audio : null
+  // Tâche 027 : q.audio n'est plus réservé au type "blindtest" (son
+  // facultatif disponible sur n'importe quel type, voir editor.js
+  // bonusAudioSection) — retiré la condition de type, q.audio suffit à
+  // lui seul à décider s'il y a un son à uploader/diffuser.
+  const audioToUpload = q.audio || null
   // "révélation" : l'image réponse ne passe JAMAIS par uploadRoomImage (relais
   // à GET public) — voir uploadRoomRevealAnswer plus haut, qui la dépose sans
   // jamais la rendre consultable avant l'heure.
@@ -6454,8 +6491,14 @@ socket.on('question:show', payload => {
   }
   if (payload.type === 'blindtest') {
     buildBlindTestArea(payload.audioUrl, payload.audioMode)
+    stopBonusAudio()
   } else {
     stopBlindTestAudio()
+    // Tâche 027 : son facultatif — jamais pour "blindtest" (déjà géré
+    // juste au-dessus par buildBlindTestArea), stopBonusAudio() sinon pour
+    // repartir propre si la question précédente en avait un.
+    if (payload.audioUrl) playBonusAudio(payload.audioUrl, payload.audioMode)
+    else stopBonusAudio()
   }
 
   const start = payload.startTs
@@ -7810,6 +7853,12 @@ socket.on('timer:end', (payload) => {
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).
   if (currentQuestionType === 'blindtest') stopBlindTestAudio()
+  // Tâche 027 : même coupure pour le son facultatif (n'importe quel type)
+  // — timer:end est déjà le signal de fin de question, qu'il arrive au
+  // bout du chrono normal OU en avance dès que tout le monde a répondu
+  // (voir server/index.js emitProgress) ; appel systématique, sans effet
+  // si aucun son facultatif n'était en cours.
+  stopBonusAudio()
   // Tâche 024 : verrouillage de révélation appliqué à l'hôte aussi en mode
   // "Jouer" (il répond comme un joueur) — réservé au mode "Présenter" avant.
   if (!isPresenterHost()) {

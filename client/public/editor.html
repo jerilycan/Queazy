@@ -652,8 +652,19 @@
             </div>
           </div>
 
-          <div id="blindtestSection" class="detail-section d-none">
-            <label for="audioUpload">Extrait audio</label>
+          <!-- Tâche 027 : bloc d'import/découpe audio détaché de
+               #blindtestSection (qui mélangeait jusqu'ici cet outil ET les
+               réponses titre/artiste propres au Blind Test) — devient un
+               son FACULTATIF disponible sur n'importe quel type de
+               question (voir toggleTypeSections côté editor.js), Blind
+               Test compris (son propre son reste ce même bloc partagé,
+               rien ne change pour lui). Ids INCHANGÉS (audioUpload,
+               audioTrimWrap...) : tout le JS existant (renderWaveform,
+               audioUploadInput.onchange, audioExtractBtn...) continue de
+               fonctionner à l'identique, seul le conteneur/le libellé
+               changent. -->
+          <div id="bonusAudioSection" class="detail-section d-none">
+            <label for="audioUpload">🔊 Son (facultatif)</label>
             <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
             <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
               <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
@@ -701,9 +712,19 @@
               <audio id="audioClipPlayer" controls></audio>
               <button type="button" id="removeAudioClipBtn" class="btn btn-nav-secondary font-13 mt-8">Retirer l'extrait</button>
             </div>
-            <p class="text-muted font-13 mt-8">Importe le morceau (extrait déjà coupé ou piste complète), choisis le début et la durée de l'extrait à faire deviner (30s max), puis valide.</p>
+            <!-- Description volontairement neutre (partagée Blind Test/tout
+                 autre type) : "à faire deviner" ne s'appliquait qu'à Blind
+                 Test, remplacé par une formulation valable dans les deux
+                 contextes (le son démarre avec la question, se coupe une
+                 fois tout le monde a répondu — voir index.js). -->
+            <p class="text-muted font-13 mt-8">Importe le morceau (extrait déjà coupé ou piste complète), choisis le début et la durée de l'extrait (30s max), puis valide. Il démarre en même temps que la question et se coupe une fois que tout le monde a répondu.</p>
+          </div>
 
-            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label mt-16">
+          <!-- Réponses propres à Blind Test (titre/artiste à deviner) —
+               séparées du bloc audio ci-dessus (tâche 027) : seul ce bloc-ci
+               reste réservé au type "blindtest" (voir toggleTypeSections). -->
+          <div id="blindtestAnswersSection" class="detail-section d-none">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
               <input id="btTitleOnly" type="checkbox" class="qz-toggle-input" />
               <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
               Titre uniquement (pas d'artiste à deviner — ex. générique de dessin animé)

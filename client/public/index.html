@@ -1261,6 +1261,15 @@
       </div>
     </div>
 
+    <!-- Tâche 027 : son facultatif (n'importe quel type de question, voir
+         editor.js bonusAudioSection) — lecteur DÉDIÉ, minimal, séparé de
+         #blindtestAudio (celui-ci garde tout son appareillage propre :
+         visualiseur, pulsation, prompt de déblocage dédié, slider de
+         volume — explicitement pas reproduit ici, voir index.js
+         playBonusAudio). Aucun contrôle visible, mêmes règles de mute
+         IRL/à distance que #revealAudioPlayer juste au-dessus. -->
+    <audio id="bonusAudioPlayer" class="d-none"></audio>
+
     <!-- Tâche 025 : popup d'ajustement manuel de score par le MJ (mode
          "Présenter" uniquement, voir renderLiveClassementDock côté index.js
          pour le bouton "+" qui l'ouvre). Élément UNIQUE et persistant (pas
