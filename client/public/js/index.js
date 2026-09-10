@@ -364,7 +364,18 @@ if (previewBankQuestionId) {
       questions: [{ ...data.question, id: data.question.id || 'q1' }]
     }
     quizIndex = 0
-    createRoom('present')
+    // Tâche 028 (retour utilisateur : "je veux le rendu joueur, avec
+    // validation, et non pas le rendu présentateur") : salle créée en mode
+    // "Jouer" ('auto') plutôt que "Présenter" — réutilise tel quel tout ce
+    // que la tâche 024 a déjà mis en place pour qu'un hôte en mode "Jouer"
+    // se comporte comme un simple joueur (répond, valide, voit le classement,
+    // aucun panneau de modération) : l'admin qui prévisualise voit et
+    // interagit EXACTEMENT comme un joueur verrait cette question en vraie
+    // partie, au lieu de la vue MJ. Nécessite de court-circuiter la
+    // génération auto du quiz dans launchQuiz() (voir plus bas,
+    // previewBankQuestionId) — sans quoi ce mode remplacerait la question
+    // choisie ici par une sélection aléatoire de la banque.
+    createRoom('auto')
     // Mécanisme "prêt" (voir Plan de la tâche 023, server/index.js
     // computeAllReady) : l'hôte est exclu du calcul de "prêt" côté serveur,
     // donc une salle solo (aucun joueur hors l'hôte) est déjà "prête" côté
@@ -1462,9 +1473,15 @@ const revealOrderList = (correctOrder) => {
   orderList.classList.add('d-none')
   orderCompare.classList.remove('d-none')
 
-  const mine = Array.isArray(myOrderSubmission) && myOrderSubmission.length === correctOrder.length
-    ? myOrderSubmission
-    : null
+  // Retour utilisateur (capture d'écran) : "Ta réponse" n'a aucun sens pour
+  // le MJ en mode "Présenter" (il ne joue jamais, voir isPresenterHost) —
+  // affichait "Pas de réponse envoyée" en permanence, un encart inutile.
+  // Colonne retirée entièrement pour lui (pas juste vidée) : seule "Réponse
+  // correcte" reste, en pleine largeur (voir .order-compare.mine-hidden
+  // côté style.css).
+  const mineCol = orderCompareMine.closest('.order-compare-col')
+  if (mineCol) mineCol.classList.toggle('d-none', isPresenterHost())
+  if (orderCompare) orderCompare.classList.toggle('mine-hidden', isPresenterHost())
 
   orderCompareCorrect.innerHTML = correctOrder.map((text, i) => `
     <div class="order-compare-row">
@@ -1473,6 +1490,11 @@ const revealOrderList = (correctOrder) => {
     </div>
   `).join('')
   orderCompareCorrect.querySelectorAll('.order-compare-text').forEach((el, i) => { el.textContent = correctOrder[i] })
+  if (isPresenterHost()) return
+
+  const mine = Array.isArray(myOrderSubmission) && myOrderSubmission.length === correctOrder.length
+    ? myOrderSubmission
+    : null
 
   if (!mine) {
     orderCompareMine.innerHTML = `<div class="order-compare-empty">Pas de réponse envoyée</div>`
@@ -3326,16 +3348,6 @@ const questionDeltas = new Map()
 // arrive avant la révélation — sert uniquement à choisir le son (correct.wav
 // / wrong.wav) joué à la révélation, jamais affiché avant.
 let myAnsweredCorrectlyThisQuestion = false
-// "Presque !" (curseur graduation) ne doit s'afficher que pour une réponse
-// VRAIMENT proche — pas dès qu'un delta > 0 a été gagné (retour utilisateur :
-// plage 0-25, cible 13, réponse 7 → "Presque !" alors que l'écart de 6
-// représente presque la moitié de l'écart maximum possible). closeness est
-// linéaire (0-1, voir plus bas), pas encore passé à la puissance
-// GRAD_CLOSENESS_EXPONENT (serveur) qui, elle, ne pèse que sur les points —
-// 0.8 exige un écart d'au plus 20% de l'intervalle min/max pour mériter le
-// label "Presque !", sinon c'est une "Mauvaise réponse" même si quelques
-// points résiduels ont été marqués.
-const GRAD_PRESQUE_MIN_CLOSENESS = 0.8
 // "Petit Bac" (q.type === 'pbac') : DOIT rester strictement identique à
 // PBAC_BASE_POINTS côté serveur (server/index.js) — sert uniquement ici à
 // déduire le libellé du bandeau perso (Bonne réponse / Presque / Mauvaise)
@@ -6115,7 +6127,12 @@ const launchQuiz = async () => {
   // (message déjà affiché dans #autoConfigError) si la banque ne suffit
   // pas aux critères choisis, plutôt que de démarrer une partie tronquée
   // sans prévenir (voir Objectif de la tâche).
-  if (roomMode === 'auto') {
+  // Exception (tâche 028) : l'aperçu banque de questions crée aussi une
+  // salle en mode "Jouer" (pour le rendu joueur, voir previewBankQuestionId
+  // plus haut) mais a déjà posé LUI-MÊME loadedQuiz sur la question exacte
+  // à prévisualiser — générer un quiz auto ici l'écraserait par une
+  // sélection aléatoire de la banque.
+  if (roomMode === 'auto' && !previewBankQuestionId) {
     startQuizBtn.classList.add('is-loading')
     const ok = await generateAutoQuiz()
     startQuizBtn.classList.remove('is-loading')
@@ -7076,7 +7093,18 @@ pbacGroupBtn.disabled = true
 pbacGroupBtn.textContent = 'Valider la famille'
 pbacGroupBar.appendChild(pbacGroupLabel)
 pbacGroupBar.appendChild(pbacGroupBtn)
-document.querySelector('.container').appendChild(pbacGroupBar)
+// Retour utilisateur (capture d'écran : "bouton valider inaccessible") :
+// ajoutée directement à .container, cette barre tombait — comme
+// #moderationPanel avant son propre correctif (voir le commentaire sur
+// #moderationZone plus haut) — dans une ligne de grille IMPLICITE en régie
+// desktop, sans placement explicite ni marge de la grille (grid-row "auto"
+// n°2, déjà occupée par #moderationZone) : poussée hors de la zone visible
+// de .container (hauteur fixe, calc(100vh - 170px)), inatteignable. Rendue
+// enfant de moderationZone (déjà la SEULE cellule de grille correcte pour
+// tout ce qui concerne la modération, voir son propre commentaire) au lieu
+// de .container directement — sa ligne de grille "auto" s'agrandit pour
+// accueillir tout son contenu, bandeau compris.
+moderationZone.appendChild(pbacGroupBar)
 
 // Rafraîchit le libellé/l'état du bandeau à partir des cases actuellement
 // cochées — appelée à chaque coche/décoche ainsi qu'après tout ajout/retrait
@@ -7159,7 +7187,10 @@ approveAllBtn.className = 'btn btn-primary'
 approveAllBtn.style.padding = '8px 16px'
 approveAllBar.appendChild(approveAllLabel)
 approveAllBar.appendChild(approveAllBtn)
-document.querySelector('.container').appendChild(approveAllBar)
+// Même correctif que pbacGroupBar juste au-dessus (retour utilisateur :
+// bouton inaccessible, tombait dans une ligne de grille implicite en régie
+// desktop en étant enfant de .container directement).
+moderationZone.appendChild(approveAllBar)
 
 // N'affiche le bandeau qu'à partir de 2 réponses génériques en attente : à
 // 1 seule, le bouton "Valider" de la ligne elle-même suffit déjà, pas besoin
@@ -8063,26 +8094,23 @@ socket.on('question:reveal', payload => {
     }
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
-    // Score continu (proximité), comme "image" : au lieu d'un simple binaire,
-    // on distingue "Bonne réponse" (écart dans la tolérance CONFIGURÉE POUR
-    // CETTE QUESTION, voir payload.tolerance — plus une constante globale
-    // fixe, réglable par question depuis l'éditeur), "Presque !" (score
-    // partiel touché mais pas assez près) et "Mauvaise réponse" (aucun
-    // point). Repli sur GRAD_CORRECT_ABS_TOLERANCE_DEFAULT si absente (vieux
-    // quiz sauvegardé avant l'ajout de ce champ) — doit rester cohérent avec
-    // la même valeur de repli côté serveur (celui qui détermine le ✓/✗
-    // affiché sur la page résultats).
+    // Scoring BINAIRE (retour utilisateur : "c'est beaucoup trop de
+    // points" — un écart largement hors tolérance rapportait encore des
+    // centaines de points via l'ancienne courbe de proximité) : dans la
+    // tolérance CONFIGURÉE POUR CETTE QUESTION (voir payload.tolerance) ->
+    // "Bonne réponse", sinon "Mauvaise réponse" — plus de "Presque !"/score
+    // partiel pour ce type (voir server/index.js answer:submit, même
+    // logique). Repli sur GRAD_CORRECT_ABS_TOLERANCE_DEFAULT si absente
+    // (vieux quiz sauvegardé avant l'ajout de ce champ) — doit rester
+    // cohérent avec la même valeur de repli côté serveur (celui qui
+    // détermine le ✓/✗ affiché sur la page résultats).
     const target = Number(payload.target)
     const tolerance = Number.isFinite(Number(payload.tolerance)) ? Number(payload.tolerance) : GRAD_CORRECT_ABS_TOLERANCE_DEFAULT
-    const range = Math.max(1e-9, gradState.max - gradState.min)
     const absDiff = (Number.isFinite(target) && myGradAnswerValue !== null)
       ? Math.abs(myGradAnswerValue - target)
       : null
-    const closeness = absDiff !== null ? Math.max(0, 1 - absDiff / range) : null
     if (absDiff !== null && absDiff <= tolerance) {
       showMyResultBanner()
-    } else if (closeness !== null && closeness >= GRAD_PRESQUE_MIN_CLOSENESS && myAnsweredCorrectlyThisQuestion) {
-      showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
     } else {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }

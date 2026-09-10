@@ -511,13 +511,14 @@ const start = async () => {
     // doit pas mélanger les deux champs, voir answer:submit).
     // "presque" (état à part de correct/incorrect, voir index.js) : la
     // question a rapporté des points (deltas) sans être comptée "correct" —
-    // concerne les types à score proportionnel (graduation, image,
-    // association, ordre, timeline, rangement, blindtest un seul champ), et
-    // aussi "qcm" à plusieurs bonnes réponses quand son réglage "toutes
-    // cochées pour gagner des points" est désactivé (voir answer:submit) ;
-    // pour les types restés strictement binaires (qcm par défaut, vrai-faux,
-    // intrus) delta reste toujours à 0 côté incorrect, donc jamais "presque"
-    // à tort.
+    // concerne les types à score proportionnel (image, association, ordre,
+    // timeline, rangement, blindtest un seul champ), et aussi "qcm" à
+    // plusieurs bonnes réponses quand son réglage "toutes cochées pour
+    // gagner des points" est désactivé (voir answer:submit) ; pour les
+    // types restés strictement binaires (qcm par défaut, vrai-faux, intrus,
+    // et désormais "graduation" — voir son scoring binaire dans
+    // answer:submit) delta reste toujours à 0 côté incorrect, donc jamais
+    // "presque" à tort.
     const perPlayer = entries
       .map(([tok, result]) => {
         const correct = result === 'correct'
@@ -934,22 +935,16 @@ const start = async () => {
   // les quiz sauvegardés avant l'ajout de ce champ (question.tolerance null).
   // 0 = seule la valeur exacte compte comme "Bonne réponse !".
   const GRAD_CORRECT_ABS_TOLERANCE_DEFAULT = 0
-  // Les scores "graduation"/"image" sont continus (proximité 0-1) : sans
-  // courbe, un "presque" à closeness=0.9 touchait encore 90% des points,
-  // trop proche d'une réponse parfaite. On élève la proximité à une
-  // puissance > 1 avant de la multiplier aux points de vitesse : ça ne
-  // change rien à closeness=1 (toujours 100%), mais creuse l'écart pour
-  // tout ce qui n'est pas exact (0.9 -> 81%, 0.7 -> 49%, 0.5 -> 25%).
+  // Le score "image" est continu (proximité 0-1) : sans courbe, un "presque"
+  // à closeness=0.9 touchait encore 90% des points, trop proche d'une
+  // réponse parfaite. On élève la proximité à une puissance > 1 avant de la
+  // multiplier aux points de vitesse : ça ne change rien à closeness=1
+  // (toujours 100%), mais creuse l'écart pour tout ce qui n'est pas exact
+  // (0.9 -> 81%, 0.7 -> 49%, 0.5 -> 25%).
+  // "graduation" n'utilise PLUS cette courbe (retour utilisateur : "c'est
+  // beaucoup trop de points" même avec un exposant dédié plus élevé — voir
+  // son scoring désormais binaire dans answer:submit).
   const CLOSENESS_EXPONENT = 2
-  // "graduation" spécifiquement jugé encore trop généreux même avec l'exposant
-  // 2 ci-dessus (retour utilisateur : "Presque ! +758 points" pour une
-  // réponse pas exacte) — exposant propre et plus élevé, SANS toucher au
-  // scoring du type "image" (jamais signalé comme trop généreux, formule
-  // différente par nature : distance à une zone dessinée, pas un écart
-  // numérique). closeness=0.9 -> 53% des points (au lieu de 81%), 0.7 -> 12%
-  // (au lieu de 49%), 0.5 -> 1.6% (au lieu de 25%) : ne récompense plus
-  // qu'une réponse VRAIMENT proche de la cible.
-  const GRAD_CLOSENESS_EXPONENT = 6
   // "Petit Bac" (q.type === 'pbac') : catégorie ouverte ("Citez un pays
   // d'Europe"), aucune liste de bonnes réponses possible à l'avance — TOUT
   // passe par l'hôte (retour utilisateur, contrairement au blind test qui
@@ -1794,17 +1789,27 @@ const start = async () => {
         const target = Number(q.correct?.[0])
         if (!Number.isFinite(guess) || !Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(target) || min >= max) return
         const clamped = Math.min(max, Math.max(min, guess))
-        const range = Math.max(1e-9, max - min)
-        const closeness = Math.max(0, 1 - Math.abs(clamped - target) / range)
-        const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * (closeness ** GRAD_CLOSENESS_EXPONENT))
+        // Retour utilisateur : "c'est beaucoup trop de points" — un écart de
+        // 7 (sur une plage 0-50, tolérance ±2) rapportait encore ~400 points
+        // via la courbe de proximité (closeness ** GRAD_CLOSENESS_EXPONENT),
+        // un écart de 20 encore ~179. Remplacé par un scoring BINAIRE : dans
+        // la tolérance (q.tolerance, configurée par question) -> plein tarif
+        // vitesse (pointsFor), sinon -> 0. Plus de "Presque !"/score partiel
+        // pour ce type (voir aussi index.js showMyResultBanner, nettoyé en
+        // conséquence). "image" (même famille de formule à l'origine, voir
+        // CLOSENESS_EXPONENT juste en dessous) n'est PAS concerné : jamais
+        // signalé comme trop généreux, formule différente par nature
+        // (distance à une zone dessinée, pas un écart numérique).
+        const tolerance = q.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT
+        const isCorrect = Math.abs(clamped - target) <= tolerance
+        const delta = isCorrect ? Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor)) : 0
         const total = (room.scores.get(socket.id) || 0) + delta
         room.scores.set(socket.id, total)
         const p = room.players.get(socket.id)
         if (p?.token) {
           room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
           if (q.historyEntry) {
-            const tolerance = q.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT
-            q.historyEntry.results[p.token] = Math.abs(clamped - target) <= tolerance ? 'correct' : 'incorrect'
+            q.historyEntry.results[p.token] = isCorrect ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
             q.historyEntry.answers[p.token] = String(clamped)
           }

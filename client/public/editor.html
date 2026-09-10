@@ -371,6 +371,75 @@
             <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
           </div>
 
+          <!-- Tâche 027/028 (retour utilisateur : positionné juste sous
+               l'image optionnelle) : bloc d'import/découpe audio détaché de
+               #blindtestSection (qui mélangeait jusqu'ici cet outil ET les
+               réponses titre/artiste propres au Blind Test) — devient un
+               son FACULTATIF disponible sur n'importe quel type de
+               question (voir toggleTypeSections côté editor.js), Blind
+               Test compris (son propre son reste ce même bloc partagé,
+               rien ne change pour lui). Ids INCHANGÉS (audioUpload,
+               audioTrimWrap...) : tout le JS existant (renderWaveform,
+               audioUploadInput.onchange, audioExtractBtn...) continue de
+               fonctionner à l'identique, seul le conteneur/le libellé
+               changent. -->
+          <div id="bonusAudioSection" class="detail-section d-none">
+            <label for="audioUpload">🔊 Son (facultatif)</label>
+            <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
+            <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
+              <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
+                   pendingAudioBuffer, déjà décodé en mémoire pour l'export WAV
+                   (voir editor.js encodeWavMono) : pas de nouveau décodage,
+                   juste un rendu en plus de données déjà là. La portion Début→
+                   Début+Durée est surlignée en direct (voir
+                   editor.js renderWaveform/updateWaveformSelection). Les
+                   barres vivent dans #audioWaveformBars (recréées à chaque
+                   import) ; les deux poignées de bord sont des éléments fixes
+                   à part, positionnées en % par updateWaveformSelection, pour
+                   pouvoir "étirer" la sélection (retour utilisateur) sans les
+                   recréer avec les barres. -->
+              <div id="audioWaveform" class="audio-waveform">
+                <div id="audioWaveformBars" class="audio-waveform-bars"></div>
+                <div id="audioWaveformHandleStart" class="waveform-handle" role="slider" tabindex="0" aria-label="Début de l'extrait"></div>
+                <div id="audioWaveformHandleEnd" class="waveform-handle" role="slider" tabindex="0" aria-label="Fin de l'extrait"></div>
+              </div>
+              <audio id="audioTrimPlayer" controls></audio>
+              <div class="d-grid grid-cols-split gap-lg mt-8">
+                <div class="detail-section">
+                  <label for="audioStartInput">Début (secondes) <span id="audioTotalDuration" class="text-muted font-13"></span></label>
+                  <div class="timer-controls">
+                    <button id="audioStartMinus" class="btn-timer" type="button">-</button>
+                    <input type="number" id="audioStartInput" class="stepper-input" value="0" min="0" />
+                    <button id="audioStartPlus" class="btn-timer" type="button">+</button>
+                  </div>
+                </div>
+                <div class="detail-section">
+                  <label for="audioDurationInput">Durée (secondes)</label>
+                  <div class="timer-controls">
+                    <button id="audioDurationMinus" class="btn-timer" type="button">-</button>
+                    <input type="number" id="audioDurationInput" class="stepper-input" value="15" min="5" max="30" />
+                    <button id="audioDurationPlus" class="btn-timer" type="button">+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex gap-sm mt-8">
+                <button type="button" id="audioPreviewBtn" class="btn btn-nav-secondary">▶ Prévisualiser l'extrait</button>
+                <button type="button" id="audioExtractBtn" class="btn btn-primary">Utiliser cet extrait</button>
+              </div>
+            </div>
+            <div id="audioClipWrap" class="audio-clip-wrap d-none mt-8">
+              <p class="text-muted font-13 m-0">Extrait actuel :</p>
+              <audio id="audioClipPlayer" controls></audio>
+              <button type="button" id="removeAudioClipBtn" class="btn btn-nav-secondary font-13 mt-8">Retirer l'extrait</button>
+            </div>
+            <!-- Description volontairement neutre (partagée Blind Test/tout
+                 autre type) : "à faire deviner" ne s'appliquait qu'à Blind
+                 Test, remplacé par une formulation valable dans les deux
+                 contextes (le son démarre avec la question, se coupe une
+                 fois tout le monde a répondu — voir index.js). -->
+            <p class="text-muted font-13 mt-8">Importe le morceau (extrait déjà coupé ou piste complète), choisis le début et la durée de l'extrait (30s max), puis valide. Il démarre en même temps que la question et se coupe une fois que tout le monde a répondu.</p>
+          </div>
+
           <!-- Bloc groupé "Après la révélation" (design validé via /design,
                canvas "Éditeur — Révélation Enrichie") : texte (existant,
                q.explanation) + image/son (nouveaux, q.revealImage/
@@ -652,77 +721,11 @@
             </div>
           </div>
 
-          <!-- Tâche 027 : bloc d'import/découpe audio détaché de
-               #blindtestSection (qui mélangeait jusqu'ici cet outil ET les
-               réponses titre/artiste propres au Blind Test) — devient un
-               son FACULTATIF disponible sur n'importe quel type de
-               question (voir toggleTypeSections côté editor.js), Blind
-               Test compris (son propre son reste ce même bloc partagé,
-               rien ne change pour lui). Ids INCHANGÉS (audioUpload,
-               audioTrimWrap...) : tout le JS existant (renderWaveform,
-               audioUploadInput.onchange, audioExtractBtn...) continue de
-               fonctionner à l'identique, seul le conteneur/le libellé
-               changent. -->
-          <div id="bonusAudioSection" class="detail-section d-none">
-            <label for="audioUpload">🔊 Son (facultatif)</label>
-            <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
-            <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
-              <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
-                   pendingAudioBuffer, déjà décodé en mémoire pour l'export WAV
-                   (voir editor.js encodeWavMono) : pas de nouveau décodage,
-                   juste un rendu en plus de données déjà là. La portion Début→
-                   Début+Durée est surlignée en direct (voir
-                   editor.js renderWaveform/updateWaveformSelection). Les
-                   barres vivent dans #audioWaveformBars (recréées à chaque
-                   import) ; les deux poignées de bord sont des éléments fixes
-                   à part, positionnées en % par updateWaveformSelection, pour
-                   pouvoir "étirer" la sélection (retour utilisateur) sans les
-                   recréer avec les barres. -->
-              <div id="audioWaveform" class="audio-waveform">
-                <div id="audioWaveformBars" class="audio-waveform-bars"></div>
-                <div id="audioWaveformHandleStart" class="waveform-handle" role="slider" tabindex="0" aria-label="Début de l'extrait"></div>
-                <div id="audioWaveformHandleEnd" class="waveform-handle" role="slider" tabindex="0" aria-label="Fin de l'extrait"></div>
-              </div>
-              <audio id="audioTrimPlayer" controls></audio>
-              <div class="d-grid grid-cols-split gap-lg mt-8">
-                <div class="detail-section">
-                  <label for="audioStartInput">Début (secondes) <span id="audioTotalDuration" class="text-muted font-13"></span></label>
-                  <div class="timer-controls">
-                    <button id="audioStartMinus" class="btn-timer" type="button">-</button>
-                    <input type="number" id="audioStartInput" class="stepper-input" value="0" min="0" />
-                    <button id="audioStartPlus" class="btn-timer" type="button">+</button>
-                  </div>
-                </div>
-                <div class="detail-section">
-                  <label for="audioDurationInput">Durée (secondes)</label>
-                  <div class="timer-controls">
-                    <button id="audioDurationMinus" class="btn-timer" type="button">-</button>
-                    <input type="number" id="audioDurationInput" class="stepper-input" value="15" min="5" max="30" />
-                    <button id="audioDurationPlus" class="btn-timer" type="button">+</button>
-                  </div>
-                </div>
-              </div>
-              <div class="d-flex gap-sm mt-8">
-                <button type="button" id="audioPreviewBtn" class="btn btn-nav-secondary">▶ Prévisualiser l'extrait</button>
-                <button type="button" id="audioExtractBtn" class="btn btn-primary">Utiliser cet extrait</button>
-              </div>
-            </div>
-            <div id="audioClipWrap" class="audio-clip-wrap d-none mt-8">
-              <p class="text-muted font-13 m-0">Extrait actuel :</p>
-              <audio id="audioClipPlayer" controls></audio>
-              <button type="button" id="removeAudioClipBtn" class="btn btn-nav-secondary font-13 mt-8">Retirer l'extrait</button>
-            </div>
-            <!-- Description volontairement neutre (partagée Blind Test/tout
-                 autre type) : "à faire deviner" ne s'appliquait qu'à Blind
-                 Test, remplacé par une formulation valable dans les deux
-                 contextes (le son démarre avec la question, se coupe une
-                 fois tout le monde a répondu — voir index.js). -->
-            <p class="text-muted font-13 mt-8">Importe le morceau (extrait déjà coupé ou piste complète), choisis le début et la durée de l'extrait (30s max), puis valide. Il démarre en même temps que la question et se coupe une fois que tout le monde a répondu.</p>
-          </div>
-
           <!-- Réponses propres à Blind Test (titre/artiste à deviner) —
-               séparées du bloc audio ci-dessus (tâche 027) : seul ce bloc-ci
-               reste réservé au type "blindtest" (voir toggleTypeSections). -->
+               séparées du bloc audio (#bonusAudioSection, tâche 027,
+               remonté juste sous l'image optionnelle depuis la tâche 028) :
+               seul ce bloc-ci reste réservé au type "blindtest" (voir
+               toggleTypeSections). -->
           <div id="blindtestAnswersSection" class="detail-section d-none">
             <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
               <input id="btTitleOnly" type="checkbox" class="qz-toggle-input" />

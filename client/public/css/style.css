@@ -2463,6 +2463,10 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   grid-template-columns: 1fr 1fr;
   gap: 20px;
 }
+/* MJ (mode "Présenter") : colonne "Ta réponse" retirée (voir revealOrderList,
+   index.js) — "Réponse correcte" reprend toute la largeur plutôt que de
+   laisser un vide à sa gauche. */
+.order-compare.mine-hidden { grid-template-columns: 1fr; }
 .order-compare-col { display: flex; flex-direction: column; gap: 10px; }
 .order-compare-label {
   font-size: 12px;
@@ -4194,7 +4198,17 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
-    padding: 48px 40px 32px;
+    /* Retour utilisateur (capture d'écran : texte passant SOUS le badge de
+       type et la barre de timer, tous deux en position:absolute à top:20px
+       dans cette carte, voir #questionTypeBadge/#timerContainer plus bas) :
+       48px de marge haute ne suffisait pas à dégager leur hauteur réelle
+       (~38-40px, badge/timer inclus) avant que le contenu (l'énoncé,
+       centré et parfois sur 2-3 lignes pour une question longue) ne
+       commence — les deux se chevauchaient dès que l'énoncé était assez
+       large pour atteindre les bords gauche/droit. 80px : dégage
+       confortablement les deux pastilles avant le début du texte.
+       */
+    padding: 80px 40px 32px;
     display: flex;
     flex-direction: column;
     justify-content: center;

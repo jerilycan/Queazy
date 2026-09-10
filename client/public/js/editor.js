@@ -2235,6 +2235,19 @@ const openRevealAudioTrimModal = (file, onConfirm) => {
 
 const populateAudioFields = (q) => {
   if (!audioClipWrap) return
+  // Retour utilisateur ("le son ajouté en option se trouve sur toutes les
+  // questions") : un import pas encore validé (pendingAudioBuffer,
+  // #audioTrimWrap resté affiché depuis audioUploadInput.onchange) n'était
+  // JAMAIS réinitialisé en changeant de question — l'outil de découpe
+  // restait ouvert sur l'extrait de la question précédente, prêt à être
+  // appliqué (audioExtractBtn) à la question maintenant affichée si on le
+  // réutilisait sans avoir réimporté de fichier. Un import non validé est
+  // donc abandonné (jamais sauvegardé de toute façon) dès qu'on change de
+  // question, comme n'importe quel autre champ non validé de l'éditeur.
+  if (pendingAudioObjectUrl) { URL.revokeObjectURL(pendingAudioObjectUrl); pendingAudioObjectUrl = null }
+  pendingAudioBuffer = null
+  if (audioTrimWrap) audioTrimWrap.classList.add('d-none')
+  if (audioTrimPlayer) audioTrimPlayer.removeAttribute('src')
   if (q.audio) {
     audioClipPlayer.src = q.audio
     audioClipWrap.classList.remove('d-none')
