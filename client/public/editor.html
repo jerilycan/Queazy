@@ -256,15 +256,13 @@
             <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
           </div>
 
-          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
-               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
-               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
-               banque" juste au-dessus (coin haut-droit), qui les exige avant
-               de publier dans bank_questions (mode "Jouer") AU PROCHAIN
-               SAUVEGARDE. Catégorie choisie dans bank_categories (table
-               gérée par un super admin depuis admin-bank.html), plus de
-               texte libre — voir loadCategoryOptions côté editor.js. -->
-          <div class="d-grid grid-cols-split gap-lg position-relative">
+          <!-- Tâche 026 bis (retour utilisateur, capture d'écran : "c'est
+               horrible") : le positionnement en absolu (coin haut-droit de
+               la grille) chevauchait les libellés Catégorie/Difficulté dès
+               que le panneau n'était pas assez large — remplacé par une
+               ligne dédiée, alignée à droite, AU-DESSUS de la grille :
+               jamais de chevauchement possible, quelle que soit la largeur. -->
+          <div class="add-to-bank-row">
             <!-- Tâche 025 bis (retour utilisateur : "le bouton est beaucoup trop
                  gros") : remplace l'ancien bouton "Ajouter à la banque" (clic
                  = publication immédiate) par une case à cocher, COCHÉE PAR
@@ -274,10 +272,20 @@
                  SAUVEGARDE du quiz (voir persistQuiz), pas au clic sur cette
                  case, même patron que la case "Brouillon" juste au-dessus
                  (un état du modèle, appliqué à la sauvegarde). -->
-            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées.">
+            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées (juste en dessous).">
               <input id="addToBankCheckbox" type="checkbox" checked />
-              <span>🏦 Banque</span>
+              <span>🏦 Ajouter à la banque</span>
             </label>
+          </div>
+          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
+               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
+               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
+               banque" juste au-dessus, qui les exige avant de publier dans
+               bank_questions (mode "Jouer") AU PROCHAIN SAUVEGARDE.
+               Catégorie choisie dans bank_categories (table gérée par un
+               super admin depuis admin-bank.html), plus de texte libre —
+               voir loadCategoryOptions côté editor.js. -->
+          <div class="d-grid grid-cols-split gap-lg">
             <div class="detail-section">
               <label for="qCategorySelect">Catégorie</label>
               <select id="qCategorySelect">

@@ -4409,16 +4409,16 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
 
 .cursor-pointer { cursor: pointer; }
 .resize-v { resize: vertical; min-height: 80px; }
-.position-relative { position: relative; }
 
-/* Tâche 025 bis : case "Ajouter à la banque" (éditeur de quiz), remplace
-   l'ancien gros bouton — posée dans le coin haut-droit de la grille
-   catégorie/difficulté (voir editor.html, position-relative sur le
-   conteneur parent). Compacte, jamais plus large que son contenu. */
+/* Tâche 025 bis/026 bis : case "Ajouter à la banque" (éditeur de quiz),
+   remplace l'ancien gros bouton. Retour utilisateur (capture d'écran,
+   "c'est horrible") sur un 1er essai en position:absolute dans le coin de
+   la grille catégorie/difficulté : chevauchait les libellés dès que le
+   panneau n'était pas assez large. Posée sur sa PROPRE ligne, alignée à
+   droite (voir .add-to-bank-row, editor.html) — reste dans le flux normal,
+   ne peut plus chevaucher quoi que ce soit quelle que soit la largeur. */
+.add-to-bank-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 .add-to-bank-checkbox {
-  position: absolute;
-  top: 0;
-  right: 0;
   display: flex;
   align-items: center;
   gap: 6px;
