@@ -280,19 +280,32 @@ if (qrScanBtn && qrScanFile) {
     const objectUrl = URL.createObjectURL(file)
     img.onload = () => {
       URL.revokeObjectURL(objectUrl)
+      // Bug corrigé (retour utilisateur : "ça capte rien") : une photo
+      // caméra pèse souvent 3000-4000px de côté (8-12 Mpx) — un canvas à
+      // cette taille pleine résolution peut dépasser les limites mémoire/
+      // surface de certains navigateurs mobiles (silencieux : pas d'erreur
+      // JS, juste un canvas vide ou une image mal décodée), et même sans
+      // ça, un buffer RGBA de cette taille ralentit `getImageData` pour rien
+      // — un QR n'a besoin d'aucune haute résolution pour être décodé.
+      // Redimensionné ici à 1280px de long côté max (rapport conservé)
+      // avant analyse.
+      const QR_SCAN_MAX_SIDE = 1280
+      const scale = Math.min(1, QR_SCAN_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight))
       const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth
-      canvas.height = img.naturalHeight
+      canvas.width = Math.round(img.naturalWidth * scale)
+      canvas.height = Math.round(img.naturalHeight * scale)
       const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, 0, 0)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const result = window.jsQR ? window.jsQR(imageData.data, imageData.width, imageData.height) : null
+      const result = window.jsQR ? window.jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' }) : null
       const code = result && extractRoomCodeFromQrText(result.data)
       if (code) {
         roomInput.value = code
         nameInput.focus()
       } else if (qrScanError) {
-        qrScanError.textContent = result ? 'QR code non reconnu comme salle Queazy.' : 'Aucun QR code détecté sur cette photo.'
+        qrScanError.textContent = result
+          ? 'QR code non reconnu comme salle Queazy.'
+          : 'Aucun QR code détecté — réessaie avec le QR bien cadré, net et pas trop loin.'
         qrScanError.classList.remove('d-none')
       }
     }

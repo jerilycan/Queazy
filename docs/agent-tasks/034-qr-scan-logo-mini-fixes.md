@@ -68,6 +68,42 @@ décorations bien groupées), logo complet intact sur desktop.
 - [x] Mini-logo : capture d'écran mobile (rendu correct) + capture desktop
       (logo complet intact, mini absent).
 
+## Suite (retours utilisateur après premier test réel)
+
+### QR : "ça ouvre bien l'appareil photo, mais ça capte rien"
+Root-cause probable (pas 100% reproductible dans ce sandbox, qui a des
+limites mémoire/canvas généreuses même en désactivant le fix) : le code
+décodait la photo à sa résolution CAMÉRA PLEINE (souvent 3000-4000px de
+côté, ~12 Mpx) — un buffer RGBA de cette taille peut dépasser des limites
+mémoire/surface canvas sur certains navigateurs mobiles (échec silencieux,
+pas d'erreur JS) et ralentit `getImageData` pour rien, un QR n'ayant besoin
+d'aucune haute résolution. Corrigé : photo redimensionnée à 1280px de long
+côté max avant analyse (rapport conservé) ; `inversionAttempts:
+'attemptBoth'` explicité (déjà la valeur par défaut de jsQR, mais posée
+sans ambiguïté) ; message d'erreur plus actionnable ("réessaie avec le QR
+bien cadré, net et pas trop loin"). Vérifié en direct avec une photo
+simulée réaliste (3024×4032, QR à ~30% du cadre) : décodage correct via le
+vrai flux (fichier → événement change → `#room` rempli). **Incertitude
+assumée** : je n'ai pas pu reproduire l'échec initial dans ce sandbox
+(desktop, limites généreuses) — cette correction cible la cause la plus
+probable sur un vrai téléphone, à confirmer par l'utilisateur.
+
+### Barre du haut mobile : logo/timer/roue mal alignés
+Bug confirmé et mesuré : `.timer-container` avait `top: 26px` pour une
+piste de 6px de haut (centre à 29px), alors que le logo et la roue sont
+tous deux centrés à 35px. Corrigé : `top: 32px` (32+6/2=35, aligné).
+Vérifié en direct : les 3 éléments centrés exactement à `centerY: 35`.
+
+### Mobile : le contenu (question, champ réponse) remonte trop
+`.timer-container` étant passé en `position:fixed` (tâche 033), il ne
+pousse plus le contenu de `#main` vers le bas comme le faisait l'ancien
+bandeau sticky (retiré du flux normal) — `#main` ne gardait que son
+`margin-top` générique (40px, classe `.mt-40` partagée), laissant à peine
+24px sous la bande du haut. `margin-top: 90px` posé spécifiquement pour ce
+contexte (joueur IRL/à distance, mobile) — `.mt-40` reste inchangé
+partout ailleurs. Vérifié en direct : `#main` démarre maintenant à 130px
+(au lieu de 80px), capture d'écran confirmant un espacement confortable.
+
 ## Risques restants
 - QR : jsQR chargé depuis jsdelivr (cdnjs ne l'héberge pas) — à surveiller
   si ce CDN venait à changer de politique de disponibilité.

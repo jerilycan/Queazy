@@ -8209,11 +8209,16 @@ body.irl-player-mode .irl-mini-logo, body.remote-player-mode .irl-mini-logo { di
      .container #timerContainer plus haut dans ce fichier) : fond/ombre/flou
      retirés, piste réduite à 6px, temps écrit à côté plutôt que dans une
      pastille. left/right calculés pour rester entre le logo (~76px) et la
-     roue (~66px de marge, elle-même 42px + 14px de marge droite). */
+     roue (~66px de marge, elle-même 42px + 14px de marge droite).
+     top:32px (pas 26px) : bug retour utilisateur ("les 3 éléments du haut
+     ne sont pas alignés") — la piste fait 6px de haut, centrée sur cette
+     bande (logo/roue centrés à 35px, voir leurs propres règles) donne
+     32px + 6px/2 = 35px, aligné. 26px (l'ancienne valeur) centrait la
+     piste à 29px, 6px plus haut que les deux autres éléments. */
   body.irl-player-mode .timer-container,
   body.remote-player-mode .timer-container {
     position: fixed;
-    top: 26px;
+    top: 32px;
     left: 76px;
     right: 66px;
     z-index: 500;
@@ -8251,6 +8256,19 @@ body.irl-player-mode .irl-mini-logo, body.remote-player-mode .irl-mini-logo { di
     margin-left: 8px;
     font-size: 12px;
     color: var(--color-text);
+  }
+  /* Retour utilisateur ("le champ pour répondre remonte trop, il faut
+     laisser respirer l'application") : la barre du haut est passée en
+     position:fixed (retirée du FLUX normal, voir .timer-container
+     ci-dessus) — #main (question, image, zone de réponse) ne "sait" donc
+     plus qu'il faut laisser de la place sous elle, contrairement à l'ancien
+     bandeau sticky qui poussait naturellement le contenu en occupant sa
+     propre place dans le flux. #main garde son mt-40 (40px, générique,
+     partagé) partout ailleurs — augmenté ICI seulement, pour cette bande
+     fixe (bas de roue/logo ≈56px + marge de respiration). */
+  body.irl-player-mode #main,
+  body.remote-player-mode #main {
+    margin-top: 90px;
   }
 }
 @keyframes irl-logo-breathe-left {
