@@ -111,13 +111,15 @@ bon état une fois la partie lancée.
   question) — pas d'amélioration demandée pour ce cas précis, mais à
   surveiller si jugé trop sobre à l'usage réel.
 
-## Suite (tâche 032 bis)
+## Suite (tâches 032 bis puis 033)
 Retour utilisateur juste après le premier `push`/`merge` : "il nous faut
 quand même avoir la réponse à la fin des réponses joueurs" — `#inputArea`
-reste masqué PENDANT la question, mais redevient visible (classe
-`.irl-reveal-answer`) à `question:reveal`, retiré à la question suivante
-(`clearRevealState`). Voir [032-multi-sujets.md](032-multi-sujets.md) pour
-le détail et la vérification en direct.
+un temps redevenu visible (`.irl-reveal-answer`) à `question:reveal`.
+**Revenu en arrière en tâche 033** : retour utilisateur suivant ("l'affichage
+doit être textuel" + "pas d'éléments de jeu côté MJ") — `#inputArea` reste
+maintenant masqué EN PERMANENCE (pendant ET après la question) ; un nouvel
+élément `#irlAnswerRecap` affiche un résumé TEXTE à la révélation à la
+place. Voir [033-multi-sujets-2.md](033-multi-sujets-2.md) pour le détail.
 
 ## Statut
 `en review`

@@ -1159,7 +1159,17 @@
           <div id="revealAnswerText" class="reveal-answer d-none"></div>
           <div id="myResultBanner" class="my-result-banner d-none"></div>
         </div>
-        
+        <!-- Tâche 033 (retour utilisateur, en réaction à la tâche 031/032) :
+             "il ne doit pas y avoir d'éléments de jeu côté MJ, seulement la
+             question et l'image" + "l'affichage des réponses doit être
+             textuel, pas visuel". #inputArea contient les VRAIES tuiles de
+             jeu (donc reste masqué en permanence pour l'hôte présentateur
+             IRL, y compris à la révélation, voir style.css
+             body.irl-presenter-mode) — ce panneau, lui, SIBLING de
+             #inputArea (jamais masqué avec lui), affiche un simple RÉSUMÉ
+             TEXTE de la réponse à la révélation (voir buildIrlAnswerRecap,
+             index.js), jamais visible pendant la question elle-même. -->
+        <div id="irlAnswerRecap" class="irl-answer-recap d-none"></div>
         <div id="log" class="log-message"></div>
       </div>
       </div>
@@ -1285,6 +1295,24 @@
          playBonusAudio). Aucun contrôle visible, mêmes règles de mute
          IRL/à distance que #revealAudioPlayer juste au-dessus. -->
     <audio id="bonusAudioPlayer" class="d-none"></audio>
+    <!-- Tâche 033 (retour utilisateur : "le son pendant la question était
+         trop fort") : petite icône flottante, visible UNIQUEMENT pendant que
+         ce son joue (voir index.js playBonusAudio/stopBonusAudio) — clic
+         pour révéler un mini curseur de volume LOCAL (jamais envoyé au
+         serveur, comme .blindtest-volume-row), pas de visualiseur ni
+         d'appareillage supplémentaire, volontairement minimal comme le
+         reste de ce lecteur. -->
+    <div id="bonusAudioVolumeControl" class="bonus-audio-volume-control d-none">
+      <button type="button" id="bonusAudioVolumeBtn" class="bonus-audio-volume-btn" title="Volume du son" aria-label="Régler le volume du son">🔊</button>
+      <div id="bonusAudioVolumePopover" class="bonus-audio-volume-popover d-none">
+        <span aria-hidden="true">🔉</span>
+        <div id="bonusAudioVolumeTrack" class="volume-track">
+          <div id="bonusAudioVolumeFill" class="volume-fill"></div>
+          <div id="bonusAudioVolumeThumb" class="volume-thumb"></div>
+        </div>
+        <span aria-hidden="true">🔊</span>
+      </div>
+    </div>
 
     <!-- Tâche 025 : popup d'ajustement manuel de score par le MJ (mode
          "Présenter" uniquement, voir renderLiveClassementDock côté index.js

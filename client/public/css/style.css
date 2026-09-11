@@ -3316,6 +3316,50 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   font-size: 15px;
 }
 
+/* Tâche 033 (retour utilisateur : "le son pendant la question était trop
+   fort") : petite icône flottante pour le son facultatif (#bonusAudioPlayer,
+   tâche 027) — visible UNIQUEMENT pendant que ce son joue (toggle en JS,
+   voir playBonusAudio/stopBonusAudio). Coin bas-droit : seul endroit
+   encore libre (badge type en haut-gauche, timer centré, récap/roue
+   crantée en haut-droite). */
+.bonus-audio-volume-control {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 520;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.bonus-audio-volume-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--gradient-card);
+  color: var(--color-text);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.bonus-audio-volume-btn:hover { transform: scale(1.06); }
+.bonus-audio-volume-popover {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  font-size: 14px;
+}
+
 /* Curseur de volume "maison" (div + pointer events, voir index.js
    wireVolumeSlider) plutôt qu'un <input type="range"> restylé : ce dernier
    souffrait d'un vrai bug visuel cross-navigateur (le halo de la règle
@@ -4113,8 +4157,17 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
        capture — beaucoup d'espace vide sous "Ambiance"), le compromis
        scroll-invisible n'a plus lieu d'être. Si un débordement réapparaît
        un jour (contenu plus riche), revoir plutôt la hauteur de .container/
-       #stageWrap que de réintroduire un scroll caché ici. */
-    overflow-y: visible;
+       #stageWrap que de réintroduire un scroll caché ici.
+       BUG trouvé (retour utilisateur : "peut être scrollée alors que je
+       t'ai demandé de le retirer") : `overflow-y: visible` seul ne suffit
+       pas — .card (classe de base sur #hostPanel) pose `overflow: hidden`
+       sur les DEUX axes ; cette règle ne réécrivait que Y, laissant
+       overflow-x à `hidden`. Or la spec CSS recalcule un axe "visible" en
+       "auto" dès que l'autre axe ne l'est pas (overflow-x/-y ne peuvent pas
+       diverger sur ce point précis) — d'où une vraie scrollbar malgré la
+       valeur déclarée. Corrigé en posant le raccourci `overflow` sur les
+       deux axes à la fois. */
+    overflow: visible;
     /* Retour utilisateur (capture d'écran) : "la tuile gauche devrait
        changer de design pour coller à celle de droite" (#liveClassementDock,
        plus bas) — liseré rose (.border-accent-left, posé en dur dans le
@@ -5238,8 +5291,6 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   border: 2px solid rgba(var(--color-accent-rgb), 0.4);
   box-shadow: var(--shadow-lg);
   box-sizing: border-box;
-  perspective: 1200px;
-  transform-style: preserve-3d;
 }
 /* Bouton de fermeture manuelle (retour utilisateur, tâche 019 v2) : tout le
    monde (hôte ET joueurs) peut fermer la popup avant la fin du délai auto —
@@ -5278,13 +5329,26 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .reveal-popup-card > .reveal-media-img-wrap {
   margin-top: 0;
 }
+/* Bug identifié (retour utilisateur : "pas d'affichage de la révélation sur
+   téléphone") : l'ancienne animation d'entrée était un flip 3D (rotateX)
+   posé sur .reveal-popup-card LUI-MÊME, avec perspective/transform-style
+   posés sur ce même élément — deux défauts CSS qui se cumulent : (1)
+   `perspective` ne donne de la profondeur qu'aux transforms 3D des
+   ENFANTS, pas à celui de l'élément qui la porte, donc sans effet réel ici ;
+   (2) `overflow-y: auto` (nécessaire, une longue explication doit pouvoir
+   défiler) force le `transform-style` calculé à `flat` quel que soit ce qui
+   est déclaré (spec CSS Transforms) — `preserve-3d` était donc silencieusement
+   ignoré. Le rendu du rotateX devenait alors imprévisible selon
+   navigateur/GPU, certains mobiles rendant la carte quasi invisible pendant
+   toute l'animation. Remplacé par une entrée 2D simple (fondu + léger zoom
+   + léger décalage vertical), robuste partout, sans dépendre d'un contexte
+   3D fragile. */
 .reveal-popup-card.popup-enter {
-  animation: revealPopupFlipIn 0.6s cubic-bezier(.25,.9,.35,1) both;
+  animation: revealPopupPopIn 0.4s cubic-bezier(.25,.9,.35,1) both;
 }
-@keyframes revealPopupFlipIn {
-  0% { transform: rotateX(-100deg); opacity: 0; }
-  55% { opacity: 1; }
-  100% { transform: rotateX(0deg); opacity: 1; }
+@keyframes revealPopupPopIn {
+  0% { transform: translateY(16px) scale(0.94); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .reveal-popup-card.popup-enter { animation: none !important; transform: none !important; opacity: 1 !important; }
@@ -8064,6 +8128,80 @@ body.irl-player-mode .irl-center-logo, body.remote-player-mode .irl-center-logo 
 }
 @media (max-width: 640px) {
   .irl-center-logo { top: 18px; height: 34px; }
+  /* Tâche 033 (retour utilisateur) : "refaire la disposition de la barre
+     d'en haut, avec de gauche à droite logo/barre de temps/roue crantée,
+     barre légère et fine comme dans l'affichage du MJ" — les 3 éléments
+     sont chacun déjà en position:fixed indépendante (logo centré, roue en
+     haut-droite, timer une pleine barre séparée plus bas) : pas de parent
+     flex commun à réutiliser, repositionnés ici chacun par coordonnées
+     fixes alignées sur la MÊME bande verticale (logo 18px+34px de haut ≈
+     centre à 35px ; roue déjà top:14px+42px ≈ centre à 35px). */
+  body.irl-player-mode .irl-center-logo,
+  body.remote-player-mode .irl-center-logo {
+    left: 16px;
+    transform: none;
+  }
+  body.irl-player-mode .irl-center-logo:hover,
+  body.remote-player-mode .irl-center-logo:hover {
+    transform: scale(1.06);
+  }
+  body.irl-player-mode .irl-center-logo:not(:hover),
+  body.remote-player-mode .irl-center-logo:not(:hover) {
+    animation: irl-logo-breathe-left 3.2s ease-in-out infinite;
+  }
+  /* Barre de temps intégrée à cette même bande (au lieu de sa propre carte
+     sticky pleine largeur juste en dessous) — même habillage "fin, sans
+     carte" que la référence régie MJ (voir body.is-host.game-active
+     .container #timerContainer plus haut dans ce fichier) : fond/ombre/flou
+     retirés, piste réduite à 6px, temps écrit à côté plutôt que dans une
+     pastille. left/right calculés pour rester entre le logo (~76px) et la
+     roue (~66px de marge, elle-même 42px + 14px de marge droite). */
+  body.irl-player-mode .timer-container,
+  body.remote-player-mode .timer-container {
+    position: fixed;
+    top: 26px;
+    left: 76px;
+    right: 66px;
+    z-index: 500;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding: 0;
+  }
+  body.irl-player-mode .timer-container .timer-bar-wrapper,
+  body.remote-player-mode .timer-container .timer-bar-wrapper {
+    width: calc(100% - 30px);
+    height: 6px;
+    background: rgba(255,255,255,0.15);
+    border: none;
+    box-shadow: none;
+    border-radius: 999px;
+    overflow: visible;
+  }
+  body.irl-player-mode .timer-container .timer-bar-fill,
+  body.remote-player-mode .timer-container .timer-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+  body.irl-player-mode .timer-container .timer-label,
+  body.remote-player-mode .timer-container .timer-label {
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    right: auto;
+    transform: translateY(-50%);
+    margin-left: 8px;
+    font-size: 12px;
+    color: var(--color-text);
+  }
+}
+@keyframes irl-logo-breathe-left {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
 }
 body.irl-player-mode #illustrationImgWrap { display: none; }
 /* Exception décidée pour "zoomguess" (voir .zoomguess-visible posé côté
@@ -8074,23 +8212,37 @@ body.irl-player-mode #illustrationImgWrap.zoomguess-visible { display: block; }
 /* Retour utilisateur : en IRL, l'hôte PRÉSENTATEUR (jamais joueur, voir
    isPresenterHost() côté index.js — n'inclut jamais le mode "Jouer", où
    l'hôte répond comme un joueur) n'a plus RIEN à montrer du gameplay/des
-   réponses sur son écran PENDANT la question : la salle répond de vive
-   voix/à main levée, pas besoin des tuiles. Toute taille d'écran (pas
-   juste régie desktop) — voir updateIrlPlayerUI, qui pose
-   body.irl-presenter-mode. !important : #inputArea reçoit display:block en
-   inline à CHAQUE question (voir index.js, question:show) — même patron
-   déjà utilisé pour #main/#hostPanel plus haut dans ce fichier, pour la
-   même raison. */
+   réponses sur son écran, ni PENDANT ni APRÈS la question (retour
+   utilisateur tâche 033 : "il ne doit pas y avoir d'éléments de jeu côté
+   MJ, seulement la question et l'image" — #inputArea reste donc masqué EN
+   PERMANENCE ici, y compris à la révélation ; voir #irlAnswerRecap plus
+   bas pour le résumé texte qui remplace les tuiles à la révélation). La
+   salle répond de vive voix/à main levée, pas besoin des tuiles. Toute
+   taille d'écran (pas juste régie desktop) — voir updateIrlPlayerUI, qui
+   pose body.irl-presenter-mode. !important : #inputArea reçoit
+   display:block en inline à CHAQUE question (voir index.js,
+   question:show) — même patron déjà utilisé pour #main/#hostPanel plus
+   haut dans ce fichier, pour la même raison. */
 body.irl-presenter-mode #inputArea { display: none !important; }
-/* Tâche 032 bis (retour utilisateur, juste après la tâche 031 ci-dessus) :
-   "il nous faut quand même avoir la réponse à la fin des réponses
-   joueurs" — .irl-reveal-answer (posée par index.js à question:reveal,
-   retirée à la question suivante) lève le masquage ci-dessus une fois la
-   question terminée, pour que le rendu de révélation déjà construit par
-   type (tuiles correct-reveal/incorrect-reveal, etc.) redevienne visible.
-   Spécificité (ID + 2 classes > ID + 1 classe) suffit à l'emporter sur la
-   règle !important ci-dessus sans avoir besoin d'un second !important. */
-body.irl-presenter-mode #inputArea.irl-reveal-answer { display: block !important; }
+/* Tâche 033 : résumé TEXTE (pas les tuiles de jeu) de la réponse, affiché
+   uniquement à la révélation (peuplé par buildIrlAnswerRecap, index.js,
+   vidé par clearRevealState à la question suivante) — sibling de
+   #inputArea, jamais masqué avec lui. Style volontairement sobre/plat
+   (pas de fond en tuile façon jeu), dans l'esprit du récap hôte
+   (.question-recap-*). */
+body.irl-presenter-mode #irlAnswerRecap {
+  display: block;
+  max-width: 700px;
+  margin: var(--space-lg) auto 0;
+  padding: 18px 24px;
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+}
 .irl-menu-btn {
   display: none;
   /* z-index 1200 (pas 200) : au-dessus de #recapSidebarToggle (1100,

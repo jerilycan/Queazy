@@ -728,6 +728,11 @@ const revealPopupBadge = document.getElementById('revealPopupBadge')
 // la popup (voir index.html) — #revealAnswerText reste la source de vérité,
 // remplie par revealFreeAnswer/revealBlindTestAnswer plus bas.
 const revealPopupAnswerTitle = document.getElementById('revealPopupAnswerTitle')
+// Tâche 033 : résumé TEXTE de la réponse pour l'hôte présentateur IRL à la
+// révélation (voir buildIrlAnswerRecap plus bas) — jamais les tuiles de jeu
+// elles-mêmes (#inputArea reste masqué en permanence pour lui, voir
+// style.css body.irl-presenter-mode).
+const irlAnswerRecap = document.getElementById('irlAnswerRecap')
 const revealPopupCloseBtn = document.getElementById('revealPopupCloseBtn')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
@@ -771,6 +776,15 @@ const blindtestArtistInput = document.getElementById('blindtestArtistInput')
 const blindtestVolumeTrack = document.getElementById('blindtestVolumeTrack')
 const blindtestVolumeFill = document.getElementById('blindtestVolumeFill')
 const blindtestVolumeThumb = document.getElementById('blindtestVolumeThumb')
+// Tâche 033 : icône + mini curseur de volume pour le son facultatif
+// (#bonusAudioPlayer, tâche 027) — voir playBonusAudio/stopBonusAudio plus
+// bas, qui pose la valeur réelle sur bonusAudioPlayer.volume.
+const bonusAudioVolumeControl = document.getElementById('bonusAudioVolumeControl')
+const bonusAudioVolumeBtn = document.getElementById('bonusAudioVolumeBtn')
+const bonusAudioVolumePopover = document.getElementById('bonusAudioVolumePopover')
+const bonusAudioVolumeTrack = document.getElementById('bonusAudioVolumeTrack')
+const bonusAudioVolumeFill = document.getElementById('bonusAudioVolumeFill')
+const bonusAudioVolumeThumb = document.getElementById('bonusAudioVolumeThumb')
 // Question "révélation" : deux <img> empilées (voir index.html/style.css) —
 // l'énigme, visible dès le début, et la réponse, qui ne reçoit son .src
 // qu'au moment de timer:end (jamais avant, voir server/index.js) puis
@@ -3088,18 +3102,40 @@ const stopBlindTestAudio = () => {
 // repli dédiée). Jamais sollicité pour une question "blindtest" (voir
 // question:show plus bas) : q.audio y est déjà géré par
 // buildBlindTestArea/blindtestAudio, aucun risque de double lecture.
-const BONUS_AUDIO_VOLUME_PCT = 70
+// Tâche 033 (retour utilisateur : "le son pendant la question était trop
+// fort") : volume réglable, plus une constante fixe — même patron que
+// BLINDTEST_VOLUME_KEY juste au-dessus (curseur "maison" wireVolumeSlider,
+// réglage LOCAL au joueur, jamais envoyé au serveur, persisté en
+// localStorage). Icône flottante (#bonusAudioVolumeControl) visible
+// UNIQUEMENT pendant que ce son joue — masquée le reste du temps, pour
+// rester volontairement minimal comme le reste de ce lecteur (voir
+// commentaire au-dessus).
+const BONUS_AUDIO_VOLUME_KEY = 'queazy_bonus_audio_volume'
+const getMyBonusAudioVolumePct = () => {
+  const saved = localStorage.getItem(BONUS_AUDIO_VOLUME_KEY)
+  return saved !== null ? Math.min(100, Math.max(0, Number(saved))) : null
+}
+const bonusAudioVolumeSlider = wireVolumeSlider(bonusAudioVolumeTrack, bonusAudioVolumeFill, bonusAudioVolumeThumb, getMyBonusAudioVolumePct() ?? 70, (pct) => {
+  localStorage.setItem(BONUS_AUDIO_VOLUME_KEY, String(pct))
+  if (bonusAudioPlayer) bonusAudioPlayer.volume = Math.min(1, Math.max(0, pct / 100))
+})
+if (bonusAudioVolumeBtn) {
+  bonusAudioVolumeBtn.onclick = () => bonusAudioVolumePopover?.classList.toggle('d-none')
+}
 const playBonusAudio = (audioUrl, mode) => {
   if (!bonusAudioPlayer || !audioUrl) return
   bonusAudioPlayer.muted = mode === 'remote' ? false : !isHost
-  bonusAudioPlayer.volume = BONUS_AUDIO_VOLUME_PCT / 100
+  bonusAudioPlayer.volume = Math.min(1, Math.max(0, bonusAudioVolumeSlider.getPct() / 100))
   bonusAudioPlayer.pause()
   bonusAudioPlayer.currentTime = 0
   bonusAudioPlayer.src = audioUrl
   bonusAudioPlayer.play().catch(() => {})
+  bonusAudioVolumeControl?.classList.remove('d-none')
 }
 const stopBonusAudio = () => {
   if (bonusAudioPlayer) bonusAudioPlayer.pause()
+  bonusAudioVolumeControl?.classList.add('d-none')
+  bonusAudioVolumePopover?.classList.add('d-none')
 }
 
 const revealBlindTestAnswer = (correctTitle, correctArtist) => {
@@ -3237,10 +3273,12 @@ socket.on('score:adjust', ({ playerId, total }) => {
 
 const clearRevealState = () => {
   closeRevealPopup()
-  // Tâche 032 bis : retire l'exception posée à la révélation précédente
-  // (voir question:reveal) — #inputArea redevient masqué pour la NOUVELLE
-  // question tant qu'elle n'est pas elle-même révélée.
-  if (inputArea) inputArea.classList.remove('irl-reveal-answer')
+  // Tâche 033 : vide le résumé texte posé à la révélation précédente (voir
+  // buildIrlAnswerRecap dans question:reveal) — jamais montré pendant la
+  // question suivante tant qu'elle n'est pas elle-même révélée. #inputArea,
+  // lui, reste masqué en permanence pour l'hôte présentateur IRL (voir
+  // style.css) — plus d'exception à retirer ici depuis ce changement.
+  if (irlAnswerRecap) { irlAnswerRecap.classList.add('d-none'); irlAnswerRecap.innerHTML = '' }
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
   if (revealPopupAnswerTitle) { revealPopupAnswerTitle.classList.add('d-none'); revealPopupAnswerTitle.innerHTML = '' }
@@ -3861,7 +3899,17 @@ const resetUI = () => {
       el.style.display = 'none'
     }
   })
-  
+  // #questionTypeBadge/#questionCategoryBadge (retour utilisateur : "au
+  // retour sur le menu, j'ai toujours l'icône du type de question en haut
+  // à gauche") : position:fixed, donc PAS couvert par la boucle `panels`
+  // ci-dessus (qui ne cache que des panneaux dans le flux normal) — déjà
+  // géré dans showJoinPanel()/showLobby() (voir hideQuestionTypeBadge plus
+  // haut dans ce fichier), mais oublié ici alors que resetUI() est LA
+  // fonction canonique de retour au menu (room:closed, player:kicked,
+  // "Quitter le salon"...).
+  hideQuestionTypeBadge()
+  hideQuestionCategoryBadge()
+
   // Show join panel
   if (joinCard) {
     joinCard.classList.remove('d-none')
@@ -8087,16 +8135,6 @@ socket.on('question:reveal', payload => {
   // désormais le SEUL signal de fin de question, pour tous les types).
   isModerationPending = false
   hideModerationWait()
-  // Tâche 032 bis (retour utilisateur, en réaction directe à la tâche 031) :
-  // #inputArea masqué pendant toute la question en IRL présentateur (voir
-  // body.irl-presenter-mode) mais la RÉPONSE doit quand même apparaître une
-  // fois les joueurs passés — .irl-reveal-answer lève ce masquage
-  // spécifiquement ici (voir style.css), réutilisant TEL QUEL le rendu de
-  // révélation déjà construit par type (tuiles correct-reveal/incorrect-
-  // reveal, etc.) plutôt que de dupliquer un résumé texte générique par
-  // type. Retirée à la question suivante par clearRevealState (voir
-  // question:show, qui l'appelle en tout début de handler).
-  if (inputArea) inputArea.classList.add('irl-reveal-answer')
   // Popup plein écran (tâche 019) : ouverte ICI, tout en haut du handler,
   // AVANT toutes les branches par type ci-dessous. Historique : v3 la
   // réservait aux types sans feedback spatial riche ; v4 l'a rouverte
@@ -8385,6 +8423,28 @@ socket.on('question:reveal', payload => {
   if (hasRevealPopupContent && revealPopupAnswerTitle && revealAnswerText && !revealAnswerText.classList.contains('d-none')) {
     revealPopupAnswerTitle.innerHTML = revealAnswerText.innerHTML
     revealPopupAnswerTitle.classList.remove('d-none')
+  }
+  // Résumé TEXTE pour l'hôte présentateur IRL (tâche 033, "l'affichage des
+  // réponses doit être textuel, pas visuel" + "seulement la question et
+  // l'image") : même miroir que le titre de popup juste au-dessus — priorité
+  // à #revealAnswerText (texte libre/indice/blindtest/pbac), sinon les
+  // libellés des tuiles déjà coloriées .correct-reveal (mcq/association/
+  // order/timeline/rangement/graduation...), LUS mais jamais montrés
+  // eux-mêmes (#inputArea reste masqué en permanence pour lui). Types sans
+  // libellé textuel exploitable (image/zoomguess, réponse spatiale) :
+  // reste vide/masqué, pas de résumé inventé.
+  if (irlAnswerRecap && gameMode === 'irl' && isPresenterHost()) {
+    let recapText = ''
+    if (revealAnswerText && !revealAnswerText.classList.contains('d-none') && revealAnswerText.textContent.trim()) {
+      recapText = revealAnswerText.textContent.trim()
+    } else if (inputArea) {
+      const labels = [...inputArea.querySelectorAll('.correct-reveal')].map(el => el.textContent.trim()).filter(Boolean)
+      if (labels.length) recapText = 'Bonne réponse : ' + labels.join(' · ')
+    }
+    if (recapText) {
+      irlAnswerRecap.textContent = recapText
+      irlAnswerRecap.classList.remove('d-none')
+    }
   }
   // Confettis (tâche 019) : réutilisation TELLE QUELLE du déclencheur déjà en
   // place en fin de partie (voir results.js, mêmes réglages) — jamais côté
