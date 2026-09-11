@@ -604,8 +604,10 @@ const QUESTION_TYPE_META = {
   // "Halo" (tâche 020) : hint rédigé pour bien distinguer du type "recherche"
   // juste au-dessus (retour utilisateur, pour un MJ qui hésiterait entre les
   // deux) — ici la révélation est LIMITÉE (5 clics max, permanents) et COÛTE
-  // des points au-delà du 1er clic, pas un balayage continu et gratuit.
-  halo: { icon: '✨', label: 'Halo', color: '#c4b5fd', rgb: '196,181,253', hint: 'Clique jusqu\'à 5 fois sur l\'image noire pour révéler des halos de lumière permanents (chaque clic après le 1er coûte des points), puis valide ta réponse.' }
+  // des points à CHAQUE clic (barème -50/-100/-150/-200/-250, voir
+  // server/index.js HALO_CLICK_PENALTIES — plus de 1er clic gratuit), pas un
+  // balayage continu et gratuit.
+  halo: { icon: '✨', label: 'Halo', color: '#c4b5fd', rgb: '196,181,253', hint: 'Clique jusqu\'à 5 fois sur l\'image noire pour révéler des halos de lumière permanents (chaque clic coûte un peu plus de points), puis valide ta réponse.' }
 }
 // Types dont la mécanique n'est pas évidente au premier coup d'œil (retour
 // utilisateur) : l'intro reste affichée un peu plus longtemps pour ceux-là
@@ -943,6 +945,20 @@ const bonusAudioVolumePopover = document.getElementById('bonusAudioVolumePopover
 const bonusAudioVolumeTrack = document.getElementById('bonusAudioVolumeTrack')
 const bonusAudioVolumeFill = document.getElementById('bonusAudioVolumeFill')
 const bonusAudioVolumeThumb = document.getElementById('bonusAudioVolumeThumb')
+// Retour utilisateur ("réduire le volume de tout ce qui se passe sur
+// l'écran") : fader général HÔTE UNIQUEMENT — au-dessus des curseurs
+// ci-dessus (Blind Test, son bonus), pas à leur place : il les MULTIPLIE
+// (voir hostMasterVolumePct plus bas) plutôt que de les remplacer, chacun
+// garde son propre équilibre relatif. Toujours visible pendant la partie
+// pour l'hôte (contrairement à #bonusAudioVolumeControl, qui n'apparaît que
+// pendant la lecture d'un son précis) — voir son affichage dans
+// socket.on('question:show', ...).
+const hostMasterVolumeControl = document.getElementById('hostMasterVolumeControl')
+const hostMasterVolumeBtn = document.getElementById('hostMasterVolumeBtn')
+const hostMasterVolumePopover = document.getElementById('hostMasterVolumePopover')
+const hostMasterVolumeTrack = document.getElementById('hostMasterVolumeTrack')
+const hostMasterVolumeFill = document.getElementById('hostMasterVolumeFill')
+const hostMasterVolumeThumb = document.getElementById('hostMasterVolumeThumb')
 // Question "révélation" : deux <img> empilées (voir index.html/style.css) —
 // l'énigme, visible dès le début, et la réponse, qui ne reçoit son .src
 // qu'au moment de timer:end (jamais avant, voir server/index.js) puis
@@ -1265,6 +1281,13 @@ let currentIllustrationZoom = null
 // zoom, proportionnel au niveau choisi, et retombe à 0 en même temps que le
 // dézoom atteint scale(1).
 const zoomGuessBlurPx = (startScale) => Math.min(24, Math.max(0, (startScale - 1) * 1.1))
+// Retour utilisateur : le dézoom atteignait pile scale(1) (image complète)
+// au même instant que le chrono à 0 — un joueur qui reconnaissait l'image
+// tout juste à la fin n'avait plus aucun temps pour taper/valider sa
+// réponse. Le dézoom vise désormais scale(1) MOINS TÔT (timerMs moins ce
+// budget), laissant ce temps intact ensuite avec l'image déjà complète et
+// nette — voir son usage dans la boucle de tick plus bas (question:show).
+const ZOOMGUESS_ANSWER_WINDOW_MS = 10000
 
 let selectedMcqOptions = []
 let currentQuestionType = 'free'
@@ -2982,6 +3005,25 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   }
 }
 
+// Volume GÉNÉRAL de l'hôte (retour utilisateur : "réduire le volume de tout
+// ce qui se passe sur l'écran") — LOCAL à son appareil (jamais envoyé au
+// serveur, comme les curseurs par source ci-dessous), persisté pareil.
+// hostMasterVolumePct multiplie le pourcentage de CHAQUE source (Blind
+// Test, son bonus, son de révélation) plutôt que de le remplacer : à 100%
+// (valeur par défaut, jamais touché) le comportement est strictement
+// identique à avant ce fader — voir son utilisation dans
+// blindtestVolumeSlider/bonusAudioVolumeSlider/playBonusAudio/
+// revealAudioPlayer ci-dessous, et son propre curseur tout en bas de ce
+// bloc "Blind Test" (câblé après les deux autres, dont son onChange a
+// besoin pour tout réappliquer en direct).
+const HOST_MASTER_VOLUME_KEY = 'queazy_host_master_volume'
+const getHostMasterVolumePct = () => {
+  const saved = localStorage.getItem(HOST_MASTER_VOLUME_KEY)
+  return saved !== null ? Math.min(100, Math.max(0, Number(saved))) : null
+}
+let hostMasterVolumePct = getHostMasterVolumePct() ?? 100
+const effectiveVolume = (pct) => Math.min(1, Math.max(0, (hostMasterVolumePct / 100) * (pct / 100)))
+
 // Volume LOCAL du joueur, jamais envoyé au serveur — juste pour lui, en cas
 // de son trop fort à son goût. Persisté en localStorage pour ne pas avoir à
 // le refaire à chaque question/partie.
@@ -2992,7 +3034,7 @@ const getMyBlindTestVolumePct = () => {
 }
 const blindtestVolumeSlider = wireVolumeSlider(blindtestVolumeTrack, blindtestVolumeFill, blindtestVolumeThumb, getMyBlindTestVolumePct() ?? 70, (pct) => {
   localStorage.setItem(BLINDTEST_VOLUME_KEY, String(pct))
-  if (blindtestAudio) blindtestAudio.volume = Math.min(1, Math.max(0, pct / 100))
+  if (blindtestAudio) blindtestAudio.volume = effectiveVolume(pct)
   applyBlindTestAudioOutput()
 })
 
@@ -3201,7 +3243,7 @@ const buildBlindTestArea = (audioUrl, mode) => {
   // n'a jamais été enregistrée sur ce navigateur.
   const myVolumePct = getMyBlindTestVolumePct()
   const startVolumePct = myVolumePct !== null ? myVolumePct : 70
-  blindtestAudio.volume = Math.min(1, Math.max(0, startVolumePct / 100))
+  blindtestAudio.volume = effectiveVolume(startVolumePct)
   blindtestVolumeSlider.setPct(startVolumePct)
   applyBlindTestAudioOutput()
 }
@@ -3275,7 +3317,7 @@ const getMyBonusAudioVolumePct = () => {
 }
 const bonusAudioVolumeSlider = wireVolumeSlider(bonusAudioVolumeTrack, bonusAudioVolumeFill, bonusAudioVolumeThumb, getMyBonusAudioVolumePct() ?? 70, (pct) => {
   localStorage.setItem(BONUS_AUDIO_VOLUME_KEY, String(pct))
-  if (bonusAudioPlayer) bonusAudioPlayer.volume = Math.min(1, Math.max(0, pct / 100))
+  if (bonusAudioPlayer) bonusAudioPlayer.volume = effectiveVolume(pct)
 })
 if (bonusAudioVolumeBtn) {
   bonusAudioVolumeBtn.onclick = () => bonusAudioVolumePopover?.classList.toggle('d-none')
@@ -3283,7 +3325,7 @@ if (bonusAudioVolumeBtn) {
 const playBonusAudio = (audioUrl, mode) => {
   if (!bonusAudioPlayer || !audioUrl) return
   bonusAudioPlayer.muted = mode === 'remote' ? false : !isHost
-  bonusAudioPlayer.volume = Math.min(1, Math.max(0, bonusAudioVolumeSlider.getPct() / 100))
+  bonusAudioPlayer.volume = effectiveVolume(bonusAudioVolumeSlider.getPct())
   bonusAudioPlayer.pause()
   bonusAudioPlayer.currentTime = 0
   bonusAudioPlayer.src = audioUrl
@@ -3294,6 +3336,27 @@ const stopBonusAudio = () => {
   if (bonusAudioPlayer) bonusAudioPlayer.pause()
   bonusAudioVolumeControl?.classList.add('d-none')
   bonusAudioVolumePopover?.classList.add('d-none')
+}
+
+// Fader général MJ (voir hostMasterVolumePct plus haut) : câblé ICI, une
+// fois blindtestVolumeSlider/bonusAudioVolumeSlider déjà définis — son
+// onChange doit pouvoir relire leur pourcentage propre pour réappliquer
+// IMMÉDIATEMENT le nouveau volume effectif à toute source déjà en cours de
+// lecture, pas seulement à la prochaine question. revealAudioPlayer n'a pas
+// son propre curseur (voir plus bas, question:show) : le fader général est
+// ici son SEUL réglage de volume.
+const hostMasterVolumeSlider = wireVolumeSlider(hostMasterVolumeTrack, hostMasterVolumeFill, hostMasterVolumeThumb, getHostMasterVolumePct() ?? 100, (pct) => {
+  hostMasterVolumePct = pct
+  localStorage.setItem(HOST_MASTER_VOLUME_KEY, String(pct))
+  if (blindtestAudio) {
+    blindtestAudio.volume = effectiveVolume(blindtestVolumeSlider.getPct())
+    applyBlindTestAudioOutput()
+  }
+  if (bonusAudioPlayer) bonusAudioPlayer.volume = effectiveVolume(bonusAudioVolumeSlider.getPct())
+  if (revealAudioPlayer) revealAudioPlayer.volume = Math.min(1, Math.max(0, hostMasterVolumePct / 100))
+})
+if (hostMasterVolumeBtn) {
+  hostMasterVolumeBtn.onclick = () => hostMasterVolumePopover?.classList.toggle('d-none')
 }
 
 const revealBlindTestAnswer = (correctTitle, correctArtist) => {
@@ -4049,7 +4112,7 @@ const resetUI = () => {
   // utilisateur : "laisse des traces"). Réaffichée par le prochain
   // question:show reçu (voir son handler). 'leaderOverlay' : même raison,
   // pour l'écran de classement plein écran.
-  const panels = ['lobby', 'main', 'leaderOverlay', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle', 'gameProgressInfo']
+  const panels = ['lobby', 'main', 'leaderOverlay', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle', 'gameProgressInfo', 'hostMasterVolumeControl']
   panels.forEach(id => {
     const el = document.getElementById(id)
     if (el) {
@@ -6502,13 +6565,25 @@ socket.on('question:show', payload => {
   // sur plusieurs questions) ne le revoyait plus jamais, question:show étant
   // le seul évènement qui resynchronise alors son écran (retour utilisateur :
   // "je vois pas de panneau récap" en pleine partie, version pourtant à jour).
-  // Ouvert à TOUT LE MONDE désormais (retour utilisateur : "faudrait qu'on
-  // ait les réponses sur la page derrière la popup après aussi, pour pouvoir
-  // discuter des réponses apportées") — auparavant réservé à l'hôte alors que
-  // le serveur diffuse déjà ce récap à toute la salle (voir revealQuestion
-  // côté server/index.js), le panneau restait juste caché côté joueur.
-  showRecapSidebarUi()
-  setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
+  // RÉSERVÉ À L'HÔTE (retour utilisateur, à nouveau) : avait été ouvert à
+  // tout le monde un temps ("faudrait qu'on ait les réponses sur la page
+  // derrière la popup après aussi") — mais le bouton encombrait l'écran
+  // joueur ("ça pollue l'écran"), retour à l'affichage hôte uniquement. Le
+  // serveur continue de diffuser question:recap à toute la salle (voir
+  // revealQuestion côté server/index.js) — rien à changer côté serveur, le
+  // joueur n'a simplement plus le bouton qui donnerait accès au panneau.
+  if (isHost) {
+    showRecapSidebarUi()
+    setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
+    // Fader général (voir hostMasterVolumeSlider) : même resynchronisation à
+    // CHAQUE question que le récap juste au-dessus, même raison (rechargement/
+    // reconnexion en pleine partie) — resetUI() le cache avec .d-none ET un
+    // style.display inline, donc un simple classList.remove ne suffit pas.
+    if (hostMasterVolumeControl) {
+      hostMasterVolumeControl.classList.remove('d-none')
+      hostMasterVolumeControl.style.display = ''
+    }
+  }
   clearRevealState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
@@ -6820,6 +6895,12 @@ socket.on('question:show', payload => {
 
   const start = payload.startTs
   const total = payload.timerMs
+  // Le dézoom "zoomguess" vise scale(1) avant la fin du chrono, pas pile
+  // dessus (voir ZOOMGUESS_ANSWER_WINDOW_MS) — clampé à 0 en repli pour un
+  // minuteur trop court : le dézoom est alors déjà terminé dès le départ
+  // (image nette d'entrée), jamais de division par une durée négative/nulle
+  // dans le tick plus bas.
+  const zoomDuration = currentIllustrationZoom ? Math.max(0, total - ZOOMGUESS_ANSWER_WINDOW_MS) : total
   clearInterval(timerInt)
   myAnsweredCorrectlyThisQuestion = false
   myLastDelta = 0
@@ -6896,11 +6977,13 @@ socket.on('question:show', payload => {
 
     // Dézoom progressif de l'illustration (voir "Zoomer progressivement sur
     // un détail", editor.js) : même tick que la barre de temps ci-dessous,
-    // donc synchronisé sur tous les écrans puisque `remaining`/`total` sont
-    // dérivés du même startTs/timerMs reçus du serveur. Atteint pile scale(1)
-    // (image complète) au même instant que le chrono affiche 0.
+    // donc synchronisé sur tous les écrans puisque `now`/`start`/
+    // zoomDuration sont dérivés du même startTs/timerMs reçus du serveur.
+    // Atteint scale(1) (image complète) ZOOMGUESS_ANSWER_WINDOW_MS avant la
+    // fin du chrono (voir sa définition, et zoomDuration plus haut) — pas
+    // pile dessus — pour laisser ce temps au joueur avec l'image déjà nette.
     if (currentIllustrationZoom && illustrationImg) {
-      const progress = Math.min(1, 1 - remaining / total)
+      const progress = zoomDuration > 0 ? Math.min(1, (now - start) / zoomDuration) : 1
       const scale = currentIllustrationZoom.startScale + (1 - currentIllustrationZoom.startScale) * progress
       illustrationImg.style.transform = `scale(${scale})`
       illustrationImg.style.filter = `blur(${zoomGuessBlurPx(currentIllustrationZoom.startScale) * (1 - progress)}px)`
@@ -8349,6 +8432,10 @@ socket.on('question:reveal', payload => {
     // — sans ce mute, chaque téléphone joueur aurait rejoué le son en même
     // temps que l'hôte.
     revealAudioPlayer.muted = gameMode === 'remote' ? false : !isHost
+    // Pas de curseur dédié pour ce son (contrairement à Blind Test/son
+    // bonus) — le fader général MJ (hostMasterVolumePct) est son SEUL
+    // réglage de volume, voir hostMasterVolumeSlider plus haut.
+    revealAudioPlayer.volume = Math.min(1, Math.max(0, hostMasterVolumePct / 100))
     // Politique autoplay des navigateurs (risque connu, documenté dans la
     // tâche 017 — pas de mécanique de repli ici) : certains joueurs, selon
     // leur historique d'interaction, verront le son bloqué silencieusement.
@@ -8435,6 +8522,16 @@ socket.on('question:reveal', payload => {
     }
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
+    // Retour utilisateur : "la bonne réponse ne s'affiche pas... il devrait
+    // y avoir un texte avec la bonne réponse, comme dans le récap" — le
+    // pouce du curseur se déplaçait bien sur la bonne valeur (voir
+    // positionGradTargetMarker juste au-dessus) mais rien ne l'écrivait en
+    // toutes lettres, contrairement aux autres types. Réutilise TEL QUEL
+    // revealFreeAnswer (même mécanisme que free/indice/blindtest/pbac) :
+    // affiche "Bonne réponse : X" à plat ET alimente par ricochet le titre
+    // de la popup de révélation et le récap texte de l'hôte IRL, qui
+    // reprennent déjà ce même #revealAnswerText.
+    revealFreeAnswer(payload.target)
     // Scoring BINAIRE (retour utilisateur : "c'est beaucoup trop de
     // points" — un écart largement hors tolérance rapportait encore des
     // centaines de points via l'ancienne courbe de proximité) : dans la

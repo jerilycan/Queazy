@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.24.0'
+const APP_VERSION = '2.25.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -981,14 +981,19 @@ const start = async () => {
   // "halo" (tâche 020) : jusqu'à 5 clics pour révéler l'image (cumulatif,
   // voir index.js), chacun laissant un halo permanent — barème DÉGRESSIF
   // FIXE (même barème pour tous les quiz, décidé avec l'utilisateur, pas un
-  // réglage par question comme le rayon du halo), 1er clic gratuit puis
-  // -100/-200/-300/-400. HALO_CLICK_PENALTIES[i] = coût du (i+1)-ème clic ;
-  // la pénalité totale pour n clics = la somme des n premières valeurs. La
-  // pénalité s'applique en la RETRANCHANT du score obtenu (pointsFor(...)),
-  // jamais comme un montant absolu indépendant de la vitesse de réponse —
-  // voir answer:submit plus bas, juste après `const res = fuzzy(...)`.
+  // réglage par question comme le rayon du halo) : -50/-100/-150/-200/-250,
+  // plus de clic gratuit (retour utilisateur : l'ancien barème, 1er clic
+  // gratuit puis -100/-200/-300/-400, sommait pile 1000 sur 5 clics — un
+  // joueur qui avait tout révélé ET deviné juste repartait quand même avec
+  // 0 point, ce qui se lit comme "correct" partout dans l'UI, y compris le
+  // récap hôte, sans jamais l'annoncer). HALO_CLICK_PENALTIES[i] = coût du
+  // (i+1)-ème clic ; la pénalité totale pour n clics = la somme des n
+  // premières valeurs (750 max sur 5 clics), retranchée de haloBasePoints
+  // (montant FIXE, voir answer:submit — pas de composante vitesse pour ce
+  // type). Une bonne réponse garde donc toujours au moins 250 points, même
+  // après avoir tout révélé.
   const HALO_MAX_CLICKS = 5
-  const HALO_CLICK_PENALTIES = [0, 100, 200, 300, 400]
+  const HALO_CLICK_PENALTIES = [50, 100, 150, 200, 250]
 
   // Une zone stockée est soit un polygone { points:[{x,y},...] } (nouveau
   // format, tracé à main levée), soit un rectangle legacy { x0,y0,x1,y1 }
@@ -2331,9 +2336,10 @@ const start = async () => {
       // compte de clics, clampé ici) — 0 pour tous les autres types, qui
       // partagent cette même branche générique (free/zoomguess/reveal/
       // recherche/indice). Pénalité = somme des N premières valeurs de
-      // HALO_CLICK_PENALTIES (1er clic gratuit), appliquée identiquement que
-      // la réponse soit auto-validée juste en dessous OU mise en file de
-      // modération (voir le "else" plus bas).
+      // HALO_CLICK_PENALTIES (aucun clic gratuit, voir sa définition plus
+      // haut), appliquée identiquement que la réponse soit auto-validée
+      // juste en dessous OU mise en file de modération (voir le "else" plus
+      // bas).
       // Retour utilisateur : PAS de composante vitesse pour "halo" (score
       // gagné = 475 alors que la seule variable annoncée était le nombre de
       // clics — décompte de vitesse jugé peu lisible ici, contrairement aux

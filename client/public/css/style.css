@@ -2437,8 +2437,17 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 /* <select> d'assignation de zone côté éditeur (voir editor.js
    renderRangementItems) — classe dédiée plutôt que .qz-select, réservée à
    un tout autre composant (menu déroulant "maison"), pas un <select>
-   natif. Même recette visuelle que #qType (voir plus bas), simplifiée. */
+   natif. Même recette visuelle que #qType (voir plus bas), simplifiée —
+   MAIS sans son `width: 100%` : ce select vit dans une ligne flex
+   (.option-row) à côté du champ "Titre de la carte" (flex: 1, voir
+   .option-row input[type="text"] plus haut). Sans width: auto ici, la
+   règle générique `select { width: 100%; ... }` plus bas dans ce fichier
+   s'appliquait quand même (jamais neutralisée faute de la redéfinir) : le
+   select prenait ~90% de la ligne et le champ titre devenait inutilisable
+   (retour utilisateur, bug réel constaté). */
 .rangement-zone-select {
+  width: auto;
+  flex: 0 0 auto;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
@@ -3358,6 +3367,24 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   border-radius: 999px;
   box-shadow: var(--shadow-md);
   font-size: 14px;
+}
+
+/* Fader général MJ (retour utilisateur : "réduire le volume de tout ce qui
+   se passe sur l'écran", voir index.html/index.js) — même bouton rond +
+   popover pilule que .bonus-audio-volume-control juste au-dessus (classes
+   réutilisées telles quelles pour #hostMasterVolumeBtn/#hostMasterVolumePopover,
+   voir index.html), seule la position/l'alignement changent : coin bas-
+   GAUCHE (bas-droit déjà pris par .bonus-audio-volume-control) et popover
+   aligné à gauche plutôt qu'à droite. */
+.host-master-volume-control {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 520;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 /* Curseur de volume "maison" (div + pointer events, voir index.js

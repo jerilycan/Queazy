@@ -482,7 +482,7 @@ const revealAudioUploadInput = document.getElementById('revealAudioUpload')
 const revealAudioPreviewWrap = document.getElementById('revealAudioPreviewWrap')
 const revealAudioPreviewPlayer = document.getElementById('revealAudioPreviewPlayer')
 const removeRevealAudioBtn = document.getElementById('removeRevealAudioBtn')
-const REVEAL_AUDIO_MAX_DURATION = 15 // secondes — plafond dur, refusé (pas tronqué) au-delà
+const REVEAL_AUDIO_MAX_DURATION = 15 // secondes — durée max sélectionnable dans la popup de découpe (voir openRevealAudioTrimModal), quelle que soit la longueur du fichier importé
 
 // Son (Blind Test + tâche 027, facultatif sur les autres types) : upload du
 // morceau + recadrage (début/durée) en un extrait court, encodé en WAV mono
@@ -1658,31 +1658,25 @@ if (revealAudioUploadInput) {
       showToast('Ce fichier n\'est pas un son', 'error')
       return
     }
-    // Durée lue via un <audio> temporaire (jamais côté serveur) : un fichier
-    // déjà ≤15s est accepté directement tel quel (dataURL, aucun ré-encodage,
-    // comportement inchangé depuis la tâche 017) ; au-delà, on ouvre
-    // désormais une popup de découpe (tâche 018, voir openRevealAudioTrimModal
-    // plus bas) plutôt qu'un refus sec — l'utilisateur choisit quelle portion
-    // de REVEAL_AUDIO_MAX_DURATION garder.
+    // Popup de découpe systématique (tâche 018, voir openRevealAudioTrimModal
+    // plus bas) — plus de "fichier déjà ≤15s accepté tel quel sans passer par
+    // la popup" (retour utilisateur : un son de 5s importé ne pouvait alors
+    // JAMAIS être raccourci, la popup ne s'ouvrant que si le fichier dépassait
+    // REVEAL_AUDIO_MAX_DURATION). La popup gère déjà très bien un fichier plus
+    // court que le plafond (voir son clampInputs : la durée par défaut se
+    // cale sur la piste importée, jamais au-delà) — juste jamais atteignable
+    // avant faute d'être proposée. Durée lue via un <audio> temporaire
+    // (jamais côté serveur) uniquement pour rejeter tôt un fichier illisible.
     const probe = new Audio()
     const objectUrl = URL.createObjectURL(file)
     probe.preload = 'metadata'
     probe.onloadedmetadata = () => {
       URL.revokeObjectURL(objectUrl)
-      if (probe.duration > REVEAL_AUDIO_MAX_DURATION) {
-        openRevealAudioTrimModal(file, (dataUrl) => {
-          if (!questions[activeIndex]) return
-          questions[activeIndex].revealAudio = dataUrl
-          populateRevealMediaFields(questions[activeIndex])
-        })
-        return
-      }
-      const reader = new FileReader()
-      reader.onload = () => {
-        questions[activeIndex].revealAudio = reader.result
+      openRevealAudioTrimModal(file, (dataUrl) => {
+        if (!questions[activeIndex]) return
+        questions[activeIndex].revealAudio = dataUrl
         populateRevealMediaFields(questions[activeIndex])
-      }
-      reader.readAsDataURL(file)
+      })
     }
     probe.onerror = () => {
       URL.revokeObjectURL(objectUrl)
@@ -1970,10 +1964,11 @@ const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
   reader.readAsDataURL(blob)
 })
 
-// Popup de découpe pour le son de révélation (tâche 018) : un fichier trop
-// long (> REVEAL_AUDIO_MAX_DURATION) n'est plus rejeté sec (voir
-// revealAudioUploadInput.onchange plus bas) — cette popup laisse choisir
-// QUELLE portion de REVEAL_AUDIO_MAX_DURATION garder, même principe que le
+// Popup de découpe pour le son de révélation (tâche 018) : ouverte pour
+// TOUT fichier importé (retour utilisateur — un son déjà court, ex. 5s,
+// doit pouvoir être raccourci lui aussi, pas seulement un fichier trop long)
+// — cette popup laisse choisir QUELLE portion de REVEAL_AUDIO_MAX_DURATION
+// garder, même principe que le
 // composant Blind Test (#audioTrimWrap, forme d'onde, poignées, WAV mono)
 // mais AUTONOME : ses propres éléments DOM créés à la volée dans un overlay
 // (comme openImageCropModal), pas de branchement sur pendingAudioBuffer/
@@ -1999,7 +1994,7 @@ const openRevealAudioTrimModal = (file, onConfirm) => {
   overlay.innerHTML = `
     <div class="modal-content card max-w-500">
       <h2 class="mb-md font-20">Découper le son de révélation</h2>
-      <p class="text-muted font-13 mb-md">Ce son dépasse ${REVEAL_AUDIO_MAX_DURATION}s — choisis la portion à garder (${REVEAL_AUDIO_MAX_DURATION}s max).</p>
+      <p class="text-muted font-13 mb-md">Choisis la portion à garder (${REVEAL_AUDIO_MAX_DURATION}s max).</p>
       <div class="audio-trim-wrap">
         <div class="audio-waveform reveal-trim-waveform">
           <div class="audio-waveform-bars"></div>
@@ -2048,6 +2043,12 @@ const openRevealAudioTrimModal = (file, onConfirm) => {
   player.src = objectUrl
 
   const cleanup = () => {
+    // pause() explicite avant de détacher l'overlay (voir le même correctif
+    // sur audioExtractBtn/populateAudioFields pour le son bonus/Blind Test) :
+    // retirer l'élément du DOM ne garantit pas à lui seul l'arrêt immédiat
+    // d'une lecture déjà en cours (aperçu lancé via "▶ Écouter cet extrait"
+    // juste au-dessus) sur tous les navigateurs.
+    player.pause()
     if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null }
     if (previewTimeout) clearTimeout(previewTimeout)
   }
@@ -2246,8 +2247,16 @@ const populateAudioFields = (q) => {
   // question, comme n'importe quel autre champ non validé de l'éditeur.
   if (pendingAudioObjectUrl) { URL.revokeObjectURL(pendingAudioObjectUrl); pendingAudioObjectUrl = null }
   pendingAudioBuffer = null
+  if (audioPreviewTimeout) { clearTimeout(audioPreviewTimeout); audioPreviewTimeout = null }
+  // pause() explicite AVANT de retirer la source (retour utilisateur : sur
+  // un import long, ex. 30s+, la lecture en cours continuait après "Utiliser
+  // cet extrait" alors même que le module de découpe disparaissait —
+  // masquer .audioTrimWrap (.d-none) et retirer `src` ne suffisaient pas à
+  // eux seuls à couper une lecture DÉJÀ en cours ; load() force le <audio> à
+  // abandonner pour de bon la ressource, plutôt que de compter sur le seul
+  // retrait de `src` pour l'arrêter.
+  if (audioTrimPlayer) { audioTrimPlayer.pause(); audioTrimPlayer.removeAttribute('src'); audioTrimPlayer.load() }
   if (audioTrimWrap) audioTrimWrap.classList.add('d-none')
-  if (audioTrimPlayer) audioTrimPlayer.removeAttribute('src')
   if (q.audio) {
     audioClipPlayer.src = q.audio
     audioClipWrap.classList.remove('d-none')
@@ -2341,6 +2350,13 @@ if (audioExtractBtn) {
       showToast('Importe d\'abord un fichier audio', 'error')
       return
     }
+    // Coupe une éventuelle lecture en cours (aperçu lancé via audioPreviewBtn
+    // OU lecture native depuis les contrôles du <audio>) tout de suite au
+    // clic — pas seulement une fois l'extrait encodé (populateAudioFields
+    // plus bas s'en charge aussi, en repli, mais ne s'exécute qu'après
+    // l'attente asynchrone de blobToDataUrl juste en dessous).
+    if (audioPreviewTimeout) { clearTimeout(audioPreviewTimeout); audioPreviewTimeout = null }
+    audioTrimPlayer.pause()
     clampAudioTrimInputs()
     const start = Number(audioStartInput.value) || 0
     const duration = Number(audioDurationInput.value) || 1

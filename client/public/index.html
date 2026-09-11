@@ -1483,6 +1483,29 @@
       </div>
     </div>
 
+    <!-- Fader général MJ (retour utilisateur : "réduire le volume de tout ce
+         qui se passe sur l'écran") — HÔTE UNIQUEMENT, affiché/masqué en JS
+         (voir index.js, socket.on('question:show', ...) + resetUI) plutôt
+         que par pure règle CSS body.is-host : .d-none est en !important,
+         une règle CSS ne suffirait pas à la lever. Contrairement à
+         #bonusAudioVolumeControl juste au-dessus (visible seulement pendant
+         la lecture d'un son précis), reste affiché toute la partie — coin
+         bas-GAUCHE pour ne pas se superposer à lui (bas-droit déjà pris).
+         Multiplie les curseurs Blind Test/son bonus existants au lieu de les
+         remplacer (voir index.js hostMasterVolumePct) ; sert aussi de SEUL
+         réglage pour le son de révélation, qui n'a pas son propre curseur. -->
+    <div id="hostMasterVolumeControl" class="host-master-volume-control d-none">
+      <button type="button" id="hostMasterVolumeBtn" class="bonus-audio-volume-btn" title="Volume général (Blind Test + sons)" aria-label="Régler le volume général">🎚️</button>
+      <div id="hostMasterVolumePopover" class="bonus-audio-volume-popover d-none">
+        <span aria-hidden="true">🔉</span>
+        <div id="hostMasterVolumeTrack" class="volume-track">
+          <div id="hostMasterVolumeFill" class="volume-fill"></div>
+          <div id="hostMasterVolumeThumb" class="volume-thumb"></div>
+        </div>
+        <span aria-hidden="true">🔊</span>
+      </div>
+    </div>
+
     <!-- Tâche 025 : popup d'ajustement manuel de score par le MJ (mode
          "Présenter" uniquement, voir renderLiveClassementDock côté index.js
          pour le bouton "+" qui l'ouvre). Élément UNIQUE et persistant (pas
