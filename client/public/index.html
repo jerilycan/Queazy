@@ -1102,8 +1102,19 @@
              parcours "Présenter", aucune régression visuelle. -->
         <div id="questionCategoryBadge" class="question-category-badge d-none"></div>
         <div id="question" class="question-text"></div>
+        <!-- illustrationZoomLayer : couche intermédiaire INERTE pour tous les
+             types SAUF "zoomguess" (aucune règle CSS par défaut, un simple
+             <div> autour de l'image ne change rien à son rendu) — voir
+             index.js. Sert à séparer, pour "zoomguess" uniquement, le
+             recadrage STATIQUE choisi à l'édition (posé sur #illustrationImg
+             lui-même, comme .assoc-item-img/.assoc-item-img-inner) du zoom
+             DYNAMIQUE qui se dézoome au fil du chrono (posé sur CETTE
+             couche) — sans ce niveau intermédiaire, les deux transforms se
+             marcheraient dessus sur un seul et même élément. -->
         <div id="illustrationImgWrap" class="illustration-img-wrap">
-          <img id="illustrationImg" class="illustration-img d-none" alt="" draggable="false" />
+          <div id="illustrationZoomLayer" class="illustration-zoom-layer">
+            <img id="illustrationImg" class="illustration-img d-none" alt="" draggable="false" />
+          </div>
         </div>
 
         <div id="inputArea" class="d-none max-w-700 m-auto">

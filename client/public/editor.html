@@ -526,11 +526,19 @@
           <div id="zoomGuessSection" class="detail-section d-none">
             <label for="zoomGuessUpload">Image à deviner</label>
             <input type="file" id="zoomGuessUpload" accept="image/*" class="cursor-pointer" />
+            <!-- zoomGuessPreviewImg reste dédié au clic "point de zoom" (voir
+                 editor.js) : le recadrage (disposition/taille de la photo
+                 dans le cadre, retour utilisateur) passe par ce bouton à
+                 part plutôt que de réutiliser le même clic pour deux
+                 réglages différents — même popup que "révélation"/
+                 "association" (voir editor.js openImageCropModal), juste au
+                 format de ce cadre (voir ZOOMGUESS_CROP_ASPECT). -->
             <div id="zoomGuessPreviewWrap" class="illustration-preview-wrap d-none mt-8">
               <img id="zoomGuessPreviewImg" class="illustration-preview-img is-zoom-pickable" alt="" />
               <div id="zoomGuessMarker" class="illustration-zoom-marker d-none"></div>
               <button type="button" id="removeZoomGuessBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
             </div>
+            <button type="button" id="zoomGuessCropBtn" class="btn btn-nav-secondary font-13 mt-8 d-none">🖼️ Cadrer l'image</button>
             <p class="text-muted font-13 mt-8">Clique sur l'image ci-dessus pour choisir le point de zoom (ex. le visage du personnage à deviner).</p>
             <div class="detail-section mt-8">
               <label for="zoomGuessZoomInput">Niveau de zoom initial</label>

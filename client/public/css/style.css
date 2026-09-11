@@ -2926,6 +2926,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    simple photo au-dessus (même largeur repère que le type "image", voir
    .image-area). */
 .illustration-img-wrap.is-zoomed {
+  position: relative;
   width: min(640px, 100%);
   height: min(70vh, 420px);
   margin: 0 auto var(--space-md);
@@ -2933,20 +2934,36 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
+/* Couche du zoom DYNAMIQUE (retour utilisateur : "pouvoir éditer la
+   disposition/la taille de la photo, en plus de cliquer où le zoomout
+   débute") — occupe exactement la boîte visible (inset:0, même taille que
+   .is-zoomed ci-dessus) ; c'est ELLE qui porte le scale()/transform-origin
+   du dézoom au fil du chrono (posés par index.js), pas #illustrationImg
+   directement. Le dézoom est recalculé ~10x/seconde par le même tick que
+   la barre de temps : une petite transition adoucit les pas entre deux
+   mises à jour plutôt qu'un changement de valeur brutal. */
+.illustration-img-wrap.is-zoomed .illustration-zoom-layer {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.12s linear;
+}
+/* #illustrationImg devient la couche du recadrage STATIQUE choisi à
+   l'édition (même recette que .assoc-item-img-inner : taille NATURELLE +
+   translate()/scale() posés par JS, voir index.js applyCropTransform) —
+   affiché en position absolue à l'intérieur de .illustration-zoom-layer
+   ci-dessus, qui occupe elle-même toute la boîte visible. Remplace l'ancien
+   width:100%/height:100%+object-fit:cover (recadrage automatique centré,
+   jamais réglable) — un imagePos absent se comporte À L'IDENTIQUE de
+   l'ancien rendu (zoom=1 = coverScale, voir applyCropTransform). */
 .illustration-img-wrap.is-zoomed .illustration-img {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
   max-width: none;
   max-height: none;
   margin: 0;
   border-radius: 0;
   box-shadow: none;
-  object-fit: cover;
-  /* Le dézoom (et le flou, voir plus bas) sont recalculés ~10x/seconde par
-     le même tick que la barre de temps (voir index.js) : une petite
-     transition adoucit les pas entre deux mises à jour plutôt qu'un
-     changement de valeur brutal. */
-  transition: transform 0.12s linear, filter 0.12s linear;
 }
 
 /* Question "révélation" : deux <img> empilées dans une boîte de taille FIXE

@@ -1124,6 +1124,10 @@ if (haloWrap) {
 // décorative au-dessus de l'énoncé.
 const illustrationImg = document.getElementById('illustrationImg')
 const illustrationImgWrap = document.getElementById('illustrationImgWrap')
+// Couche intermédiaire pour "zoomguess" (voir style.css/index.html) : porte
+// le zoom DYNAMIQUE qui se dézoome au fil du chrono, pendant qu'illustrationImg
+// porte désormais le recadrage STATIQUE choisi à l'édition.
+const illustrationZoomLayer = document.getElementById('illustrationZoomLayer')
 // "ZoomOut Devinette" : filet en plus de draggable="false"/-webkit-user-drag
 // (voir index.html/style.css) — bloque le drag natif qui montrerait sinon un
 // fantôme de l'image source non zoomée/floutée (retour utilisateur).
@@ -1274,14 +1278,11 @@ let timerInt = null
 // TOUS les écrans (hôte + joueurs), puisque tous calculent depuis le même
 // startTs/timerMs reçus du serveur — jamais un minuteur local indépendant.
 let currentIllustrationZoom = null
-// Un fort scale() seul ne garantit pas un rendu "juste une tache de
-// couleur" : sur une image aux formes simples et très contrastées (dessin
-// stylisé, rendu 3D à plat...), même un tout petit recadrage agrandi peut
-// rester lisible (retour utilisateur : un oeil encore net à zoom x25). Le
-// flou, lui, brouille l'image quel que soit son contenu — ajouté en plus du
-// zoom, proportionnel au niveau choisi, et retombe à 0 en même temps que le
-// dézoom atteint scale(1).
-const zoomGuessBlurPx = (startScale) => Math.min(24, Math.max(0, (startScale - 1) * 1.1))
+// Le flou ajouté en plus du zoom (retour utilisateur : à l'origine, un
+// fort scale() seul ne garantissait pas un rendu "juste une tache de
+// couleur" sur une image aux formes simples/très contrastées) a été retiré
+// (nouveau retour utilisateur : "enlever le flou") — seul le zoom fait
+// désormais le travail de brouillage.
 // Retour utilisateur : le dézoom atteignait pile scale(1) (image complète)
 // au même instant que le chrono à 0 — un joueur qui reconnaissait l'image
 // tout juste à la fin n'avait plus aucun temps pour taper/valider sa
@@ -6264,6 +6265,17 @@ const emitQuestion = (index) => {
     // le scoring (qui reste le texte libre générique) — pas besoin que le
     // serveur en sache quoi que ce soit, transmis tel quel.
     zoom: q.type === 'zoomguess' ? (q.zoom || { x: 0.5, y: 0.5, startScale: 4 }) : undefined,
+    // Recadrage STATIQUE de la photo (retour utilisateur : "pouvoir éditer
+    // la disposition/la taille de la photo, en plus de cliquer où le
+    // zoomout débute") — {x, y, zoom}, même convention que revealPos/
+    // pair.aPos (voir editor.js openImageCropModal). Absent = centré, zoom
+    // plein (comportement d'origine, voir index.js applyCropTransform) :
+    // purement cosmétique, transmis tel quel, comme q.zoom ci-dessus.
+    imagePos: q.type === 'zoomguess' ? (q.imagePos || undefined) : undefined,
+    // Couleur de fond détectée derrière l'image quand le recadrage dézoome
+    // sous "cover" (mêmes bandes vides que revealBg/pair.aBg) — voir
+    // openImageCropModal (editor.js) onBgReady.
+    imageBg: q.type === 'zoomguess' ? (q.imageBg || undefined) : undefined,
     // "halo" (tâche 020) : rayon du halo réglable par question (comme le
     // niveau de zoom de "zoomguess" ci-dessus), en % de la largeur de
     // .halo-wrap côté jeu — purement cosmétique, aucun impact serveur (la
@@ -6854,11 +6866,48 @@ socket.on('question:show', payload => {
       // changer la hauteur totale du contenu, voir fitStageContent.
       fitStageContent()
     }
+    // Zoom initial posé tout de suite (avant même startTs) : la question
+    // révélée doit apparaître déjà zoomée, pas dézoomée puis re-zoomée une
+    // fois le chrono démarré. Le dézoom progressif lui-même est piloté par
+    // le tick de la barre de temps (voir timerInt plus bas). Posé AVANT le
+    // chargement de l'image ci-dessous (pas après comme avant) : .is-zoomed
+    // doit déjà donner à #illustrationImgWrap sa taille FINALE avant que
+    // applyCropTransform (dans applyZoomGuessCrop plus bas) ne lise
+    // clientWidth/clientHeight dessus — sinon le recadrage statique se
+    // calculerait sur l'ancienne taille (illustration décorative) pour une
+    // image déjà en cache (voir le même piège documenté sur
+    // applyPortraitLayout/.complete juste au-dessus).
+    currentIllustrationZoom = isZoomGuess ? (payload.zoom || null) : null
+    if (illustrationImgWrap) illustrationImgWrap.classList.toggle('is-zoomed', !!currentIllustrationZoom)
+    // Exception décidée pour "zoomguess" : contrairement aux autres types,
+    // où l'illustration est purement décorative (masquée en IRL, voir
+    // body.irl-player-mode #illustrationImgWrap dans style.css — le
+    // présentateur la montre sur l'écran commun), l'image EST le mécanisme
+    // du jeu pour zoomguess. La masquer sur le téléphone du joueur en IRL
+    // cassait la question. .zoomguess-visible contourne la règle générale
+    // uniquement pour ce type.
+    if (illustrationImgWrap) illustrationImgWrap.classList.toggle('zoomguess-visible', isZoomGuess)
+    // Bandes vides éventuelles du recadrage statique (voir onBgReady dans
+    // openImageCropModal, editor.js) — même mécanisme que revealBg/pair.aBg.
+    // Remis à vide hors "zoomguess" ou si absent, pour ne pas laisser une
+    // couleur de la question précédente sur ce wrapper réutilisé.
+    if (illustrationImgWrap) illustrationImgWrap.style.background = (isZoomGuess && payload.imageBg) ? payload.imageBg : ''
+    // Recadrage STATIQUE choisi à l'édition (retour utilisateur : "pouvoir
+    // éditer la disposition/la taille de la photo, en plus de cliquer où le
+    // zoomout débute") — posé sur #illustrationImg lui-même (voir
+    // applyCropTransform, déjà utilisé pour "association"), à l'intérieur de
+    // #illustrationZoomLayer qui occupe toute la boîte visible. imagePos
+    // absent (vieux quiz, ou type autre que zoomguess) : applyCropTransform
+    // retombe sur zoom=1/centré, identique à l'ancien object-fit:cover.
+    const applyZoomGuessCrop = () => {
+      if (!isZoomGuess || !illustrationImgWrap) return
+      applyCropTransform(illustrationImgWrap, illustrationImg, payload.imagePos)
+    }
     if (mediaUrl) {
       illustrationImg.onerror = () => { illustrationImg.classList.add('d-none'); if (mainEl) mainEl.classList.remove('regie-portrait-layout'); fitStageContent() }
-      illustrationImg.onload = applyPortraitLayout
+      illustrationImg.onload = () => { applyPortraitLayout(); applyZoomGuessCrop() }
       illustrationImg.src = mediaUrl
-      if (illustrationImg.complete && illustrationImg.naturalWidth) applyPortraitLayout()
+      if (illustrationImg.complete && illustrationImg.naturalWidth) { applyPortraitLayout(); applyZoomGuessCrop() }
       illustrationImg.classList.remove('d-none')
       // L'animation d'entrée (tileRevealIn) anime elle-même "transform" —
       // posée directement sur <img>, elle écraserait en continu (tant
@@ -6875,28 +6924,20 @@ socket.on('question:show', payload => {
       illustrationImg.removeAttribute('src')
       if (mainEl) mainEl.classList.remove('regie-portrait-layout')
     }
-    // Zoom initial posé tout de suite (avant même startTs) : la question
-    // révélée doit apparaître déjà zoomée, pas dézoomée puis re-zoomée une
-    // fois le chrono démarré. Le dézoom progressif lui-même est piloté par
-    // le tick de la barre de temps (voir timerInt plus bas).
-    currentIllustrationZoom = isZoomGuess ? (payload.zoom || null) : null
-    if (illustrationImgWrap) illustrationImgWrap.classList.toggle('is-zoomed', !!currentIllustrationZoom)
-    // Exception décidée pour "zoomguess" : contrairement aux autres types,
-    // où l'illustration est purement décorative (masquée en IRL, voir
-    // body.irl-player-mode #illustrationImgWrap dans style.css — le
-    // présentateur la montre sur l'écran commun), l'image EST le mécanisme
-    // du jeu pour zoomguess. La masquer sur le téléphone du joueur en IRL
-    // cassait la question. .zoomguess-visible contourne la règle générale
-    // uniquement pour ce type.
-    if (illustrationImgWrap) illustrationImgWrap.classList.toggle('zoomguess-visible', isZoomGuess)
-    if (currentIllustrationZoom) {
-      illustrationImg.style.transformOrigin = `${currentIllustrationZoom.x * 100}% ${currentIllustrationZoom.y * 100}%`
-      illustrationImg.style.transform = `scale(${currentIllustrationZoom.startScale})`
-      illustrationImg.style.filter = `blur(${zoomGuessBlurPx(currentIllustrationZoom.startScale)}px)`
+    if (currentIllustrationZoom && illustrationZoomLayer) {
+      illustrationZoomLayer.style.transformOrigin = `${currentIllustrationZoom.x * 100}% ${currentIllustrationZoom.y * 100}%`
+      illustrationZoomLayer.style.transform = `scale(${currentIllustrationZoom.startScale})`
     } else {
-      illustrationImg.style.transformOrigin = ''
+      // Réinitialise aussi le recadrage statique (width/height/transform posés
+      // par applyCropTransform ci-dessus) : sans ça, une illustration
+      // DÉCORATIVE classique affichée juste après une question "zoomguess"
+      // hériterait des dimensions en pixels NATURELLES de l'image précédente
+      // au lieu de son rendu responsive habituel (max-width:100%, voir
+      // style.css .illustration-img).
+      if (illustrationZoomLayer) { illustrationZoomLayer.style.transformOrigin = ''; illustrationZoomLayer.style.transform = '' }
+      illustrationImg.style.width = ''
+      illustrationImg.style.height = ''
       illustrationImg.style.transform = ''
-      illustrationImg.style.filter = ''
     }
   }
   answerInput.value = ''
@@ -7077,11 +7118,10 @@ socket.on('question:show', payload => {
     // Atteint scale(1) (image complète) ZOOMGUESS_ANSWER_WINDOW_MS avant la
     // fin du chrono (voir sa définition, et zoomDuration plus haut) — pas
     // pile dessus — pour laisser ce temps au joueur avec l'image déjà nette.
-    if (currentIllustrationZoom && illustrationImg) {
+    if (currentIllustrationZoom && illustrationZoomLayer) {
       const progress = zoomDuration > 0 ? Math.min(1, (now - start) / zoomDuration) : 1
       const scale = currentIllustrationZoom.startScale + (1 - currentIllustrationZoom.startScale) * progress
-      illustrationImg.style.transform = `scale(${scale})`
-      illustrationImg.style.filter = `blur(${zoomGuessBlurPx(currentIllustrationZoom.startScale) * (1 - progress)}px)`
+      illustrationZoomLayer.style.transform = `scale(${scale})`
     }
 
     // Apparition progressive des indices (type "indice", tâche 014) — voir

@@ -419,6 +419,7 @@ const zoomGuessPreviewWrap = document.getElementById('zoomGuessPreviewWrap')
 const zoomGuessPreviewImg = document.getElementById('zoomGuessPreviewImg')
 const zoomGuessMarker = document.getElementById('zoomGuessMarker')
 const removeZoomGuessBtn = document.getElementById('removeZoomGuessBtn')
+const zoomGuessCropBtn = document.getElementById('zoomGuessCropBtn')
 const zoomGuessZoomInput = document.getElementById('zoomGuessZoomInput')
 const zoomGuessZoomMinusBtn = document.getElementById('zoomGuessZoomMinus')
 const zoomGuessZoomPlusBtn = document.getElementById('zoomGuessZoomPlus')
@@ -583,11 +584,19 @@ const wireEditorVolumeSlider = (track, fill, thumb, label, initialPct, onChange)
     getPct: () => pct
   }
 }
+// pct/100 posé directement sur le lecteur, PAS SEULEMENT sur la question
+// (retour utilisateur : "modifier à la volée la musique écoutée pour
+// qu'on puisse avoir une référence de ce qui sera diffusé") — si l'extrait
+// est déjà en train de jouer (contrôles natifs du <audio>), l'effet
+// s'entend immédiatement en faisant glisser le curseur, sans avoir à
+// relancer la lecture pour vérifier le réglage.
 const audioVolumeSlider = wireEditorVolumeSlider(audioVolumeTrack, audioVolumeFill, audioVolumeThumb, audioVolumeLabel, 100, (pct) => {
   if (questions[activeIndex]) questions[activeIndex].audioVolumePct = pct
+  if (audioClipPlayer) audioClipPlayer.volume = Math.min(1, Math.max(0, pct / 100))
 })
 const revealAudioVolumeSlider = wireEditorVolumeSlider(revealAudioVolumeTrack, revealAudioVolumeFill, revealAudioVolumeThumb, revealAudioVolumeLabel, 100, (pct) => {
   if (questions[activeIndex]) questions[activeIndex].revealAudioVolumePct = pct
+  if (revealAudioPreviewPlayer) revealAudioPreviewPlayer.volume = Math.min(1, Math.max(0, pct / 100))
 })
 
 const correctTitleList = document.getElementById('correctTitleList')
@@ -1383,6 +1392,7 @@ const populateZoomGuessFields = (q) => {
   } else {
     zoomGuessPreviewWrap.classList.add('d-none')
   }
+  if (zoomGuessCropBtn) zoomGuessCropBtn.classList.toggle('d-none', !q.image)
   if (!q.zoom) q.zoom = { x: 0.5, y: 0.5, startScale: ZOOM_GUESS_DEFAULT }
   if (zoomGuessZoomInput) zoomGuessZoomInput.value = q.zoom.startScale
   positionZoomGuessMarker(q.image ? q.zoom : null)
@@ -1398,10 +1408,38 @@ if (zoomGuessUploadInput) {
       q.image = dataUrl
       // Nouvelle image -> un ancien point de zoom choisi sur l'image
       // précédente n'a plus de sens (cadre différent), mais on garde le
-      // niveau de zoom déjà réglé.
+      // niveau de zoom déjà réglé. Même chose pour un éventuel cadrage
+      // (imagePos/imageBg, voir openImageCropModal) : plus de sens sur une
+      // photo différente.
       q.zoom = { x: 0.5, y: 0.5, startScale: q.zoom?.startScale || ZOOM_GUESS_DEFAULT }
+      delete q.imagePos
+      delete q.imageBg
       populateZoomGuessFields(q)
     })
+  }
+}
+
+if (zoomGuessCropBtn) {
+  // Recadrage (disposition/taille de la photo dans le cadre) : même popup
+  // qu'association/révélation/intrus (voir openImageCropModal), au format
+  // du cadre réel de la question ZoomOut Devinette (voir
+  // ZOOMGUESS_CROP_ASPECT). Reste volontairement séparé du clic sur
+  // zoomGuessPreviewImg (point de zoom) — voir le commentaire dans
+  // editor.html.
+  zoomGuessCropBtn.onclick = () => {
+    const q = questions[activeIndex]
+    if (readOnly || !q || !q.image) return
+    openImageCropModal(q.image, q.imagePos, q.imageBg, {
+      onSave: (pos) => { q.imagePos = pos },
+      onBgReady: (bg) => { q.imageBg = bg },
+      onReplace: (dataUrl) => {
+        q.image = dataUrl
+        q.zoom = { x: 0.5, y: 0.5, startScale: q.zoom?.startScale || ZOOM_GUESS_DEFAULT }
+        delete q.imagePos
+        delete q.imageBg
+        populateZoomGuessFields(q)
+      }
+    }, ZOOMGUESS_CROP_ASPECT, ZOOMGUESS_CROP_VIEWPORT_W)
   }
 }
 
@@ -1669,9 +1707,24 @@ const populateRevealMediaFields = (q) => {
     // Resynchronise le curseur de volume à CHAQUE affichage (sélection dans
     // la sidebar, retour depuis un autre type...), pas seulement à l'import
     // — sinon il resterait bloqué sur le réglage de la question précédente.
-    revealAudioVolumeSlider.setPct(Number.isFinite(Number(q.revealAudioVolumePct)) ? Number(q.revealAudioVolumePct) : 100)
+    // setPct() seul ne pose que l'AFFICHAGE du curseur (pas d'appel à
+    // onChange, par convention — voir wireEditorVolumeSlider) : le lecteur
+    // lui-même a besoin de sa propre affectation pour refléter ce volume
+    // dès la première lecture, avant même d'avoir touché au curseur.
+    {
+      const pct = Number.isFinite(Number(q.revealAudioVolumePct)) ? Number(q.revealAudioVolumePct) : 100
+      revealAudioVolumeSlider.setPct(pct)
+      revealAudioPreviewPlayer.volume = Math.min(1, Math.max(0, pct / 100))
+    }
   } else {
+    // pause() explicite AVANT de retirer la source (retour utilisateur :
+    // même bug que audioTrimPlayer/reveal-trim-player déjà corrigé — une
+    // lecture lancée depuis les contrôles natifs de CE lecteur continuait
+    // après "Retirer le son", masquer/retirer `src` seuls ne suffisant pas
+    // à couper une lecture déjà en cours sur tous les navigateurs).
+    revealAudioPreviewPlayer.pause()
     revealAudioPreviewPlayer.removeAttribute('src')
+    revealAudioPreviewPlayer.load()
     revealAudioPreviewWrap.classList.add('d-none')
   }
 }
@@ -2353,9 +2406,27 @@ const populateAudioFields = (q) => {
     // Resynchronise le curseur de volume à CHAQUE affichage (sélection dans
     // la sidebar, retour depuis un autre type...), pas seulement à l'import
     // — sinon il resterait bloqué sur le réglage de la question précédente.
-    audioVolumeSlider.setPct(Number.isFinite(Number(q.audioVolumePct)) ? Number(q.audioVolumePct) : 100)
+    // setPct() seul ne pose que l'AFFICHAGE du curseur (pas d'appel à
+    // onChange, par convention — voir wireEditorVolumeSlider) : le lecteur
+    // lui-même a besoin de sa propre affectation pour refléter ce volume
+    // dès la première lecture, avant même d'avoir touché au curseur.
+    {
+      const pct = Number.isFinite(Number(q.audioVolumePct)) ? Number(q.audioVolumePct) : 100
+      audioVolumeSlider.setPct(pct)
+      audioClipPlayer.volume = Math.min(1, Math.max(0, pct / 100))
+    }
   } else {
+    // pause() explicite AVANT de retirer la source (retour utilisateur :
+    // "j'ai lancé un extrait que j'ai validé, puis je l'ai supprimé, il a
+    // continué" — même bug déjà corrigé sur audioTrimPlayer/
+    // reveal-trim-player/revealAudioPreviewPlayer : une lecture lancée
+    // depuis les contrôles natifs de CE lecteur, une fois l'extrait validé
+    // ("Utiliser cet extrait"), continuait après "Retirer l'extrait" —
+    // masquer/retirer `src` seuls ne suffisent pas à couper une lecture
+    // déjà en cours sur tous les navigateurs).
+    audioClipPlayer.pause()
     audioClipPlayer.removeAttribute('src')
+    audioClipPlayer.load()
     audioClipWrap.classList.add('d-none')
   }
   // "Titre uniquement" — synchronise la case et la colonne "Artiste(s)
@@ -3061,6 +3132,15 @@ const wireAssociationEditDrag = (row) => {
 // recadreur a le même ratio que la tuile réelle.
 const IMAGE_CROP_ASPECT = 4 / 3
 const IMAGE_CROP_VIEWPORT_W = 360
+// Cadre "ZoomOut Devinette" : même ratio que le cadre réel en jeu
+// (min(640px,100%) x min(70vh,420px), voir #illustrationImgWrap.is-zoomed
+// dans style.css), pour que le cadrage choisi ici corresponde à ce que les
+// joueurs verront.
+const ZOOMGUESS_CROP_ASPECT = 640 / 420
+// Même largeur que IMAGE_CROP_VIEWPORT_W (360) : .assoc-crop-modal a un
+// max-width de 420px, marge de padding comprise — une largeur plus grande
+// ferait déborder la popup (seul le ratio doit changer, pas la largeur).
+const ZOOMGUESS_CROP_VIEWPORT_W = 360
 // Bornes du zoom, en multiple de "coverScale" (1 = cadrage plein, identique
 // au comportement d'origine avant l'ajout du dézoom — voir computeCropGeometry).
 const IMAGE_CROP_ZOOM_MAX = 4
@@ -3157,7 +3237,14 @@ const applyCropTransform = (wrapEl, imgEl, pos) => {
 // le cadrage associé) ; onBgReady est TOUJOURS appelé une fois la couleur
 // dominante connue (recalculée si bgColor était absent), pour que l'appelant
 // la persiste et n'ait plus à la recalculer la prochaine fois.
-const openImageCropModal = (imageSrc, currentPos, bgColor, callbacks) => {
+// aspect/viewportW optionnels (retour utilisateur zoomguess : "pouvoir
+// éditer la disposition/la taille de la photo" — voir plus bas
+// ZOOMGUESS_CROP_ASPECT) : par défaut restent IMAGE_CROP_ASPECT/
+// IMAGE_CROP_VIEWPORT_W, donc aucun changement pour les appels existants
+// (association/intrus/révélation, tous en 4:3) — plutôt qu'une popup dédiée
+// dupliquée pour un seul type de plus (voir CLAUDE.md, pas de duplication
+// évitable).
+const openImageCropModal = (imageSrc, currentPos, bgColor, callbacks, aspect = IMAGE_CROP_ASPECT, viewportW = IMAGE_CROP_VIEWPORT_W) => {
   const pos = {
     x: Number.isFinite(currentPos?.x) ? currentPos.x : 0.5,
     y: Number.isFinite(currentPos?.y) ? currentPos.y : 0.5,
@@ -3167,12 +3254,12 @@ const openImageCropModal = (imageSrc, currentPos, bgColor, callbacks) => {
 
   const overlay = document.createElement('div')
   overlay.className = 'modal-overlay'
-  const viewportH = Math.round(IMAGE_CROP_VIEWPORT_W / IMAGE_CROP_ASPECT)
+  const viewportH = Math.round(viewportW / aspect)
   overlay.innerHTML = `
     <div class="modal-content card max-w-500 assoc-crop-modal">
       <h2 class="mb-md font-20">Recadrer l'image</h2>
       <p class="text-muted font-13 mb-md">Glisse l'image pour la repositionner, molette ou pincement pour zoomer/dézoomer.</p>
-      <div class="assoc-crop-viewport" style="width:${IMAGE_CROP_VIEWPORT_W}px; height:${viewportH}px; background:${bgColor || 'var(--color-bg-alt)'};">
+      <div class="assoc-crop-viewport" style="width:${viewportW}px; height:${viewportH}px; background:${bgColor || 'var(--color-bg-alt)'};">
         <img class="assoc-crop-img" src="${imageSrc}" alt="" draggable="false" />
       </div>
       <div class="d-flex align-center gap-sm mt-12 assoc-crop-zoom-row">
