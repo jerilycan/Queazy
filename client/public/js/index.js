@@ -252,6 +252,73 @@ const guestJoinOptions = document.getElementById('guestJoinOptions')
 const guestNameInput = document.getElementById('guestNameInput')
 const confirmGuestJoin = document.getElementById('confirmGuestJoin')
 const cancelGuestJoin = document.getElementById('cancelGuestJoin')
+
+// Tâche 034 (retour utilisateur) : bouton "scanner un QR code" à gauche du
+// champ "Code salle" — ouvre l'appareil photo via un <input type="file"
+// capture="environment"> caché (déclenché par un clic programmatique) plutôt
+// qu'un flux vidéo live (getUserMedia) : pas de permission caméra
+// persistante à gérer, une seule photo suffit, marche pareil sur mobile
+// (ouvre directement l'appli photo) que sur desktop (sélecteur de fichier,
+// utile pour scanner une capture d'écran). Décodage CÔTÉ CLIENT (jsQR, voir
+// index.html) : aucune image envoyée au serveur.
+const qrScanBtn = document.getElementById('qrScanBtn')
+const qrScanFile = document.getElementById('qrScanFile')
+const qrScanError = document.getElementById('qrScanError')
+if (qrScanBtn && qrScanFile) {
+  qrScanBtn.onclick = () => qrScanFile.click()
+  qrScanFile.addEventListener('change', () => {
+    const file = qrScanFile.files && qrScanFile.files[0]
+    // Réinitialisé tout de suite (pas seulement en fin de traitement) : sans
+    // ça, rescanner la MÊME photo deux fois de suite (ex. après une erreur,
+    // l'utilisateur retente sans changer de fichier) ne redéclencherait pas
+    // l'évènement "change" (valeur inchangée), le sélecteur resterait
+    // silencieusement inerte au 2e essai.
+    qrScanFile.value = ''
+    if (qrScanError) qrScanError.classList.add('d-none')
+    if (!file) return
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const result = window.jsQR ? window.jsQR(imageData.data, imageData.width, imageData.height) : null
+      const code = result && extractRoomCodeFromQrText(result.data)
+      if (code) {
+        roomInput.value = code
+        nameInput.focus()
+      } else if (qrScanError) {
+        qrScanError.textContent = result ? 'QR code non reconnu comme salle Queazy.' : 'Aucun QR code détecté sur cette photo.'
+        qrScanError.classList.remove('d-none')
+      }
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      if (qrScanError) { qrScanError.textContent = 'Impossible de lire cette photo.'; qrScanError.classList.remove('d-none') }
+    }
+    img.src = objectUrl
+  })
+}
+// Le QR généré côté hôte encode l'URL complète de la salle (voir plus bas,
+// renderRoomInfo : `${base}/?room=${roomCode}`), pas juste le code brut —
+// on essaie donc d'abord de le lire comme une URL avant de retomber sur le
+// texte scanné tel quel (au cas où un QR généré autrement, juste le code,
+// serait scanné). MAJUSCULES : cohérent avec la saisie manuelle (voir
+// l'input listener juste plus bas, roomInput.value forcé en majuscules).
+const extractRoomCodeFromQrText = (text) => {
+  if (!text) return null
+  try {
+    const url = new URL(text)
+    const fromQuery = url.searchParams.get('room')
+    if (fromQuery) return fromQuery.toUpperCase()
+  } catch { /* pas une URL absolue valide — repli ci-dessous */ }
+  const trimmed = text.trim().toUpperCase()
+  return /^[A-Z0-9]{4,8}$/.test(trimmed) ? trimmed : null
+}
 const params = new URLSearchParams(location.search)
 const preRoom = params.get('room')
 const autoCreate = params.get('create')
@@ -7206,12 +7273,17 @@ applyModerationEyeState()
 // nombreux points d'ajout/retrait de ligne (pbac, générique, blind test) :
 // une seule source de vérité pour "le panneau a du contenu", jamais désynchro.
 const updateModerationEyeVisibility = () => {
+  // Bug corrigé (retour utilisateur : "les réponses ne sont pas masquées
+  // par défaut") : ceci ne pilote QUE la visibilité de la BARRE œil
+  // elle-même (pas de bouton à montrer s'il n'y a rien à masquer/révéler
+  // dans le panneau) — ne doit JAMAIS toucher moderationAnswersHidden.
+  // L'ancienne version le forçait à `false` dès que le panneau redevenait
+  // vide (état de départ de CHAQUE question, avant la 1re réponse) et ne le
+  // remettait jamais à `true` ensuite : au moindre passage par un panneau
+  // vide — donc systématiquement —, les réponses restaient "visibles" pour
+  // toutes les questions suivantes, à l'opposé du "caché par défaut" voulu.
   const showEye = gameMode === 'irl' && moderationDiv.children.length > 0
   moderationEyeBar.classList.toggle('d-none', !showEye)
-  if (!showEye && moderationAnswersHidden) {
-    moderationAnswersHidden = false
-    applyModerationEyeState()
-  }
 }
 new MutationObserver(updateModerationEyeVisibility).observe(moderationDiv, { childList: true })
 

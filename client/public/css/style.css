@@ -4493,8 +4493,17 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
        (retour utilisateur avec capture d'écran). Corrigé ICI plutôt que sur
        le bouton Récap lui-même (fonctionnalité déjà ancienne et longuement
        retouchée, voir son propre commentaire — préférence pour ne pas y
-       toucher) : on pousse simplement le dock sous lui. */
-    margin-top: 48px;
+       toucher) : laisse de la place sous lui.
+       Bug corrigé (retour utilisateur, capture avec repères) : un
+       margin-top ici (au lieu d'un padding-top) réduisait la hauteur RÉELLE
+       de la carte en layout stretch (grid item étiré = hauteur de ligne
+       moins ses propres marges) — la carte démarrait 48px plus bas que
+       #hostPanel (même ligne de grille, même étirement, mais lui sans
+       marge), donnant deux cartes visiblement de tailles différentes.
+       padding-top : la place sous le bouton Récap reste réservée à
+       l'INTÉRIEUR de la même boîte extérieure (mêmes haut/bas que
+       #hostPanel), plutôt que de rétrécir la boîte elle-même. */
+    padding-top: 48px;
     overflow-y: auto;
   }
   /* Badge de type de question : fixe à l'écran partout ailleurs (voir sa
@@ -4705,6 +4714,32 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   overflow: hidden;
 }
 .grid-cols-split { grid-template-columns: 1fr 1.5fr; }
+/* Tâche 034 : ligne "Code salle" du formulaire de connexion (#joinCard) —
+   classe DÉDIÉE plutôt que de retoucher .grid-cols-split (réutilisée telle
+   quelle ailleurs, éditeur compris, pour de simples grilles 2 colonnes sans
+   rapport). 3e colonne "auto" pour le bouton QR, carrée (largeur = hauteur
+   des champs voisins, voir .qr-scan-btn). */
+.join-code-row { grid-template-columns: auto 1fr 1.5fr; align-items: stretch; }
+.qr-scan-btn {
+  aspect-ratio: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.qr-scan-btn:hover { border-color: var(--color-accent); background: var(--color-surface-2); }
+.qr-scan-error {
+  color: var(--color-danger);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
 .divider { display: flex; align-items: center; gap: 16px; margin: 12px 0; }
 .divider-line { flex: 1; height: 1px; background: var(--color-border); }
 .divider-text { color: var(--color-text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -8104,6 +8139,13 @@ body.irl-player-mode .navbar, body.remote-player-mode .navbar { display: none; }
    wrapper ci-dessus. */
 .irl-center-logo .brand-logo-svg { height: 100%; width: auto; }
 body.irl-player-mode .irl-center-logo, body.remote-player-mode .irl-center-logo { display: block; }
+/* Tâche 034 : .irl-mini-logo partage .irl-center-logo (mêmes réglages de
+   base) mais ne doit apparaître QU'en mobile (voir @media max-width:640px
+   plus bas, qui le réaffiche et masque le logo complet à sa place) — cette
+   règle (même spécificité que celle juste au-dessus, mais placée APRÈS
+   dans la feuille donc gagnante) l'garde caché par défaut sur desktop/
+   tablette. */
+body.irl-player-mode .irl-mini-logo, body.remote-player-mode .irl-mini-logo { display: none; }
 .irl-center-logo:hover {
   transform: translateX(-50%) scale(1.06);
   filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45)) drop-shadow(0 0 16px rgba(var(--color-accent-rgb),0.55));
@@ -8135,18 +8177,30 @@ body.irl-player-mode .irl-center-logo, body.remote-player-mode .irl-center-logo 
      haut-droite, timer une pleine barre séparée plus bas) : pas de parent
      flex commun à réutiliser, repositionnés ici chacun par coordonnées
      fixes alignées sur la MÊME bande verticale (logo 18px+34px de haut ≈
-     centre à 35px ; roue déjà top:14px+42px ≈ centre à 35px). */
-  body.irl-player-mode .irl-center-logo,
-  body.remote-player-mode .irl-center-logo {
+     centre à 35px ; roue déjà top:14px+42px ≈ centre à 35px).
+     Tâche 034 : le logo COMPLET ("Queazy" en toutes lettres) est trop
+     large pour cette bande étroite — remplacé ici par le "mini-logo"
+     dédié (.irl-mini-logo, voir index.html, juste le "Q" + les 4
+     décorations). Les deux partagent la classe .irl-center-logo (mêmes
+     réglages de base : position fixe, respiration...) mais seul le mini
+     doit apparaître ICI : `:not(.irl-mini-logo)` masque le logo complet,
+     les règles suivantes ne ciblent que `.irl-mini-logo`. */
+  body.irl-player-mode .irl-center-logo:not(.irl-mini-logo),
+  body.remote-player-mode .irl-center-logo:not(.irl-mini-logo) {
+    display: none;
+  }
+  body.irl-player-mode .irl-mini-logo,
+  body.remote-player-mode .irl-mini-logo {
+    display: block;
     left: 16px;
     transform: none;
   }
-  body.irl-player-mode .irl-center-logo:hover,
-  body.remote-player-mode .irl-center-logo:hover {
+  body.irl-player-mode .irl-mini-logo:hover,
+  body.remote-player-mode .irl-mini-logo:hover {
     transform: scale(1.06);
   }
-  body.irl-player-mode .irl-center-logo:not(:hover),
-  body.remote-player-mode .irl-center-logo:not(:hover) {
+  body.irl-player-mode .irl-mini-logo:not(:hover),
+  body.remote-player-mode .irl-mini-logo:not(:hover) {
     animation: irl-logo-breathe-left 3.2s ease-in-out infinite;
   }
   /* Barre de temps intégrée à cette même bande (au lieu de sa propre carte
