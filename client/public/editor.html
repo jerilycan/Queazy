@@ -430,6 +430,32 @@
             <div id="audioClipWrap" class="audio-clip-wrap d-none mt-8">
               <p class="text-muted font-13 m-0">Extrait actuel :</p>
               <audio id="audioClipPlayer" controls></audio>
+              <!-- Volume PROPRE à cet extrait (retour utilisateur : "pouvoir
+                   jauger le volume pour qu'il ressorte comme attendu chez
+                   les joueurs") — réglé une fois ici par le créateur, puis
+                   MULTIPLIÉ côté jeu avec le volume personnel de chaque
+                   joueur/le fader général (jamais un remplacement, voir
+                   index.js effectiveVolume) : deux sons à des niveaux
+                   d'enregistrement différents peuvent ainsi ressortir
+                   équilibrés l'un par rapport à l'autre, quel que soit le
+                   réglage de chacun. Même curseur "maison" que côté jeu
+                   (.volume-track, voir index.js wireVolumeSlider) —
+                   dupliqué ici volontairement (editor.js/index.js restent
+                   deux scripts indépendants, même choix déjà fait pour
+                   computeCropGeometry). -->
+              <div class="detail-section mt-8">
+                <label for="audioVolumeTrack">🔊 Volume de cet extrait</label>
+                <div class="d-flex align-center gap-sm">
+                  <span aria-hidden="true">🔉</span>
+                  <div id="audioVolumeTrack" class="volume-track">
+                    <div id="audioVolumeFill" class="volume-fill"></div>
+                    <div id="audioVolumeThumb" class="volume-thumb"></div>
+                  </div>
+                  <span aria-hidden="true">🔊</span>
+                  <span id="audioVolumeLabel" class="text-muted font-13" style="min-width: 38px;">100%</span>
+                </div>
+                <p class="text-muted font-13 m0">Réglé une fois pour tous les joueurs — pour équilibrer ce son par rapport aux autres, quel que soit le volume personnel de chacun.</p>
+              </div>
               <button type="button" id="removeAudioClipBtn" class="btn btn-nav-secondary font-13 mt-8">Retirer l'extrait</button>
             </div>
             <!-- Description volontairement neutre (partagée Blind Test/tout
@@ -476,6 +502,19 @@
                   <div id="revealAudioPreviewWrap" class="reveal-sound-card d-none mt-8">
                     <div class="reveal-sound-badge">🎵</div>
                     <audio id="revealAudioPreviewPlayer" controls></audio>
+                    <!-- Même volume propre au son, réglé par le créateur (voir
+                         le bloc jumeau sur #audioClipWrap plus haut pour le
+                         détail) — juste plus compact pour tenir dans cette
+                         carte centrée. -->
+                    <div class="d-flex align-center gap-sm" style="width: 100%; justify-content: center;">
+                      <span aria-hidden="true">🔉</span>
+                      <div id="revealAudioVolumeTrack" class="volume-track" style="width: 80px;">
+                        <div id="revealAudioVolumeFill" class="volume-fill"></div>
+                        <div id="revealAudioVolumeThumb" class="volume-thumb"></div>
+                      </div>
+                      <span aria-hidden="true">🔊</span>
+                      <span id="revealAudioVolumeLabel" class="text-muted font-13" style="min-width: 34px;">100%</span>
+                    </div>
                     <button type="button" id="removeRevealAudioBtn" class="reveal-remove-link">Retirer le son</button>
                   </div>
                   <p class="text-muted font-13 mt-8">Un court effet sonore (15 s max).</p>

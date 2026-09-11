@@ -946,19 +946,20 @@ const bonusAudioVolumeTrack = document.getElementById('bonusAudioVolumeTrack')
 const bonusAudioVolumeFill = document.getElementById('bonusAudioVolumeFill')
 const bonusAudioVolumeThumb = document.getElementById('bonusAudioVolumeThumb')
 // Retour utilisateur ("réduire le volume de tout ce qui se passe sur
-// l'écran") : fader général HÔTE UNIQUEMENT — au-dessus des curseurs
-// ci-dessus (Blind Test, son bonus), pas à leur place : il les MULTIPLIE
-// (voir hostMasterVolumePct plus bas) plutôt que de les remplacer, chacun
-// garde son propre équilibre relatif. Toujours visible pendant la partie
-// pour l'hôte (contrairement à #bonusAudioVolumeControl, qui n'apparaît que
-// pendant la lecture d'un son précis) — voir son affichage dans
-// socket.on('question:show', ...).
-const hostMasterVolumeControl = document.getElementById('hostMasterVolumeControl')
-const hostMasterVolumeBtn = document.getElementById('hostMasterVolumeBtn')
-const hostMasterVolumePopover = document.getElementById('hostMasterVolumePopover')
-const hostMasterVolumeTrack = document.getElementById('hostMasterVolumeTrack')
-const hostMasterVolumeFill = document.getElementById('hostMasterVolumeFill')
-const hostMasterVolumeThumb = document.getElementById('hostMasterVolumeThumb')
+// l'écran", puis "comme pour le MJ" pour le joueur "à distance") : fader
+// général — hôte toujours, joueur seulement en partie "à distance" (voir
+// son affichage dans socket.on('question:show', ...)) — au-dessus des
+// curseurs ci-dessus (Blind Test, son bonus), pas à leur place : il les
+// MULTIPLIE (voir masterVolumePct plus bas) plutôt que de les remplacer,
+// chacun garde son propre équilibre relatif. Toujours visible pendant la
+// partie pour qui y a droit (contrairement à #bonusAudioVolumeControl, qui
+// n'apparaît que pendant la lecture d'un son précis).
+const masterVolumeControl = document.getElementById('masterVolumeControl')
+const masterVolumeBtn = document.getElementById('masterVolumeBtn')
+const masterVolumePopover = document.getElementById('masterVolumePopover')
+const masterVolumeTrack = document.getElementById('masterVolumeTrack')
+const masterVolumeFill = document.getElementById('masterVolumeFill')
+const masterVolumeThumb = document.getElementById('masterVolumeThumb')
 // Question "révélation" : deux <img> empilées (voir index.html/style.css) —
 // l'énigme, visible dès le début, et la réponse, qui ne reçoit son .src
 // qu'au moment de timer:end (jamais avant, voir server/index.js) puis
@@ -1331,6 +1332,36 @@ const makeTileFocusable = (el) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
       e.preventDefault()
       el.click()
+    }
+  })
+}
+
+// Réduit progressivement la taille de police d'une tuile de réponse tant
+// que son texte déborde (retour utilisateur : "la typographie ne s'adapte
+// pas côté MJ" — .option-btn n'a qu'une taille de police FIXE par palier
+// d'écran, voir style.css ; sur le grand écran de l'hôte, où cette taille
+// est la plus élevée, une réponse longue peut déborder de sa tuile ou se
+// couper). Vise 2 lignes maximum, jamais en dessous d'un plancher lisible.
+// requestAnimationFrame : le texte doit être posé ET la tuile déjà dans le
+// DOM pour que scrollWidth/scrollHeight reflètent le rendu réel (donc pas
+// une simple exécution synchrone juste après avoir posé .textContent).
+const FIT_TILE_MIN_FONT_PX = 12
+const FIT_TILE_MAX_LINES = 2
+const fitTileText = (el) => {
+  if (!el) return
+  requestAnimationFrame(() => {
+    el.style.fontSize = ''
+    let size = parseFloat(getComputedStyle(el).fontSize)
+    if (!Number.isFinite(size)) return
+    const maxHeight = () => {
+      const lh = parseFloat(getComputedStyle(el).lineHeight)
+      return (Number.isFinite(lh) ? lh : size * 1.3) * FIT_TILE_MAX_LINES
+    }
+    let guard = 0
+    while ((el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > maxHeight() + 1) && size > FIT_TILE_MIN_FONT_PX && guard < 24) {
+      size -= 1
+      el.style.fontSize = size + 'px'
+      guard++
     }
   })
 }
@@ -2288,10 +2319,18 @@ const ensureAssociationResizeObserver = () => {
 // pour CHAQUE paire déjà complétée — coordonnées lues directement sur le DOM
 // (getBoundingClientRect) plutôt que déduites de la grille, pour rester
 // justes quel que soit le nombre de lignes que prend le texte d'une tuile.
-// Le trait va du bord DROIT de la tuile A au bord GAUCHE de la tuile B (pas
-// centre à centre) : il ne traverse ainsi jamais l'intérieur d'une tuile,
-// seulement l'espace vide entre les deux colonnes — pas besoin de le passer
-// derrière les tuiles avec un z-index.
+// Deux ORIENTATIONS possibles (retour utilisateur : "bien pour les gens sur
+// PC, si la largeur le permet" — voir le @media (min-width: 900px) sur
+// .association-area/.association-col-list dans style.css) : colonnes côte
+// à côte (mobile/étroit) ou rangées empilées (large écran). Plutôt que de
+// dupliquer le seuil 900px ici (et risquer une désync si un jour il bouge
+// côté CSS), l'orientation est déduite de la géométrie RÉELLE des deux
+// conteneurs de colonne : si B commence sous A (empilés), c'est le mode
+// rangées ; sinon (B à côté de A), c'est le mode colonnes. Dans les deux
+// cas le trait part du bord de la tuile A tourné vers B et arrive au bord
+// opposé de la tuile B (jamais centre à centre) : il ne traverse ainsi
+// jamais l'intérieur d'une tuile, seulement l'espace vide entre les deux —
+// pas besoin de le passer derrière les tuiles avec un z-index.
 const renderAssociationLinks = () => {
   if (!associationLinksSvg || !associationState || !associationColA || !associationColB || !associationArea) return
   const { matches } = associationState
@@ -2299,6 +2338,13 @@ const renderAssociationLinks = () => {
   associationLinksSvg.innerHTML = ''
   if (!areaRect.width || !areaRect.height) return
   associationLinksSvg.setAttribute('viewBox', `0 0 ${areaRect.width} ${areaRect.height}`)
+  // .association-col (parent direct de -ColA/-ColB) plutôt que les listes
+  // elles-mêmes : c'est LUI qui est empilé ou côte à côte selon le mode
+  // (voir .association-area en grid 1 ou 2 colonnes) — comparé une seule
+  // fois ici, pas par paire, la disposition est la même pour toutes.
+  const colARect = associationColA.parentElement.getBoundingClientRect()
+  const colBRect = associationColB.parentElement.getBoundingClientRect()
+  const isStackedRows = colBRect.top >= colARect.bottom - 1
   Array.from(associationColA.children).forEach((elA, i) => {
     const key = matches[i]
     if (key === null || key === undefined) return
@@ -2307,10 +2353,17 @@ const renderAssociationLinks = () => {
     const rectA = elA.getBoundingClientRect()
     const rectB = elB.getBoundingClientRect()
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
-    line.setAttribute('x1', rectA.right - areaRect.left)
-    line.setAttribute('y1', rectA.top + rectA.height / 2 - areaRect.top)
-    line.setAttribute('x2', rectB.left - areaRect.left)
-    line.setAttribute('y2', rectB.top + rectB.height / 2 - areaRect.top)
+    if (isStackedRows) {
+      line.setAttribute('x1', rectA.left + rectA.width / 2 - areaRect.left)
+      line.setAttribute('y1', rectA.bottom - areaRect.top)
+      line.setAttribute('x2', rectB.left + rectB.width / 2 - areaRect.left)
+      line.setAttribute('y2', rectB.top - areaRect.top)
+    } else {
+      line.setAttribute('x1', rectA.right - areaRect.left)
+      line.setAttribute('y1', rectA.top + rectA.height / 2 - areaRect.top)
+      line.setAttribute('x2', rectB.left - areaRect.left)
+      line.setAttribute('y2', rectB.top + rectB.height / 2 - areaRect.top)
+    }
     const colorClass = associationRevealed
       ? (key === i ? 'correct-reveal' : 'incorrect-reveal')
       : ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length]
@@ -3005,10 +3058,13 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
   }
 }
 
-// Volume GÉNÉRAL de l'hôte (retour utilisateur : "réduire le volume de tout
-// ce qui se passe sur l'écran") — LOCAL à son appareil (jamais envoyé au
-// serveur, comme les curseurs par source ci-dessous), persisté pareil.
-// hostMasterVolumePct multiplie le pourcentage de CHAQUE source (Blind
+// Volume GÉNÉRAL (retour utilisateur : "réduire le volume de tout ce qui
+// se passe sur l'écran") — hôte, et aussi joueur en partie "à distance"
+// (retour utilisateur suivant : "comme pour le MJ" — voir son affichage
+// dans question:show, plus bas). LOCAL à son appareil (jamais envoyé au
+// serveur, comme les curseurs par source ci-dessous), persisté pareil —
+// chaque appareil (hôte ou joueur) a donc son propre réglage indépendant.
+// masterVolumePct multiplie le pourcentage de CHAQUE source (Blind
 // Test, son bonus, son de révélation) plutôt que de le remplacer : à 100%
 // (valeur par défaut, jamais touché) le comportement est strictement
 // identique à avant ce fader — voir son utilisation dans
@@ -3016,13 +3072,27 @@ const wireVolumeSlider = (track, fill, thumb, initialPct, onChange) => {
 // revealAudioPlayer ci-dessous, et son propre curseur tout en bas de ce
 // bloc "Blind Test" (câblé après les deux autres, dont son onChange a
 // besoin pour tout réappliquer en direct).
-const HOST_MASTER_VOLUME_KEY = 'queazy_host_master_volume'
-const getHostMasterVolumePct = () => {
-  const saved = localStorage.getItem(HOST_MASTER_VOLUME_KEY)
+const MASTER_VOLUME_KEY = 'queazy_master_volume'
+const getMasterVolumePct = () => {
+  const saved = localStorage.getItem(MASTER_VOLUME_KEY)
   return saved !== null ? Math.min(100, Math.max(0, Number(saved))) : null
 }
-let hostMasterVolumePct = getHostMasterVolumePct() ?? 100
-const effectiveVolume = (pct) => Math.min(1, Math.max(0, (hostMasterVolumePct / 100) * (pct / 100)))
+let masterVolumePct = getMasterVolumePct() ?? 100
+// Volume propre à l'extrait de la question EN COURS (retour utilisateur :
+// "pouvoir jauger le volume pour qu'il ressorte comme attendu chez les
+// joueurs") — réglé par le créateur (voir editor.js), diffusé dans
+// payload.audioVolumePct et relu à chaque question:show (voir plus bas).
+// TROISIÈME multiplicateur dans effectiveVolume, en plus du fader général
+// et du curseur personnel du joueur — jamais un remplacement de l'un ou
+// l'autre, les trois se combinent.
+let currentAudioVolumePct = 100
+const effectiveVolume = (pct) => Math.min(1, Math.max(0, (masterVolumePct / 100) * (pct / 100) * (currentAudioVolumePct / 100)))
+// Même principe pour le son de révélation (voir question:reveal plus bas,
+// qui met à jour cette variable) — pas de curseur personnel pour ce son
+// (voir son propre commentaire plus bas), donc juste fader général ×
+// volume réglé par le créateur, sans troisième terme "joueur".
+let currentRevealAudioVolumePct = 100
+const revealEffectiveVolume = () => Math.min(1, Math.max(0, (masterVolumePct / 100) * (currentRevealAudioVolumePct / 100)))
 
 // Volume LOCAL du joueur, jamais envoyé au serveur — juste pour lui, en cas
 // de son trop fort à son goût. Persisté en localStorage pour ne pas avoir à
@@ -3338,25 +3408,25 @@ const stopBonusAudio = () => {
   bonusAudioVolumePopover?.classList.add('d-none')
 }
 
-// Fader général MJ (voir hostMasterVolumePct plus haut) : câblé ICI, une
+// Fader général (voir masterVolumePct plus haut) : câblé ICI, une
 // fois blindtestVolumeSlider/bonusAudioVolumeSlider déjà définis — son
 // onChange doit pouvoir relire leur pourcentage propre pour réappliquer
 // IMMÉDIATEMENT le nouveau volume effectif à toute source déjà en cours de
 // lecture, pas seulement à la prochaine question. revealAudioPlayer n'a pas
 // son propre curseur (voir plus bas, question:show) : le fader général est
 // ici son SEUL réglage de volume.
-const hostMasterVolumeSlider = wireVolumeSlider(hostMasterVolumeTrack, hostMasterVolumeFill, hostMasterVolumeThumb, getHostMasterVolumePct() ?? 100, (pct) => {
-  hostMasterVolumePct = pct
-  localStorage.setItem(HOST_MASTER_VOLUME_KEY, String(pct))
+const masterVolumeSlider = wireVolumeSlider(masterVolumeTrack, masterVolumeFill, masterVolumeThumb, getMasterVolumePct() ?? 100, (pct) => {
+  masterVolumePct = pct
+  localStorage.setItem(MASTER_VOLUME_KEY, String(pct))
   if (blindtestAudio) {
     blindtestAudio.volume = effectiveVolume(blindtestVolumeSlider.getPct())
     applyBlindTestAudioOutput()
   }
   if (bonusAudioPlayer) bonusAudioPlayer.volume = effectiveVolume(bonusAudioVolumeSlider.getPct())
-  if (revealAudioPlayer) revealAudioPlayer.volume = Math.min(1, Math.max(0, hostMasterVolumePct / 100))
+  if (revealAudioPlayer) revealAudioPlayer.volume = revealEffectiveVolume()
 })
-if (hostMasterVolumeBtn) {
-  hostMasterVolumeBtn.onclick = () => hostMasterVolumePopover?.classList.toggle('d-none')
+if (masterVolumeBtn) {
+  masterVolumeBtn.onclick = () => masterVolumePopover?.classList.toggle('d-none')
 }
 
 const revealBlindTestAnswer = (correctTitle, correctArtist) => {
@@ -3501,8 +3571,8 @@ const clearRevealState = () => {
   // style.css) — plus d'exception à retirer ici depuis ce changement.
   if (irlAnswerRecap) { irlAnswerRecap.classList.add('d-none'); irlAnswerRecap.innerHTML = '' }
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
-  if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.textContent = '' }
-  if (revealPopupAnswerTitle) { revealPopupAnswerTitle.classList.add('d-none'); revealPopupAnswerTitle.innerHTML = '' }
+  if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.classList.remove('is-incorrect', 'is-close'); revealAnswerText.textContent = '' }
+  if (revealPopupAnswerTitle) { revealPopupAnswerTitle.classList.add('d-none'); revealPopupAnswerTitle.classList.remove('is-incorrect', 'is-close'); revealPopupAnswerTitle.innerHTML = '' }
   if (myResultBanner) { myResultBanner.classList.add('d-none'); myResultBanner.classList.remove('is-correct', 'is-incorrect', 'is-close'); myResultBanner.textContent = '' }
   if (revealExplanationText) { revealExplanationText.classList.add('d-none'); revealExplanationText.textContent = '' }
   // Wrapper masqué en plus de l'<img> elle-même (tâche 018, voir
@@ -4112,7 +4182,7 @@ const resetUI = () => {
   // utilisateur : "laisse des traces"). Réaffichée par le prochain
   // question:show reçu (voir son handler). 'leaderOverlay' : même raison,
   // pour l'écran de classement plein écran.
-  const panels = ['lobby', 'main', 'leaderOverlay', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle', 'gameProgressInfo', 'hostMasterVolumeControl']
+  const panels = ['lobby', 'main', 'leaderOverlay', 'hostPanel', 'roomInfo', 'timerContainer', 'persistentRoomCode', 'recapSidebar', 'recapSidebarToggle', 'gameProgressInfo', 'masterVolumeControl']
   panels.forEach(id => {
     const el = document.getElementById(id)
     if (el) {
@@ -6180,6 +6250,15 @@ const emitQuestion = (index) => {
     // jamais validé côté serveur, transmis tel quel.
     revealPos: q.revealPos || undefined,
     revealBg: q.revealBg || undefined,
+    // Volume propre à CE son de révélation (retour utilisateur : "pouvoir
+    // jauger le volume pour qu'il ressorte comme attendu chez les joueurs"),
+    // réglé côté éditeur (voir editor.js revealAudioVolumeSlider) — MULTIPLIÉ
+    // côté jeu avec le volume personnel de chaque joueur/le fader général,
+    // jamais un remplacement (voir index.js effectiveVolume, question:reveal
+    // plus bas). Passe par question.revealAudioVolumePct côté serveur (comme
+    // revealAudio/revealPos/revealBg juste au-dessus) plutôt que le passthrough
+    // générique : diffusé à l'heure via question.revealPayload, pas avant.
+    revealAudioVolumePct: Number.isFinite(Number(q.revealAudioVolumePct)) ? Math.min(100, Math.max(0, Number(q.revealAudioVolumePct))) : 100,
     // "zoomguess" : zoom obligatoire sur SA propre image (voir editor.js),
     // {x, y, startScale}. Purement cosmétique côté client, aucun impact sur
     // le scoring (qui reste le texte libre générique) — pas besoin que le
@@ -6190,7 +6269,13 @@ const emitQuestion = (index) => {
     // .halo-wrap côté jeu — purement cosmétique, aucun impact serveur (la
     // pénalité de clics, elle, dépend seulement de leur NOMBRE, pas du
     // rayon, voir server/index.js).
-    haloRadius: q.type === 'halo' ? (q.haloRadius || HALO_DEFAULT_RADIUS_PCT) : undefined
+    haloRadius: q.type === 'halo' ? (q.haloRadius || HALO_DEFAULT_RADIUS_PCT) : undefined,
+    // Volume propre à l'extrait Blind Test/son facultatif (même principe que
+    // revealAudioVolumePct ci-dessus) — celui-ci, lui, PASSE PAR le
+    // passthrough générique côté serveur (aucun risque de spoiler, contrairement
+    // au son de révélation) : voir index.js effectiveVolume, playBonusAudio,
+    // buildBlindTestArea.
+    audioVolumePct: Number.isFinite(Number(q.audioVolumePct)) ? Math.min(100, Math.max(0, Number(q.audioVolumePct))) : 100
   }
   // L'image ("image" cliquable, "zoomguess" à deviner, ou simple illustration
   // au-dessus de la question pour les autres types) et l'extrait audio du
@@ -6554,6 +6639,13 @@ const fitStageContent = () => {
 
 socket.on('question:show', payload => {
   inActiveGame = true
+  // Volume propre à CETTE question (retour utilisateur : "pouvoir jauger le
+  // volume pour qu'il ressorte comme attendu chez les joueurs") — réglé par
+  // le créateur (voir editor.js), lu ici une fois par question et réutilisé
+  // par effectiveVolume() à chaque changement du curseur perso/du fader
+  // général (voir plus haut). ?? 100 : un vieux quiz sauvegardé avant
+  // l'ajout de ce champ se comporte exactement comme avant (aucune atténuation).
+  currentAudioVolumePct = Number.isFinite(Number(payload?.audioVolumePct)) ? Number(payload.audioVolumePct) : 100
   // Renfort (retour utilisateur : "il n'est plus visible") — déjà posé
   // dans emitQuestion() (avant l'aller-retour serveur), reposé ICI au
   // signal canonique "une question est affichée" reçu par l'hôte, pour ne
@@ -6575,14 +6667,17 @@ socket.on('question:show', payload => {
   if (isHost) {
     showRecapSidebarUi()
     setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
-    // Fader général (voir hostMasterVolumeSlider) : même resynchronisation à
-    // CHAQUE question que le récap juste au-dessus, même raison (rechargement/
-    // reconnexion en pleine partie) — resetUI() le cache avec .d-none ET un
-    // style.display inline, donc un simple classList.remove ne suffit pas.
-    if (hostMasterVolumeControl) {
-      hostMasterVolumeControl.classList.remove('d-none')
-      hostMasterVolumeControl.style.display = ''
-    }
+  }
+  // Fader général (voir masterVolumeSlider) : hôte TOUJOURS, joueur
+  // seulement en partie "à distance" (retour utilisateur : "comme pour le
+  // MJ" — en IRL un joueur est de toute façon muet sur ces sons, rien à
+  // régler pour lui). Même resynchronisation à CHAQUE question que le récap
+  // juste au-dessus, même raison (rechargement/reconnexion en pleine
+  // partie) — resetUI() le cache avec .d-none ET un style.display inline,
+  // donc un simple classList.remove ne suffit pas.
+  if ((isHost || gameMode === 'remote') && masterVolumeControl) {
+    masterVolumeControl.classList.remove('d-none')
+    masterVolumeControl.style.display = ''
   }
   clearRevealState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
@@ -7098,6 +7193,7 @@ socket.on('question:show', payload => {
       }
       optionsDiv.appendChild(el)
       applyTileReveal(el, i)
+      fitTileText(el)
     })
   } else if (payload.type === 'intrus' && Array.isArray(payload.options)) {
     // Réutilise le rendu QCM (mêmes tuiles .option-btn) mais choix EXCLUSIF
@@ -7227,6 +7323,7 @@ socket.on('question:show', payload => {
       }
       optionsDiv.appendChild(el)
       applyTileReveal(el, i)
+      fitTileText(el)
     })
   }
   // Ajustement générique "tient dans la carte" (voir sa définition plus
@@ -8432,10 +8529,13 @@ socket.on('question:reveal', payload => {
     // — sans ce mute, chaque téléphone joueur aurait rejoué le son en même
     // temps que l'hôte.
     revealAudioPlayer.muted = gameMode === 'remote' ? false : !isHost
-    // Pas de curseur dédié pour ce son (contrairement à Blind Test/son
-    // bonus) — le fader général MJ (hostMasterVolumePct) est son SEUL
-    // réglage de volume, voir hostMasterVolumeSlider plus haut.
-    revealAudioPlayer.volume = Math.min(1, Math.max(0, hostMasterVolumePct / 100))
+    // Pas de curseur personnel dédié pour ce son (contrairement à Blind
+    // Test/son bonus) — le fader général (masterVolumePct) et le volume
+    // réglé par le créateur pour CET extrait (payload.revealAudioVolumePct,
+    // voir editor.js) sont ses SEULS réglages de volume, voir
+    // revealEffectiveVolume/masterVolumeSlider plus haut.
+    currentRevealAudioVolumePct = Number.isFinite(Number(payload.revealAudioVolumePct)) ? Number(payload.revealAudioVolumePct) : 100
+    revealAudioPlayer.volume = revealEffectiveVolume()
     // Politique autoplay des navigateurs (risque connu, documenté dans la
     // tâche 017 — pas de mécanique de repli ici) : certains joueurs, selon
     // leur historique d'interaction, verront le son bloqué silencieusement.
@@ -8621,12 +8721,22 @@ socket.on('question:reveal', payload => {
     const normLite = s => (s || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim()
     const titleOk = !!myBlindTestSubmission?.title && correctTitles.some(t => normLite(t) === normLite(myBlindTestSubmission.title))
     const artistOk = !!myBlindTestSubmission?.artist && correctArtists.some(a => normLite(a) === normLite(myBlindTestSubmission.artist))
+    // Retour utilisateur (capture, "j'ai eu faux, c'est pas confus") :
+    // #revealAnswerText affiche ICI "Toi : ..." à côté de "Bonne réponse"
+    // (voir revealBlindTestAnswer) — en vert fixe, une mauvaise réponse
+    // rendue juste à côté de la bonne dans le MÊME vert donnait l'impression
+    // trompeuse d'avoir eu juste. Même état, même 3 branches que
+    // #myResultBanner juste en dessous (voir son propre commentaire sur
+    // pourquoi myAnsweredCorrectlyThisQuestion fait foi en dernier ressort).
+    revealAnswerText?.classList.remove('is-incorrect', 'is-close')
     if (titleOk && artistOk) {
       showMyResultBanner()
     } else if (myAnsweredCorrectlyThisQuestion) {
       showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
+      revealAnswerText?.classList.add('is-close')
     } else {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
+      revealAnswerText?.classList.add('is-incorrect')
     }
   }
   // Tâche 024 : l'hôte entend/ressent aussi le retour bonne/mauvaise réponse
@@ -8682,6 +8792,11 @@ socket.on('question:reveal', payload => {
   // copie reste alors vide/masquée, ce qui est le comportement voulu.
   if (hasRevealPopupContent && revealPopupAnswerTitle && revealAnswerText && !revealAnswerText.classList.contains('d-none')) {
     revealPopupAnswerTitle.innerHTML = revealAnswerText.innerHTML
+    // Couleur conditionnelle (Blind Test "Toi : ...") copiée avec le
+    // contenu — voir .reveal-popup-answer-title.is-incorrect/.is-close et
+    // le commentaire sur #revealAnswerText plus haut dans ce handler.
+    revealPopupAnswerTitle.classList.toggle('is-incorrect', revealAnswerText.classList.contains('is-incorrect'))
+    revealPopupAnswerTitle.classList.toggle('is-close', revealAnswerText.classList.contains('is-close'))
     revealPopupAnswerTitle.classList.remove('d-none')
   }
   // Résumé TEXTE pour l'hôte présentateur IRL (tâche 033, "l'affichage des

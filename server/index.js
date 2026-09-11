@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.25.0'
+const APP_VERSION = '2.26.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -604,6 +604,11 @@ const start = async () => {
       // cosmétiques (voir index.js applyCropTransform pour l'affichage).
       revealPos: question.revealPos || undefined,
       revealBg: question.revealBg || undefined,
+      // Volume propre à ce son, réglé côté éditeur (retour utilisateur :
+      // "pouvoir jauger le volume pour qu'il ressorte comme attendu chez
+      // les joueurs") — voir index.js effectiveVolume, qui le MULTIPLIE avec
+      // le volume personnel du joueur/le fader général, jamais un remplacement.
+      revealAudioVolumePct: question.revealAudioVolumePct ?? 100,
       target: question.type === 'graduation' ? question.correct?.[0] : undefined,
       tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined,
       players: imagePlayers
@@ -1654,7 +1659,7 @@ const start = async () => {
       // bien. revealPos/revealBg purement cosmétiques (cadrage choisi côté
       // éditeur, voir editor.js openImageCropModal), jamais validés ici —
       // même traitement que pair.aPos/bPos pour "association".
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length + (room.mode === 'auto' ? 1 : 0), options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined }
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length + (room.mode === 'auto' ? 1 : 0), options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined, revealAudioVolumePct: Number.isFinite(Number(payload?.revealAudioVolumePct)) ? Math.min(100, Math.max(0, Number(payload.revealAudioVolumePct))) : 100 }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est

@@ -1483,24 +1483,27 @@
       </div>
     </div>
 
-    <!-- Fader général MJ (retour utilisateur : "réduire le volume de tout ce
-         qui se passe sur l'écran") — HÔTE UNIQUEMENT, affiché/masqué en JS
-         (voir index.js, socket.on('question:show', ...) + resetUI) plutôt
-         que par pure règle CSS body.is-host : .d-none est en !important,
-         une règle CSS ne suffirait pas à la lever. Contrairement à
+    <!-- Fader général (retour utilisateur : "réduire le volume de tout ce
+         qui se passe sur l'écran") — HÔTE, et aussi JOUEUR en partie "à
+         distance" (retour utilisateur suivant : "comme pour le MJ" — en
+         IRL, un joueur est de toute façon muet sur ces sons, un fader
+         n'aurait rien à régler pour lui). Affiché/masqué en JS (voir
+         index.js, socket.on('question:show', ...) + resetUI) plutôt que
+         par pure règle CSS body.is-host : .d-none est en !important, une
+         règle CSS ne suffirait pas à la lever. Contrairement à
          #bonusAudioVolumeControl juste au-dessus (visible seulement pendant
          la lecture d'un son précis), reste affiché toute la partie — coin
          bas-GAUCHE pour ne pas se superposer à lui (bas-droit déjà pris).
          Multiplie les curseurs Blind Test/son bonus existants au lieu de les
-         remplacer (voir index.js hostMasterVolumePct) ; sert aussi de SEUL
+         remplacer (voir index.js masterVolumePct) ; sert aussi de SEUL
          réglage pour le son de révélation, qui n'a pas son propre curseur. -->
-    <div id="hostMasterVolumeControl" class="host-master-volume-control d-none">
-      <button type="button" id="hostMasterVolumeBtn" class="bonus-audio-volume-btn" title="Volume général (Blind Test + sons)" aria-label="Régler le volume général">🎚️</button>
-      <div id="hostMasterVolumePopover" class="bonus-audio-volume-popover d-none">
+    <div id="masterVolumeControl" class="master-volume-control d-none">
+      <button type="button" id="masterVolumeBtn" class="bonus-audio-volume-btn" title="Volume général (Blind Test + sons)" aria-label="Régler le volume général">🎚️</button>
+      <div id="masterVolumePopover" class="bonus-audio-volume-popover d-none">
         <span aria-hidden="true">🔉</span>
-        <div id="hostMasterVolumeTrack" class="volume-track">
-          <div id="hostMasterVolumeFill" class="volume-fill"></div>
-          <div id="hostMasterVolumeThumb" class="volume-thumb"></div>
+        <div id="masterVolumeTrack" class="volume-track">
+          <div id="masterVolumeFill" class="volume-fill"></div>
+          <div id="masterVolumeThumb" class="volume-thumb"></div>
         </div>
         <span aria-hidden="true">🔊</span>
       </div>

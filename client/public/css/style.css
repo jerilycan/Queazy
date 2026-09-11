@@ -2247,6 +2247,29 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   .assoc-item { padding: 13px 8px; font-size: 13px; }
 }
 
+/* Deux rangées horizontales plutôt que deux colonnes verticales, à partir
+   d'un écran large (retour utilisateur, questions à images : "trop de
+   scroll en chaîne pour retrouver une correspondance" — affiné ensuite :
+   "bien pour les gens sur PC, si la largeur le permet") — même seuil
+   "écran large" que .option-btn/.truefalse-btn ailleurs dans ce fichier.
+   GÉNÉRIQUE, pas réservé à l'hôte (contrairement à l'ancien correctif
+   tâche 030 qu'elle remplace — voir le commentaire dans la section régie
+   plus bas, body.is-host.game-active, qui se contentait d'élargir les 2
+   colonnes sans raccourcir leur hauteur) : un joueur à distance sur PC en
+   profite aussi désormais. .association-col-list en rangée + flex-wrap : si une rangée
+   ne tient pas sur une seule ligne à la largeur dispo, elle passe à la
+   ligne plutôt que de déborder ou d'écraser les tuiles — d'où "si la
+   largeur le permet", ça s'adapte en continu, pas de rupture nette.
+   Les traits SVG n'ont rien à recalculer à la main ici : voir
+   renderAssociationLinks côté index.js, qui détecte l'orientation depuis
+   la géométrie réelle des colonnes plutôt que depuis ce point de rupture
+   (donc jamais désynchronisé si ce seuil bouge un jour). */
+@media (min-width: 900px) {
+  .association-area { grid-template-columns: 1fr; max-width: 960px; gap: var(--space-lg); }
+  .association-col-list { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .assoc-item { flex: 0 1 170px; }
+}
+
 /* Liste réordonnable (question "order") */
 .order-area { max-width: 560px; margin: var(--space-lg) auto 0; }
 .order-list {
@@ -3369,14 +3392,15 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   font-size: 14px;
 }
 
-/* Fader général MJ (retour utilisateur : "réduire le volume de tout ce qui
-   se passe sur l'écran", voir index.html/index.js) — même bouton rond +
+/* Fader général (retour utilisateur : "réduire le volume de tout ce qui
+   se passe sur l'écran" — hôte, et joueur en partie "à distance" depuis un
+   retour suivant, voir index.html/index.js) — même bouton rond +
    popover pilule que .bonus-audio-volume-control juste au-dessus (classes
-   réutilisées telles quelles pour #hostMasterVolumeBtn/#hostMasterVolumePopover,
+   réutilisées telles quelles pour #masterVolumeBtn/#masterVolumePopover,
    voir index.html), seule la position/l'alignement changent : coin bas-
    GAUCHE (bas-droit déjà pris par .bonus-audio-volume-control) et popover
    aligné à gauche plutôt qu'à droite. */
-.host-master-volume-control {
+.master-volume-control {
   position: fixed;
   left: 16px;
   bottom: 16px;
@@ -4488,16 +4512,13 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
      des zones à 2-3 colonnes deviendraient disproportionnées sur un écran
      très large. */
   body.is-host.game-active .container .rangement-area { max-width: 1000px; }
-  /* Tâche 030 (suite) : association — c'est DÉJÀ la disposition "2 colonnes
-     appariées" (grid 1fr 1fr), l'existant est bon sur le principe. Seule
-     limitation : plafonné à 640px, hérité du même défaut que rangement (pensé
-     mobile/tablette, jamais élargi pour la régie). Aucun risque pour les
-     traits SVG reliant les paires (.association-links-svg) : son viewBox et
-     les coordonnées des lignes sont recalculés dynamiquement à partir du
-     rect réel de .association-area à chaque sélection (voir index.js), pas
-     de valeur figée à corriger. */
-  body.is-host.game-active .container .association-area { max-width: 900px; gap: 32px; }
-  body.is-host.game-active .container .assoc-item { padding: 20px 24px; font-size: 18px; }
+  /* Tâche 030 (suite) : association — ce simple élargissement (2 colonnes
+     appariées, plafond levé à 900px) a été remplacé par une disposition en
+     2 RANGÉES horizontales à partir de 900px (retour utilisateur ultérieur :
+     "trop de scroll en chaîne" avec des questions à images) — voir le bloc
+     @media (min-width: 900px) sur .association-area/.association-col-list
+     plus haut dans ce fichier, générique (hôte ET joueur PC), pas juste
+     réservé à la régie comme l'était ce correctif. */
   /* Tâche 030 (fin) : indice — carte centrale plafonnée à 640px de large,
      240px de haut. La hauteur FIXE (pas un minimum) est un choix technique
      documenté plus haut (empêcher un saut de taille selon le contenu), PAS
@@ -5346,6 +5367,19 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   border-radius: var(--radius-md);
   text-align: center;
 }
+/* Retour utilisateur (capture à l'appui, type Blind Test) : cet encart
+   affiche À LA FOIS "Bonne réponse : X" ET "Toi : Y" (voir
+   revealBlindTestAnswer, index.js) — en vert FIXE quel que soit le
+   résultat, "Toi : [réponse fausse]" en vert à côté de la bonne réponse
+   donnait l'impression trompeuse d'avoir eu juste. Mêmes variantes que
+   .my-result-banner juste en dessous (même esprit : jamais de rouge
+   "sanction" pour une mauvaise réponse, juste moins mis en avant que
+   correct/presque) — posées UNIQUEMENT quand ce bandeau montre aussi MA
+   réponse (voir index.js, blindtest seulement pour l'instant) : les autres
+   types n'affichent ici que LA bonne réponse (jamais "Toi : ..."), rien de
+   trompeur à corriger pour eux, le vert reste leur défaut normal. */
+.reveal-answer.is-incorrect { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
+.reveal-answer.is-close { background: var(--tile-yellow); color: #3a2e00; }
 
 /* Bandeau "Bonne réponse !/Mauvaise réponse" au reveal : nécessaire pour les
    types où la révélation ne montre que LA bonne réponse (ex. "ordre", où
@@ -5581,6 +5615,13 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   text-align: center;
   box-sizing: border-box;
 }
+/* Même correctif que .reveal-answer.is-incorrect/.is-close juste plus haut
+   dans ce fichier (retour utilisateur, Blind Test "Toi : ..." rendu en vert
+   à côté de la bonne réponse) — cette copie hérite du même contenu (voir
+   index.js, miroir de #revealAnswerText), doit donc aussi hériter de la
+   même couleur conditionnelle. */
+.reveal-popup-answer-title.is-incorrect { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
+.reveal-popup-answer-title.is-close { background: var(--tile-yellow); color: #3a2e00; }
 
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
 

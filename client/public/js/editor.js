@@ -482,6 +482,10 @@ const revealAudioUploadInput = document.getElementById('revealAudioUpload')
 const revealAudioPreviewWrap = document.getElementById('revealAudioPreviewWrap')
 const revealAudioPreviewPlayer = document.getElementById('revealAudioPreviewPlayer')
 const removeRevealAudioBtn = document.getElementById('removeRevealAudioBtn')
+const revealAudioVolumeTrack = document.getElementById('revealAudioVolumeTrack')
+const revealAudioVolumeFill = document.getElementById('revealAudioVolumeFill')
+const revealAudioVolumeThumb = document.getElementById('revealAudioVolumeThumb')
+const revealAudioVolumeLabel = document.getElementById('revealAudioVolumeLabel')
 const REVEAL_AUDIO_MAX_DURATION = 15 // secondes — durée max sélectionnable dans la popup de découpe (voir openRevealAudioTrimModal), quelle que soit la longueur du fichier importé
 
 // Son (Blind Test + tâche 027, facultatif sur les autres types) : upload du
@@ -508,7 +512,84 @@ const audioPreviewBtn = document.getElementById('audioPreviewBtn')
 const audioExtractBtn = document.getElementById('audioExtractBtn')
 const audioClipWrap = document.getElementById('audioClipWrap')
 const audioClipPlayer = document.getElementById('audioClipPlayer')
+const audioVolumeTrack = document.getElementById('audioVolumeTrack')
+const audioVolumeFill = document.getElementById('audioVolumeFill')
+const audioVolumeThumb = document.getElementById('audioVolumeThumb')
+const audioVolumeLabel = document.getElementById('audioVolumeLabel')
 const removeAudioClipBtn = document.getElementById('removeAudioClipBtn')
+
+// Curseur de volume "maison" (voir index.js wireVolumeSlider — dupliqué ici
+// volontairement, editor.js et index.js restent deux scripts classiques
+// indépendants, même choix déjà fait pour computeCropGeometry) : réutilise
+// les mêmes classes CSS déjà globales dans style.css (.volume-track/
+// .volume-fill/.volume-thumb), plutôt qu'un <input type="range"> natif —
+// bug visuel cross-navigateur déjà documenté sur ce composant (le halo de
+// focus global déborde largement du curseur).
+// Sert à régler, PAR EXTRAIT, un volume propre au son importé (retour
+// utilisateur : "pouvoir jauger le volume pour qu'il ressorte comme
+// attendu chez les joueurs") — stocké sur la question (audioVolumePct /
+// revealAudioVolumePct), MULTIPLIÉ côté jeu avec le volume personnel de
+// chaque joueur et le fader général, jamais un remplacement (voir index.js
+// effectiveVolume). 100% par défaut : un vieux quiz sans ce champ, ou un
+// extrait qu'on n'a jamais eu besoin de retoucher, se comporte exactement
+// comme avant l'ajout de ce réglage.
+const wireEditorVolumeSlider = (track, fill, thumb, label, initialPct, onChange) => {
+  if (!track || !fill || !thumb) return { setPct: () => {}, getPct: () => initialPct }
+  let pct = initialPct
+  const render = () => {
+    fill.style.width = pct + '%'
+    thumb.style.left = pct + '%'
+    track.setAttribute('aria-valuenow', pct)
+    if (label) label.textContent = pct + '%'
+  }
+  const setFromClientX = (clientX) => {
+    const r = track.getBoundingClientRect()
+    pct = Math.round(Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * 100)
+    render()
+    onChange(pct)
+  }
+  let dragging = false
+  track.addEventListener('pointerdown', e => {
+    dragging = true
+    try { track.setPointerCapture(e.pointerId) } catch {}
+    track.classList.add('grabbing')
+    setFromClientX(e.clientX)
+  })
+  track.addEventListener('pointermove', e => { if (dragging) setFromClientX(e.clientX) })
+  const endDrag = e => {
+    if (!dragging) return
+    dragging = false
+    try { track.releasePointerCapture(e.pointerId) } catch {}
+    track.classList.remove('grabbing')
+  }
+  track.addEventListener('pointerup', endDrag)
+  track.addEventListener('pointercancel', endDrag)
+  track.tabIndex = 0
+  track.setAttribute('role', 'slider')
+  track.setAttribute('aria-valuemin', '0')
+  track.setAttribute('aria-valuemax', '100')
+  track.addEventListener('keydown', e => {
+    let handled = true
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { pct = Math.min(100, pct + 5); render(); onChange(pct) }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { pct = Math.max(0, pct - 5); render(); onChange(pct) }
+    else if (e.key === 'Home') { pct = 0; render(); onChange(pct) }
+    else if (e.key === 'End') { pct = 100; render(); onChange(pct) }
+    else handled = false
+    if (handled) e.preventDefault()
+  })
+  render()
+  return {
+    setPct: (v) => { pct = Math.min(100, Math.max(0, Math.round(v))); render() },
+    getPct: () => pct
+  }
+}
+const audioVolumeSlider = wireEditorVolumeSlider(audioVolumeTrack, audioVolumeFill, audioVolumeThumb, audioVolumeLabel, 100, (pct) => {
+  if (questions[activeIndex]) questions[activeIndex].audioVolumePct = pct
+})
+const revealAudioVolumeSlider = wireEditorVolumeSlider(revealAudioVolumeTrack, revealAudioVolumeFill, revealAudioVolumeThumb, revealAudioVolumeLabel, 100, (pct) => {
+  if (questions[activeIndex]) questions[activeIndex].revealAudioVolumePct = pct
+})
+
 const correctTitleList = document.getElementById('correctTitleList')
 const correctArtistList = document.getElementById('correctArtistList')
 const addCorrectTitleBtn = document.getElementById('addCorrectTitle')
@@ -1585,6 +1666,10 @@ const populateRevealMediaFields = (q) => {
   if (q.revealAudio) {
     revealAudioPreviewPlayer.src = q.revealAudio
     revealAudioPreviewWrap.classList.remove('d-none')
+    // Resynchronise le curseur de volume à CHAQUE affichage (sélection dans
+    // la sidebar, retour depuis un autre type...), pas seulement à l'import
+    // — sinon il resterait bloqué sur le réglage de la question précédente.
+    revealAudioVolumeSlider.setPct(Number.isFinite(Number(q.revealAudioVolumePct)) ? Number(q.revealAudioVolumePct) : 100)
   } else {
     revealAudioPreviewPlayer.removeAttribute('src')
     revealAudioPreviewWrap.classList.add('d-none')
@@ -1675,6 +1760,10 @@ if (revealAudioUploadInput) {
       openRevealAudioTrimModal(file, (dataUrl) => {
         if (!questions[activeIndex]) return
         questions[activeIndex].revealAudio = dataUrl
+        // Nouvel extrait : son ancien volume n'a plus forcément de sens
+        // (piste différente, niveau d'enregistrement différent) — repart à
+        // 100%, comme un cadrage d'image remis à zéro sur un remplacement.
+        questions[activeIndex].revealAudioVolumePct = 100
         populateRevealMediaFields(questions[activeIndex])
       })
     }
@@ -1696,6 +1785,7 @@ if (removeRevealAudioBtn) {
     }).then((ok) => {
       if (!ok || !questions[activeIndex]) return
       questions[activeIndex].revealAudio = null
+      delete questions[activeIndex].revealAudioVolumePct
       populateRevealMediaFields(questions[activeIndex])
     })
   }
@@ -2260,6 +2350,10 @@ const populateAudioFields = (q) => {
   if (q.audio) {
     audioClipPlayer.src = q.audio
     audioClipWrap.classList.remove('d-none')
+    // Resynchronise le curseur de volume à CHAQUE affichage (sélection dans
+    // la sidebar, retour depuis un autre type...), pas seulement à l'import
+    // — sinon il resterait bloqué sur le réglage de la question précédente.
+    audioVolumeSlider.setPct(Number.isFinite(Number(q.audioVolumePct)) ? Number(q.audioVolumePct) : 100)
   } else {
     audioClipPlayer.removeAttribute('src')
     audioClipWrap.classList.add('d-none')
@@ -2363,6 +2457,9 @@ if (audioExtractBtn) {
     const blob = encodeWavMono(pendingAudioBuffer, start, duration)
     const dataUrl = await blobToDataUrl(blob)
     questions[activeIndex].audio = dataUrl
+    // Nouvel extrait : son ancien volume n'a plus forcément de sens (piste
+    // différente, niveau d'enregistrement différent) — repart à 100%.
+    questions[activeIndex].audioVolumePct = 100
     populateAudioFields(questions[activeIndex])
     showToast('Extrait audio prêt !')
   }
@@ -2383,6 +2480,7 @@ if (removeAudioClipBtn) {
     }).then((ok) => {
       if (!ok || !questions[activeIndex]) return
       questions[activeIndex].audio = null
+      delete questions[activeIndex].audioVolumePct
       populateAudioFields(questions[activeIndex])
     })
   }
