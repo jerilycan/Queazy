@@ -19,10 +19,22 @@ déjà satisfaites par l'architecture existante. `AUTO_ADVANCE_REVEAL_DELAY_MS`
 apparaître le classement avant que la popup joueur ait eu le temps de
 s'afficher pleinement.
 
-### 2. Régie MJ : 3 encarts de même taille
+### 2. Régie MJ : 3 encarts de même taille — REVENU EN ARRIÈRE
 `body.is-host.game-active .container` (`client/public/css/style.css`,
 `@media (min-width: 1100px)`) : `grid-template-columns: 280px minmax(0,1fr)
-280px` → `1fr 1fr 1fr`.
+280px` → `1fr 1fr 1fr` essayé, puis **annulé** après retour utilisateur
+avec capture d'écran à l'appui : les docks latéraux (contrôles hôte,
+classement) n'avaient pas assez de contenu pour occuper un tiers plein
+écran — ça laissait un vide énorme des deux côtés pendant que le centre
+(le contenu réel de la question) restait comparativement étroit, l'inverse
+de l'effet recherché. Le sous-agent de vérification avait pourtant repéré
+ce risque ("observation annexe : colonnes latérales visuellement un peu
+vides") sans le remonter comme un défaut bloquant — leçon retenue : une
+observation de ce genre doit être traitée comme un signal fort, pas
+juste une note en passant. Remis à `280px minmax(0, 1fr) 280px` (centre
+dominant, docks à taille fixe adaptée à leur contenu) — les 3 colonnes
+gardent déjà la même HAUTEUR (`align-items: stretch`), qui satisfaisait
+probablement l'intention réelle du retour utilisateur.
 
 ### 3. Petit bac : réponses cachées (pas floutées) côté MJ en IRL
 `.moderation-answers-hidden .moderation-answer-text` (`style.css`) :
@@ -80,10 +92,12 @@ suivante via `clearRevealState()`) pour que le MJ revoie la réponse
       quand même) ; `#revealPopupAnswerTitle` reprend exactement le
       contenu de `#revealAnswerText` ("Bonne réponse : X"), bandeau vert
       en haut de la popup confirmé visuellement.
-- [x] **2 (3 colonnes égales)** — sous-agent dédié : 3 colonnes mesurées à
-      la même largeur (431px chacune, écart sub-pixel négligeable), aucun
-      débordement. Observation annexe (pas un défaut) : colonnes latérales
-      visuellement un peu vides à cette largeur.
+- [x] **2 (3 colonnes égales) — REVENU EN ARRIÈRE** : essayé en 1fr 1fr
+      1fr (validé techniquement par sous-agent, 431px chacune, aucun
+      débordement), mais retour utilisateur avec capture d'écran réelle :
+      vide énorme dans les docks latéraux, centre comparativement étroit.
+      Remis à `280px minmax(0,1fr) 280px`, revérifié EN DIRECT
+      (screenshot) — rendu équilibré, docks compacts, centre dominant.
 - [x] **3 (petit bac caché)** — sous-agent dédié : bandeaux masqués mesurés
       à largeur STRICTEMENT identique (62.92px) pour "Ami" (3 lettres) et
       "Anticonstitutionnellement" (25 lettres), aucune fuite de longueur ;

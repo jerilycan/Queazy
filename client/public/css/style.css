@@ -4053,14 +4053,19 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     width: 100%;
     padding: 0 24px;
     margin: 0;
-    /* Tâche 033 (retour utilisateur) : "les 3 encarts doivent être de la
-       même taille" — remplace l'ancien 280px minmax(0,1fr) 280px (centre
-       dominant, docks latéraux étroits à taille fixe) par 3 tiers stricts
-       et égaux. Les docks latéraux (#hostPanel/#liveClassementDock) et
-       leur contenu interne n'avaient pas de largeur en dur dépendant de
-       280px (déjà en %/flex, voir leurs règles plus bas) : ce changement
-       de grille ne demande pas d'ajustement supplémentaire de leur côté. */
-    grid-template-columns: 1fr 1fr 1fr;
+    /* Tâche 033 : "les 3 encarts doivent être de la même taille" essayé en
+       3 tiers stricts et égaux (1fr 1fr 1fr) — REVENU EN ARRIÈRE (retour
+       utilisateur, capture d'écran à l'appui) : les docks latéraux
+       (contrôles hôte, classement) n'ont pas assez de contenu pour
+       occuper un tiers plein écran, ça laissait un vide énorme des deux
+       côtés pendant que le centre (le contenu réel de la question)
+       restait comparativement étroit — le contraire de l'effet recherché.
+       Retour à 280px minmax(0,1fr) 280px (centre dominant, docks à taille
+       fixe adaptée à leur contenu) — "même taille" satisfait autrement :
+       les 3 colonnes ont déjà la même HAUTEUR (align-items:stretch,
+       height:100%, voir juste en dessous), qui est ce qui donnait
+       l'impression de déséquilibre sur la capture d'origine. */
+    grid-template-columns: 280px minmax(0, 1fr) 280px;
     /* Retour utilisateur (2e passe) : "les blocs gauche et droite doivent
        prendre la hauteur, comme le design décidé ensemble" — une seule
        rangée explicite (1fr) qui occupe TOUTE la hauteur disponible
