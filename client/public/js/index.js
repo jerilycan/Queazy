@@ -254,18 +254,96 @@ const confirmGuestJoin = document.getElementById('confirmGuestJoin')
 const cancelGuestJoin = document.getElementById('cancelGuestJoin')
 
 // Tâche 034 (retour utilisateur) : bouton "scanner un QR code" à gauche du
-// champ "Code salle" — ouvre l'appareil photo via un <input type="file"
-// capture="environment"> caché (déclenché par un clic programmatique) plutôt
-// qu'un flux vidéo live (getUserMedia) : pas de permission caméra
-// persistante à gérer, une seule photo suffit, marche pareil sur mobile
-// (ouvre directement l'appli photo) que sur desktop (sélecteur de fichier,
-// utile pour scanner une capture d'écran). Décodage CÔTÉ CLIENT (jsQR, voir
-// index.html) : aucune image envoyée au serveur.
+// champ "Code salle". v1 ouvrait l'appareil photo (une seule capture,
+// décodée après coup) — retour utilisateur : "l'appareil photo ignore
+// complètement son but de recherche de qr code" (aucune API web ne permet
+// d'activer le mode détection QR natif du téléphone depuis un site, ce
+// mode n'existe que dans l'appli Appareil photo elle-même, jamais quand
+// elle sert de simple sélecteur pour un <input type="file">). v2 : vrai
+// scanner LIVE dans la page (flux caméra via getUserMedia, décodé en
+// continu image par image, voir startQrScan/tickQrScan plus bas) — même
+// principe que le scanner QR de WhatsApp Web. Décodage CÔTÉ CLIENT (jsQR,
+// voir index.html) dans les deux cas : aucune image envoyée au serveur.
 const qrScanBtn = document.getElementById('qrScanBtn')
 const qrScanFile = document.getElementById('qrScanFile')
 const qrScanError = document.getElementById('qrScanError')
+const qrScanOverlay = document.getElementById('qrScanOverlay')
+const qrScanVideo = document.getElementById('qrScanVideo')
+const qrScanCloseBtn = document.getElementById('qrScanCloseBtn')
+let qrScanStream = null
+let qrScanRAF = null
+let qrScanCanvas = null
+
+const stopQrScan = () => {
+  if (qrScanRAF) cancelAnimationFrame(qrScanRAF)
+  qrScanRAF = null
+  if (qrScanStream) {
+    // Coupe VRAIMENT la caméra (pas juste l'affichage) : sans ça, le
+    // voyant/l'icône caméra du téléphone resterait allumé en arrière-plan
+    // après fermeture du scanner.
+    qrScanStream.getTracks().forEach(t => t.stop())
+    qrScanStream = null
+  }
+  if (qrScanVideo) qrScanVideo.srcObject = null
+  if (qrScanOverlay) qrScanOverlay.classList.add('d-none')
+}
+
+// Boucle de décodage — une frame vidéo à la fois, tant que le scanner est
+// ouvert (qrScanStream non nul, retiré par stopQrScan). readyState vérifié
+// avant chaque frame : au tout début du flux (permission tout juste
+// accordée), la vidéo peut ne pas encore avoir de pixels à lire.
+const tickQrScan = () => {
+  if (!qrScanStream || !qrScanVideo) return
+  if (qrScanVideo.readyState >= qrScanVideo.HAVE_CURRENT_DATA) {
+    const w = qrScanVideo.videoWidth
+    const h = qrScanVideo.videoHeight
+    if (w && h) {
+      if (!qrScanCanvas) qrScanCanvas = document.createElement('canvas')
+      qrScanCanvas.width = w
+      qrScanCanvas.height = h
+      const ctx = qrScanCanvas.getContext('2d')
+      ctx.drawImage(qrScanVideo, 0, 0, w, h)
+      const imageData = ctx.getImageData(0, 0, w, h)
+      const result = window.jsQR ? window.jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' }) : null
+      const code = result && extractRoomCodeFromQrText(result.data)
+      if (code) {
+        roomInput.value = code
+        stopQrScan()
+        nameInput.focus()
+        return
+      }
+    }
+  }
+  qrScanRAF = requestAnimationFrame(tickQrScan)
+}
+
+const startQrScan = async () => {
+  if (qrScanError) qrScanError.classList.add('d-none')
+  // Repli silencieux (pas de bouton dédié) : navigateur sans caméra/API
+  // (desktop sans webcam) ou sans jsQR chargé (échec réseau du CDN) — la
+  // capture photo reste utilisable (scanner une capture d'écran, etc.).
+  if (!navigator.mediaDevices?.getUserMedia || !window.jsQR) {
+    qrScanFile.click()
+    return
+  }
+  try {
+    qrScanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+  } catch {
+    // Permission refusée, aucune caméra dispo, contexte non sécurisé
+    // (getUserMedia exige HTTPS/localhost)... quelle que soit la raison,
+    // même repli que ci-dessus plutôt qu'un message d'erreur technique.
+    qrScanFile.click()
+    return
+  }
+  qrScanVideo.srcObject = qrScanStream
+  try { await qrScanVideo.play() } catch { /* autoplay refusé — rare avec muted+playsinline, ignoré */ }
+  qrScanOverlay.classList.remove('d-none')
+  qrScanRAF = requestAnimationFrame(tickQrScan)
+}
+
 if (qrScanBtn && qrScanFile) {
-  qrScanBtn.onclick = () => qrScanFile.click()
+  qrScanBtn.onclick = startQrScan
+  if (qrScanCloseBtn) qrScanCloseBtn.onclick = stopQrScan
   qrScanFile.addEventListener('change', () => {
     const file = qrScanFile.files && qrScanFile.files[0]
     // Réinitialisé tout de suite (pas seulement en fin de traitement) : sans

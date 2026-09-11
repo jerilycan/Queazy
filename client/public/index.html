@@ -752,15 +752,23 @@
         <h2 class="mb-lg font-32">C’est l’heure du quiz !</h2>
         <div class="d-flex flex-column gap-md">
           <!-- Tâche 034 (retour utilisateur) : bouton "scanner un QR code" à
-               gauche du champ "Code salle" — ouvre directement l'appareil
-               photo (input file caché, capture="environment") plutôt qu'un
-               flux vidéo live façon lecteur de code-barres (plus simple, pas
-               de permission caméra persistante à gérer) ; la photo est
-               décodée côté client (jsQR, voir index.js scanQrCodeFile) —
-               le QR déjà affiché côté hôte encode l'URL de la salle
-               (`${base}/?room=CODE`, voir renderRoomInfo plus bas dans ce
-               fichier), le code y est donc extrait puis posé dans #room,
-               exactement comme si l'utilisateur l'avait tapé. -->
+               gauche du champ "Code salle". v1 ouvrait juste l'appareil
+               photo (une seule capture, décodée après coup) — retour
+               utilisateur : "l'appareil photo ignore complètement son but
+               de recherche de qr code" (aucune API web ne permet d'activer
+               le mode "détection QR" natif du téléphone depuis un site, ce
+               mode n'existe que dans l'appli Appareil photo elle-même).
+               v2 (ci-dessous) : vrai scanner LIVE dans la page — flux
+               caméra (getUserMedia) affiché dans #qrScanOverlay, décodé en
+               continu (jsQR sur chaque frame, voir startQrScan/tickQrScan
+               dans index.js) jusqu'à trouver un code, comme le fait
+               WhatsApp Web pour scanner un QR de connexion. Le QR de
+               l'hôte encode l'URL de la salle (`${base}/?room=CODE`, voir
+               renderRoomInfo plus bas dans ce fichier) : le code en est
+               extrait puis posé dans #room. #qrScanFile (capture photo)
+               reste un REPLI silencieux (pas de bouton dédié) pour les
+               navigateurs sans caméra/`getUserMedia` (desktop sans webcam,
+               ou pour scanner une capture d'écran). -->
           <div class="d-grid join-code-row gap-sm">
             <button type="button" id="qrScanBtn" class="btn qr-scan-btn" title="Scanner le QR code de la salle" aria-label="Scanner le QR code de la salle">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20v.01"/></svg>
@@ -770,6 +778,19 @@
           </div>
           <input type="file" id="qrScanFile" accept="image/*" capture="environment" class="d-none" />
           <div id="qrScanError" class="qr-scan-error d-none"></div>
+          <div id="qrScanOverlay" class="qr-scan-overlay d-none">
+            <button type="button" id="qrScanCloseBtn" class="qr-scan-close-btn" aria-label="Fermer le scanner">✕</button>
+            <div class="qr-scan-frame">
+              <video id="qrScanVideo" autoplay playsinline muted></video>
+              <div class="qr-scan-viewfinder">
+                <span class="qr-scan-corner"></span>
+                <span class="qr-scan-corner"></span>
+                <span class="qr-scan-corner"></span>
+                <span class="qr-scan-corner"></span>
+              </div>
+            </div>
+            <div class="qr-scan-hint">Vise le QR code affiché par l'hôte</div>
+          </div>
           <button id="join" class="btn btn-primary h-56 font-18 w-full">
             <span>Rejoindre la partie</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>

@@ -104,6 +104,56 @@ contexte (joueur IRL/à distance, mobile) — `.mt-40` reste inchangé
 partout ailleurs. Vérifié en direct : `#main` démarre maintenant à 130px
 (au lieu de 80px), capture d'écran confirmant un espacement confortable.
 
+## Suite 2 (retours utilisateur après tests réels)
+
+### QR : scanner LIVE au lieu d'une simple photo
+Retour utilisateur : "l'appareil photo ignore complètement son but de
+recherche de qr code" — `capture="environment"` ouvre l'appli Appareil
+Photo standard, jamais un mode "détection QR" (qui n'existe que dans
+l'appli native elle-même, aucune API web ne l'expose). Remplacé par un
+vrai scanner intégré à la page : flux caméra (`getUserMedia`) affiché
+dans `#qrScanOverlay`, décodé en continu (jsQR sur chaque frame via
+`requestAnimationFrame`) jusqu'à trouver un code — même principe que le
+scanner de WhatsApp Web. La capture photo (`#qrScanFile`) reste un repli
+silencieux pour les navigateurs sans caméra/`getUserMedia` (desktop sans
+webcam). Caméra coupée proprement à la fermeture (`getTracks().forEach(t
+=> t.stop())`) pour ne pas laisser le voyant allumé. **Non testable en
+conditions réelles dans ce sandbox** (accès caméra bloqué) : le repli
+photo a été vérifié comme se déclenchant correctement sur refus/absence
+de caméra, sans erreur JS.
+
+### QR : masqué hors mobile
+Retour utilisateur : le bouton scan n'a de sens que depuis l'appareil qui
+a la caméra en main — masqué au-delà de 640px (même seuil que le reste
+des adaptations mobiles), grille repassée à 2 colonnes. Vérifié en direct
+(desktop : bouton absent, formulaire à 2 colonnes normal).
+
+### QR : viseur stylisé Queazy (violet/cyan)
+1er essai : dégradé plein en `background` — abandonné en vérifiant en
+direct (remplissait tout le carré, pas juste une bordure : cette
+technique ne peut que MASQUER le centre avec une couleur opaque, jamais
+laisser un flux vidéo transparaître). Remplacé par 4 coins façon viseur
+(Google Lens/WhatsApp Web), dégradé accent-2→cyan suggéré par la couleur
+de chaque coin, avec glow. Vérifié en direct (capture d'écran) : rendu
+conforme, centre bien transparent.
+
+### Bug : "en tant que MJ, je peux scroll, et c'est très moche en dessous"
+Root-cause trouvé par isolation binaire (désactiver `overflow` de
+chaque suspect un par un jusqu'à voir `scrollHeight` retomber) : `#hostPanel`
+garde la classe utilitaire `.justify-between` posée dans le HTML pour sa
+disposition D'ORIGINE (rangée icône+titre, hors partie) — jamais
+neutralisée pour la disposition EN COLONNE de la régie, où
+`justify-content: space-between` hérité éparpillait les quelques items
+sur toute la hauteur (gros vide entre "Suivant" et la pastille "Ambiance")
+ET faussait le calcul de la hauteur de page (`scrollHeight` gonflé
+d'environ 300px, SANS aucun contenu réel dans cet espace — probable quirk
+navigateur, flex-column + enfant `display:contents`). Corrigé :
+`justify-content: flex-start` (empilement compact) + `overflow: hidden`
+(remis, sûr maintenant que tout le contenu réel tient confirmé dans la
+boîte — voir l'historique détaillé en commentaire CSS). Vérifié en direct :
+`scrollHeight` repassé de 1201 à 916 (≈ viewport), capture d'écran
+confirmant un panneau compact sans vide disgracieux.
+
 ## Risques restants
 - QR : jsQR chargé depuis jsdelivr (cdnjs ne l'héberge pas) — à surveiller
   si ce CDN venait à changer de politique de disponibilité.
@@ -112,6 +162,16 @@ partout ailleurs. Vérifié en direct : `#main` démarre maintenant à 130px
   final — le résultat vérifié en direct est déjà bon, mais un œil averti
   pourrait vouloir affiner l'espacement exact entre le Q et les
   décorations réordonnées.
+- QR live : l'accès caméra est bloqué dans ce sandbox de test — le flux
+  vidéo + la boucle de décodage n'ont PAS pu être vérifiés en conditions
+  réelles (uniquement le repli photo sur refus/absence de caméra). À
+  tester sur un vrai téléphone.
+- `#hostPanel` : `overflow: hidden` remis (3e fois sur ce même point dans
+  l'historique de ce fichier) — sûr aujourd'hui car tout le contenu réel
+  tient dans la boîte (vérifié), mais un contenu futur plus riche serait
+  SILENCIEUSEMENT coupé plutôt que de créer un débordement visible. Si un
+  jour un élément semble manquant dans cette colonne, penser à ce
+  changement avant de chercher ailleurs.
 
 ## Statut
 `en review`

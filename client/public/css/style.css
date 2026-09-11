@@ -4144,30 +4144,48 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    /* Bug corrigé (retour utilisateur : "c'est très moche en dessous" +
+       scroll de page inattendu) : #hostPanel garde la classe utilitaire
+       `.justify-between` posée dans le HTML pour sa disposition D'ORIGINE
+       (rangée icône+titre, hors partie) — jamais neutralisée ici pour la
+       disposition EN COLONNE de la régie, où `justify-content:
+       space-between` hérité éparpillait les quelques items sur toute la
+       hauteur de la colonne (gros vide entre "Suivant" et la pastille
+       "Ambiance" tout en bas) ET faussait le calcul de hauteur de
+       débordement de la page (`scrollHeight` de la page gonflé de ~300px
+       au-delà du viewport, sans aucun contenu réel dans cet espace —
+       reproductible en direct, `hostPanel.style.overflow='hidden'` seul
+       suffisait à le faire disparaître). `flex-start` : les items
+       s'empilent normalement, compacts, en haut de la colonne. */
+    justify-content: flex-start;
     gap: 16px;
     /* Étiré à toute la hauteur de la rangée (voir .container ci-dessus).
-       Historique (gardé pour mémoire) : rendu scrollable un temps (scrollbar
-       masquée) car le contenu pouvait dépasser la boîte sur un écran moins
-       haut que large et qu'un simple overflow:hidden coupait alors du
-       contenu SANS PRÉVENIR (dont, potentiellement, le bas du bouton
-       "Question suivante" et son icône). Retour utilisateur (capture
-       d'écran) : "cette colonne ne doit pas être scrollable" — remis en
-       overflow visible ; le contenu allégé de cette colonne tient
-       désormais largement dans la hauteur dispo en usage réel (voir la
-       capture — beaucoup d'espace vide sous "Ambiance"), le compromis
-       scroll-invisible n'a plus lieu d'être. Si un débordement réapparaît
-       un jour (contenu plus riche), revoir plutôt la hauteur de .container/
-       #stageWrap que de réintroduire un scroll caché ici.
-       BUG trouvé (retour utilisateur : "peut être scrollée alors que je
-       t'ai demandé de le retirer") : `overflow-y: visible` seul ne suffit
-       pas — .card (classe de base sur #hostPanel) pose `overflow: hidden`
-       sur les DEUX axes ; cette règle ne réécrivait que Y, laissant
-       overflow-x à `hidden`. Or la spec CSS recalcule un axe "visible" en
-       "auto" dès que l'autre axe ne l'est pas (overflow-x/-y ne peuvent pas
-       diverger sur ce point précis) — d'où une vraie scrollbar malgré la
-       valeur déclarée. Corrigé en posant le raccourci `overflow` sur les
-       deux axes à la fois. */
-    overflow: visible;
+       Historique (gardé pour mémoire, plusieurs allers-retours) :
+       1) rendu scrollable un temps (scrollbar masquée) car le contenu
+          pouvait dépasser la boîte sur un écran moins haut que large ;
+       2) retour utilisateur ("cette colonne ne doit pas être scrollable")
+          — remis en overflow visible ;
+       3) bug retour utilisateur ("peut être scrollée alors que je t'ai
+          demandé de le retirer") — overflow-y:visible seul ne suffisait
+          pas (.card, classe de base, pose overflow:hidden sur les DEUX
+          axes ; la spec CSS recalcule un axe "visible" en "auto" dès que
+          l'autre ne l'est pas) — corrigé en posant `overflow` (raccourci,
+          2 axes) à `visible` ;
+       4) BUG suivant (retour utilisateur : "moche" + scroll de PAGE
+          inattendu, capture à l'appui) : avec overflow:visible, la vraie
+          cause (justify-content:space-between hérité de .justify-between,
+          voir juste au-dessus) faisait gonfler `scrollHeight` d'environ
+          300px SANS AUCUN CONTENU RÉEL dans cet espace (vérifié : chaque
+          item visible tient largement dans les 728px disponibles une fois
+          `flex-start` posé) — probable quirk navigateur (calcul de
+          overflow scrollable d'un flex-column dont un enfant direct est en
+          display:contents). Repassé à `overflow: hidden` : plus rien à
+          couper (tout tient déjà), et ça élimine ce débordement fantôme à
+          la source. Si un JOUR un vrai débordement visible réapparaît
+          (contenu plus riche qui dépasse réellement 728px), revoir plutôt
+          la hauteur de .container/#stageWrap que de repasser en overflow
+          visible — cette valeur a déjà causé 2 bugs distincts ici. */
+    overflow: hidden;
     /* Retour utilisateur (capture d'écran) : "la tuile gauche devrait
        changer de design pour coller à celle de droite" (#liveClassementDock,
        plus bas) — liseré rose (.border-accent-left, posé en dur dans le
@@ -4720,6 +4738,17 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
    rapport). 3e colonne "auto" pour le bouton QR, carrée (largeur = hauteur
    des champs voisins, voir .qr-scan-btn). */
 .join-code-row { grid-template-columns: auto 1fr 1.5fr; align-items: stretch; }
+/* Retour utilisateur : "ne pas afficher le bouton scan QR code si on n'est
+   pas sur mobile" — scanner un QR n'a de sens que depuis l'appareil qui a
+   la caméra sous la main pointée vers un autre écran (le sien) ; sur
+   desktop, on tape le code affiché à l'écran, pas besoin de ce bouton
+   (même seuil 640px que le reste des adaptations mobiles de l'appli).
+   Grille repassée à 2 colonnes (comme .grid-cols-split) : la 1re colonne
+   "auto" n'a plus de raison d'être une fois le bouton retiré. */
+@media (min-width: 641px) {
+  #qrScanBtn { display: none; }
+  .join-code-row { grid-template-columns: 1fr 1.5fr; }
+}
 .qr-scan-btn {
   aspect-ratio: 1;
   padding: 0;
@@ -4738,6 +4767,103 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   color: var(--color-danger);
   font-size: 13px;
   font-weight: 700;
+  text-align: center;
+}
+/* Tâche 034 v2 : scanner QR live (retour utilisateur — un input file
+   "capture" n'active jamais le mode détection QR natif du téléphone,
+   juste l'appareil photo classique). Plein écran, même langage que les
+   autres popups plein écran de l'appli (fond sombre + flou). */
+.qr-scan-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(5, 5, 15, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+.qr-scan-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.qr-scan-close-btn:hover { background: rgba(255, 255, 255, 0.2); }
+.qr-scan-frame {
+  position: relative;
+  width: min(320px, 80vw);
+  height: min(320px, 80vw);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #000;
+  box-shadow: var(--shadow-lg);
+}
+.qr-scan-frame video {
+  width: 100%;
+  height: 100%;
+  /* object-fit:cover, pas contain : le flux caméra garde généralement un
+     ratio 16:9/4:3, jamais carré comme ce cadre — cover remplit le cadre
+     carré sans bande vide, quitte à rogner les bords (le centre, où on
+     vise le QR, reste toujours entièrement visible). */
+  object-fit: cover;
+}
+/* Cadre de visée (purement décoratif, jamais lu par jsQR — le decodage
+   porte sur l'image ENTIÈRE de la frame vidéo, pas seulement ce carré) :
+   retour utilisateur ("un design Queazy, violet/bleu"). 1re version : un
+   dégradé plein en `background` (technique "double fond padding-box/
+   border-box") — abandonnée en vérifiant en direct, elle remplit TOUT le
+   carré au lieu de rester une fine bordure (cette technique fonctionne
+   seulement pour "masquer" le centre avec une couleur OPAQUE, jamais pour
+   laisser le flux vidéo transparaître). Remplacée par 4 coins façon
+   viseur d'appareil photo (le vrai réflexe visuel d'un scanner QR — Google
+   Lens, WhatsApp Web...) : chaque coin est juste 2 traits (border-top +
+   border-left, etc.), jamais de fond plein, donc jamais ce problème.
+   Dégradé accent-2 (violet) -> cyan suggéré en alternant la couleur des 4
+   coins (un vrai border-image dégradé ignore border-radius de toute façon
+   — coins ANGULAIRES ici, donc sans objet). */
+.qr-scan-viewfinder {
+  position: absolute;
+  inset: 12%;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: qr-scan-pulse 2s ease-in-out infinite;
+}
+.qr-scan-corner {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border: 4px solid var(--color-accent-2);
+  filter: drop-shadow(0 0 6px rgba(var(--color-accent-2-rgb), 0.7));
+}
+.qr-scan-corner:nth-child(1) { top: -3px; left: -3px; border-right: none; border-bottom: none; border-top-left-radius: var(--radius-md); }
+.qr-scan-corner:nth-child(2) { top: -3px; right: -3px; border-left: none; border-bottom: none; border-top-right-radius: var(--radius-md); border-color: var(--color-cyan); filter: drop-shadow(0 0 6px rgba(47, 227, 255, 0.7)); }
+.qr-scan-corner:nth-child(3) { bottom: -3px; left: -3px; border-right: none; border-top: none; border-bottom-left-radius: var(--radius-md); border-color: var(--color-cyan); filter: drop-shadow(0 0 6px rgba(47, 227, 255, 0.7)); }
+.qr-scan-corner:nth-child(4) { bottom: -3px; right: -3px; border-left: none; border-top: none; border-bottom-right-radius: var(--radius-md); }
+@keyframes qr-scan-pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qr-scan-viewfinder { animation: none; }
+}
+.qr-scan-hint {
+  color: white;
+  font-weight: 700;
+  font-size: 15px;
   text-align: center;
 }
 .divider { display: flex; align-items: center; gap: 16px; margin: 12px 0; }
