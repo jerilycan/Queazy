@@ -4327,7 +4327,24 @@ const loadQuizById = (id) => {
         revealImage: q.revealImage,
         revealAudio: q.revealAudio,
         revealPos: q.revealPos,
-        revealBg: q.revealBg
+        revealBg: q.revealBg,
+        // Même piège, une 6e fois (retour utilisateur : "quand je lance la
+        // partie, ça ne dézoome pas complètement l'image comme je l'ai
+        // définie dans ma configuration") : le recadrage statique de
+        // "zoomguess" (imagePos/imageBg, tâche 035 — voir applyCropTransform
+        // dans emitQuestion/index.js) ET son point de zoom (zoom, x/y/
+        // startScale) disparaissaient silencieusement à CE chargement précis
+        // (celui utilisé pour lancer une vraie partie) — l'éditeur, lui,
+        // affiche sa vignette directement depuis l'objet question en mémoire
+        // (voir applyZoomGuessPreviewCrop, editor.js), jamais reparti par ce
+        // chemin, donc le recadrage semblait fonctionner là-bas sans jamais
+        // atteindre la partie réelle. emitQuestion retombait alors sur son
+        // repli par défaut (imagePos absent -> centré/zoom plein, zoom absent
+        // -> point de départ générique) — aucun rebord, aucune erreur
+        // visible, exactement comme les 5 oublis précédents ci-dessus.
+        imagePos: q.imagePos,
+        imageBg: q.imageBg,
+        zoom: q.zoom
       }))
       loadedQuiz = {
         id: data.id,
