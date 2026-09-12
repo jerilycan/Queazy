@@ -164,8 +164,21 @@ uniquement du CSS/JS côté client.
       2 colonnes (identique à avant), 6 → 3, 8 → 4 — tuiles toujours
       bien lisibles, `mainZoom` reste à `1` (aucune réduction
       déclenchée) même à 8 options sur 1366×768.
-- [ ] 3. Vérification visuelle complète (avec image, coexistence tâche
-      037, cas de stress texte long)
+- [x] 3. Vérification visuelle complète — MCQ + illustration à 4 et 8
+      options : image toujours visible, tuiles lisibles, aucun scroll,
+      bonne coexistence avec la tâche 037 (image profite de l'espace
+      libéré par une grille plus compacte). Cas cumulé extrême repéré
+      (énoncé long + 8 options + illustration) : l'illustration se
+      réduit jusqu'à disparaître complètement (espace vertical
+      entièrement absorbé par le texte + les tuiles avant elle) — montré
+      à l'utilisateur, jugé acceptable pour l'instant (résultat
+      recherché — tuiles lisibles — atteint ; ce cas cumulé n'est pas le
+      scénario décrit au départ). Piste retenue si retravaillé plus tard
+      : réduire `#stageWrap`'s padding-top (96px, historique de réglages
+      à la marge documentée dans son commentaire style.css) pour libérer
+      de la place — nécessite une vérification live soigneuse (badge/
+      timer en position absolue juste en dessous) avant d'y toucher, pas
+      fait dans cette tâche.
 
 ## Checks effectués
 - [x] Étape 1 : `node --check client/public/js/index.js` — passe.
@@ -173,10 +186,9 @@ uniquement du CSS/JS côté client.
       (script Playwright jetable) sur 2/4/6/8 options à 1366×768 —
       captures + mesures (`--mcq-cols`, `grid-template-columns`,
       `mainZoom`) conformes à l'attendu pour les 4 cas.
-- [ ] `node --check client/public/js/index.js`
-- [ ] Vérification visuelle (script Playwright jetable, comme pour les
-      tâches 036/037 — aucun outil Browser pane interactif dans cette
-      session distante)
+- [x] Étape 3 : vérification visuelle avec illustration (2/4/8 options +
+      image, + cas cumulé énoncé long) — captures envoyées à
+      l'utilisateur, comportement discuté et jugé acceptable en l'état.
 
 ## Tests manuels recommandés
 En régie desktop (≥1100px), salle IRL (Présenter et "à distance", même
@@ -205,6 +217,22 @@ régie) :
   raisonnable, pas testés avec du vrai contenu utilisateur (textes
   d'options réels, pas les placeholders synthétiques du script de test)
   — à ajuster si le rendu réel semble trop serré ou trop clairsemé.
+- **Cas cumulé extrême** (énoncé de question long + 8 options +
+  illustration) : l'illustration disparaît complètement (réduite à 0 par
+  le flex-grow, aucune place restante une fois texte + tuiles logés) —
+  montré à l'utilisateur, jugé secondaire par rapport à l'objectif
+  principal (tuiles lisibles, atteint). Piste de correctif envisagée
+  mais NON faite ici : réduire `#stageWrap`'s `padding-top` (96px
+  aujourd'hui, marge dont l'historique dans `style.css` documente déjà
+  un tâtonnement — 48px insuffisant, 80px encore signalé insuffisant
+  mais soupçonné d'être un artefact de cache PWA plutôt qu'un vrai
+  calcul, 96px jamais revalidé depuis) pour redonner de la place — décrit
+  comme "pousser l'énoncé plus haut, dans la limite d'une marge minimum
+  de respiration". Nécessite une mesure live précise du dégagement
+  réel sous le badge/timer (tous deux position:absolute juste en
+  dessous) avant de choisir une nouvelle valeur, pour ne pas
+  réintroduire le chevauchement historique — à reprendre dans une
+  tâche dédiée si besoin.
 
 ## Statut
-`en cours`
+`en review`
