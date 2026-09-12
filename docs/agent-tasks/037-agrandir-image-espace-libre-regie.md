@@ -101,7 +101,123 @@ comportement actuel inchangé (carte compacte, centrée).
   historique uniquement, pas de modification de son contenu.
 
 ## Plan
-_à remplir par `/plan-feature`_
+
+**Conclusion de l'exploration** : "l'image" de la question ne vit pas au
+même endroit selon le type — trois familles bien distinctes :
+1. **Illustration décorative générique** (`#illustrationImgWrap` /
+   `#illustrationImg`, `payload.illustrationUrl`) : utilisée par TOUS les
+   types SAUF `image`/`reveal`/`recherche`/`halo`/`zoomguess` (qui ont leur
+   propre champ image dédié, voir `emitQuestion` ~ligne 6283). C'est le cas
+   le plus fréquent (mcq/truefalse/intrus/graduation/order/timeline/
+   rangement/indice/blindtest/free/pbac) et celui qui illustre le mieux le
+   problème signalé : plafond fixe `.illustration-img { max-height: 260px
+   }` (ligne 2925, pensé mobile), jamais remonté pour la régie desktop —
+   contrairement aux zones par type de la tâche 030.
+2. **Zone image dédiée dans `#inputArea`**, où l'image EST tout le contenu
+   de la question : `reveal`/`recherche`/`halo` partagent déjà un plafond
+   généreux et responsive en régie desktop (`height: min(65vh, 560px)`,
+   ligne 4541, tâche 030) — déjà mieux loti que le cas 1, mais toujours un
+   plafond FIXE, pas dépendant de l'espace réellement libre pour CETTE
+   question précise.
+3. **Cas à part, mécaniquement plus sensibles** : `image` (zone cliquable,
+   `#imageWrap` dimensionné via JS "une seule fois", pas en pur CSS, voir
+   ligne ~2731) et `zoomguess` (mécanisme de zoom/dézoom avec calculs de
+   transform dépendant de la taille affichée) — agrandir leur boîte sans
+   casser leurs calculs JS demande plus de prudence. `association` n'a
+   PAS "une image" mais jusqu'à 16 petites images de tuiles : agrandir
+   l'espace ne se traduit pas par "une image plus grande" de la même
+   façon.
+
+**Approche retenue (cas 1 et 2)** : purement CSS, pas de mesure JS. Poser
+UNE classe (ex. `has-question-image`) sur `#stageWrap`/`#main` à
+`question:show`, dès que la question a une image (n'importe laquelle des
+sources ci-dessus) — puis :
+- `#stageWrap` : `align-self: stretch` au lieu de `center` sous cette
+  classe (rejoint la hauteur des blocs latéraux, déjà stretch).
+- `#main` passe en `display:flex; flex-direction:column` sous cette même
+  classe (il ne l'est pas par défaut, simple bloc empilé) : badge/timer/
+  question gardent leur taille naturelle, et le conteneur de l'image
+  (`#illustrationImgWrap` pour le cas 1, `.reveal-area`/`.recherche-wrap`/
+  `.halo-wrap` pour le cas 2) reçoit `flex: 1; min-height: 0`, avec l'image
+  elle-même en `max-height: 100%; object-fit: contain` (retrait du plafond
+  fixe sous cette classe). Le flex-grow absorbe alors AUTOMATIQUEMENT tout
+  l'espace inutilisé, sans calcul JS — le navigateur fait le travail.
+  *Trade-off* : une mesure JS (à la `fitStageContent`) donnerait un
+  contrôle plus fin (ex. plafonner à l'aspect-ratio naturel de l'image
+  pour éviter un agrandissement disproportionné sur une image très
+  large/étroite), mais le flex-grow + `object-fit:contain` couvre déjà ce
+  cas nativement (l'image ne peut pas dépasser son propre ratio à
+  l'intérieur d'une boîte flex) — pas de raison d'ajouter de la
+  complexité JS pour un résultat équivalent.
+- Sans image sur la question : classe absente, `align-self: center` et
+  comportement actuel intacts (déjà le cas par défaut).
+
+1. **JS — poser la classe `has-question-image` au bon moment**
+   - Dans le handler `question:show` (index.js), calculer si la question a
+     une image (`payload.illustrationUrl || payload.imageUrl ||
+     payload.enigmeImageUrl` selon le type — réutiliser la même logique
+     que `mediaUrl`/les branches déjà lues dans `emitQuestion`/le handler
+     client) et poser/retirer la classe sur `#stageWrap` en conséquence.
+     Réservé à la régie desktop (`is-host`/`game-active`, la classe elle
+     -même peut être posée partout, seul le CSS scopé `@media (min-width:
+     1100px)` la rend active).
+   - **Décision à confirmer** : `association` compte-t-il comme "a une
+     image" pour cette classe (vu qu'elle n'agrandit rien de concret ici,
+     étape 2/3 ne la couvrant pas) ? Proposition : NON à ce stade — la
+     classe ne sert que pour les cas 1/2 couverts par l'étape suivante,
+     `association` reste `align-self:center` comme aujourd'hui tant
+     qu'elle n'a pas son propre traitement.
+
+2. **CSS — `#stageWrap` stretch + `#main` flex sous `has-question-image`,
+   cas 1 (illustration décorative générique)**
+   - Nouvelle règle scopée `body.is-host.game-active.has-question-image
+     .container #stageWrap { align-self: stretch }` (ou classe posée plus
+     localement sur `#stageWrap` lui-même, à trancher au moment du code
+     — équivalent fonctionnellement, préférence pour la classe sur
+     `#stageWrap` directement : évite de dépendre d'un sélecteur combiné
+     avec `body`, plus proche de l'élément concerné).
+   - `#main` en flex-column + `#illustrationImgWrap { flex: 1; min-height:
+     0; display:flex; align-items:center; justify-content:center }` +
+     `.illustration-img { max-height: 100%` sous cette classe (au lieu de
+     260px).
+   - Couvre à lui seul la majorité des types (cas le plus visible du
+     problème signalé : un mcq avec 4 options courtes + petite image).
+
+3. **CSS — étendre à `reveal`/`recherche`/`halo` (cas 2)**
+   - Même traitement flex pour `.reveal-area`/`.recherche-wrap`/
+     `.halo-wrap` (leurs parents dans `#inputArea` doivent aussi devenir
+     flex le temps de leur laisser absorber l'espace) — remplacer leur
+     plafond fixe `min(65vh, 560px)` par un comportement flex-grow sous
+     `has-question-image`, garder le plafond actuel en repli hors régie
+     desktop/sans la classe.
+
+4. **Vérifier la coexistence avec `fitStageContent`**
+   - Rappeler `fitStageContent()` après l'agrandissement (déjà appelé aux
+     bons points d'accroche, `question:show`/`question:reveal` — à
+     vérifier que l'ORDRE reste correct : agrandir D'ABORD, puis laisser
+     `fitStageContent` réduire par zoom SI malgré tout ça déborde encore,
+     jamais l'inverse).
+   - Cas à tester spécifiquement : question avec énoncé long + image +
+     beaucoup d'options — confirmer que le résultat final reste dans le
+     cadre (zoom réduit si besoin), pas de boucle ou d'état incohérent
+     entre les deux mécanismes.
+
+5. **Vérification visuelle**
+   - Script Playwright jetable (même méthode que la tâche 036 — pas
+     d'outil Browser pane dans cette session) : comparer AVANT/APRÈS sur
+     un mcq simple (le cas le plus parlant), confirmer l'image
+     visiblement plus grande et la carte alignée sur la hauteur des
+     blocs latéraux ; confirmer qu'une question SANS image n'a rien
+     changé (carte toujours compacte/centrée).
+
+**Hors périmètre de ce plan, à trancher séparément si voulu** :
+`image`/`zoomguess` (cas 3, dimensionnement JS/mécanique de zoom à
+respecter) et `association` (pas "une image" mais une grille de tuiles) —
+non traités ici, laissés avec leur comportement actuel.
+
+Aucune étape ne touche une zone des "Interdictions" du `CLAUDE.md` (pas de
+`supabase/schema.sql`, pas de `render.yaml`, pas de nouvelle dépendance) —
+uniquement du CSS/JS côté client.
 
 ## Étapes réalisées
 - [ ]
@@ -113,10 +229,31 @@ _à remplir par `/plan-feature`_
       distante)
 
 ## Tests manuels recommandés
-_à remplir par `/plan-feature`_
+En régie desktop (≥1100px), salle IRL (Présenter et "à distance", les deux
+utilisent la même régie) :
+- MCQ avec petite illustration + peu d'options : image nettement plus
+  grande, carte alignée sur la hauteur des docks latéraux.
+- MCQ SANS illustration : aucun changement (carte toujours compacte,
+  centrée).
+- Reveal / recherche / halo : image toujours plus grande qu'avant quand
+  il y a de la place, jamais de scroll inattendu.
+- Question à énoncé long + illustration + beaucoup d'options (ex.
+  association 8 paires ou rangement avec plusieurs zones) : confirmer que
+  `fitStageContent` réduit toujours correctement si le total déborde
+  malgré l'agrandissement.
+- Illustration très large (paysage) et très étroite (portrait) : l'image
+  ne doit jamais déformer son ratio (`object-fit: contain`), ni déborder
+  horizontalement de sa colonne.
 
 ## Risques restants
-_à remplir par `/plan-feature`_
+- Les types "cas 3" (`image`/`zoomguess`) et `association` restent hors
+  périmètre — leur écran continuera de sembler comparativement plus petit/
+  centré que les autres types une fois cette tâche faite, pouvait donner
+  une impression d'incohérence entre types si remarqué.
+- `#illustrationImgWrap`/zones image dédiées n'ont aujourd'hui aucune
+  règle de flex — vérifier qu'aucune autre règle CSS existante ne dépend
+  implicitement de leur comportement de bloc normal (ex. marges `auto`,
+  `text-align: center` hérité) une fois passées en enfants flex.
 
 ## Statut
 `ouverte`
