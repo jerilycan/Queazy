@@ -3091,11 +3091,20 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   background: #000;
   --spot-x: 50%;
   --spot-y: 50%;
-  --spot-r: 0px;
+  /* Bug corrigé (retour utilisateur, iPhone : "l'image apparaît complètement
+     révélée par défaut, pas de filtre noir") : un rayon PILE à 0px rend le
+     radial-gradient dégénéré — Safari/iOS semble alors ignorer le masque
+     entier plutôt que masquer intégralement l'élément (calque noir censé
+     être plein s'affiche transparent), l'exact inverse de l'effet voulu au
+     repos. 0.01px : visuellement identique à 0 (aucun trou perceptible),
+     mais non-nul, donc jamais ce cas dégénéré. Comme le signalait déjà le
+     commentaire plus haut, cette recette n'avait jamais été testée sur un
+     vrai Safari avant ce retour. */
+  --spot-r: 0.01px;
   /* Trou transparent (image visible) du centre à (r - 16px), dégradé
      progressif jusqu'à r (bord adouci), opaque au-delà (calque noir =
      image cachée) — même recette dupliquée avec/sans préfixe -webkit- pour
-     Safari (jamais testé en pratique dans cette session, voir Risques). */
+     Safari. */
   mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
   -webkit-mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
 }
@@ -4632,28 +4641,24 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     max-width: none;
     width: 100%;
   }
-  /* Retour utilisateur ("une zone à part entière dédiée à la validation
-     des réponses, sous le bloc central") : #moderationZone (index.js —
-     enveloppe barre œil + #moderationPanel, réponses à juger) a maintenant
-     sa PROPRE cellule de grille, sous #stageWrap (voir la 2e ligne "auto"
-     sur .container plus haut) — plus un enfant de #hostPanel comme essayé
-     au tour précédent. C'est la zone qui est placée (pas le panneau
-     directement) : sinon la barre œil, ajoutée à côté sans placement
-     explicite, tomberait dans une ligne de grille implicite. margin-top:0
-     en !important : #moderationZone pose 16px par défaut en CSS (repli pour
+  /* #moderationZone (index.js) a sa PROPRE cellule de grille, sous
+     #stageWrap (voir la 2e ligne "auto" sur .container plus haut) — plus un
+     enfant de #hostPanel comme essayé au tour précédent. margin-top:0 en
+     !important : #moderationZone pose 16px par défaut en CSS (repli pour
      les contextes hors régie desktop, où c'est juste un bloc de plus dans le
      flux normal) — ici le gap:24px de la grille fait déjà l'espacement avec
-     #stageWrap au-dessus. max-height/overflow-y restent sur le panneau
-     lui-même (pas la zone) : seule la liste de réponses défile, la barre
-     œil reste toujours visible au-dessus. */
+     #stageWrap au-dessus.
+     Bug corrigé (retour utilisateur : "modération fixe avec ouverture popup
+     pour modal" — la carte centrale rétrécissait à chaque nouvelle réponse
+     à juger) : #moderationZone ne contient plus QUE #moderationPanel et sa
+     barre œil ont déménagé dans #moderationModalOverlay (voir index.html/
+     index.js), qui n'a plus rien à voir avec la grille régie — la ligne
+     "auto" ci-dessus ne dépend donc plus du nombre de réponses en attente,
+     seulement du petit bouton compact qui reste ici. */
   body.is-host.game-active .container #moderationZone {
     grid-column: 2;
     grid-row: 2;
     margin-top: 0 !important;
-  }
-  body.is-host.game-active .container #moderationPanel {
-    max-height: 260px;
-    overflow-y: auto;
   }
   /* Tâche 038 (retour utilisateur : "garder les tuiles lisibles, ajouter
      des colonnes plutôt que pousser vers le bas puis tout réduire") :
@@ -8901,6 +8906,59 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
   font-size: 13px;
   color: var(--color-text-muted);
   text-align: center;
+}
+
+/* Popup de modération (#moderationModalOverlay, voir index.html/index.js) :
+   même carte que .score-adjust-card (fond/bordure/ombre), juste plus large
+   (liste de réponses à parcourir, pas un simple réglage) et scrollable en
+   hauteur — le contenu (#moderationPanel, ses lignes de réponses) peut
+   largement dépasser 80% de la hauteur d'écran sur une question à
+   nombreuses réponses en attente. */
+.moderation-modal-card {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: 28px var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+  border: 2px solid rgba(var(--color-accent-rgb), 0.4);
+  box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+}
+/* #moderationPanel n'a plus besoin de son propre plafond/scroll une fois
+   dans la popup (voir la règle régie desktop retirée, style.css) : c'est
+   .moderation-modal-card ci-dessus qui scrolle désormais, panneau ET barre
+   œil ensemble — évite un double niveau de scroll imbriqué. */
+#moderationModalSlot #moderationPanel { max-height: none; overflow-y: visible; }
+/* Bouton compact de #moderationZone (voir index.js) qui ouvre la popup —
+   seul élément que la zone garde en permanence : sa taille FIXE, quel que
+   soit le nombre de réponses en attente, est tout le sens du correctif
+   (retour utilisateur : "modération fixe avec ouverture popup pour
+   modal") — avant, #moderationPanel grandissait directement dans cette
+   cellule de grille régie, rétrécissant d'autant la carte centrale. Même
+   habillage que .moderation-eye-bar/son bouton, avec un badge de compte en
+   plus. */
+.moderation-open-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.moderation-open-btn-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--tile-red);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 /* ============================================================

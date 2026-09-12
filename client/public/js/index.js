@@ -1029,7 +1029,11 @@ const updateRechercheSpot = (clientX, clientY, pointerType) => {
   rechercheOverlay.style.setProperty('--spot-y', `${clientY - rect.top - offsetY}px`)
   rechercheOverlay.style.setProperty('--spot-r', `${RECHERCHE_SPOT_RADIUS_PX}px`)
 }
-const hideRechercheSpot = () => { if (rechercheOverlay) rechercheOverlay.style.setProperty('--spot-r', '0px') }
+// 0.01px et non 0px (retour utilisateur, iPhone : filtre noir absent par
+// défaut) — voir le commentaire sur --spot-r dans .recherche-overlay,
+// style.css, pour la raison exacte (radial-gradient dégénéré à rayon pile
+// nul, mal géré par Safari/iOS).
+const hideRechercheSpot = () => { if (rechercheOverlay) rechercheOverlay.style.setProperty('--spot-r', '0.01px') }
 if (rechercheWrap) {
   rechercheWrap.addEventListener('pointerdown', (e) => updateRechercheSpot(e.clientX, e.clientY, e.pointerType))
   rechercheWrap.addEventListener('pointermove', (e) => updateRechercheSpot(e.clientX, e.clientY, e.pointerType))
@@ -2483,6 +2487,29 @@ const buildAssocItemImg = () => {
   return wrap
 }
 
+// Distingue un vrai tap d'un scroll qui démarre sur une tuile (retour
+// utilisateur : "au scroll, on a eu une sélection non voulue", type
+// association) — un clic natif est normalement déjà annulé par le
+// navigateur après un vrai geste de défilement, mais pas assez fiablement
+// sur certains mobiles pour un scroll bref/rapide. pointerdown/pointerup
+// plutôt que onclick : un pointerup trop loin de son pointerdown n'est plus
+// considéré comme un tap, quel que soit le navigateur — même principe que
+// le glisser/tap du type "image" (imagePanGesture), en plus léger (pas de
+// pan/zoom à gérer ici, juste départager tap vs scroll).
+const ASSOC_TAP_MOVE_THRESHOLD_PX = 10
+const bindAssocTap = (el, handler) => {
+  let start = null
+  el.addEventListener('pointerdown', (e) => { start = { x: e.clientX, y: e.clientY } })
+  el.addEventListener('pointerup', (e) => {
+    if (!start) return
+    const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+    start = null
+    if (moved > ASSOC_TAP_MOVE_THRESHOLD_PX) return
+    handler()
+  })
+  el.addEventListener('pointercancel', () => { start = null })
+}
+
 const renderAssociationColumns = () => {
   if (!associationState || !associationColA || !associationColB) return
   const { pairsA, pairsB, pairsBKeys, matches, selected } = associationState
@@ -2495,22 +2522,29 @@ const renderAssociationColumns = () => {
     el.appendChild(document.createTextNode(text))
     if (matches[i] !== null) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length])
     if (selected?.side === 'a' && selected.index === i) el.classList.add('is-selected')
-    el.onclick = () => {
+    bindAssocTap(el, () => {
       if (associationDisabled) return
       if (sendBtn.disabled) return
       const sel = associationState.selected
       if (sel && sel.side === 'b') {
         // Un B était déjà sélectionné : ce clic sur A complète la paire.
         completeAssociationPair(i, sel.index)
+      } else if (sel && sel.side === 'a' && sel.index === i) {
+        // Reclique sur la même tuile déjà sélectionnée (retour utilisateur :
+        // "pouvoir désélectionner un choix") : désélectionne, et si elle
+        // était déjà appariée, retire aussi cette association — avant, une
+        // tuile déjà appariée restait bloquée sur son ancienne paire tant
+        // qu'on n'en choisissait pas explicitement une nouvelle.
+        if (associationState.matches[i] !== null) associationState.matches[i] = null
+        associationState.selected = null
       } else {
-        // Recliquer un A déjà sélectionné le désélectionne ; en cliquer un
-        // autre (même déjà apparié) permet de choisir un nouveau B pour lui —
-        // son ancienne association reste affichée tant qu'un B n'est pas
-        // choisi pour la remplacer.
-        associationState.selected = (sel && sel.side === 'a' && sel.index === i) ? null : { side: 'a', index: i }
+        // Cliquer une AUTRE tuile (même déjà appariée) permet de choisir un
+        // nouveau B pour elle — son ancienne association reste affichée
+        // tant qu'un B n'est pas choisi pour la remplacer.
+        associationState.selected = { side: 'a', index: i }
       }
       updateAssociationClasses()
-    }
+    })
     associationColA.appendChild(el)
     applyTileReveal(el, i)
   })
@@ -2526,19 +2560,24 @@ const renderAssociationColumns = () => {
     const matchedAIdx = matches.findIndex(m => m === key)
     if (matchedAIdx !== -1) el.classList.add('is-matched', ASSOCIATION_PAIR_COLORS[matchedAIdx % ASSOCIATION_PAIR_COLORS.length])
     if (selected?.side === 'b' && selected.index === j) el.classList.add('is-selected')
-    el.onclick = () => {
+    bindAssocTap(el, () => {
       if (associationDisabled) return
       if (sendBtn.disabled) return
       const sel = associationState.selected
       if (sel && sel.side === 'a') {
         // Un A était déjà sélectionné : ce clic sur B complète la paire.
         completeAssociationPair(sel.index, j)
+      } else if (sel && sel.side === 'b' && sel.index === j) {
+        // Même désélection/désassociation que côté A, voir plus haut —
+        // retire l'association de l'A qui pointait vers CETTE clé B.
+        const matchedIdx = associationState.matches.findIndex(m => m === key)
+        if (matchedIdx !== -1) associationState.matches[matchedIdx] = null
+        associationState.selected = null
       } else {
-        // Même bascule sélection/désélection que côté A, voir plus haut.
-        associationState.selected = (sel && sel.side === 'b' && sel.index === j) ? null : { side: 'b', index: j }
+        associationState.selected = { side: 'b', index: j }
       }
       updateAssociationClasses()
-    }
+    })
     associationColB.appendChild(el)
     applyTileReveal(el, j)
   })
@@ -4240,6 +4279,15 @@ const resetUI = () => {
   // server/index.js le fait déjà côté salle — évite qu'un ancien
   // #hostAutoPanel affiché reste visible après avoir quitté la salle.
   applyRoomMode('present', null)
+  // resetUI() est LA fonction canonique de retour au menu (voir commentaire
+  // plus haut) — donc aussi le bon endroit pour oublier la dernière salle
+  // rejointe (voir rememberJoin/readLastJoin) : sans ça, un JOUEUR PARTI
+  // POUR DE BON (salle fermée, exclu, "Quitter le salon") qui recharge la
+  // page plus tard, ou rejoint une AUTRE salle depuis le même onglet,
+  // pourrait se retrouver auto-rejoint dans une salle qui n'existe même
+  // plus (sans conséquence grave — le serveur ignore une jointure vers une
+  // salle inconnue — mais sans utilité non plus).
+  forgetJoin()
 }
 
 socket.on('room:closed', ({ message }) => {
@@ -5132,11 +5180,36 @@ let myJoinedRoomCode = null
 let myJoinedName = null
 let myJoinedAvatar = null
 let myJoinedToken = null
+// Bug corrigé (retour utilisateur : "un joueur avait des micro coupures, et
+// ça lui ouvrait une popup pour se renommer constamment" — la toute
+// première chose qui accueille le joueur en rejoignant) : myJoinedRoomCode
+// & co ci-dessus ne survivent qu'en mémoire JS — parfait pour une simple
+// reconnexion socket.io, mais perdus pour de bon si le NAVIGATEUR recharge
+// carrément la page (fréquent sur mobile lors d'une coupure réseau, Safari
+// iOS en particulier reclaime volontiers un onglet mis en arrière-plan).
+// Au rechargement, seul un visiteur avec un PROFIL enregistré (queazy_
+// profile_name) était re-rejoint automatiquement (voir socket.on('connect')
+// plus bas) — un invité (jamais enregistré) retombait donc systématiquement
+// sur le formulaire/popup de pseudo, en pleine partie, à chaque coupure.
+// sessionStorage plutôt que localStorage : survit à un rechargement de
+// page (ce qu'il faut ici), mais s'efface à la fermeture de l'onglet —
+// jamais une persistance façon "compte", contrairement à queazy_token
+// (localStorage, réservé à un utilisateur enregistré) : cohérent avec le
+// choix déjà fait de ne PAS mettre le jeton d'un invité dans localStorage
+// (voir confirmGuestJoin plus bas, genToken() plutôt que getToken()).
+const QUEAZY_LAST_JOIN_KEY = 'queazy_last_join'
 const rememberJoin = (roomCode, playerName, avatar, token) => {
   myJoinedRoomCode = roomCode
   myJoinedName = playerName
   myJoinedAvatar = avatar
   myJoinedToken = token
+  sessionStorage.setItem(QUEAZY_LAST_JOIN_KEY, JSON.stringify({ roomCode, playerName, avatar, token }))
+}
+const forgetJoin = () => sessionStorage.removeItem(QUEAZY_LAST_JOIN_KEY)
+const readLastJoin = () => {
+  let lastJoin = null
+  try { lastJoin = JSON.parse(sessionStorage.getItem(QUEAZY_LAST_JOIN_KEY) || 'null') } catch { lastJoin = null }
+  return (lastJoin?.roomCode && lastJoin?.playerName && lastJoin?.token) ? lastJoin : null
 }
 
 joinBtn.onclick = () => {
@@ -5223,6 +5296,7 @@ socket.on('host:reconnected', () => {
 socket.on('connect', () => {
   clearConnBanner()
   window.myId = socket.id
+  const lastJoin = readLastJoin()
   if (myJoinedRoomCode) {
     // Reconnexion (pas la toute première connexion de l'onglet) : on était
     // déjà dans une room avant que ce socket ne change d'id (coupure réseau,
@@ -5232,6 +5306,17 @@ socket.on('connect', () => {
     // plus aucune mise à jour n'arrive : classement figé, ligne qui semble
     // "disparaître" au prochain rendu).
     socket.emit('room:join', { roomCode: myJoinedRoomCode, playerName: myJoinedName, token: myJoinedToken, avatar: myJoinedAvatar })
+  } else if (lastJoin) {
+    // Rechargement complet de la page (myJoinedRoomCode vient de retomber à
+    // null en mémoire) : QUEAZY_LAST_JOIN_KEY (sessionStorage, voir
+    // rememberJoin) a survécu — on rejoint avec ces mêmes infos plutôt que
+    // de tomber sur le formulaire/popup de pseudo, y compris pour un invité
+    // (contrairement à la branche preRoom+profil juste en dessous, réservée
+    // à un visiteur enregistré). Retour utilisateur : "un joueur avait des
+    // micro coupures, et ça lui ouvrait une popup pour se renommer
+    // constamment" — voir le commentaire complet sur rememberJoin.
+    rememberJoin(lastJoin.roomCode, lastJoin.playerName, lastJoin.avatar, lastJoin.token)
+    socket.emit('room:join', { roomCode: lastJoin.roomCode, playerName: lastJoin.playerName, token: lastJoin.token, avatar: lastJoin.avatar })
   } else if (preRoom) {
     // Auto-join UNIQUEMENT pour un visiteur qui a déjà un profil enregistré
     // (retour utilisateur/joueur régulier) — jamais sur le simple CHARGEMENT
@@ -6847,7 +6932,12 @@ socket.on('question:show', payload => {
         // calque encore caché par le .d-none posé à la révélation
         // précédente (voir socket.on('question:reveal', ...) plus bas).
         rechercheOverlay.classList.remove('d-none')
-        rechercheOverlay.style.setProperty('--spot-r', '0px')
+        // 0.01px, pas 0px (voir hideRechercheSpot juste au-dessus pour la
+        // raison exacte) — c'est CE point d'entrée précis, au début de
+        // chaque question "recherche", qui correspond au "par défaut" du
+        // retour utilisateur (iPhone, filtre noir absent avant même tout
+        // contact).
+        rechercheOverlay.style.setProperty('--spot-r', '0.01px')
       }
     }
   }
@@ -7667,15 +7757,44 @@ moderationEyeBtn.onclick = () => {
   applyModerationEyeState()
 }
 moderationEyeBar.appendChild(moderationEyeBtn)
-moderationZone.appendChild(moderationEyeBar)
-moderationZone.appendChild(moderationDiv)
+// Bug corrigé (retour utilisateur : "modération fixe avec ouverture popup
+// pour modal" — la carte centrale rétrécissait à chaque nouvelle réponse à
+// juger) : la barre œil ET le panneau vivent maintenant en permanence dans
+// #moderationModalOverlay (voir index.html), jamais dans #moderationZone —
+// celle-ci ne garde qu'un petit bouton compact ci-dessous, de taille FIXE
+// quel que soit le nombre de réponses en attente.
+const moderationModalSlot = document.getElementById('moderationModalSlot')
+if (moderationModalSlot) {
+  moderationModalSlot.appendChild(moderationEyeBar)
+  moderationModalSlot.appendChild(moderationDiv)
+}
 applyModerationEyeState()
+
+// Bouton compact resté dans #moderationZone (voir son commentaire plus
+// haut) : ouvre la popup de modération, avec un badge de compte pour que
+// l'hôte voie d'un coup d'œil qu'il a des réponses à traiter sans avoir à
+// l'ouvrir.
+const moderationOpenBtn = document.createElement('button')
+moderationOpenBtn.type = 'button'
+moderationOpenBtn.className = 'btn moderation-open-btn d-none'
+moderationOpenBtn.innerHTML = '🗳️ Réponses à valider <span class="moderation-open-btn-count"></span>'
+const moderationOpenBtnCount = moderationOpenBtn.querySelector('.moderation-open-btn-count')
+const moderationModalOverlay = document.getElementById('moderationModalOverlay')
+const openModerationModal = () => moderationModalOverlay?.classList.remove('d-none')
+const closeModerationModal = () => moderationModalOverlay?.classList.add('d-none')
+moderationOpenBtn.onclick = openModerationModal
+moderationZone.appendChild(moderationOpenBtn)
+document.getElementById('moderationModalCloseBtn')?.addEventListener('click', closeModerationModal)
+moderationModalOverlay?.addEventListener('click', (e) => { if (e.target === moderationModalOverlay) closeModerationModal() })
 
 // N'a de sens qu'en session IRL (à distance, chaque joueur regarde son
 // propre écran, jamais celui de l'hôte — rien à cacher). Un seul
 // MutationObserver sur moderationDiv plutôt qu'un appel ajouté à chacun des
 // nombreux points d'ajout/retrait de ligne (pbac, générique, blind test) :
 // une seule source de vérité pour "le panneau a du contenu", jamais désynchro.
+// Pilote AUSSI le bouton compact/son badge de compte (ni l'un ni l'autre
+// n'a de sens gameMode confondus — moderationDiv ne reçoit de toute façon
+// jamais de contenu hors "Présenter", voir socket.on('answer:queue')).
 const updateModerationEyeVisibility = () => {
   // Bug corrigé (retour utilisateur : "les réponses ne sont pas masquées
   // par défaut") : ceci ne pilote QUE la visibilité de la BARRE œil
@@ -7688,6 +7807,12 @@ const updateModerationEyeVisibility = () => {
   // toutes les questions suivantes, à l'opposé du "caché par défaut" voulu.
   const showEye = gameMode === 'irl' && moderationDiv.children.length > 0
   moderationEyeBar.classList.toggle('d-none', !showEye)
+  const count = moderationDiv.children.length
+  moderationOpenBtn.classList.toggle('d-none', count === 0)
+  if (moderationOpenBtnCount) moderationOpenBtnCount.textContent = count
+  // Plus rien à valider (dernière réponse traitée) : referme la popup toute
+  // seule plutôt que de la laisser ouverte sur une liste vide.
+  if (count === 0) closeModerationModal()
 }
 new MutationObserver(updateModerationEyeVisibility).observe(moderationDiv, { childList: true })
 
@@ -8403,13 +8528,18 @@ const renderTeamBoard = () => {
 // points : juste un instantané à jour à chaque appel. Masqué en mode équipe
 // (computeOrder()/s.total ne représentent pas les scores d'équipe, pas
 // encore traité ici — périmètre volontairement réduit à ce 1er lot).
-const LIVE_DOCK_MAX_ROWS = 5
+// Bug corrigé (retour utilisateur, salle à 16 joueurs : "le classement sur
+// le côté du MJ doit contenir tous les joueurs") : un plafond à 5 lignes ne
+// laissait voir qu'un tiers de la salle, sans indication que la liste était
+// tronquée. #liveClassementDock est déjà scrollable (overflow-y:auto, voir
+// style.css) — plus besoin de plafonner ici, le dock défile tout seul si la
+// liste dépasse la hauteur disponible.
 const renderLiveClassementDock = () => {
   if (!liveClassementList) return
   if (teamModeActive) { liveClassementList.textContent = ''; return }
   // Tâche 024 : même règle que renderBoard() — l'hôte apparaît dans le dock
   // en mode "Jouer", reste exclu en mode "Présenter".
-  const ordered = computeOrder().filter(([, s]) => !(s.isHost && roomMode !== 'auto')).slice(0, LIVE_DOCK_MAX_ROWS)
+  const ordered = computeOrder().filter(([, s]) => !(s.isHost && roomMode !== 'auto'))
   liveClassementList.textContent = ''
   ordered.forEach(([id, s], idx) => {
     const row = document.createElement('div')
@@ -8875,6 +9005,16 @@ socket.on('question:reveal', payload => {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }
   } else if (payload.type === 'image') {
+    // Bug corrigé (retour utilisateur : "lors d'un reveal, remettre l'image
+    // non zoomée") : un joueur qui avait zoomé/déplacé la vue pour mieux
+    // viser (voir applyImageZoom) restait sur ce cadrage à la révélation,
+    // ratant les zones correctes dessinées hors de sa vue actuelle si elle
+    // ne couvrait plus toute l'image. Même repli qu'à l'arrivée de la
+    // question (voir buildImageAnswerArea) : zoom neutre, recentré.
+    imageZoom = 1
+    imagePanX = 0
+    imagePanY = 0
+    applyImageZoom()
     const zones = payload.correct || []
     revealImageZones(zones)
     revealImagePlayerPoints(payload.players)

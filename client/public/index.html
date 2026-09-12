@@ -2,7 +2,15 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- maximum-scale=1, user-scalable=no (retour utilisateur : "empêcher le
+         zoom dézoom sur le téléphone, pareil pour le double clic qui zoom") :
+         sans ça, un tap rapide/répété sur les tuiles de réponse en pleine
+         partie pouvait déclencher le zoom natif du navigateur (pincement OU
+         double-tap), perturbant l'affichage en pleine partie. Trade-off
+         connu et assumé : ça retire aussi la possibilité de zoomer pour un
+         joueur qui en aurait besoin pour lire (accessibilité) — à
+         reconsidérer si ce besoin remonte. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>QuEazy</title>
     <!-- Préconnexions aux origines externes : la poignée de main (DNS/TLS) se
          fait pendant que le reste de la page se charge, au lieu d'attendre le
@@ -1528,6 +1536,26 @@
           <button type="button" id="scoreAdjustApplyBtn" class="btn btn-primary score-adjust-apply-btn">Valider</button>
         </div>
         <div id="scoreAdjustFeedback" class="score-adjust-feedback d-none"></div>
+      </div>
+    </div>
+
+    <!-- Retour utilisateur ("modération fixe avec ouverture popup pour
+         modal") : le panneau de modération (#moderationPanel, réponses en
+         attente) et sa barre œil (#moderationEyeBar) vivent en permanence
+         ICI, jamais dans #moderationZone (voir index.js) — celle-ci ne
+         garde qu'un petit bouton compact de taille FIXE, qui ouvre cette
+         popup. Avant ce correctif, le panneau grandissait directement dans
+         la grille régie, rétrécissant d'autant la carte centrale (l'image
+         d'une question texte libre, par exemple) à chaque nouvelle réponse
+         à juger — gênant en pleine partie, pour un outil que l'hôte
+         n'utilise que ponctuellement. Même famille visuelle que
+         #scoreAdjustOverlay juste au-dessus, carte plus large (liste de
+         réponses, pas un simple réglage). -->
+    <div id="moderationModalOverlay" class="d-none score-adjust-overlay">
+      <div class="moderation-modal-card">
+        <button type="button" id="moderationModalCloseBtn" class="score-adjust-close-btn" aria-label="Fermer" title="Fermer">✕</button>
+        <h3 class="score-adjust-title">Réponses à valider</h3>
+        <div id="moderationModalSlot"></div>
       </div>
     </div>
 
