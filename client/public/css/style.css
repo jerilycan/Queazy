@@ -2836,6 +2836,16 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   position: absolute;
   top: 0;
   left: 0;
+  /* transform-origin: 0 0 — retour utilisateur : "l'image disparaît /
+     ça ne représente pas du tout ce que j'ai choisi" dès que le zoom est
+     réduit. Sans ça, le scale() de applyCropTransform tourne autour du
+     CENTRE de l'image (comportement par défaut) au lieu de son coin
+     haut-gauche — la formule de computeCropGeometry (translate + scale)
+     suppose justement l'inverse (même recette que .assoc-crop-img/
+     .assoc-item-img-inner, qui l'ont déjà). À zoom=1 (cas par défaut,
+     sans cadrage personnalisé) l'écart est nul, d'où un bug invisible
+     jusqu'ici ; il grandit avec le dézoom et pousse l'image hors cadre. */
+  transform-origin: 0 0;
   width: 100%;
   height: auto;
   max-width: none;
@@ -2992,6 +3002,16 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   position: absolute;
   top: 0;
   left: 0;
+  /* transform-origin: 0 0 (retour utilisateur, tâche 035 quater : "l'image
+     disparaît / ne représente pas du tout ce que j'ai choisi" dès qu'on
+     dézoome le cadrage) — bug présent depuis l'introduction du recadrage
+     statique (tâche 035) : sans cette ligne, applyCropTransform (JS) pose
+     translate()+scale() en supposant une origine en haut-gauche, alors que
+     le CSS par défaut scale autour du CENTRE de l'image. Écart nul à
+     zoom=1 (cadrage par défaut, cas jamais remarqué jusqu'ici) mais qui
+     grandit avec le dézoom, poussant l'image hors du cadre visible. Même
+     recette que .assoc-crop-img/.assoc-item-img-inner, qui l'ont déjà. */
+  transform-origin: 0 0;
   max-width: none;
   max-height: none;
   margin: 0;
