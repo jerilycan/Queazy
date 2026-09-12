@@ -2836,6 +2836,16 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   position: absolute;
   top: 0;
   left: 0;
+  /* transform-origin: 0 0 — retour utilisateur : "l'image disparaît /
+     ça ne représente pas du tout ce que j'ai choisi" dès que le zoom est
+     réduit. Sans ça, le scale() de applyCropTransform tourne autour du
+     CENTRE de l'image (comportement par défaut) au lieu de son coin
+     haut-gauche — la formule de computeCropGeometry (translate + scale)
+     suppose justement l'inverse (même recette que .assoc-crop-img/
+     .assoc-item-img-inner, qui l'ont déjà). À zoom=1 (cas par défaut,
+     sans cadrage personnalisé) l'écart est nul, d'où un bug invisible
+     jusqu'ici ; il grandit avec le dézoom et pousse l'image hors cadre. */
+  transform-origin: 0 0;
   width: 100%;
   height: auto;
   max-width: none;
@@ -2992,6 +3002,16 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   position: absolute;
   top: 0;
   left: 0;
+  /* transform-origin: 0 0 (retour utilisateur, tâche 035 quater : "l'image
+     disparaît / ne représente pas du tout ce que j'ai choisi" dès qu'on
+     dézoome le cadrage) — bug présent depuis l'introduction du recadrage
+     statique (tâche 035) : sans cette ligne, applyCropTransform (JS) pose
+     translate()+scale() en supposant une origine en haut-gauche, alors que
+     le CSS par défaut scale autour du CENTRE de l'image. Écart nul à
+     zoom=1 (cadrage par défaut, cas jamais remarqué jusqu'ici) mais qui
+     grandit avec le dézoom, poussant l'image hors du cadre visible. Même
+     recette que .assoc-crop-img/.assoc-item-img-inner, qui l'ont déjà. */
+  transform-origin: 0 0;
   max-width: none;
   max-height: none;
   margin: 0;
@@ -4762,7 +4782,17 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   body.is-host.game-active .container .indice-area { max-width: 900px; }
   body.is-host.game-active .container .indice-central,
   body.is-host.game-active .container .indice-central-card { height: 320px; }
-  body.is-host.game-active .container .indice-card-text { font-size: 28px; }
+  /* Scopé à .indice-central-card (pas .indice-card-text seul) : retour
+     utilisateur (tâche 036, capture d'écran) — le sélecteur générique
+     l'emportait aussi sur .indice-history-card .indice-card-text (11px,
+     -webkit-line-clamp:3, voir plus haut) malgré son unique rôle affiché
+     de repli, à cause d'une spécificité supérieure (4 classes contre 2) —
+     un indice texte un peu long dans les petites vignettes d'historique
+     (84×84px) se retrouvait à 28px, débordant/coupé en plein mot au lieu
+     d'être proprement clampé sur 3 lignes. Bug pré-existant à la tâche
+     030 (jamais vu jusqu'ici : régie desktop masquée pour l'hôte
+     présentateur IRL avant la tâche 036, voir #inputArea plus haut). */
+  body.is-host.game-active .container .indice-central-card .indice-card-text { font-size: 28px; }
   body.is-host.game-active .container #liveClassementDock {
     grid-column: 3;
     /* span 2, même raison que #hostPanel plus haut. */
