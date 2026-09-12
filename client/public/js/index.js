@@ -4820,7 +4820,7 @@ const setupLiveProfile = () => {
     const handler = debounce(() => {
       const roomCode = roomInput.value.trim()
       const name = (nameBox.value.trim() || 'Player')
-      const avatar = selectedIcon || '🙂'
+      const avatar = selectedIcon || AVATAR_CHOICES[0]
       socket.emit('player:profile', { roomCode, name, avatar })
     }, 200)
     nameBox.addEventListener('input', handler)
@@ -5136,7 +5136,13 @@ confirmGuestJoin.onclick = () => {
   if (!roomCode) { log('Entre un code de salle'); return }
   if (!guestName) { log('Entre un pseudo'); return }
 
-  const guestAvatar = '🙂' // Default guest avatar
+  // Retour utilisateur : un invité (jamais passé par la grille d'avatars,
+  // voir personalizationPopup) se retrouvait avec un simple smiley emoji en
+  // guise de photo de profil, détonnant au milieu des vraies vignettes
+  // AVATAR_CHOICES des autres joueurs — même fallback que les autres points
+  // d'entrée (joinBtn.onclick plus haut) : reprendre un avatar déjà choisi
+  // sur cet appareil si possible, sinon le premier avatar par défaut.
+  const guestAvatar = selectedIcon || localStorage.getItem('queazy_profile_avatar') || AVATAR_CHOICES[0]
   // genToken() (pas getToken()) : un invité n'a pas de compte, son jeton
   // n'est PAS persisté dans localStorage — mais il doit rester identique le
   // temps de cette session d'onglet pour que la reconnexion fonctionne (voir
@@ -5201,7 +5207,7 @@ socket.on('connect', () => {
     // voir plus haut).
     const savedName = localStorage.getItem('queazy_profile_name')
     if (savedName) {
-      const av = selectedIcon || localStorage.getItem('queazy_profile_avatar') || '🙂'
+      const av = selectedIcon || localStorage.getItem('queazy_profile_avatar') || AVATAR_CHOICES[0]
       rememberJoin(preRoom.toUpperCase(), savedName, av, getToken())
       socket.emit('room:join', { roomCode: preRoom.toUpperCase(), playerName: savedName, token: getToken(), avatar: av })
     }
@@ -5952,7 +5958,7 @@ if (saveBtn) {
     const roomCode = roomInput.value.trim()
     const nameBox = document.getElementById('lobbyName')
     const name = (nameBox && nameBox.value.trim()) || (nameInput.value.trim() || 'Player')
-    const avatar = selectedIcon || localStorage.getItem('queazy_profile_avatar') || '🙂'
+    const avatar = selectedIcon || localStorage.getItem('queazy_profile_avatar') || AVATAR_CHOICES[0]
     
     // Sauvegarder localement pour la prochaine fois
     localStorage.setItem('queazy_profile_name', name)
