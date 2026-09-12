@@ -888,11 +888,6 @@ const revealPopupBadge = document.getElementById('revealPopupBadge')
 // la popup (voir index.html) — #revealAnswerText reste la source de vérité,
 // remplie par revealFreeAnswer/revealBlindTestAnswer plus bas.
 const revealPopupAnswerTitle = document.getElementById('revealPopupAnswerTitle')
-// Tâche 033 : résumé TEXTE de la réponse pour l'hôte présentateur IRL à la
-// révélation (voir buildIrlAnswerRecap plus bas) — jamais les tuiles de jeu
-// elles-mêmes (#inputArea reste masqué en permanence pour lui, voir
-// style.css body.irl-presenter-mode).
-const irlAnswerRecap = document.getElementById('irlAnswerRecap')
 const revealPopupCloseBtn = document.getElementById('revealPopupCloseBtn')
 const orderArea = document.getElementById('orderArea')
 const orderList = document.getElementById('orderList')
@@ -3565,12 +3560,6 @@ socket.on('score:adjust', ({ playerId, total }) => {
 
 const clearRevealState = () => {
   closeRevealPopup()
-  // Tâche 033 : vide le résumé texte posé à la révélation précédente (voir
-  // buildIrlAnswerRecap dans question:reveal) — jamais montré pendant la
-  // question suivante tant qu'elle n'est pas elle-même révélée. #inputArea,
-  // lui, reste masqué en permanence pour l'hôte présentateur IRL (voir
-  // style.css) — plus d'exception à retirer ici depuis ce changement.
-  if (irlAnswerRecap) { irlAnswerRecap.classList.add('d-none'); irlAnswerRecap.innerHTML = '' }
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.classList.remove('is-incorrect', 'is-close'); revealAnswerText.textContent = '' }
   if (revealPopupAnswerTitle) { revealPopupAnswerTitle.classList.add('d-none'); revealPopupAnswerTitle.classList.remove('is-incorrect', 'is-close'); revealPopupAnswerTitle.innerHTML = '' }
@@ -8838,28 +8827,6 @@ socket.on('question:reveal', payload => {
     revealPopupAnswerTitle.classList.toggle('is-incorrect', revealAnswerText.classList.contains('is-incorrect'))
     revealPopupAnswerTitle.classList.toggle('is-close', revealAnswerText.classList.contains('is-close'))
     revealPopupAnswerTitle.classList.remove('d-none')
-  }
-  // Résumé TEXTE pour l'hôte présentateur IRL (tâche 033, "l'affichage des
-  // réponses doit être textuel, pas visuel" + "seulement la question et
-  // l'image") : même miroir que le titre de popup juste au-dessus — priorité
-  // à #revealAnswerText (texte libre/indice/blindtest/pbac), sinon les
-  // libellés des tuiles déjà coloriées .correct-reveal (mcq/association/
-  // order/timeline/rangement/graduation...), LUS mais jamais montrés
-  // eux-mêmes (#inputArea reste masqué en permanence pour lui). Types sans
-  // libellé textuel exploitable (image/zoomguess, réponse spatiale) :
-  // reste vide/masqué, pas de résumé inventé.
-  if (irlAnswerRecap && gameMode === 'irl' && isPresenterHost()) {
-    let recapText = ''
-    if (revealAnswerText && !revealAnswerText.classList.contains('d-none') && revealAnswerText.textContent.trim()) {
-      recapText = revealAnswerText.textContent.trim()
-    } else if (inputArea) {
-      const labels = [...inputArea.querySelectorAll('.correct-reveal')].map(el => el.textContent.trim()).filter(Boolean)
-      if (labels.length) recapText = 'Bonne réponse : ' + labels.join(' · ')
-    }
-    if (recapText) {
-      irlAnswerRecap.textContent = recapText
-      irlAnswerRecap.classList.remove('d-none')
-    }
   }
   // Confettis (tâche 019) : réutilisation TELLE QUELLE du déclencheur déjà en
   // place en fin de partie (voir results.js, mêmes réglages) — jamais côté

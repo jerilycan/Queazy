@@ -180,7 +180,7 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
       65vh + grille portrait 1 colonne) de la tâche 031 retirés.
 - [x] 2. CSS — styles `#irlAnswerRecap` retirés
 - [x] 3. HTML — élément `#irlAnswerRecap` retiré
-- [ ] 4. JS — références orphelines à `irlAnswerRecap` retirées
+- [x] 4. JS — références orphelines à `irlAnswerRecap` retirées
 - [ ] 5. JS — classe `irl-presenter-mode` retirée
 - [ ] 6. `server/index.js` — bump `APP_VERSION`
 
@@ -200,8 +200,17 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
 - [x] Étape 3 : confirmée par sous-agent indépendant (diff limité à
       l'élément `#irlAnswerRecap` + son commentaire, HTML valide autour,
       seules des refs JS résiduelles restent — prévues pour l'étape 4).
+- [x] Étape 4 : confirmée par sous-agent indépendant (`node --check` passe,
+      3 blocs retirés proprement — déclaration, `clearRevealState`, handler
+      `question:reveal` —, `isPresenterHost()`/`gameMode` intacts ailleurs
+      dans le fichier). Note du sous-agent : le commentaire du bloc
+      `clearRevealState` a été supprimé en bloc plutôt que "reformulé"
+      comme littéralement écrit dans le plan — résultat correct (plus
+      aucune affirmation fausse), juste une exécution différente de
+      l'énoncé du plan, sans impact.
 - [x] `node --check client/public/js/index.js` — lancé par précaution
       (fichier non modifié à cette étape), passe.
+- [x] Étape 4 : `node --check client/public/js/index.js` — passe.
 - [ ] Vérification visuelle Browser pane — **non effectuée à cette étape** :
       aucun outil "Browser pane" interactif disponible dans cette session
       distante (pas d'équivalent à ce qu'utilisaient les tâches
