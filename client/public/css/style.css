@@ -83,12 +83,47 @@
   /* Mode équipe (voir .team-* plus bas) : violet réutilise --color-accent-2,
      manquait sa variante rgb pour les fonds/bordures translucides. */
   --color-accent-2-rgb: 123,47,247;
-  /* Podium final (voir .race-* plus bas) : argent/bronze n'existaient pas
-     encore dans la palette, l'or réutilise --tile-yellow. */
-  --tile-silver: #cfd8ea;
-  --tile-silver-deep: #6b7690;
-  --tile-bronze: #ff9f5a;
-  --tile-bronze-deep: #a1571f;
+  /* Podium final (voir .race-* plus bas). Bug corrigé (retour utilisateur :
+     "les trois couleurs du podium devraient être or argent bronze") : l'or
+     réutilisait --tile-yellow (même jaune vif que la 3e tuile QCM, voir
+     plus bas) — --color-gold, déjà présent dans la palette pour l'accent
+     "indice" côté éditeur, est un ton plus chaud/plus proche d'un vrai or ;
+     jamais utilisé pour un fond de grande surface jusqu'ici, d'où sa
+     variante -deep manquante, ajoutée ici. Argent/bronze retouchés dans le
+     même esprit : l'ancien argent tirait sur le bleu pâle (plus "tuile QCM
+     bleutée" que métal), l'ancien bronze était en réalité un orange vif —
+     tons neutres/cuivrés plus proches de vrais médailles. */
+  --tile-gold: var(--color-gold);
+  --tile-gold-deep: #a67e12;
+  --tile-gold-rgb: var(--color-gold-rgb);
+  --tile-silver: #d9dce2;
+  --tile-silver-deep: #868c96;
+  --tile-silver-rgb: 217,220,226;
+  --tile-bronze: #cd7f32;
+  --tile-bronze-deep: #8c5523;
+  --tile-bronze-rgb: 205,127,50;
+  /* Tuiles QCM/intrus au-delà de 4 options (jusqu'à 8, voir MCQ_MAX_OPTIONS
+     côté editor.js) — retour utilisateur : "ajouter de nouvelles couleurs
+     et formes aux QCM, pour ne pas avoir de redondance visuelle". Avant cet
+     ajout, la palette de 4 couleurs (rouge/bleu/jaune/vert) tournait dès la
+     5e tuile (identique à la 1re, etc.) : sur une question à 8 réponses,
+     chaque couleur/forme se répétait deux fois, prêtant à confusion (deux
+     tuiles semblent "aller ensemble" sans aucun rapport). Teintes reprises
+     de l'accent éditeur déjà en place (violet/cyan/flame), plutôt
+     qu'inventées ailleurs — cohérent avec le reste de la palette, jamais
+     utilisées pour des tuiles de réponse jusqu'ici. */
+  --tile-purple: var(--color-violet);
+  --tile-purple-deep: #6b1f99;
+  --tile-purple-rgb: 179,75,245;
+  --tile-cyan: var(--color-cyan);
+  --tile-cyan-deep: #0a7a99;
+  --tile-cyan-rgb: var(--color-cyan-rgb);
+  --tile-orange: var(--color-flame);
+  --tile-orange-deep: #a33d09;
+  --tile-orange-rgb: 255,106,26;
+  --tile-pink: #ff5fa8;
+  --tile-pink-deep: #a02d63;
+  --tile-pink-rgb: 255,95,168;
 
   --radius-lg: 24px;
   --radius-md: 16px;
@@ -1936,20 +1971,35 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    box-shadow que la règle de base (arête basse "pressée") + un glow diffus
    dans la teinte de la tuile, ajouté ici (une seule déclaration box-shadow
    par règle, la 2e ne s'ajoute pas à la 1re) plutôt que dans .option-btn —
-   sinon les 4 tuiles partageraient un seul halo neutre au lieu du leur. */
-.option-btn:nth-child(4n+1) { background: var(--tile-red); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-red-rgb),0.35); }
-.option-btn:nth-child(4n+1)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
-.option-btn:nth-child(4n+2) { background: var(--tile-blue); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-blue-rgb),0.35); }
-.option-btn:nth-child(4n+2)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
-/* color en plus du background (contrairement aux 3 autres tuiles) : le
-   blanc par défaut de .option-btn tombe à ~1.5:1 sur ce jaune clair, bien
+   sinon les tuiles partageraient un seul halo neutre au lieu du leur.
+   8n+X (pas 4n+X) : retour utilisateur ("ajouter de nouvelles couleurs et
+   formes aux QCM, pour ne pas avoir de redondance visuelle") — un QCM peut
+   monter jusqu'à 8 réponses (MCQ_MAX_OPTIONS, editor.js) ; boucler tous les
+   4 tons faisait qu'une question à 8 réponses affichait deux fois chaque
+   couleur/forme, laissant croire à tort que deux tuiles "vont ensemble". */
+.option-btn:nth-child(8n+1) { background: var(--tile-red); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-red-rgb),0.35); }
+.option-btn:nth-child(8n+1)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+.option-btn:nth-child(8n+2) { background: var(--tile-blue); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-blue-rgb),0.35); }
+.option-btn:nth-child(8n+2)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+/* color en plus du background (contrairement aux tuiles rouge/bleu/verte) :
+   le blanc par défaut de .option-btn tombe à ~1.5:1 sur ce jaune clair, bien
    sous le minimum WCAG AA (4.5:1) — illisible en plein soleil sur mobile.
    Même brun foncé déjà choisi ailleurs pour ce même fond (voir
    .my-result-banner.is-close), repris ici pour rester cohérent. */
-.option-btn:nth-child(4n+3) { background: var(--tile-yellow); color: #3a2e00; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-yellow-rgb),0.35); }
-.option-btn:nth-child(4n+3)::before { border-radius: 50%; }
-.option-btn:nth-child(4n+4) { background: var(--tile-green); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-green-rgb),0.35); }
-.option-btn:nth-child(4n+4)::before { border-radius: 4px; }
+.option-btn:nth-child(8n+3) { background: var(--tile-yellow); color: #3a2e00; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-yellow-rgb),0.35); }
+.option-btn:nth-child(8n+3)::before { border-radius: 50%; }
+.option-btn:nth-child(8n+4) { background: var(--tile-green); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-green-rgb),0.35); }
+.option-btn:nth-child(8n+4)::before { border-radius: 4px; }
+.option-btn:nth-child(8n+5) { background: var(--tile-purple); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-purple-rgb),0.35); }
+.option-btn:nth-child(8n+5)::before { clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%); }
+/* Même raison de contraste que la tuile jaune ci-dessus : ce cyan est tout
+   aussi clair (~1.55:1 en blanc, mesuré) — même repli texte foncé. */
+.option-btn:nth-child(8n+6) { background: var(--tile-cyan); color: #053b44; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-cyan-rgb),0.35); }
+.option-btn:nth-child(8n+6)::before { clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%); }
+.option-btn:nth-child(8n+7) { background: var(--tile-orange); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-orange-rgb),0.35); }
+.option-btn:nth-child(8n+7)::before { clip-path: polygon(35% 0%, 65% 0%, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0% 65%, 0% 35%, 35% 35%); }
+.option-btn:nth-child(8n+8) { background: var(--tile-pink); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-pink-rgb),0.35); }
+.option-btn:nth-child(8n+8)::before { clip-path: polygon(0% 0%, 100% 0%, 50% 100%); }
 .option-btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
 /* Ces tuiles sont maintenant navigables au clavier (voir index.js
    makeTileFocusable) — un vrai repère de focus visible, cohérent avec
@@ -7923,9 +7973,14 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   box-shadow: 0 0 16px rgba(123,47,247,0.4);
   transition: height .38s cubic-bezier(0.34, 1.56, 0.64, 1), background .5s ease, box-shadow .5s ease;
 }
-.race-lane-bar.gold { background: linear-gradient(180deg, var(--tile-yellow) 0%, var(--tile-yellow-deep) 100%); box-shadow: 0 0 30px rgba(255,210,63,0.55); }
-.race-lane-bar.silver { background: linear-gradient(180deg, var(--tile-silver) 0%, var(--tile-silver-deep) 100%); box-shadow: 0 0 18px rgba(207,216,234,0.3); }
-.race-lane-bar.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(255,159,90,0.35); }
+/* Bug corrigé (retour utilisateur : "les trois couleurs du podium devraient
+   être or argent bronze") : .gold utilisait --tile-yellow (même jaune vif
+   que la 3e tuile QCM, voir plus haut dans ce fichier) — --tile-gold/
+   -silver/-bronze (voir :root) sont désormais des tons dédiés, jamais
+   réutilisés ailleurs pour une tuile de réponse. */
+.race-lane-bar.gold { background: linear-gradient(180deg, var(--tile-gold) 0%, var(--tile-gold-deep) 100%); box-shadow: 0 0 30px rgba(var(--tile-gold-rgb),0.55); }
+.race-lane-bar.silver { background: linear-gradient(180deg, var(--tile-silver) 0%, var(--tile-silver-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-silver-rgb),0.3); }
+.race-lane-bar.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-bronze-rgb),0.35); }
 
 .race-lane-avatar {
   position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, 50%);
@@ -7946,7 +8001,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   60% { transform: translate(calc(-50% - 2px), 50%); }
   100% { transform: translate(-50%, 50%); }
 }
-.race-lane.rank-1 .race-lane-avatar { border-color: var(--tile-yellow); }
+.race-lane.rank-1 .race-lane-avatar { border-color: var(--tile-gold); }
 .race-lane.rank-2 .race-lane-avatar { border-color: var(--tile-silver); }
 .race-lane.rank-3 .race-lane-avatar { border-color: var(--tile-bronze); }
 
