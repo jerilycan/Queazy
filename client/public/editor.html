@@ -805,6 +805,32 @@
             <button id="addCorrect" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une réponse correcte</button>
           </div>
 
+          <!-- Type "Texte libre" uniquement (tâche 037) : disposition
+               "réponse principale + chips" retenue sur le canvas de design
+               (Free.dc.html/FreeAvance.dc.html), à la place de la liste
+               #correctSection ci-dessus (réservée aux 5 autres types qui la
+               partagent encore — zoomguess/reveal/recherche/indice/halo).
+               q.correct reste le même tableau de chaînes : q.correct[0] est
+               la réponse mise en avant ici, q.correct.slice(1) les variantes
+               en chips. Voir populateFreeAnswer/renderFreeVariantChips dans
+               editor.js. -->
+          <div id="correctFreeSection" class="detail-section d-none">
+            <label>Réponse correcte</label>
+            <input id="freeMainAnswer" type="text" class="main-answer-input" placeholder="ex : Canberra" />
+            <div class="auto-accordion" style="margin-top: 12px;">
+              <button type="button" class="auto-accordion-head" id="freeVariantsToggle">
+                <span class="auto-accordion-head-left">Variantes acceptées (orthographes alternatives)<span class="auto-accordion-count" id="freeVariantsCount">0</span></span>
+                <svg class="auto-chevron" id="freeVariantsChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="auto-accordion-body d-none" id="freeVariantsBody">
+                <div id="freeVariantsChipList" class="chip-list">
+                  <!-- Rempli par JS -->
+                </div>
+                <input id="freeVariantAddInput" type="text" class="chip-add-input mt-8" placeholder="+ variante… (Entrée)" />
+              </div>
+            </div>
+          </div>
+
           <!-- "Petit Bac" : contrairement au Blind Test (qui valide
                automatiquement toute réponse EXACTEMENT identique à une liste
                fournie par le créateur), il n'y a ici AUCUNE liste de bonnes

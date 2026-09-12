@@ -273,6 +273,18 @@ const deleteQuestionBtn = document.getElementById('deleteQuestion')
 const qIndexLabel = document.getElementById('qIndexLabel')
 const questionSaveBar = document.getElementById('questionSaveBar')
 const correctLabel = document.getElementById('correctLabel')
+// Type "Texte libre" (tâche 037) : disposition "réponse principale + chips"
+// à côté du bloc partagé ci-dessus (correctSection/correctList), qui reste
+// utilisé tel quel par les 5 autres types (zoomguess/reveal/recherche/
+// indice/halo). Voir populateFreeAnswer/renderFreeVariantChips plus bas.
+const correctFreeSection = document.getElementById('correctFreeSection')
+const freeMainAnswer = document.getElementById('freeMainAnswer')
+const freeVariantsToggle = document.getElementById('freeVariantsToggle')
+const freeVariantsBody = document.getElementById('freeVariantsBody')
+const freeVariantsChevron = document.getElementById('freeVariantsChevron')
+const freeVariantsCount = document.getElementById('freeVariantsCount')
+const freeVariantsChipList = document.getElementById('freeVariantsChipList')
+const freeVariantAddInput = document.getElementById('freeVariantAddInput')
 
 const graduationSection = document.getElementById('graduationSection')
 const qGradMin = document.getElementById('qGradMin')
@@ -2699,6 +2711,7 @@ const selectQuestion = (index) => {
 
   renderOptions()
   renderCorrects()
+  populateFreeAnswer(q)
   renderOrderItems()
   renderCorrectTitleList()
   renderCorrectArtistList()
@@ -2843,8 +2856,11 @@ const toggleTypeSections = () => {
   // "halo" (tâche 020) en plus : même raison que "recherche" (deviner à
   // partir d'une image cachée), la section haloSection ci-dessus ne gère
   // QUE l'image et le rayon, pas la réponse.
-  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'free' && qType.value !== 'zoomguess' && qType.value !== 'reveal' && qType.value !== 'recherche' && qType.value !== 'indice' && qType.value !== 'halo')
+  if (correctSection) correctSection.classList.toggle('d-none', qType.value !== 'zoomguess' && qType.value !== 'reveal' && qType.value !== 'recherche' && qType.value !== 'indice' && qType.value !== 'halo')
   correctLabel.textContent = 'Réponses acceptées'
+  // "free" seul a désormais sa disposition dédiée "réponse principale +
+  // chips" (tâche 037) au lieu de la liste générique ci-dessus.
+  if (correctFreeSection) correctFreeSection.classList.toggle('d-none', qType.value !== 'free')
 }
 
 if (tfTrueBtn && tfFalseBtn) {
@@ -2949,6 +2965,101 @@ const renderCorrects = () => {
     }, false)
     correctList.appendChild(row)
   })
+}
+
+// Type "Texte libre" (tâche 037) : "réponse principale + chips", à côté du
+// bloc générique ci-dessus (que ce type n'utilise plus depuis
+// toggleTypeSections — q.correct reste le même tableau de chaînes pour les
+// deux dispositions, seul le rendu change). q.correct[0] est la réponse
+// mise en avant, q.correct.slice(1) les variantes en chips.
+//
+// État plié/déplié de l'accordéon des variantes purement transitoire (comme
+// le reste de l'état d'édition non sauvegardé de cet éditeur) : une simple
+// variable de module, jamais persistée sur q, réinitialisée à chaque
+// (re)population du panneau pour une question (voir populateFreeAnswer).
+let freeVariantsOpen = false
+
+const setFreeVariantsOpen = (open) => {
+  freeVariantsOpen = open
+  if (freeVariantsBody) freeVariantsBody.classList.toggle('d-none', !open)
+  if (freeVariantsChevron) freeVariantsChevron.classList.toggle('open', open)
+}
+
+const renderFreeVariantChips = (q) => {
+  if (!freeVariantsChipList || !q || q.type !== 'free') return
+  const variants = q.correct.slice(1)
+  freeVariantsChipList.innerHTML = ''
+  variants.forEach((v, idx) => {
+    const chip = document.createElement('span')
+    chip.className = 'chip'
+    chip.textContent = v
+    // Pas de bouton × en lecture seule (même patron que createInputRow
+    // ci-dessous pour la liste #correctList partagée).
+    if (!readOnly) {
+      const removeBtn = document.createElement('button')
+      removeBtn.type = 'button'
+      removeBtn.className = 'chip-remove'
+      removeBtn.title = 'Supprimer cette variante'
+      removeBtn.textContent = '✕'
+      // idx+1 : les variantes commencent à q.correct[1], q.correct[0] étant
+      // la réponse principale (jamais supprimable ici, voir freeMainAnswer).
+      removeBtn.onclick = () => {
+        q.correct.splice(idx + 1, 1)
+        renderFreeVariantChips(q)
+      }
+      chip.appendChild(removeBtn)
+    }
+    freeVariantsChipList.appendChild(chip)
+  })
+  if (freeVariantsCount) freeVariantsCount.textContent = String(variants.length)
+}
+
+const populateFreeAnswer = (q) => {
+  if (!freeMainAnswer || !q || q.type !== 'free') return
+  if (!Array.isArray(q.correct)) q.correct = ['']
+  freeMainAnswer.value = q.correct[0] || ''
+  freeMainAnswer.disabled = readOnly
+  if (freeVariantAddInput) freeVariantAddInput.disabled = readOnly
+  // Déplié d'office s'il y a déjà des variantes (rien à cacher), replié sinon
+  // — esprit du canvas, adapté au cas où aucune variante n'existe encore.
+  setFreeVariantsOpen(q.correct.length > 1)
+  renderFreeVariantChips(q)
+}
+
+if (freeMainAnswer) {
+  freeMainAnswer.maxLength = TEXT_SHORT_MAXLENGTH
+  freeMainAnswer.oninput = () => {
+    const q = questions[activeIndex]
+    if (!q || q.type !== 'free') return
+    if (!Array.isArray(q.correct)) q.correct = ['']
+    q.correct[0] = freeMainAnswer.value
+  }
+}
+
+if (freeVariantsToggle) {
+  freeVariantsToggle.onclick = () => setFreeVariantsOpen(!freeVariantsOpen)
+}
+
+if (freeVariantAddInput) {
+  freeVariantAddInput.maxLength = TEXT_SHORT_MAXLENGTH
+  freeVariantAddInput.onkeydown = (e) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const q = questions[activeIndex]
+    if (!q || q.type !== 'free') return
+    const value = freeVariantAddInput.value.trim()
+    if (!value) return
+    if (!Array.isArray(q.correct)) q.correct = ['']
+    // Même plafond et même message que addCorrectBtn ci-dessous (les
+    // variantes s'ajoutent au même tableau q.correct que la liste générique).
+    if (q.correct.length >= FREE_MAX_ANSWERS) {
+      showToast(`Maximum ${FREE_MAX_ANSWERS} réponses acceptées`, 'error')
+      return
+    }
+    q.correct.push(value)
+    freeVariantAddInput.value = ''
+    renderFreeVariantChips(q)
+  }
 }
 
 // Même glisser au pointeur que la liste "ordre" en jeu (voir index.js
@@ -4642,6 +4753,7 @@ qType.onchange = () => {
   toggleTypeSections()
   renderOptions()
   renderCorrects()
+  populateFreeAnswer(q)
   renderOrderItems()
   renderCorrectTitleList()
   renderCorrectArtistList()
@@ -4745,6 +4857,7 @@ const deleteQuestionAt = (index) => {
 
     renderOptions()
     renderCorrects()
+    populateFreeAnswer(q)
     renderOrderItems()
     renderCorrectTitleList()
     renderCorrectArtistList()

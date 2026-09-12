@@ -6457,6 +6457,69 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   gap: 8px;
 }
 
+/* Type "Texte libre" (tâche 037) — disposition "réponse principale +
+   chips" décidée sur le canvas de design (Free.dc.html/FreeAvance.dc.html) :
+   un grand champ mis en avant, puis les variantes acceptées repliées en
+   accordéon. L'accordéon lui-même réutilise .auto-accordion/.auto-chevron
+   déjà en place (voir plus haut, utilisé par le panneau "Jouer" pour
+   Catégories/Types) plutôt que d'en recréer un dédié — seuls les éléments
+   propres au canvas et absents du design system réel sont ajoutés ici. */
+.main-answer-input {
+  font-size: 20px;
+  font-weight: 800;
+  font-family: 'Baloo 2', sans-serif;
+  padding: 16px 20px;
+  border: 2px solid rgba(var(--tile-green-rgb),.4);
+  background: rgba(var(--tile-green-rgb),0.06);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  width: 100%;
+}
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 6px 8px 6px 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.chip-remove {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--color-accent-rgb),.14);
+  color: var(--color-accent);
+  border: none;
+  font-size: 10.5px;
+  font-weight: 900;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chip-add-input {
+  border: 1.5px dashed var(--color-border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-text);
+  width: auto;
+  min-width: 160px;
+}
+
 .truefalse-toggle {
   display: flex;
   gap: var(--space-sm);
