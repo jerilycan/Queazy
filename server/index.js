@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.28.0'
+const APP_VERSION = '2.28.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -895,17 +895,44 @@ const start = async () => {
     // ONLY if there are multiple correct answers defined
     if (normalizedAnswers.length > 1 && x.includes(',')) {
       const inputs = x.split(',').map(s => s.trim()).filter(s => s !== '').sort()
-      
+
       if (inputs.length === normalizedAnswers.length) {
         const allMatch = inputs.every((val, idx) => val === normalizedAnswers[idx])
         if (allMatch) return { ok: true, exact: true }
       }
-      return { ok: false }
+      // Bug corrigé (retour utilisateur, Blind Test : "l'artiste qu'un joueur
+      // a entré n'a pas été validé alors que la réponse faisait partie de la
+      // liste acceptée") : un `return { ok: false }` ici court-circuitait
+      // tout le reste de la fonction dès que la réponse contenait une
+      // virgule, MÊME si elle correspondait très bien à UNE SEULE réponse
+      // acceptée prise isolément (ex : une virgule parasite en fin de saisie
+      // — copier/coller, clavier téléphone). Pas de `return` : on retombe
+      // simplement sur la boucle exact/fuzzy ci-dessous, comme si cette
+      // tentative d'interprétation "plusieurs réponses à la fois" n'avait
+      // jamais eu lieu — ne peut qu'AJOUTER des correspondances, jamais en
+      // retirer (le cas où `allMatch` réussit retourne déjà plus haut).
     }
 
+    // Bug corrigé (retour utilisateur, Blind Test : "l'artiste qu'un joueur
+    // a entré n'a pas été validé alors que la réponse faisait partie de la
+    // liste acceptée" — 3e réponse de la liste, exactement identique à la
+    // saisie) : UNE SEULE boucle testait exact PUIS fuzzy réponse par
+    // réponse, et retournait dès le PREMIER succès rencontré — si une
+    // réponse acceptée PLUS TÔT dans le tableau (ex : une orthographe
+    // voisine) matchait déjà en fuzzy (distance <= seuil), la fonction
+    // s'arrêtait là avec exact:false SANS JAMAIS regarder les réponses
+    // suivantes, même si l'une d'elles était un match EXACT — repéré `res.
+    // exact` étant requis pour la validation automatique hors mode "Jouer"
+    // (voir evalField) : un match exact "raté" à cause de l'ordre du tableau
+    // retombait donc en attente de modération au lieu d'être validé tout de
+    // suite. Deux passes désormais : toutes les réponses testées en exact
+    // d'abord (un exact où qu'il soit dans la liste gagne toujours), la
+    // fuzzy ne sert de repli qu'en l'absence de tout match exact.
+    for (const ans of answers) {
+      if (x === norm(ans)) return { ok: true, exact: true }
+    }
     for (const ans of answers) {
       const y = norm(ans)
-      if (x === y) return { ok: true, exact: true }
       const d = lev(x, y)
       const thresh = Math.max(1, Math.floor(y.length * 0.2))
       if (d <= thresh) return { ok: true, exact: false }
