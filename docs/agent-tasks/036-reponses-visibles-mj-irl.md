@@ -223,15 +223,11 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
       Supabase au boot (`min_points_floor`/`checkStorageUsage`) dus à
       l'absence d'accès réseau sortant vers Supabase depuis ce sandbox —
       limitation d'environnement confirmée, pas une erreur de code.
-- [ ] Vérification visuelle Browser pane — **toujours pas effectuée** :
+- [ ] Vérification visuelle Browser pane — **toujours pas effectuée**,
       aucun outil "Browser pane" interactif disponible dans cette session
-      distante. Les 6 étapes du plan sont maintenant toutes faites (état
-      cohérent), donc plus de raison technique d'attendre — mais je n'ai
-      pas de moyen de faire ce contrôle moi-même ici. À faire par
-      l'utilisateur avant de pousser/déployer, ou dis-moi si tu veux que je
-      tente un script Playwright automatisé (créer un salon, passer en
-      IRL/Présenter, lancer une question, capturer un screenshot) à la
-      place d'un vrai contrôle visuel humain.
+      distante. Poussé sur `main` (feu vert explicite de l'utilisateur) et
+      déployé (auto-deploy Render) SANS ce contrôle visuel — à vérifier
+      en conditions réelles sur le déploiement live.
 
 ## Tests manuels recommandés
 En régie desktop (≥1100px) ET sur un écran plus petit, salle "Présenter"
@@ -269,6 +265,10 @@ En régie desktop (≥1100px) ET sur un écran plus petit, salle "Présenter"
   antérieur à la tâche 031, hors périmètre ici) fait que sa carte reste
   quasi vide pour ce type précis — comportement inchangé par cette tâche,
   pas une régression qu'elle introduit.
+
+Poussé et mergé dans `main` sur feu vert explicite de l'utilisateur
+(auto-deploy Render déclenché) — sans la vérification visuelle listée
+ci-dessus, toujours en attente.
 
 ## Statut
 `en review`
