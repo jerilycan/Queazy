@@ -8474,25 +8474,6 @@ body.irl-player-mode #illustrationImgWrap { display: none; }
    illustration décorative — elle doit rester visible sur le téléphone du
    joueur même en IRL, contrairement aux autres types. */
 body.irl-player-mode #illustrationImgWrap.zoomguess-visible { display: block; }
-/* Tâche 033 : résumé TEXTE (pas les tuiles de jeu) de la réponse, affiché
-   uniquement à la révélation (peuplé par buildIrlAnswerRecap, index.js,
-   vidé par clearRevealState à la question suivante) — sibling de
-   #inputArea, jamais masqué avec lui. Style volontairement sobre/plat
-   (pas de fond en tuile façon jeu), dans l'esprit du récap hôte
-   (.question-recap-*). */
-body.irl-presenter-mode #irlAnswerRecap {
-  display: block;
-  max-width: 700px;
-  margin: var(--space-lg) auto 0;
-  padding: 18px 24px;
-  background: var(--color-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  text-align: center;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--color-text);
-}
 .irl-menu-btn {
   display: none;
   /* z-index 1200 (pas 200) : au-dessus de #recapSidebarToggle (1100,

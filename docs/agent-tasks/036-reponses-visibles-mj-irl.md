@@ -178,7 +178,7 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
 ## Étapes réalisées
 - [x] 1. CSS — `#inputArea` réaffiché, ajustements desktop (illustration
       65vh + grille portrait 1 colonne) de la tâche 031 retirés.
-- [ ] 2. CSS — styles `#irlAnswerRecap` retirés
+- [x] 2. CSS — styles `#irlAnswerRecap` retirés
 - [ ] 3. HTML — élément `#irlAnswerRecap` retiré
 - [ ] 4. JS — références orphelines à `irlAnswerRecap` retirées
 - [ ] 5. JS — classe `irl-presenter-mode` retirée
@@ -192,6 +192,11 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
 - [x] Étape 1 : `grep irl-presenter-mode client/public/css/style.css` — ne
       renvoie plus que la règle `#irlAnswerRecap` (tâche 033, prévue pour
       l'étape 2, pas celle-ci).
+- [x] Étape 2 : confirmée par sous-agent indépendant (diff limité à la
+      règle `#irlAnswerRecap` + son commentaire, accolades du fichier
+      équilibrées 1542/1542, aucune casse prématurée — l'élément HTML et
+      les refs JS restent pour l'instant mais l'élément est masqué par
+      défaut via `d-none`).
 - [x] `node --check client/public/js/index.js` — lancé par précaution
       (fichier non modifié à cette étape), passe.
 - [ ] Vérification visuelle Browser pane — **non effectuée à cette étape** :
