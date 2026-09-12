@@ -79,12 +79,101 @@ recoder).
   réactive l'interactivité pour `isPresenterHost()` ; retrait de
   `buildIrlAnswerRecap`/`irlAnswerRecap` et du bloc qui le peuple (plus
   d'usage une fois les tuiles réaffichées).
+- `client/public/index.html` — élément `#irlAnswerRecap` (tâche 033) et son
+  commentaire, à retirer (oublié du premier passage, trouvé en explorant le
+  code pour le plan).
+- `server/index.js` — `APP_VERSION`, à incrémenter par convention (chaque
+  tâche visible côté client bump cette constante).
 - `docs/agent-tasks/031-irl-hide-gameplay-mj.md` et
   `033-multi-sujets-2.md` — référence historique uniquement, pas de
   modification de leur contenu.
 
 ## Plan
-_à remplir par `/plan-feature`_
+
+**Conclusion de l'exploration** : le verrouillage visuel-mais-non-interactif
+pour l'hôte présentateur (`answers-locked` posé en permanence + les flags
+`orderDisabled`/`associationDisabled`/`timelineDisabled`/`rangementDisabled`/
+`gradState.disabled`, tous initialisés `true` et jamais repassés à `false`
+pour lui, voir le `setTimeout` de déverrouillage gardé par `if
+(!isPresenterHost())`) fonctionne déjà et n'a JAMAIS été retiré, même
+pendant les tâches 031/033 — il était juste invisible derrière `#inputArea`
+en `display:none`. Chaque écouteur de glisser-déposer/clic (`wireOrderDrag`,
+`wireTimelineDrag`, `wireRangementCardDrag`, le slider de graduation,
+`.assoc-item.onclick`, `imageClickLayer`) est attaché DIRECTEMENT sur
+l'élément couvert par `.answers-locked … { pointer-events: none }` — pas de
+délégation distante ni de calcul de position qui contournerait ce
+verrouillage. Les fonctions `build*` (tuiles, association, timeline,
+rangement, indice, image...) sont déjà appelées inconditionnellement, y
+compris pour l'hôte présentateur (jamais gardées par `isPresenterHost()`).
+**Conséquence** : cette tâche est presque entièrement un nettoyage CSS/HTML
+(retirer ce que 031/033 ont ajouté), pas une réécriture de la logique de
+verrouillage — aucune étape ne touche au mécanisme `answers-locked`
+lui-même, seulement à ce qui masquait `#inputArea` par-dessus.
+
+1. **CSS — réafficher `#inputArea` et annuler les ajustements desktop
+   pensés pour son absence (retour sur tâche 031)**
+   - Supprimer `body.irl-presenter-mode #inputArea { display: none
+     !important; }` (`style.css`, ~ligne 8509) et son commentaire
+     au-dessus (~lignes 8495-8508).
+   - Supprimer le bloc `body.is-host.game-active.irl-presenter-mode
+     .container #main ...` (illustration agrandie à 65vh + grille portrait
+     repassée à 1 colonne, ~lignes 4551-4568) et son commentaire.
+   - *Trade-off* : suppression pure, pas d'adaptation — une fois
+     `#inputArea` visible, le comportement "par défaut" (sans la classe
+     `irl-presenter-mode`) est déjà EXACTEMENT celui voulu : c'est celui
+     déjà utilisé en mode "à distance"/"Jouer", jamais concernés par ces
+     overrides (illustration à 260px de base, `.regie-portrait-layout` à 2
+     colonnes déjà prévu pour `#inputArea` visible, tâche 028) — vérifié en
+     lisant la règle de base `.illustration-img` (`max-height: 260px`,
+     ligne 2899) et la grille portrait (`grid-template-columns: 1fr 1fr`,
+     ligne 4408), aucune des deux n'est spécifique à un mode.
+
+2. **CSS — retirer les styles de `#irlAnswerRecap` (tâche 033)**
+   - Supprimer `body.irl-presenter-mode #irlAnswerRecap { ... }`
+     (`style.css`, ~lignes 8510-8528) et son commentaire.
+
+3. **HTML — retirer l'élément `#irlAnswerRecap`**
+   - Supprimer `<div id="irlAnswerRecap" ...>` et le commentaire tâche 033
+     juste au-dessus (`index.html`, ~lignes 1342-1352).
+
+4. **JS — retirer les références orphelines à `irlAnswerRecap`**
+   - Supprimer la déclaration `const irlAnswerRecap = ...` et son
+     commentaire dédié (~lignes 891-895), en gardant le commentaire voisin
+     sur `revealPopupAnswerTitle` (sans rapport, tâche 032).
+   - Supprimer le bloc qui le vide dans `clearRevealState` (~lignes
+     3568-3573) ; reformuler la phrase de commentaire du dessus qui
+     affirme (à tort après cette tâche) que "`#inputArea` reste masqué en
+     permanence pour l'hôte présentateur IRL".
+   - Supprimer le bloc qui le peuple dans le handler `socket.on('question:reveal', ...)`
+     (~lignes 8842-8863).
+
+5. **JS — retirer la classe `irl-presenter-mode` elle-même**
+   - Dans `updateIrlPlayerUI()` (~ligne 5330), retirer
+     `document.body.classList.toggle('irl-presenter-mode', ...)`.
+   - Réduire le commentaire qui la documentait (~lignes 5312-5327,
+     "Pour l'hôte PRÉSENTATEUR...") et repasser la note sur "les quatre
+     facteurs" à trois, puisque `isPresenterHost()` ne rentre plus dans le
+     calcul de cette fonction après ce retrait.
+   - *Trade-off* (à valider, seule étape avec un vrai choix) : je propose
+     de RETIRER la classe plutôt que de la laisser posée sans lecteur —
+     après les étapes 1-2, plus aucune règle CSS ne la consomme nulle part
+     (vérifié par recherche globale) ; la laisser vivante mais orpheline
+     serait trompeur (donnerait l'impression qu'un style en dépend encore
+     quelque part) dans un fichier déjà volumineux où ce genre de résidu
+     est coûteux à ré-auditer plus tard. Alternative plus prudente : la
+     laisser posée (diff plus petit, risque nul) si une réutilisation
+     rapprochée est prévue — à trancher si tu préfères ce filet de
+     sécurité.
+
+6. **`server/index.js` — bump `APP_VERSION`**
+   - `2.27.0` → `2.27.1` (patch : changement d'affichage seul, convention
+     déjà suivie par toutes les tâches précédentes, y compris 031 qui
+     avait le même genre de portée CSS/JS).
+
+Aucune étape ne touche une zone des "Interdictions" du `CLAUDE.md` (pas de
+`supabase/schema.sql`, pas de `render.yaml`, pas de nouvelle dépendance) —
+uniquement du nettoyage CSS/HTML/JS côté client + le bump `APP_VERSION`
+déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
 
 ## Étapes réalisées
 - [ ]
@@ -94,10 +183,41 @@ _à remplir par `/plan-feature`_
 - [ ] Vérification visuelle Browser pane
 
 ## Tests manuels recommandés
-_à remplir par `/plan-feature`_
+En régie desktop (≥1100px) ET sur un écran plus petit, salle "Présenter"
+(jamais mode "Jouer") en IRL, tester au moins un type de chaque famille :
+- **Tuiles simples** (mcq/truefalse/intrus) : tuiles visibles, colorées à
+  la révélation (bonne réponse en vert), AUCUN clic ne sélectionne rien
+  pour le MJ.
+- **Glisser-déposer** (order/timeline/rangement) : items visibles, un
+  essai de glisser-déposer côté MJ ne doit RIEN déplacer.
+- **Slider** (graduation) : curseur visible, un clic/glissé dessus ne doit
+  rien déplacer.
+- **Association** : clic sur un item ne sélectionne rien.
+- **Image** (image/zoomguess) : clic sur l'image ne place aucun marqueur.
+- **Question avec illustration** : vérifier que l'image garde sa taille
+  normale (260px de base), PAS la taille agrandie de la tâche 031.
+- **Question avec illustration portrait** : vérifier le retour à la
+  grille 2 colonnes (tâche 028), pas 1 colonne.
+- Confirmer qu'aucune trace de `#irlAnswerRecap` n'apparaît plus à la
+  révélation.
+- Mode "à distance" et mode "Jouer" (même salle) : confirmer qu'AUCUN
+  changement visuel n'est visible (comportement déjà celui d'avant cette
+  tâche pour ces deux modes).
 
 ## Risques restants
-_à remplir par `/plan-feature`_
+- **`.recherche-wrap` (lampe torche IRL)** reste volontairement EXCLUE du
+  verrouillage `answers-locked` (choix documenté dans `style.css`,
+  antérieur à la tâche 031 : outil de présentation sans impact sur le
+  score, pas un mécanisme de réponse) — non touché par cette tâche. À
+  confirmer que c'est bien voulu : si le MJ ne doit vraiment RIEN pouvoir
+  actionner, même cet outil de présentation, ce sera une étape
+  supplémentaire à ajouter (hors du plan actuel).
+- Types sans contenu visuel propre (réponse texte libre pure, sans image
+  ni tuile — ex. "free") : le comportement pré-existant qui masque
+  `freeTextEl` pour l'hôte présentateur (`if (!isPresenterHost())`,
+  antérieur à la tâche 031, hors périmètre ici) fait que sa carte reste
+  quasi vide pour ce type précis — comportement inchangé par cette tâche,
+  pas une régression qu'elle introduit.
 
 ## Statut
 `ouverte`
