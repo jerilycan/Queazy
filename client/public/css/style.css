@@ -5044,9 +5044,16 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 12px;
   display: flex; align-items: center; justify-content: center;
 }
-.live-classement-row:nth-child(1) .live-classement-rank { background: var(--tile-yellow); }
-.live-classement-row:nth-child(2) .live-classement-rank { background: var(--tile-green); }
-.live-classement-row:nth-child(3) .live-classement-rank { background: var(--tile-red); }
+/* Bug corrigé (retour utilisateur : "les 3 couleurs du joueur doivent être
+   visibles... dans le classement entre les questions aussi") : ce dock
+   utilisait déjà une couleur par rang, mais jaune/vert/rouge — sans rapport
+   avec le podium/la liste finale (or/argent/bronze, voir :root). Aligné ici
+   sur les mêmes tons. color foncé sur l'or, comme pour la tuile QCM jaune
+   (même style.css, .option-btn) : ce fond clair tombe sous le seuil de
+   lisibilité en blanc. */
+.live-classement-row:nth-child(1) .live-classement-rank { background: var(--tile-gold); color: #3a2e00; }
+.live-classement-row:nth-child(2) .live-classement-rank { background: var(--tile-silver); color: #2a2e36; }
+.live-classement-row:nth-child(3) .live-classement-rank { background: var(--tile-bronze); }
 .live-classement-name { flex: 1; font-weight: 700; font-size: 13px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-classement-score { font-weight: 700; font-size: 13px; color: var(--color-accent); font-family: 'Baloo 2', sans-serif; }
 /* Tâche 025 : bouton "+" d'ajustement manuel de score (MJ, mode
@@ -7820,9 +7827,17 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   box-shadow: 0 0 0 2px rgba(var(--tile-red-rgb),0.4), var(--shadow-sm);
 }
 .leader-rank { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: var(--tile-blue); color: white; font-family: 'Baloo 2', sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.leader-row:nth-child(1) .leader-rank { background: var(--tile-yellow); }
-.leader-row:nth-child(2) .leader-rank { background: var(--tile-green); }
-.leader-row:nth-child(3) .leader-rank { background: var(--tile-red); }
+/* Bug corrigé (retour utilisateur : "les 3 couleurs du joueur doivent être
+   visibles... dans le classement entre les questions aussi") : ce
+   classement (#leaderOverlay, affiché après chaque question) utilisait déjà
+   une couleur par rang, mais jaune/vert/rouge — sans rapport avec le podium
+   final (or/argent/bronze, voir :root). Aligné ici sur les mêmes tons.
+   color foncé sur l'or/l'argent, comme pour la tuile QCM jaune (même
+   style.css, .option-btn) : ces fonds clairs tombent sous le seuil de
+   lisibilité en blanc. */
+.leader-row:nth-child(1) .leader-rank { background: var(--tile-gold); color: #3a2e00; }
+.leader-row:nth-child(2) .leader-rank { background: var(--tile-silver); color: #2a2e36; }
+.leader-row:nth-child(3) .leader-rank { background: var(--tile-bronze); }
 .leader-name { flex: 1; font-weight: 700; color: var(--color-text); font-family: 'Nunito', sans-serif; }
 .leader-score { color: var(--color-accent); font-weight: 700; font-family: 'Baloo 2', sans-serif; }
 
