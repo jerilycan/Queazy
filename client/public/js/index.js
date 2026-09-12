@@ -7220,7 +7220,23 @@ socket.on('question:show', payload => {
     }
   }, 100)
   optionsDiv.innerHTML = ''
+  // Tâche 038 (retour utilisateur : "garder les tuiles lisibles, ajouter
+  // des colonnes plutôt que pousser vers le bas puis tout réduire") :
+  // nombre de colonnes de la grille MCQ posé ici selon le nombre
+  // d'options (voir --mcq-cols, consommé en régie desktop uniquement par
+  // style.css) — 2-8 options, bornes imposées par l'éditeur
+  // (MCQ_MIN_OPTIONS/MCQ_MAX_OPTIONS). Formule plutôt qu'une table comme
+  // INTRUS_ROW_PATTERNS plus bas : ce cas n'a pas besoin d'un motif par
+  // rangée (grille uniforme repeat(N, 1fr), pas de tuile à centrer à
+  // part). Réinitialisée ICI, avant les branches par type (comme
+  // innerHTML juste au-dessus) plutôt que dans chacune des branches
+  // truefalse/intrus : aucune des deux ne consomme cette propriété
+  // (voir style.css, sélecteur qui les exclut explicitement), pas besoin
+  // de la reposer plusieurs fois pour la même hygiène.
+  optionsDiv.style.removeProperty('--mcq-cols')
   if (payload.type === 'mcq' && Array.isArray(payload.options)) {
+    const mcqCols = payload.options.length <= 4 ? 2 : payload.options.length <= 6 ? 3 : 4
+    optionsDiv.style.setProperty('--mcq-cols', mcqCols)
     payload.options.forEach((opt, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn'

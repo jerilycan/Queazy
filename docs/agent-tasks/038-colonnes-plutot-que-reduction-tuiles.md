@@ -152,9 +152,18 @@ Aucune étape ne touche une zone des "Interdictions" du `CLAUDE.md` (pas de
 uniquement du CSS/JS côté client.
 
 ## Étapes réalisées
-- [ ]
+- [x] 1. JS — `--mcq-cols` posée sur `#options` à la construction des
+      tuiles MCQ (formule `count<=4?2:count<=6?3:4`). Réinitialisée
+      (`removeProperty`) une seule fois avant les branches par type
+      (juste après `optionsDiv.innerHTML = ''`), plutôt que dans chacune
+      des branches truefalse/intrus séparément comme envisagé au
+      planning — même résultat (aucune des deux ne consomme cette
+      propriété), diff plus petit.
+- [ ] 2. CSS — consommer `--mcq-cols` en régie desktop uniquement
+- [ ] 3. Vérification visuelle
 
 ## Checks effectués
+- [x] Étape 1 : `node --check client/public/js/index.js` — passe.
 - [ ] `node --check client/public/js/index.js`
 - [ ] Vérification visuelle (script Playwright jetable, comme pour les
       tâches 036/037 — aucun outil Browser pane interactif dans cette
@@ -189,4 +198,4 @@ régie) :
   — à ajuster si le rendu réel semble trop serré ou trop clairsemé.
 
 ## Statut
-`ouverte`
+`en cours`
