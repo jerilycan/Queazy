@@ -1215,7 +1215,15 @@ const openQrOverlay = () => {
   // Régénéré à une vraie plus grande taille par la lib (pas un
   // agrandissement CSS d'un QR déjà petit, qui serait flou) — assez net
   // pour être photographié depuis une distance de salle.
-  new QRCode(qrExpandContainer, { text: currentJoinUrl, width: 320, height: 320 })
+  // Taille responsive (retour utilisateur : "il reste trop petit" avec
+  // les 320px fixes d'avant) — jusqu'à 60% de la plus petite dimension
+  // du viewport, jamais moins que les 320px d'origine : #qrExpandOverlay
+  // est en plein écran (position:fixed;inset:0), la place ne manque pas,
+  // surtout sur un grand écran/TV projeté (le cas d'usage documenté
+  // ci-dessus). Recalculée à chaque ouverture (comme avant), pas de
+  // recalcul si la fenêtre est redimensionnée pendant que c'est ouvert.
+  const qrSize = Math.max(320, Math.min(window.innerWidth, window.innerHeight) * 0.6)
+  new QRCode(qrExpandContainer, { text: currentJoinUrl, width: qrSize, height: qrSize })
   if (qrExpandCode) qrExpandCode.textContent = roomInput.value.trim().toUpperCase()
   qrExpandOverlay.classList.remove('d-none')
   qrExpandOverlay.style.display = 'flex'
