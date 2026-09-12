@@ -182,7 +182,7 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
 - [x] 3. HTML — élément `#irlAnswerRecap` retiré
 - [x] 4. JS — références orphelines à `irlAnswerRecap` retirées
 - [x] 5. JS — classe `irl-presenter-mode` retirée
-- [ ] 6. `server/index.js` — bump `APP_VERSION`
+- [x] 6. `server/index.js` — bump `APP_VERSION` (2.27.0 → 2.27.1)
 
 ## Checks effectués
 - [x] Étape 1 : relecture manuelle du fichier avant/après édition (pas
@@ -216,14 +216,22 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
       `isPresenterHost()`/`roomMode` restent utilisés normalement à une
       quinzaine/vingtaine d'autres endroits, commentaire "trois facteurs"
       cohérent avec les 2 toggles restants).
-- [ ] Vérification visuelle Browser pane — **non effectuée à cette étape** :
+- [x] Étape 6 : confirmée par sous-agent indépendant — `node --check`
+      passe, diff limité à la ligne `APP_VERSION`, **démarrage serveur
+      vérifié** (`npm install` + `npm start`) : `Server listening at
+      http://0.0.0.0:3000`, aucune stack trace/exception. Deux warnings
+      Supabase au boot (`min_points_floor`/`checkStorageUsage`) dus à
+      l'absence d'accès réseau sortant vers Supabase depuis ce sandbox —
+      limitation d'environnement confirmée, pas une erreur de code.
+- [ ] Vérification visuelle Browser pane — **toujours pas effectuée** :
       aucun outil "Browser pane" interactif disponible dans cette session
-      distante (pas d'équivalent à ce qu'utilisaient les tâches
-      précédentes en local), et l'état actuel est intermédiaire
-      (`#irlAnswerRecap` existe encore, étapes 2-6 pas faites) — pas encore
-      un état cohérent à montrer. À faire une fois toutes les étapes
-      terminées ; dis-moi si tu préfères un script Playwright automatisé
-      entre-temps.
+      distante. Les 6 étapes du plan sont maintenant toutes faites (état
+      cohérent), donc plus de raison technique d'attendre — mais je n'ai
+      pas de moyen de faire ce contrôle moi-même ici. À faire par
+      l'utilisateur avant de pousser/déployer, ou dis-moi si tu veux que je
+      tente un script Playwright automatisé (créer un salon, passer en
+      IRL/Présenter, lancer une question, capturer un screenshot) à la
+      place d'un vrai contrôle visuel humain.
 
 ## Tests manuels recommandés
 En régie desktop (≥1100px) ET sur un écran plus petit, salle "Présenter"
@@ -263,4 +271,4 @@ En régie desktop (≥1100px) ET sur un écran plus petit, salle "Présenter"
   pas une régression qu'elle introduit.
 
 ## Statut
-`en cours`
+`en review`
