@@ -223,11 +223,27 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
       Supabase au boot (`min_points_floor`/`checkStorageUsage`) dus à
       l'absence d'accès réseau sortant vers Supabase depuis ce sandbox —
       limitation d'environnement confirmée, pas une erreur de code.
-- [ ] Vérification visuelle Browser pane — **toujours pas effectuée**,
-      aucun outil "Browser pane" interactif disponible dans cette session
-      distante. Poussé sur `main` (feu vert explicite de l'utilisateur) et
-      déployé (auto-deploy Render) SANS ce contrôle visuel — à vérifier
-      en conditions réelles sur le déploiement live.
+- [x] Vérification visuelle **effectuée après coup** (post-merge/déploiement)
+      via un script Playwright jetable (jamais commité) : serveur QuEazy
+      lancé en local, salle IRL "Présenter" réelle, hôte + 1 joueur, 3
+      questions synthétiques avec images (mcq+illustration,
+      association 8 paires+images, reveal+image portrait), mesurées à
+      1366×768 (cas le plus contraignant, `.container height: calc(100vh
+      - 170px)`) puis 1920×1080 pour comparaison.
+  - MCQ + illustration : tient entièrement (zoom auto 57%).
+  - Association 8 paires + images (cas stress-test tâche 029, avec images
+    en plus) : **déborde de 34px** à 1366×768 (zoom au plancher 55%,
+    scrollable, jamais inatteignable) ; tient entièrement à 1920×1080
+    (zoom 86%).
+  - Reveal + image portrait : **déborde de 27px** à 1366×768 (zoom 69%).
+  - Confirme concrètement le risque déjà signalé en théorie plus haut
+    (plancher `STAGE_FIT_MIN_ZOOM` atteignable sur un laptop compact avec
+    beaucoup de contenu imagé) — débordement minime et jamais bloquant,
+    mais réel.
+  - Non-interactivité reconfirmée en conditions réelles : clic simulé sur
+    une tuile MCQ et sur un item Association → `pointer-events:none`,
+    aucun changement d'état dans les deux cas.
+  - Captures envoyées à l'utilisateur (mcq, association 768p/1080p, reveal).
 
 ## Tests manuels recommandés
 En régie desktop (≥1100px) ET sur un écran plus petit, salle "Présenter"
