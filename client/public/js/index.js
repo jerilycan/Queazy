@@ -1215,7 +1215,15 @@ const openQrOverlay = () => {
   // Régénéré à une vraie plus grande taille par la lib (pas un
   // agrandissement CSS d'un QR déjà petit, qui serait flou) — assez net
   // pour être photographié depuis une distance de salle.
-  new QRCode(qrExpandContainer, { text: currentJoinUrl, width: 320, height: 320 })
+  // Taille responsive (retour utilisateur : "il reste trop petit" avec
+  // les 320px fixes d'avant) — jusqu'à 60% de la plus petite dimension
+  // du viewport, jamais moins que les 320px d'origine : #qrExpandOverlay
+  // est en plein écran (position:fixed;inset:0), la place ne manque pas,
+  // surtout sur un grand écran/TV projeté (le cas d'usage documenté
+  // ci-dessus). Recalculée à chaque ouverture (comme avant), pas de
+  // recalcul si la fenêtre est redimensionnée pendant que c'est ouvert.
+  const qrSize = Math.max(320, Math.min(window.innerWidth, window.innerHeight) * 0.6)
+  new QRCode(qrExpandContainer, { text: currentJoinUrl, width: qrSize, height: qrSize })
   if (qrExpandCode) qrExpandCode.textContent = roomInput.value.trim().toUpperCase()
   qrExpandOverlay.classList.remove('d-none')
   qrExpandOverlay.style.display = 'flex'
@@ -6707,6 +6715,28 @@ socket.on('question:show', payload => {
     inputArea.style.display = 'block'
   }
   currentQuestionType = payload.type || 'free'
+  // Tâche 037 (régie desktop) : quand la question porte une image que
+  // style.css sait agrandir dans l'espace libre (illustration décorative
+  // générique, ou zone dédiée reveal/recherche/halo), #stageWrap peut
+  // s'étirer jusqu'à la hauteur des blocs latéraux au lieu de rester
+  // centré à la taille de son contenu (voir body.is-host.game-active
+  // .container #stageWrap, align-self). Exclusions volontaires,
+  // laissées hors périmètre pour l'instant : "image"/"zoomguess" (zone
+  // dimensionnée par du JS/une mécanique de zoom, plus délicate à
+  // agrandir sans y toucher) et "association" (pas UNE image mais
+  // jusqu'à 16 petites images de tuiles — même si payload.illustrationUrl
+  // est renseigné, une illustration décorative reste possible sur ce
+  // type comme sur tous les autres, voir emitQuestion/index.js). Miroir
+  // volontaire de la branche imageToUpload dans emitQuestion (index.js)
+  // qui décide où chaque champ image atterrit dans le payload.
+  const stageGrowExcludedTypes = new Set(['image', 'zoomguess', 'association'])
+  const hasQuestionImage = !stageGrowExcludedTypes.has(payload.type) && !!(
+    payload.type === 'reveal' ? payload.enigmeImageUrl
+      : (payload.type === 'recherche' || payload.type === 'halo') ? payload.imageUrl
+        : payload.illustrationUrl
+  )
+  const stageWrap = document.getElementById('stageWrap')
+  if (stageWrap) stageWrap.classList.toggle('has-question-image', hasQuestionImage)
   if (optionsDiv) {
     const isMcqLike = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus'
     // 'grid' ici même pour "intrus" : le passage en flex (nombre de
@@ -7198,7 +7228,23 @@ socket.on('question:show', payload => {
     }
   }, 100)
   optionsDiv.innerHTML = ''
+  // Tâche 038 (retour utilisateur : "garder les tuiles lisibles, ajouter
+  // des colonnes plutôt que pousser vers le bas puis tout réduire") :
+  // nombre de colonnes de la grille MCQ posé ici selon le nombre
+  // d'options (voir --mcq-cols, consommé en régie desktop uniquement par
+  // style.css) — 2-8 options, bornes imposées par l'éditeur
+  // (MCQ_MIN_OPTIONS/MCQ_MAX_OPTIONS). Formule plutôt qu'une table comme
+  // INTRUS_ROW_PATTERNS plus bas : ce cas n'a pas besoin d'un motif par
+  // rangée (grille uniforme repeat(N, 1fr), pas de tuile à centrer à
+  // part). Réinitialisée ICI, avant les branches par type (comme
+  // innerHTML juste au-dessus) plutôt que dans chacune des branches
+  // truefalse/intrus : aucune des deux ne consomme cette propriété
+  // (voir style.css, sélecteur qui les exclut explicitement), pas besoin
+  // de la reposer plusieurs fois pour la même hygiène.
+  optionsDiv.style.removeProperty('--mcq-cols')
   if (payload.type === 'mcq' && Array.isArray(payload.options)) {
+    const mcqCols = payload.options.length <= 4 ? 2 : payload.options.length <= 6 ? 3 : 4
+    optionsDiv.style.setProperty('--mcq-cols', mcqCols)
     payload.options.forEach((opt, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn'
