@@ -1383,14 +1383,41 @@ const positionZoomGuessMarker = (zoom) => {
   zoomGuessMarker.classList.remove('d-none')
 }
 
+// Reflète dans cette vignette le cadrage statique choisi via "Cadrer
+// l'image" (q.imagePos/q.imageBg) — même fonction que le rendu réel en jeu
+// (voir index.js applyCropTransform, définie plus bas dans ce fichier pour
+// association/intrus/révélation). Jusqu'ici la vignette restait un simple
+// object-fit:cover ignorant complètement ce réglage une fois validé (retour
+// utilisateur : "elle devrait être mise à jour... pour qu'on sache à quoi
+// ressemble le dézoom complet") — le créateur validait un cadrage sans
+// jamais le revoir avant de lancer une vraie partie. imagePos absent :
+// applyCropTransform retombe sur zoom=1/centré, identique à l'ancien rendu.
+const applyZoomGuessPreviewCrop = (q) => {
+  if (!zoomGuessPreviewWrap || !zoomGuessPreviewImg || !q.image) return
+  applyCropTransform(zoomGuessPreviewWrap, zoomGuessPreviewImg, q.imagePos)
+}
+
 const populateZoomGuessFields = (q) => {
   if (!zoomGuessPreviewWrap) return
   if (q.type !== 'zoomguess') return
   if (q.image) {
-    zoomGuessPreviewImg.src = q.image
+    // Couleur de fond éventuelle (bandes vides d'un cadrage dézoomé sous
+    // "cover", voir onBgReady plus bas) — même principe que
+    // illustrationImgWrap.style.background côté jeu (index.js).
+    zoomGuessPreviewWrap.style.background = q.imageBg || ''
+    // d-none retiré AVANT le recadrage (pas après) : applyZoomGuessPreviewCrop
+    // lit clientWidth/clientHeight du wrap (voir applyCropTransform) — encore
+    // masqué (display:none), il les lirait à 0 pour une image déjà en cache
+    // (même piège documenté sur index.js applyPortraitLayout/.complete).
     zoomGuessPreviewWrap.classList.remove('d-none')
+    zoomGuessPreviewImg.onload = () => applyZoomGuessPreviewCrop(q)
+    zoomGuessPreviewImg.src = q.image
+    // Image déjà en cache (même piège que partout ailleurs dans ce fichier
+    // et index.js) : onload ne se redéclenche jamais dans ce cas.
+    if (zoomGuessPreviewImg.complete && zoomGuessPreviewImg.naturalWidth) applyZoomGuessPreviewCrop(q)
   } else {
     zoomGuessPreviewWrap.classList.add('d-none')
+    zoomGuessPreviewWrap.style.background = ''
   }
   if (zoomGuessCropBtn) zoomGuessCropBtn.classList.toggle('d-none', !q.image)
   if (!q.zoom) q.zoom = { x: 0.5, y: 0.5, startScale: ZOOM_GUESS_DEFAULT }
@@ -1430,8 +1457,13 @@ if (zoomGuessCropBtn) {
     const q = questions[activeIndex]
     if (readOnly || !q || !q.image) return
     openImageCropModal(q.image, q.imagePos, q.imageBg, {
-      onSave: (pos) => { q.imagePos = pos },
-      onBgReady: (bg) => { q.imageBg = bg },
+      // Retour utilisateur : la vignette d'édition ne reflétait jamais le
+      // cadrage une fois "Valider" cliqué dans la popup — corrigé en
+      // réappliquant tout de suite le recadrage sur cette même vignette
+      // (voir applyZoomGuessPreviewCrop ci-dessus), au lieu d'attendre un
+      // futur changement de question pour le voir apparaître.
+      onSave: (pos) => { q.imagePos = pos; applyZoomGuessPreviewCrop(q) },
+      onBgReady: (bg) => { q.imageBg = bg; if (zoomGuessPreviewWrap) zoomGuessPreviewWrap.style.background = bg || '' },
       onReplace: (dataUrl) => {
         q.image = dataUrl
         q.zoom = { x: 0.5, y: 0.5, startScale: q.zoom?.startScale || ZOOM_GUESS_DEFAULT }
@@ -1467,7 +1499,14 @@ if (zoomGuessPreviewImg) {
     const q = questions[activeIndex]
     if (readOnly || !q || !q.image) return
     if (!q.zoom) q.zoom = { x: 0.5, y: 0.5, startScale: ZOOM_GUESS_DEFAULT }
-    const rect = zoomGuessPreviewImg.getBoundingClientRect()
+    // Rect du WRAP, pas de l'<img> : depuis applyZoomGuessPreviewCrop
+    // ci-dessus, l'<img> est positionnée/dimensionnée en taille NATURELLE
+    // (recadrage statique, voir applyCropTransform) — son propre rect ne
+    // correspond donc plus au cadre visible dès qu'un cadrage personnalisé
+    // est actif. Le point de zoom reste box-relatif, exactement comme en
+    // jeu (transform-origin posé sur #illustrationImgWrap, jamais sur
+    // l'image elle-même — voir index.js).
+    const rect = zoomGuessPreviewWrap.getBoundingClientRect()
     q.zoom.x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
     q.zoom.y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
     positionZoomGuessMarker(q.zoom)
@@ -2670,6 +2709,14 @@ const selectQuestion = (index) => {
   renderIntrusOptions()
   renderIndiceHints()
   toggleTypeSections()
+  // Réappliqué ici, APRÈS toggleTypeSections() : populateZoomGuessFields()
+  // ci-dessus tourne alors que #zoomGuessSection est peut-être encore
+  // masquée (question précédente d'un autre type) — applyCropTransform y
+  // lisait alors clientWidth/clientHeight à 0 et n'appliquait jamais le
+  // cadrage pour une image déjà en cache (retour utilisateur : le cadrage
+  // ne s'affichait qu'après avoir rouvert "Cadrer l'image", jamais en
+  // rechargeant/changeant simplement de question).
+  if (q.type === 'zoomguess') applyZoomGuessPreviewCrop(q)
   updateSidebar()
 
   qIndexLabel.textContent = `Question ${activeIndex + 1} / ${questions.length}`
