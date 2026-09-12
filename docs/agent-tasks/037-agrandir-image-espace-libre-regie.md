@@ -225,8 +225,25 @@ uniquement du CSS/JS côté client.
       générique), `image`/`zoomguess`/`association` explicitement
       exclus. Aucun effet visuel encore : le CSS qui la consomme arrive
       aux étapes 2/3.
-- [ ] 2. CSS — stretch + flex illustration décorative générique
-- [ ] 3. CSS — étendre à reveal/recherche/halo
+- [x] 2. CSS — stretch + flex illustration décorative générique (mcq,
+      free, etc., portrait inclus) — confirmé visuellement, image
+      nettement agrandie (ex. 260px → 404-1044px selon le cas), sans
+      distorsion (`object-fit: contain`), question sans image inchangée.
+      2 pièges rencontrés/corrigés en cours de route : `max-height`
+      restait prioritaire sur `height:100%` sans `max-height:none`
+      explicite ; `#illustrationZoomLayer` (enveloppe intermédiaire)
+      avait besoin d'une largeur ET hauteur explicites (référence
+      circulaire sinon).
+- [x] 3. CSS — étendu à reveal/recherche/halo — confirmé visuellement.
+      2 pièges supplémentaires : `#inputArea` reçoit `display:block` en
+      inline à chaque question (même piège que `#main`, `!important`
+      nécessaire) ; `.reveal-area`/`.reveal-img-wrap` ont une marge
+      gauche/droite `auto` (pensée pour un centrage hors flex) qui
+      empêche l'étirement sur l'axe transversal sans `width:100%`
+      explicite — les deux effondraient toute la chaîne à 0px sans ces
+      correctifs. `#illustrationImgWrap` (vide pour ces 3 types) protégé
+      par `:has(.illustration-img:not(.d-none))` pour ne pas voler
+      l'espace flex de `#inputArea`.
 - [ ] 4. Coexistence avec `fitStageContent`
 - [ ] 5. Vérification visuelle
 

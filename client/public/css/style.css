@@ -4421,6 +4421,99 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     min-height: 380px;
     max-height: 100%;
   }
+  /* Tâche 037 (retour utilisateur : "si le bloc central peut atteindre la
+     taille des blocs latéraux, on le fait, et on utilise l'espace pour
+     agrandir les images") : #stageWrap peut s'étirer comme #hostPanel/
+     #liveClassementDock (déjà align-items:stretch hérité de .container,
+     voir plus haut dans ce fichier) dès que la question a une image
+     "agrandissable" — classe posée en JS (voir index.js, question:show,
+     has-question-image), jamais posée pour "image"/"zoomguess" (zone
+     dimensionnée par du JS/une mécanique de zoom, plus délicate à
+     agrandir sans y toucher) ni "association" (pas UNE image mais
+     jusqu'à 16 petites images de tuiles). Sans image sur la question :
+     align-self:center ci-dessus reste inchangé, comportement identique à
+     avant cette tâche. */
+  body.is-host.game-active .container #stageWrap.has-question-image {
+    align-self: stretch;
+  }
+  /* #main doit alors REMPLIR ce #stageWrap agrandi, pas juste rester
+     centré dedans à sa taille de contenu (ce que justify-content:safe
+     center ci-dessus ferait par défaut) : flex-grow sur l'unique enfant
+     de #stageWrap qui participe au flux flex (#questionTypeBadge est en
+     position:fixed, hors flux). "1 1 auto" (pas juste "1", qui
+     repartirait d'une base 0%) : part de sa taille naturelle puis
+     grandit, jamais l'inverse. */
+  body.is-host.game-active .container #stageWrap.has-question-image #main {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  /* Disposition PORTRAIT (tâche 028, #main.regie-portrait-layout) déjà en
+     grid-template-rows: auto 1fr — l'image y récupère DÉJÀ tout l'espace
+     vertical restant DANS #main une fois celui-ci agrandi par la règle
+     juste au-dessus, rien de plus à faire pour elle. Les 3 règles
+     suivantes (:not(.regie-portrait-layout)) ne concernent donc que le
+     cas standard (illustration empilée au-dessus des tuiles, pas de
+     grille 2 colonnes). */
+  body.is-host.game-active .container #stageWrap.has-question-image #main:not(.regie-portrait-layout) {
+    /* !important : même piège que .regie-portrait-layout juste en dessous
+       (style inline display:block posé par enterGameScreen(), index.js,
+       à chaque question — un inline-style l'emporte toujours sur une
+       règle de feuille de style, même plus spécifique). */
+    display: flex !important;
+    flex-direction: column;
+  }
+  /* #illustrationImgWrap > #illustrationZoomLayer > .illustration-img
+     (voir index.html) : deux niveaux d'enveloppe à agrandir en cascade,
+     pas seulement l'image elle-même — un height:100% sur un ancêtre à
+     hauteur AUTO (comme #illustrationZoomLayer par défaut, aucune règle
+     CSS qui lui soit propre) ne veut rien dire pour le navigateur, la
+     chaîne de pourcentages a besoin d'une hauteur DÉFINIE à chaque étage
+     pour se résoudre jusqu'à l'image.
+     :has(.illustration-img:not(.d-none)) : has-question-image est aussi
+     posée pour reveal/recherche/halo (tâche 037, voir plus bas) — leur
+     image dédiée vit dans #inputArea, PAS ici (#illustrationImgWrap reste
+     d-none pour eux, voir emitQuestion côté index.js). Sans ce garde-fou,
+     ce conteneur VIDE réclamerait quand même sa part d'espace flex,
+     laissant d'autant moins à #inputArea pour ces 3 types. */
+  body.is-host.game-active .container #stageWrap.has-question-image #main:not(.regie-portrait-layout) #illustrationImgWrap:has(.illustration-img:not(.d-none)) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.is-host.game-active .container #stageWrap.has-question-image #main:not(.regie-portrait-layout) #illustrationZoomLayer {
+    /* width ET height, pas juste height : #illustrationImgWrap est en
+       display:flex (flex-direction:row par défaut) — sans largeur
+       explicite ici, #illustrationZoomLayer se limiterait à la largeur de
+       son propre contenu (l'image), qui a justement besoin d'une boîte
+       AUX DEUX DIMENSIONS DÉJÀ RÉSOLUES pour que son width/height:100%
+       (règle suivante) ait un sens (sinon référence circulaire :
+       l'enveloppe se dimensionne sur l'image, l'image se dimensionne sur
+       l'enveloppe). */
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.is-host.game-active .container #stageWrap.has-question-image #main:not(.regie-portrait-layout) .illustration-img {
+    /* max-height seul ne suffit pas : ça PLAFONNE, ça n'agrandit jamais
+       une petite image au-delà de sa résolution native (retour terrain :
+       une illustration 800×300 restait affichée à 300px de haut malgré
+       ~886px de place disponible). width/height:100% + object-fit:contain
+       (technique standard) forcent l'image à occuper toute la boîte
+       disponible, dans les deux sens, sans jamais déformer son ratio. */
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    /* max-height:none impératif : la règle de base (.illustration-img,
+       plus haut dans ce fichier) plafonne à 260px — height:100% seul ne
+       suffit pas à le dépasser, max-height reste toujours prioritaire sur
+       height en cas de conflit, quelle que soit sa valeur calculée. */
+    max-height: none;
+    object-fit: contain;
+  }
   /* Tâche 028 (retour utilisateur : "impossible de voir la question en
      haut... géner ça en deux colonnes pour les images verticales — TITRE
      en haut, Photo en bas à gauche, éléments réponse en bas à droite") :
@@ -4464,6 +4557,26 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   body.is-host.game-active .container #main.regie-portrait-layout #illustrationImgWrap .illustration-img {
     max-height: min(50vh, 420px);
     max-width: 100%;
+    margin: 0;
+  }
+  /* Tâche 037 : même correctif que le cas standard juste au-dessus (voir
+     son commentaire) — le plafond min(50vh,420px) ci-dessus ne fait que
+     brider, il n'agrandit jamais une petite image. #illustrationImgWrap a
+     déjà height:100% de sa colonne de grille (tâche 028, juste au-dessus)
+     : il suffit ici de laisser l'image en profiter pleinement.
+     #illustrationZoomLayer (enveloppe intermédiaire entre les deux, voir
+     index.html) a aussi besoin d'une largeur explicite pour la même
+     raison de référence circulaire que le cas standard. */
+  body.is-host.game-active .container #stageWrap.has-question-image #main.regie-portrait-layout #illustrationZoomLayer {
+    width: 100%;
+    height: 100%;
+  }
+  body.is-host.game-active .container #stageWrap.has-question-image #main.regie-portrait-layout #illustrationImgWrap .illustration-img {
+    height: 100%;
+    max-height: none;
+    width: 100%;
+    max-width: 100%;
+    object-fit: contain;
     margin: 0;
   }
   body.is-host.game-active .container #main.regie-portrait-layout #inputArea {
@@ -4539,6 +4652,75 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   body.is-host.game-active .container .reveal-img-wrap,
   body.is-host.game-active .container .recherche-wrap,
   body.is-host.game-active .container .halo-wrap { width: min(900px, 100%); height: min(65vh, 560px); }
+  /* Tâche 037 : même principe que l'illustration décorative générique
+     plus haut dans ce fichier (#stageWrap.has-question-image), pour ces 3
+     types où l'image vit dans #inputArea plutôt que dans
+     #illustrationImgWrap. .reveal-img/.recherche-img/.halo-img sont déjà
+     position:absolute;inset:0;object-fit:contain (voir plus haut) — elles
+     remplissent AUTOMATIQUEMENT n'importe quelle taille donnée à leur
+     .reveal-img-wrap/.recherche-wrap/.halo-wrap, rien à changer sur les
+     images elles-mêmes ici, juste sur leurs enveloppes en cascade.
+     :has(> .reveal-area:not(.d-none), ...) sur #inputArea : has-question-
+     image est AUSSI posée pour l'illustration décorative générique (mcq,
+     order...) où c'est #illustrationImgWrap qui doit grandir, pas
+     #inputArea (qui contiendrait alors les tuiles, pas à étirer) — ce
+     garde-fou réserve le flex-grow de #inputArea aux 3 types concernés
+     ici, où .reveal-area/.recherche-area/.halo-area est la zone visible
+     (pas d-none) à l'intérieur. */
+  body.is-host.game-active .container #stageWrap.has-question-image #inputArea:has(> .reveal-area:not(.d-none), > .recherche-area:not(.d-none), > .halo-area:not(.d-none)) {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* !important : #inputArea reçoit display:block en INLINE à chaque
+       question (voir index.js, question:show — même piège déjà rencontré/
+       déjà corrigé pour #main plus haut dans ce fichier, voir son
+       commentaire). Sans ça, cette règle est ignorée : #inputArea reste
+       display:block, .reveal-area/etc. ci-dessous n'ont alors aucune
+       hauteur définie à hériter (leurs propres enfants — .reveal-img-wrap
+       et consorts — n'ont pas de hauteur "naturelle" à eux, leur contenu
+       est en position:absolute, hors flux : sans une chaîne flex
+       ininterrompue jusqu'ici, tout s'effondre à 0px). */
+    display: flex !important;
+    flex-direction: column;
+    /* width:100% impératif : #inputArea porte aussi .m-auto (voir
+       index.html, margin-left/right:auto) — même piège que .reveal-area
+       plus bas (marge auto sur l'axe transversal d'un flex-container =
+       pas d'étirement, repli sur la taille du contenu, qui s'effondre en
+       cascade). Sans ce correctif ICI, tout ce qui suit dans la chaîne a
+       beau être correctement en flex:1, le PARENT commun (#inputArea)
+       reste large de 0px et rien ne peut en hériter davantage. */
+    width: 100%;
+  }
+  body.is-host.game-active .container #stageWrap.has-question-image .reveal-area:not(.d-none),
+  body.is-host.game-active .container #stageWrap.has-question-image .recherche-area:not(.d-none),
+  body.is-host.game-active .container #stageWrap.has-question-image .halo-area:not(.d-none) {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    /* width:100% impératif : .reveal-area a une marge gauche/droite auto
+       (voir sa règle de base, plus haut — pensée pour centrer un bloc
+       normal) — sur l'axe transversal d'un flex-container, une marge auto
+       SANS largeur explicite empêche l'étirement (align-items:stretch
+       ignoré) et retombe sur "taille du contenu" — qui s'effondre lui
+       aussi à 0 en cascade (même piège que la hauteur juste au-dessus,
+       mais sur la largeur cette fois). width:100% (plafonné par
+       max-width:900px, tâche 030, toujours actif) + la marge auto
+       restante centrent normalement le résultat. */
+    width: 100%;
+  }
+  body.is-host.game-active .container #stageWrap.has-question-image .reveal-img-wrap,
+  body.is-host.game-active .container #stageWrap.has-question-image .recherche-wrap,
+  body.is-host.game-active .container #stageWrap.has-question-image .halo-wrap {
+    /* height:auto annule le min(65vh,560px) ci-dessus (cette règle est
+       plus spécifique, .has-question-image en plus) — flex:1 le remplace
+       par "toute la hauteur que #inputArea/.xxx-area peuvent donner".
+       width:100% : même raison que .reveal-area ci-dessus (margin auto
+       gauche/droite sur sa règle de base). */
+    height: auto;
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
   /* Tâche 030 (suite) : order / timeline — liste verticale glissable,
      plafonnée à 560px de large avec du texte à taille fixe. Une liste
      ordonnée reste le bon choix visuel quel que soit le nombre d'items (un
