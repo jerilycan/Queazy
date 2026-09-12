@@ -8090,6 +8090,36 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   position: relative;
   box-shadow: inset 3px 0 0 rgba(var(--tile-red-rgb),0.4);
 }
+/* Bug corrigé (retour utilisateur : "les 3 couleurs du joueur doivent être
+   visibles sur le classement en liste") : #fullTable ("Détail" > liste
+   complète, distincte du podium animé juste au-dessus) ne distinguait pas
+   du tout le top 3 — contrairement au podium (or/argent/bronze) et au dock
+   régie MJ en cours de partie (voir renderLiveClassementDock). Même recette
+   que .result-row.rank-up/.rank-down ci-dessus (bordure de gauche colorée +
+   halo), mais PERMANENTE sur les 3 premières lignes plutôt que le temps
+   d'une animation de dépassement — :nth-child suffit, les lignes sont déjà
+   ajoutées dans l'ordre du classement (voir renderFullTable, index.js).
+   Mêmes tons que le podium (--tile-gold/-silver/-bronze, voir :root) +
+   médaille en repère visuel supplémentaire, cohérent avec les badges du
+   podium juste au-dessus. */
+#fullTable .result-row:nth-child(1) {
+  position: relative;
+  background: rgba(var(--tile-gold-rgb),0.12);
+  box-shadow: inset 3px 0 0 var(--tile-gold), 0 0 20px rgba(var(--tile-gold-rgb),0.35);
+}
+#fullTable .result-row:nth-child(1) .result-row-rank::before { content: '🥇 '; }
+#fullTable .result-row:nth-child(2) {
+  position: relative;
+  background: rgba(var(--tile-silver-rgb),0.12);
+  box-shadow: inset 3px 0 0 var(--tile-silver), 0 0 16px rgba(var(--tile-silver-rgb),0.3);
+}
+#fullTable .result-row:nth-child(2) .result-row-rank::before { content: '🥈 '; }
+#fullTable .result-row:nth-child(3) {
+  position: relative;
+  background: rgba(var(--tile-bronze-rgb),0.12);
+  box-shadow: inset 3px 0 0 var(--tile-bronze), 0 0 16px rgba(var(--tile-bronze-rgb),0.3);
+}
+#fullTable .result-row:nth-child(3) .result-row-rank::before { content: '🥉 '; }
 
 
 .history-tooltip {
