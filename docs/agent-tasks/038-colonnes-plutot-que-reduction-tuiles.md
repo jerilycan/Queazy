@@ -78,7 +78,78 @@ cadre.
   uniquement, pas de modification de leur contenu.
 
 ## Plan
-_à remplir par `/plan-feature`_
+
+**Conclusion de l'exploration** : le périmètre réel se réduit à MCQ
+uniquement.
+- `truefalse` a TOUJOURS exactement 2 options (`.options-grid.truefalse-grid`
+  ne surcharge jamais `grid-template-columns`, hérite du `repeat(2, 1fr)`
+  de base) — déjà optimal, rien à faire.
+- `intrus` a DÉJÀ un système adaptatif dédié (`--intrus-row-cols`, posé
+  PAR TUILE en JS, table `INTRUS_ROW_PATTERNS` dans `index.js`, consommé
+  par `.options-grid.intrus-grid` en `flex-wrap` — pas `grid-template-
+  columns`) depuis un retour utilisateur antérieur, actif dès 900px donc
+  déjà couvert en régie desktop. Rien à faire non plus.
+- Seul `.options-grid` "nu" (mcq, ni `.truefalse-grid` ni `.intrus-grid`)
+  reste figé à `repeat(2, 1fr)` (`style.css` ligne 1778) quel que soit le
+  nombre d'options — 2 à 8 par question, bornes imposées par l'éditeur
+  (`MCQ_MIN_OPTIONS`/`MCQ_MAX_OPTIONS`, `editor.js`).
+- Filet de sécurité déjà existant et pertinent pour ce plan :
+  `fitTileText` (`index.js`) réduit déjà la police d'UNE tuile (plancher
+  12px) si son texte déborde à largeur donnée — couvre déjà le cas d'une
+  réponse longue dans une tuile devenue plus étroite avec plus de
+  colonnes, rien à ajouter ici non plus.
+
+**Approche retenue** : même patron que `--intrus-row-cols` (déjà en
+place) — une variable CSS posée en JS au moment de construire les tuiles
+MCQ, consommée par une règle CSS scopée régie desktop. Nombre de colonnes
+selon le nombre d'options (`count`) : `count <= 4 ? 2 : count <= 6 ? 3 :
+4` (2-4 options : 2 colonnes, comportement ACTUEL inchangé ; 5-6 : 3 ;
+7-8 : 4). *Trade-off* : une formule plutôt qu'une table explicite comme
+`INTRUS_ROW_PATTERNS` — justifié pour l'intrus par un besoin spécifique
+(éviter une tuile orpheline mal centrée en rangées de largeur variable),
+absent ici (grille uniforme `repeat(N, 1fr)`, une dernière rangée
+incomplète reste simplement alignée à gauche — déjà le cas AUJOURD'HUI
+pour un MCQ à 3 options avec la grille figée à 2 colonnes, rien de
+nouveau introduit par ce changement).
+
+1. **JS — poser `--mcq-cols` à la construction des tuiles MCQ**
+   - Dans la branche `payload.type === 'mcq'` de la construction des
+     tuiles (`index.js`, ~ligne 7223), calculer le nombre de colonnes
+     depuis `payload.options.length` et le poser via
+     `optionsDiv.style.setProperty('--mcq-cols', ...)`.
+   - Réinitialiser (`removeProperty`) pour les autres types partageant
+     `#options` (truefalse/intrus), par hygiène — même pattern déjà
+     utilisé pour `--intrus-cols` juste à côté — bien que ces deux types
+     ne consomment jamais cette propriété (la règle CSS de l'étape 2 les
+     exclut explicitement), pour ne pas laisser une valeur JS orpheline
+     sans lecteur.
+
+2. **CSS — consommer `--mcq-cols` en régie desktop uniquement**
+   - `body.is-host.game-active .container .options-grid:not(.truefalse-grid):not(.intrus-grid) { grid-template-columns: repeat(var(--mcq-cols, 2), 1fr); }`
+     (repli à 2 si jamais absente — identique au rendu actuel).
+   - Uniquement régie desktop (`body.is-host.game-active`, ≥1100px) :
+     vue joueur/mobile inchangée, comme cadré.
+
+3. **Vérification visuelle**
+   - Script Playwright jetable (même méthode que les tâches 036/037) :
+     MCQ à 2, 4, 6 et 8 options, avec et sans illustration (pour
+     confirmer la bonne coexistence avec la tâche 037 — l'image doit
+     continuer à profiter de l'espace vertical libéré par des tuiles
+     moins hautes), à 1366×768 ET 1920×1080. Confirmer :
+     - 2-4 options : rendu IDENTIQUE à avant (2 colonnes, même taille de
+       tuile).
+     - 5-8 options : passage à 3/4 colonnes, taille de police/tuile
+       proche de l'actuelle (`fitTileText` peut la réduire légèrement si
+       une réponse est longue — attendu, "à peine plus petit" accepté
+       par l'utilisateur).
+     - `fitStageContent` sollicité beaucoup moins souvent (idéalement
+       plus du tout pour 8 options texte courtes sans image) — comparer
+       `mainZoom` avant/après sur le même cas que le stress-test de la
+       tâche 037.
+
+Aucune étape ne touche une zone des "Interdictions" du `CLAUDE.md` (pas de
+`supabase/schema.sql`, pas de `render.yaml`, pas de nouvelle dépendance) —
+uniquement du CSS/JS côté client.
 
 ## Étapes réalisées
 - [ ]
@@ -90,10 +161,32 @@ _à remplir par `/plan-feature`_
       session distante)
 
 ## Tests manuels recommandés
-_à remplir par `/plan-feature`_
+En régie desktop (≥1100px), salle IRL (Présenter et "à distance", même
+régie) :
+- MCQ à 2, 3, 4 options : confirmer visuellement AUCUN changement par
+  rapport à avant cette tâche.
+- MCQ à 5, 6, 7, 8 options : confirmer le passage à 3/4 colonnes, tuiles
+  lisibles (police proche de la taille actuelle), pas de zoom réducteur
+  déclenché pour un cas raisonnable (réponses courtes).
+- Même cas + illustration : confirmer que l'image profite bien de
+  l'espace vertical libéré par la grille plus compacte (tâche 037).
+- Une réponse MCQ avec un texte très long dans une grille à 4 colonnes
+  (tuile étroite) : confirmer que `fitTileText` réduit sa police
+  proprement sans casser la mise en page des autres tuiles.
+- Vue joueur (mobile/PC) : confirmer AUCUN changement (grille 2 colonnes
+  ou 1 colonne mobile, comme avant).
 
 ## Risques restants
-_à remplir par `/plan-feature`_
+- Dernière rangée incomplète (ex. 7 options en 4 colonnes = 4+3) reste
+  alignée à gauche, pas centrée — limitation cosmétique mineure, déjà
+  présente aujourd'hui pour un MCQ à 3 options (grille 2 colonnes
+  figée), pas une régression introduite par cette tâche. Si signalé à
+  l'usage, s'inspirer du traitement déjà fait pour "intrus" (flex-wrap +
+  justify-content:center) plutôt que de le anticiper sans demande.
+- Les seuils choisis (≤4→2, ≤6→3, ≤8→4 colonnes) sont un point de départ
+  raisonnable, pas testés avec du vrai contenu utilisateur (textes
+  d'options réels, pas les placeholders synthétiques du script de test)
+  — à ajuster si le rendu réel semble trop serré ou trop clairsemé.
 
 ## Statut
 `ouverte`
