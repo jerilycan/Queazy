@@ -53,9 +53,9 @@ recoder).
   visible, sous peine de recréer le problème inverse (image géante qui
   écrase les tuiles, ou grille à 1 colonne avec les tuiles qui ne
   profitent plus de la 2e colonne prévue en tâche 028).
-- Trancher le sort de `#irlAnswerRecap` (résumé texte, tâche 033) :
-  redondant une fois les tuiles à nouveau visibles à la révélation, ou
-  conservé en complément — décision à documenter dans le Plan.
+- Retirer `#irlAnswerRecap` (résumé texte, tâche 033) : redondant une fois
+  les tuiles à nouveau visibles à la révélation (décision validée par
+  l'utilisateur — pas besoin de le garder).
 
 ## Hors périmètre
 - Mode "à distance" (`gameMode === 'remote'`) — jamais touché par 031,
@@ -71,15 +71,14 @@ recoder).
 - `client/public/css/style.css` — règle `body.irl-presenter-mode
   #inputArea` (031) à retirer/adapter ; règles d'agrandissement de
   l'illustration desktop + grille portrait 1 colonne (031) à revoir ;
-  styles `body.irl-presenter-mode #irlAnswerRecap` (033) à trancher selon
-  la décision prise sur son sort.
+  styles `body.irl-presenter-mode #irlAnswerRecap` (033) à retirer.
 - `client/public/js/index.js` — `updateIrlPlayerUI()`/`isPresenterHost()`
   (la classe `irl-presenter-mode` elle-même n'a probablement pas besoin de
   changer, seul le CSS qui la consomme change) ; relecture des fonctions
   `build*`/`reveal*` par type de question pour confirmer qu'aucune ne
-  réactive l'interactivité pour `isPresenterHost()` ; `buildIrlAnswerRecap`
-  et le bloc qui le peuple (à garder ou retirer selon la décision sur
-  `#irlAnswerRecap`).
+  réactive l'interactivité pour `isPresenterHost()` ; retrait de
+  `buildIrlAnswerRecap`/`irlAnswerRecap` et du bloc qui le peuple (plus
+  d'usage une fois les tuiles réaffichées).
 - `docs/agent-tasks/031-irl-hide-gameplay-mj.md` et
   `033-multi-sujets-2.md` — référence historique uniquement, pas de
   modification de leur contenu.
