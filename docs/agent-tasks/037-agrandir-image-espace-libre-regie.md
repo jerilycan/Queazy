@@ -244,14 +244,28 @@ uniquement du CSS/JS côté client.
       correctifs. `#illustrationImgWrap` (vide pour ces 3 types) protégé
       par `:has(.illustration-img:not(.d-none))` pour ne pas voler
       l'espace flex de `#inputArea`.
-- [ ] 4. Coexistence avec `fitStageContent`
-- [ ] 5. Vérification visuelle
+- [x] 4. Coexistence avec `fitStageContent` — aucun code à changer,
+      confirmée par construction : `fitStageContent` mesure
+      `scrollHeight`/`clientHeight` APRÈS layout, peu importe ce qui rend
+      le contenu haut (plus de tuiles ou une image agrandie). Testé avec
+      un cas extrême (mcq 8 options + image + énoncé très long, 1366×768)
+      : tout tient dans le cadre, zoom réduit au plancher (0.55), rendu
+      propre (aucune distorsion, juste l'image plus fine faute de place).
+- [x] 5. Vérification visuelle — 6 types testés (mcq+paysage, mcq sans
+      image, free+portrait, reveal, recherche, halo) + comparaison
+      768p/1080p + cas de stress ci-dessus. Toutes les captures confirment
+      le comportement attendu.
 
 ## Checks effectués
-- [x] Étape 1 : `node --check client/public/js/index.js` — passe.
-- [ ] Vérification visuelle (script Playwright jetable, comme pour la
-      tâche 036 — aucun outil Browser pane interactif dans cette session
-      distante)
+- [x] Étape 1 : `node --check client/public/js/index.js` — passe (aucun
+      JS modifié depuis, les étapes 2-4 sont purement CSS).
+- [x] Brace-balance CSS vérifiée après chaque édition (aucun outil de
+      lint CSS dans ce projet).
+- [x] Vérification visuelle : script Playwright jetable (jamais commité,
+      même méthode que la tâche 036 — pas d'outil Browser pane dans cette
+      session distante). 6 types + comparaison résolutions + cas de
+      stress, captures à l'appui pour chacun (voir détail étapes 2-5
+      ci-dessus).
 
 ## Tests manuels recommandés
 En régie desktop (≥1100px), salle IRL (Présenter et "à distance", les deux
@@ -272,13 +286,20 @@ utilisent la même régie) :
 
 ## Risques restants
 - Les types "cas 3" (`image`/`zoomguess`) et `association` restent hors
-  périmètre — leur écran continuera de sembler comparativement plus petit/
-  centré que les autres types une fois cette tâche faite, pouvait donner
-  une impression d'incohérence entre types si remarqué.
-- `#illustrationImgWrap`/zones image dédiées n'ont aujourd'hui aucune
-  règle de flex — vérifier qu'aucune autre règle CSS existante ne dépend
-  implicitement de leur comportement de bloc normal (ex. marges `auto`,
-  `text-align: center` hérité) une fois passées en enfants flex.
+  périmètre (décision validée par l'utilisateur) — leur écran continuera
+  de sembler comparativement plus petit/centré que les autres types une
+  fois cette tâche faite, pouvait donner une impression d'incohérence
+  entre types si remarqué.
+- Le piège "marge `auto` sur l'axe transversal empêche l'étirement flex"
+  anticipé dans ce risque s'est effectivement produit (2 fois : largeur de
+  `#inputArea` puis de `.reveal-area`/`.reveal-img-wrap`) — corrigé (voir
+  étapes 2/3 ci-dessus). Reste un risque générique pour toute future
+  extension de ce mécanisme (ex. si `image`/`association` sont un jour
+  inclus) : tout élément avec une marge horizontale `auto` dans la chaîne
+  flex devra recevoir le même correctif `width: 100%`.
+- Testé uniquement via script automatisé (pas de vraie session IRL avec
+  un vrai hôte/joueurs humains) — comme pour la tâche 036, l'utilisateur
+  a prévu de tester en conditions réelles après déploiement.
 
 ## Statut
-`en cours`
+`en review`
