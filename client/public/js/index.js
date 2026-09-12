@@ -8477,7 +8477,17 @@ socket.on('timer:end', (payload) => {
   // clore avant que le tick d'index.js n'ait naturellement atteint scale(1)
   // (tout le monde a répondu en avance) — on force l'image complète tout de
   // suite pour rester cohérent avec la révélation qui s'affiche en dessous.
-  if (currentIllustrationZoom && illustrationImg) { illustrationImg.style.transform = 'scale(1)'; illustrationImg.style.filter = '' }
+  // Bug corrigé (retour utilisateur : "l'image se dézoome correctement...
+  // puis quand tout le monde a répondu, rezoom dans l'image" — révélation
+  // "cassée", image finale mal cadrée) : ce forçage ciblait illustrationImg,
+  // qui ne porte PAS le zoom (voir le tick plus haut, currentIllustrationZoom
+  // + illustrationZoomLayer) mais le recadrage STATIQUE posé par
+  // applyCropTransform (voir applyZoomGuessCrop dans question:show) — lui
+  // écraser un scale(1) brut réinitialisait ce cadrage choisi à l'édition,
+  // d'où l'impression d'un "rezoom" dans l'image à ce moment précis. Corrigé
+  // en ciblant le bon élément, illustrationZoomLayer, qui ne porte lui que
+  // le zoom et n'a donc plus rien d'autre à préserver.
+  if (currentIllustrationZoom && illustrationZoomLayer) { illustrationZoomLayer.style.transform = 'scale(1)' }
   // "révélation" : timer:end est le SEUL moment où l'image réponse arrive
   // enfin du serveur (voir server/index.js, jamais transmise avant) — pour
   // TOUT LE MONDE, hôte compris (c'est souvent son écran qui est projeté en
