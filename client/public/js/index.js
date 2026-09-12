@@ -5298,25 +5298,15 @@ let gameMode = 'irl'
 // dans le salon d'attente, la navbar reste utile pour repartir/rejoindre un
 // autre salon si l'hôte a un souci (retour utilisateur explicite — masquer
 // la navbar dès le salon empêchait ce repli).
-// Pour l'hôte PRÉSENTATEUR (ne joue jamais, isPresenterHost()) : retour
-// utilisateur explicite (le contraire d'un choix passé, gardé pour mémoire
-// dans l'historique git) — en IRL, sa vue ne doit plus RIEN montrer du
-// gameplay/des réponses (voir body.irl-presenter-mode plus bas, posée sur
-// TOUTE taille d'écran, pas juste la régie desktop) : la salle répond de
-// vive voix/à main levée, l'écran du MJ n'a plus besoin d'afficher les
-// tuiles — autant garder toute la place pour l'illustration. Uniquement en
-// IRL : à distance, la vue régie garde son rôle de console de contrôle
-// habituel (rien ne change pour ce mode).
-// Rappelée à chaque changement possible de l'un des quatre facteurs (isHost
+// Rappelée à chaque changement possible de l'un des trois facteurs (isHost
 // posé dans renderLobbyGrid, gameMode reçu par socket, game-active posé au
-// lancement/retour au salon, roomMode déjà stable avant le lancement de la
-// partie) : l'ordre d'arrivée entre eux n'est jamais garanti.
+// lancement/retour au salon) : l'ordre d'arrivée entre eux n'est jamais
+// garanti.
 const updateIrlPlayerUI = () => {
   const gameActive = document.body.classList.contains('game-active')
   const isPlayerInGame = !isHost && gameActive
   document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && isPlayerInGame)
   document.body.classList.toggle('remote-player-mode', gameMode === 'remote' && isPlayerInGame)
-  document.body.classList.toggle('irl-presenter-mode', gameMode === 'irl' && gameActive && isPresenterHost())
   // Ligne d'info du menu roue crantée (voir #irlMenuModeInfo, index.html) —
   // affichée uniquement en remote, où le mode n'a rien d'évident visuellement
   // une fois la navbar masquée (contrairement à IRL, déjà signalé ailleurs).

@@ -181,7 +181,7 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
 - [x] 2. CSS — styles `#irlAnswerRecap` retirés
 - [x] 3. HTML — élément `#irlAnswerRecap` retiré
 - [x] 4. JS — références orphelines à `irlAnswerRecap` retirées
-- [ ] 5. JS — classe `irl-presenter-mode` retirée
+- [x] 5. JS — classe `irl-presenter-mode` retirée
 - [ ] 6. `server/index.js` — bump `APP_VERSION`
 
 ## Checks effectués
@@ -211,6 +211,11 @@ déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
 - [x] `node --check client/public/js/index.js` — lancé par précaution
       (fichier non modifié à cette étape), passe.
 - [x] Étape 4 : `node --check client/public/js/index.js` — passe.
+- [x] Étape 5 : confirmée par sous-agent indépendant (`node --check` passe,
+      `grep -rn irl-presenter-mode client/public/` vide sur tout le dossier,
+      `isPresenterHost()`/`roomMode` restent utilisés normalement à une
+      quinzaine/vingtaine d'autres endroits, commentaire "trois facteurs"
+      cohérent avec les 2 toggles restants).
 - [ ] Vérification visuelle Browser pane — **non effectuée à cette étape** :
       aucun outil "Browser pane" interactif disponible dans cette session
       distante (pas d'équivalent à ce qu'utilisaient les tâches
