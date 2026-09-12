@@ -159,11 +159,20 @@ uniquement du CSS/JS côté client.
       des branches truefalse/intrus séparément comme envisagé au
       planning — même résultat (aucune des deux ne consomme cette
       propriété), diff plus petit.
-- [ ] 2. CSS — consommer `--mcq-cols` en régie desktop uniquement
-- [ ] 3. Vérification visuelle
+- [x] 2. CSS — `--mcq-cols` consommée par `.options-grid:not(.truefalse-grid):not(.intrus-grid)`
+      en régie desktop uniquement. Confirmé visuellement : 2/4 options →
+      2 colonnes (identique à avant), 6 → 3, 8 → 4 — tuiles toujours
+      bien lisibles, `mainZoom` reste à `1` (aucune réduction
+      déclenchée) même à 8 options sur 1366×768.
+- [ ] 3. Vérification visuelle complète (avec image, coexistence tâche
+      037, cas de stress texte long)
 
 ## Checks effectués
 - [x] Étape 1 : `node --check client/public/js/index.js` — passe.
+- [x] Étape 2 : brace-balance CSS vérifiée ; vérification visuelle
+      (script Playwright jetable) sur 2/4/6/8 options à 1366×768 —
+      captures + mesures (`--mcq-cols`, `grid-template-columns`,
+      `mainZoom`) conformes à l'attendu pour les 4 cas.
 - [ ] `node --check client/public/js/index.js`
 - [ ] Vérification visuelle (script Playwright jetable, comme pour les
       tâches 036/037 — aucun outil Browser pane interactif dans cette

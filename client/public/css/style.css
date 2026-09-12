@@ -4629,6 +4629,19 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     max-height: 260px;
     overflow-y: auto;
   }
+  /* Tâche 038 (retour utilisateur : "garder les tuiles lisibles, ajouter
+     des colonnes plutôt que pousser vers le bas puis tout réduire") :
+     .options-grid reste figée à 2 colonnes partout ailleurs (base,
+     style.css plus haut) — ICI seulement, en régie desktop, le nombre de
+     colonnes suit --mcq-cols (posée en JS selon le nombre d'options,
+     voir index.js question:show). Repli à 2 si absente (truefalse/
+     intrus, jamais posée pour eux) : identique au comportement de base,
+     d'où l'exclusion explicite de .truefalse-grid (toujours 2 options,
+     déjà optimal) et .intrus-grid (système adaptatif dédié déjà en
+     place, --intrus-row-cols par tuile plutôt que par grille). */
+  body.is-host.game-active .container .options-grid:not(.truefalse-grid):not(.intrus-grid) {
+    grid-template-columns: repeat(var(--mcq-cols, 2), 1fr);
+  }
   /* Tâche 030 (disposition dédiée par type de question) : Blind Test est
      le type où l'hôte n'a QUE l'orbe à regarder pendant toute la question
      (pas de tuiles à lire) — le garder à sa taille mobile (176px) sur une
