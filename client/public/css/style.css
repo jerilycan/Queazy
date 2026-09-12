@@ -4600,7 +4600,17 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   body.is-host.game-active .container .indice-area { max-width: 900px; }
   body.is-host.game-active .container .indice-central,
   body.is-host.game-active .container .indice-central-card { height: 320px; }
-  body.is-host.game-active .container .indice-card-text { font-size: 28px; }
+  /* Scopé à .indice-central-card (pas .indice-card-text seul) : retour
+     utilisateur (tâche 036, capture d'écran) — le sélecteur générique
+     l'emportait aussi sur .indice-history-card .indice-card-text (11px,
+     -webkit-line-clamp:3, voir plus haut) malgré son unique rôle affiché
+     de repli, à cause d'une spécificité supérieure (4 classes contre 2) —
+     un indice texte un peu long dans les petites vignettes d'historique
+     (84×84px) se retrouvait à 28px, débordant/coupé en plein mot au lieu
+     d'être proprement clampé sur 3 lignes. Bug pré-existant à la tâche
+     030 (jamais vu jusqu'ici : régie desktop masquée pour l'hôte
+     présentateur IRL avant la tâche 036, voir #inputArea plus haut). */
+  body.is-host.game-active .container .indice-central-card .indice-card-text { font-size: 28px; }
   body.is-host.game-active .container #liveClassementDock {
     grid-column: 3;
     /* span 2, même raison que #hostPanel plus haut. */
