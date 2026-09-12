@@ -220,10 +220,18 @@ Aucune étape ne touche une zone des "Interdictions" du `CLAUDE.md` (pas de
 uniquement du CSS/JS côté client.
 
 ## Étapes réalisées
-- [ ]
+- [x] 1. JS — classe `has-question-image` posée sur `#stageWrap` à
+      `question:show`, calculée type par type (reveal/recherche+halo/
+      générique), `image`/`zoomguess`/`association` explicitement
+      exclus. Aucun effet visuel encore : le CSS qui la consomme arrive
+      aux étapes 2/3.
+- [ ] 2. CSS — stretch + flex illustration décorative générique
+- [ ] 3. CSS — étendre à reveal/recherche/halo
+- [ ] 4. Coexistence avec `fitStageContent`
+- [ ] 5. Vérification visuelle
 
 ## Checks effectués
-- [ ] `node --check client/public/js/index.js` (si JS modifié)
+- [x] Étape 1 : `node --check client/public/js/index.js` — passe.
 - [ ] Vérification visuelle (script Playwright jetable, comme pour la
       tâche 036 — aucun outil Browser pane interactif dans cette session
       distante)
@@ -256,4 +264,4 @@ utilisent la même régie) :
   `text-align: center` hérité) une fois passées en enfants flex.
 
 ## Statut
-`ouverte`
+`en cours`

@@ -6707,6 +6707,28 @@ socket.on('question:show', payload => {
     inputArea.style.display = 'block'
   }
   currentQuestionType = payload.type || 'free'
+  // Tâche 037 (régie desktop) : quand la question porte une image que
+  // style.css sait agrandir dans l'espace libre (illustration décorative
+  // générique, ou zone dédiée reveal/recherche/halo), #stageWrap peut
+  // s'étirer jusqu'à la hauteur des blocs latéraux au lieu de rester
+  // centré à la taille de son contenu (voir body.is-host.game-active
+  // .container #stageWrap, align-self). Exclusions volontaires,
+  // laissées hors périmètre pour l'instant : "image"/"zoomguess" (zone
+  // dimensionnée par du JS/une mécanique de zoom, plus délicate à
+  // agrandir sans y toucher) et "association" (pas UNE image mais
+  // jusqu'à 16 petites images de tuiles — même si payload.illustrationUrl
+  // est renseigné, une illustration décorative reste possible sur ce
+  // type comme sur tous les autres, voir emitQuestion/index.js). Miroir
+  // volontaire de la branche imageToUpload dans emitQuestion (index.js)
+  // qui décide où chaque champ image atterrit dans le payload.
+  const stageGrowExcludedTypes = new Set(['image', 'zoomguess', 'association'])
+  const hasQuestionImage = !stageGrowExcludedTypes.has(payload.type) && !!(
+    payload.type === 'reveal' ? payload.enigmeImageUrl
+      : (payload.type === 'recherche' || payload.type === 'halo') ? payload.imageUrl
+        : payload.illustrationUrl
+  )
+  const stageWrap = document.getElementById('stageWrap')
+  if (stageWrap) stageWrap.classList.toggle('has-question-image', hasQuestionImage)
   if (optionsDiv) {
     const isMcqLike = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus'
     // 'grid' ici même pour "intrus" : le passage en flex (nombre de
