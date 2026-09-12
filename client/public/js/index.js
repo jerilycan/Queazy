@@ -955,6 +955,32 @@ const masterVolumePopover = document.getElementById('masterVolumePopover')
 const masterVolumeTrack = document.getElementById('masterVolumeTrack')
 const masterVolumeFill = document.getElementById('masterVolumeFill')
 const masterVolumeThumb = document.getElementById('masterVolumeThumb')
+// Place d'origine (pilule flottante bas-gauche, voir index.html) — mémorisée
+// UNE FOIS ici, avant tout déplacement éventuel, pour pouvoir la restaurer
+// telle quelle (voir placeMasterVolumeControl plus bas) pour qui n'a pas de
+// #hostPanel où se loger : joueur à distance, hôte en mode "Jouer" (retour
+// utilisateur : "le bouton de volume ... doit se placer dans les contrôles
+// de l'hôte, et non pas sous les blocs" — concerne l'hôte en régie
+// "Présenter" desktop uniquement, voir placeMasterVolumeControl).
+const masterVolumeControlHome = masterVolumeControl
+  ? { parent: masterVolumeControl.parentElement, next: masterVolumeControl.nextSibling }
+  : null
+// Repositionne le fader général dans #hostPanel pour l'hôte en régie
+// "Présenter" (voir body.is-host.game-active #hostPanel #masterVolumeControl
+// en CSS, qui bascule sa position:fixed en position:static + order une fois
+// dedans — inchangé ailleurs, la règle .master-volume-control de base reste
+// fixed) ; remis à sa place d'origine sinon (hôte en mode "Jouer", qui n'a
+// pas de #hostPanel affiché, et joueur à distance, qui n'en a jamais eu).
+// Appelé à chaque question:show, même logique de resynchronisation que le
+// reste de ce bloc (reconnexion en pleine partie).
+const placeMasterVolumeControl = () => {
+  if (!masterVolumeControl || !hostPanel || !masterVolumeControlHome) return
+  if (isPresenterHost()) {
+    if (masterVolumeControl.parentElement !== hostPanel) hostPanel.appendChild(masterVolumeControl)
+  } else if (masterVolumeControl.parentElement !== masterVolumeControlHome.parent) {
+    masterVolumeControlHome.parent.insertBefore(masterVolumeControl, masterVolumeControlHome.next)
+  }
+}
 // Question "révélation" : deux <img> empilées (voir index.html/style.css) —
 // l'énigme, visible dès le début, et la réponse, qui ne reçoit son .src
 // qu'au moment de timer:end (jamais avant, voir server/index.js) puis
@@ -6428,6 +6454,16 @@ const AUTO_ADVANCE_LEADERBOARD_DELAY_MS = 3500 // temps laissé sur le classemen
 // revealExtendedDelayMs) avant de couper/enchaîner — jamais pile sur la
 // dernière milliseconde du clip.
 const REVEAL_AUDIO_EXTEND_MARGIN_MS = 500
+// Popup de révélation (voir question:reveal) : délai de base + marge après
+// la fin d'un éventuel son, mêmes constantes que les deux ci-dessus mais
+// pour la fermeture de la popup plutôt que l'enchaînement auto — remontées
+// ici (module-scope, au lieu de littéraux redéclarés localement dans le
+// handler) pour pouvoir aussi les réutiliser depuis l'écouteur
+// 'loadedmetadata' qui rallonge les deux minuteries a posteriori (retour
+// utilisateur : "le son est tronqué... j'avais demandé à ce que la popup
+// reste ouverte le temps de la musique" — voir ce même écouteur).
+const REVEAL_POPUP_BASE_DELAY_MS = 10000
+const REVEAL_POPUP_AUDIO_MARGIN_MS = 500
 let autoAdvanceTimer = null
 const clearAutoAdvanceTimer = () => { if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null } }
 const scheduleAutoAdvance = (delayMs, action) => {
@@ -6684,7 +6720,16 @@ socket.on('question:show', payload => {
     masterVolumeControl.classList.remove('d-none')
     masterVolumeControl.style.display = ''
   }
+  placeMasterVolumeControl()
   clearRevealState()
+  // Reset du bouton œil de modération à CHAQUE question (retour utilisateur :
+  // "il faut que le bouton 'cacher les réponses' se reset entre deux
+  // questions") — sans ça moderationAnswersHidden gardait la valeur laissée
+  // par la question précédente (un clic sur l'œil pour la révéler restait
+  // valable pour toutes les questions suivantes). Même règle qu'à
+  // l'initialisation : caché par défaut en IRL, sans objet à distance.
+  moderationAnswersHidden = gameMode === 'irl'
+  applyModerationEyeState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
   // Tâche 024 : en mode "Jouer", l'hôte fait partie du classement comme un
@@ -8611,6 +8656,42 @@ socket.on('question:reveal', payload => {
     // tâche 017 — pas de mécanique de repli ici) : certains joueurs, selon
     // leur historique d'interaction, verront le son bloqué silencieusement.
     revealAudioPlayer.play().catch(() => {})
+    // Retour utilisateur ("le son est tronqué... j'avais demandé à ce que la
+    // popup reste ouverte le temps de la musique") : à cet instant précis,
+    // revealAudioPlayer.duration n'est presque jamais connue (métadonnées
+    // pas encore chargées, voir commentaires plus bas sur revealPopupDelay/
+    // revealExtendedDelayMs) — les deux minuteries qui ferment la popup et
+    // enchaînent vers le classement sont donc d'abord programmées avec le
+    // délai de base, PUIS rallongées ICI dès que la vraie durée arrive,
+    // jamais raccourcies. `expectedSrc` : filet de sécurité si l'hôte a déjà
+    // enchaîné vers une autre question avant que ces métadonnées n'arrivent
+    // — sans lui, un 'loadedmetadata' tardif pourrait reprogrammer les
+    // minuteries de la question SUIVANTE avec la durée de l'ANCIEN son.
+    const revealStartedAt = Date.now()
+    const expectedSrc = revealAudioPlayer.src
+    revealAudioPlayer.addEventListener('loadedmetadata', () => {
+      if (revealAudioPlayer.src !== expectedSrc) return
+      if (!Number.isFinite(revealAudioPlayer.duration) || revealAudioPlayer.duration <= 0) return
+      const elapsed = Date.now() - revealStartedAt
+      if (revealPopupCloseTimer) {
+        const extended = Math.max(REVEAL_POPUP_BASE_DELAY_MS, revealAudioPlayer.duration * 1000 + REVEAL_POPUP_AUDIO_MARGIN_MS)
+        const remaining = extended - elapsed
+        if (remaining > 0) {
+          clearTimeout(revealPopupCloseTimer)
+          revealPopupCloseTimer = setTimeout(() => { revealPopupCloseTimer = null; closeRevealPopup() }, remaining)
+        }
+      }
+      if (autoAdvanceTimer && roomMode === 'auto' && isHost) {
+        const extended = Math.max(AUTO_ADVANCE_REVEAL_DELAY_MS, revealAudioPlayer.duration * 1000 + REVEAL_AUDIO_EXTEND_MARGIN_MS)
+        const remaining = extended - elapsed
+        if (remaining > 0) {
+          scheduleAutoAdvance(remaining, () => {
+            const roomCode = roomInput.value.trim()
+            if (roomCode) socket.emit('leaderboard:show', { roomCode })
+          })
+        }
+      }
+    }, { once: true })
   }
   // Retour utilisateur : "la révélation doit durer plus longtemps... si il
   // y a un extrait sonore, que ça dure tout ce temps-là" — le délai de base
@@ -8885,19 +8966,21 @@ socket.on('question:reveal', payload => {
   // (tâche 032), étendu pour ne jamais couper net un son de révélation plus
   // long (petite marge après sa fin) — jamais raccourci en dessous du délai
   // de base. La durée du son n'est pas toujours connue de façon synchrone
-  // ici (métadonnées pas encore chargées) : si c'est le cas, on garde
-  // simplement le délai de base, comme prévu au plan de la tâche. Rien à
-  // programmer si la popup n'a pas été ouverte (hasRevealPopupContent
-  // faux, v5) — y compris le cas "son seul" (tâche 032), qui joue sans
-  // jamais ouvrir de popup à fermer.
+  // ici (métadonnées pas encore chargées) : si c'est le cas, on part du
+  // délai de base, RALLONGÉ ensuite dès que 'loadedmetadata' arrive (voir
+  // plus haut dans ce handler, juste après revealAudioPlayer.src) — sans ça
+  // un son plus long que la marge de base se retrouvait tronqué par la
+  // fermeture de la popup (retour utilisateur). Rien à programmer si la
+  // popup n'a pas été ouverte (hasRevealPopupContent faux, v5) — y compris
+  // le cas "son seul" (tâche 032), qui joue sans jamais ouvrir de popup à
+  // fermer.
   if (hasRevealPopupContent) {
     // Tâche 032 : 4.5s -> 10s (retour utilisateur explicite), toujours
     // étendu si un son de révélation dure plus longtemps (jamais raccourci
     // en dessous de 10s même pour un son plus court : le temps de LIRE le
     // texte/l'explication de révélation reste garanti, indépendamment de
-    // la durée d'un éventuel son).
-    const REVEAL_POPUP_BASE_DELAY_MS = 10000
-    const REVEAL_POPUP_AUDIO_MARGIN_MS = 500
+    // la durée d'un éventuel son). Constantes remontées en module-scope
+    // (voir REVEAL_POPUP_BASE_DELAY_MS plus haut dans le fichier).
     let revealPopupDelay = REVEAL_POPUP_BASE_DELAY_MS
     if (revealAudioPlayer && payload.revealAudio && Number.isFinite(revealAudioPlayer.duration) && revealAudioPlayer.duration > 0) {
       revealPopupDelay = Math.max(revealPopupDelay, revealAudioPlayer.duration * 1000 + REVEAL_POPUP_AUDIO_MARGIN_MS)

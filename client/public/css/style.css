@@ -3653,6 +3653,16 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   body.is-host.game-active #hostPanel .volume-fill {
     box-shadow: 0 0 10px rgba(var(--color-accent-rgb), 0.5);
   }
+  /* Fader général (retour utilisateur : "le bouton de volume ... doit se
+     placer dans les contrôles de l'hôte, et non pas sous les blocs") :
+     déplacé en enfant de #hostPanel en JS (voir placeMasterVolumeControl
+     dans index.js) pour l'hôte en régie "Présenter" — sort ici de sa
+     position:fixed d'origine (page entière) pour devenir un simple item de
+     cette colonne, comme #hostAmbiancePill juste en dessous. */
+  body.is-host.game-active #hostPanel #masterVolumeControl {
+    position: static;
+    align-self: flex-start;
+  }
 }
 
 .recap-sidebar {
@@ -4376,6 +4386,22 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   body.is-host.game-active .container #hostPanel > .d-flex.gap-sm .btn .btn-shine-icon {
     font-size: 15px;
     line-height: 1;
+  }
+  /* Fader général (retour utilisateur : "le bouton de volume ... doit se
+     placer dans les contrôles de l'hôte, et non pas sous les blocs") :
+     déplacé en enfant de #hostPanel en JS (voir placeMasterVolumeControl
+     dans index.js) pour l'hôte en régie "Présenter" — sort de sa
+     position:fixed d'origine (coin bas-gauche de la page entière) pour
+     devenir un simple item de cette colonne (gap déjà posé sur #hostPanel
+     ci-dessus, pas besoin de marge propre). order:5 : juste au-dessus de la
+     pastille "Ambiance" (order:6, tout en bas via margin-top:auto), sous le
+     bouton "Question suivante" — emplacement déjà anticipé, jamais occupé
+     jusqu'ici (voir commentaire "musique en dessous" plus haut sur
+     #hostPanel > .d-flex.flex-column.gap-xs). */
+  body.is-host.game-active .container #hostPanel #masterVolumeControl {
+    order: 5;
+    align-self: flex-start;
+    position: static;
   }
   body.is-host.game-active .container #hostPanel #hostAmbiancePill {
     order: 6;
