@@ -176,11 +176,32 @@ uniquement du nettoyage CSS/HTML/JS côté client + le bump `APP_VERSION`
 déjà pratiqué sans validation dédiée dans toutes les tâches comparables.
 
 ## Étapes réalisées
-- [ ]
+- [x] 1. CSS — `#inputArea` réaffiché, ajustements desktop (illustration
+      65vh + grille portrait 1 colonne) de la tâche 031 retirés.
+- [ ] 2. CSS — styles `#irlAnswerRecap` retirés
+- [ ] 3. HTML — élément `#irlAnswerRecap` retiré
+- [ ] 4. JS — références orphelines à `irlAnswerRecap` retirées
+- [ ] 5. JS — classe `irl-presenter-mode` retirée
+- [ ] 6. `server/index.js` — bump `APP_VERSION`
 
 ## Checks effectués
-- [ ] `node --check client/public/js/index.js`
-- [ ] Vérification visuelle Browser pane
+- [x] Étape 1 : relecture manuelle du fichier avant/après édition (pas
+      d'outil de lint CSS dans ce projet) — les deux blocs retirés
+      proprement, pas d'accolade orpheline, contexte voisin intact
+      (vérifié aux deux emplacements).
+- [x] Étape 1 : `grep irl-presenter-mode client/public/css/style.css` — ne
+      renvoie plus que la règle `#irlAnswerRecap` (tâche 033, prévue pour
+      l'étape 2, pas celle-ci).
+- [x] `node --check client/public/js/index.js` — lancé par précaution
+      (fichier non modifié à cette étape), passe.
+- [ ] Vérification visuelle Browser pane — **non effectuée à cette étape** :
+      aucun outil "Browser pane" interactif disponible dans cette session
+      distante (pas d'équivalent à ce qu'utilisaient les tâches
+      précédentes en local), et l'état actuel est intermédiaire
+      (`#irlAnswerRecap` existe encore, étapes 2-6 pas faites) — pas encore
+      un état cohérent à montrer. À faire une fois toutes les étapes
+      terminées ; dis-moi si tu préfères un script Playwright automatisé
+      entre-temps.
 
 ## Tests manuels recommandés
 En régie desktop (≥1100px) ET sur un écran plus petit, salle "Présenter"
@@ -220,4 +241,4 @@ En régie desktop (≥1100px) ET sur un écran plus petit, salle "Présenter"
   pas une régression qu'elle introduit.
 
 ## Statut
-`ouverte`
+`en cours`
