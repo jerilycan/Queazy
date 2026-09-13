@@ -424,6 +424,17 @@ const autoPlay = params.get('play')
 // popup "Sélectionner un Quiz" — voir plus bas, loadQuizById() fait déjà
 // tout le travail utilisé normalement par confirmQuizSelect.
 const preQuizId = params.get('quiz')
+// Vue affichage (tâche 039) : ?display=1&room=CODE — mode purement visuel
+// destiné à être projeté (2e fenêtre/écran séparée du poste MJ), rejoint la
+// salle en lecture seule (viewer:true, voir server/index.js room:join et
+// client/public/js/results.js pour le même mécanisme utilisé après une
+// partie). Court-circuite tout l'écran de connexion habituel (formulaire
+// nom/avatar/salon d'attente) — jamais de compte ni de profil joueur
+// nécessaire, voir le bloc dédié plus bas dans l'IIFE de démarrage et dans
+// socket.on('connect'). roomCode obligatoire dans l'URL : sans lui, rien à
+// rejoindre.
+const isDisplayView = params.get('display') === '1'
+const displayRoomCode = (preRoom || '').toUpperCase()
 
 if (preRoom) {
   roomInput.value = preRoom.toUpperCase()
@@ -451,6 +462,68 @@ window.addEventListener('DOMContentLoaded', () => {
 
 ;(async () => {
   await checkAuth()
+
+  // Vue affichage (tâche 039) : prioritaire sur tout le reste de ce bloc
+  // (create/play/join) — un lien ?display=1&room=CODE n'a jamais vocation à
+  // déclencher l'un de ces parcours. resetUI() sert de base "table rase"
+  // commune (mêmes panneaux masqués que pour un retour au menu normal),
+  // puis on masque en plus l'écran de connexion qu'elle réaffiche par
+  // défaut (joinCard) au profit du placeholder d'attente dédié
+  // (#displayViewScreen, voir index.html) — la connexion réelle en tant que
+  // spectateur se fait dans socket.on('connect') plus bas, pas ici.
+  if (isDisplayView) {
+    resetUI()
+    // .display-view-mode (tâche 039, étape 3) : masque le chrome qui n'est
+    // pas déjà couvert par isPresenterHost()/.is-host (navbar, zone de
+    // modération, compteur de réponses côté hôte — voir style.css). La mise
+    // en page "carte centrale" régie, elle, vient gratuitement de .is-host
+    // (posé par renderLobbyGrid dès le 1er lobby:list, voir isPresenterHost
+    // plus bas) — jamais retirée ensuite, resetUI() ne la gère pas.
+    document.body.classList.add('display-view-mode')
+    if (joinCard) {
+      joinCard.classList.add('d-none')
+      joinCard.style.display = 'none'
+    }
+    const displayViewScreen = document.getElementById('displayViewScreen')
+    if (displayViewScreen) {
+      displayViewScreen.classList.remove('d-none')
+      displayViewScreen.style.display = 'block'
+    }
+    // Bouton plein écran (tâche 039, étape 5) : API Fullscreen, nécessite un
+    // geste utilisateur — jamais de plein écran automatique au chargement.
+    // Bouton toujours visible en vue affichage (placeholder ET scène une
+    // fois une question affichée), voir #displayFullscreenBtn en CSS
+    // (position fixe, hors flux, indépendant de #displayViewScreen).
+    const displayFullscreenBtn = document.getElementById('displayFullscreenBtn')
+    if (displayFullscreenBtn) {
+      displayFullscreenBtn.classList.remove('d-none')
+      const updateFullscreenBtnLabel = () => {
+        displayFullscreenBtn.textContent = document.fullscreenElement ? '⛶ Quitter le plein écran' : '⛶ Plein écran'
+      }
+      displayFullscreenBtn.onclick = () => {
+        if (document.fullscreenElement) {
+          // Même raison que requestFullscreen ci-dessous : refus navigateur
+          // rare, rien de plus à faire, le bouton reste cohérent via
+          // fullscreenchange (qui ne se déclenchera de toute façon pas ici).
+          document.exitFullscreen().catch(() => {})
+        } else {
+          document.documentElement.requestFullscreen().catch(() => {
+            // Refus navigateur (rare hors interaction directe, ou API absente
+            // sur un vieux navigateur embarqué de boîtier TV/vidéoprojecteur) :
+            // pas de recours, juste ne pas laisser le bouton dans un état
+            // incohérent — updateFullscreenBtnLabel (déclenché par
+            // fullscreenchange) ne se déclenchera de toute façon pas ici.
+          })
+        }
+      }
+      document.addEventListener('fullscreenchange', updateFullscreenBtnLabel)
+      updateFullscreenBtnLabel()
+    }
+    if (!displayRoomCode) {
+      showAnnounce('Vue affichage : code de salle manquant dans le lien.', 'error')
+    }
+    return
+  }
 
   if (autoCreate === 'true') {
     if (!canCreate) {
@@ -970,12 +1043,16 @@ const masterVolumeControlHome = masterVolumeControl
 // en CSS, qui bascule sa position:fixed en position:static + order une fois
 // dedans — inchangé ailleurs, la règle .master-volume-control de base reste
 // fixed) ; remis à sa place d'origine sinon (hôte en mode "Jouer", qui n'a
-// pas de #hostPanel affiché, et joueur à distance, qui n'en a jamais eu).
+// pas de #hostPanel affiché, joueur à distance, qui n'en a jamais eu, et vue
+// affichage — tâche 039 : #hostPanel reste TOUJOURS masqué pour elle, voir
+// body.display-view-mode en CSS, l'y déplacer le rendrait invisible pour de
+// bon plutôt que de le laisser flottant. Volontairement isHost brut, pas
+// isPresenterHost() : seul le vrai hôte a un #hostPanel à offrir.
 // Appelé à chaque question:show, même logique de resynchronisation que le
 // reste de ce bloc (reconnexion en pleine partie).
 const placeMasterVolumeControl = () => {
   if (!masterVolumeControl || !hostPanel || !masterVolumeControlHome) return
-  if (isPresenterHost()) {
+  if (isHost && roomMode !== 'auto') {
     if (masterVolumeControl.parentElement !== hostPanel) hostPanel.appendChild(masterVolumeControl)
   } else if (masterVolumeControl.parentElement !== masterVolumeControlHome.parent) {
     masterVolumeControlHome.parent.insertBefore(masterVolumeControl, masterVolumeControlHome.next)
@@ -1303,6 +1380,41 @@ let quizIndex = 0
 // .is-disabled seul ne bloque pas les clics (pointer-events:auto).
 let goNextPending = false
 let isHost = false
+// Tâche 039 (vue affichage) : mis à jour par socket.on('display:status', ...)
+// plus bas — vrai dès qu'AU MOINS une vue affichage (viewer:true) est
+// connectée à la salle (voir server/index.js room:join/disconnect). Ne
+// concerne que l'hôte (seul à avoir besoin de savoir s'il doit céder le son,
+// voir shouldPlayIrlAudio() plus bas, et l'indicateur côté contrôles) — reçu
+// par tout le monde (diffusion simple, pas de round-trip ciblé), sans effet
+// ailleurs.
+let displayViewConnected = false
+socket.on('display:status', ({ connected }) => {
+  displayViewConnected = !!connected
+  // Indicateur côté contrôles (tâche 039, étape 6, voir #displayStatusPill
+  // dans index.html) : même pastille pour tout le monde (host et joueurs la
+  // reçoivent tous deux, voir le commentaire ci-dessus), mais seule la
+  // régie desktop hôte la rend visible (voir style.css) — pas besoin de
+  // condition isHost ici, l'affichage se charge déjà de la restreindre.
+  const pill = document.getElementById('displayStatusPill')
+  const valueEl = document.getElementById('displayStatusValue')
+  if (pill) pill.classList.toggle('is-connected', displayViewConnected)
+  if (valueEl) valueEl.textContent = displayViewConnected ? 'connectée' : 'en attente'
+})
+// Qui porte le son de jeu en IRL (révélation/blind test/bonus) une fois une
+// vue affichage éventuellement connectée — remplace l'ancien `!isHost` figé
+// aux 3 points d'usage (revealAudioPlayer/bonusAudioPlayer/blindtestAudio) :
+// - vue affichage : porte le son dès qu'elle est là (c'est sa raison d'être,
+//   l'appareil réellement branché aux enceintes/au vidéoprojecteur).
+// - hôte : porte le son comme avant, SAUF si une vue affichage est
+//   connectée — sinon les deux appareils joueraient le même son en même
+//   temps, désynchronisés (retour attendu, pas testé en conditions réelles
+//   avec 2 appareils physiques — voir Risques restants du fichier de tâche).
+// - joueur normal : jamais, comme avant (inchangé).
+const shouldPlayIrlAudio = () => {
+  if (isDisplayView) return true
+  if (isHost) return !displayViewConnected
+  return false
+}
 let selectedIcon = AVATAR_CHOICES[0]
 let timerInt = null
 // Zoom progressif sur l'illustration (voir editor.js) : {x, y, startScale}
@@ -3359,8 +3471,10 @@ const buildBlindTestArea = (audioUrl, mode) => {
   if (blindtestErrorMsg) blindtestErrorMsg.classList.add('d-none')
   if (blindtestOrb) blindtestOrb.classList.remove('d-none')
   // "à distance" : personne n'est muet, chacun entend sur son poste.
-  // "irl" (par défaut) : seul l'hôte (l'écran/les enceintes de la salle) entend.
-  blindtestAudio.muted = mode === 'remote' ? false : !isHost
+  // "irl" (par défaut) : seul l'hôte (l'écran/les enceintes de la salle)
+  // entend — ou la vue affichage si elle a pris le relais, voir
+  // shouldPlayIrlAudio() (tâche 039).
+  blindtestAudio.muted = mode === 'remote' ? false : !shouldPlayIrlAudio()
   applyBlindTestAudioOutput()
   blindtestAudio.pause()
   blindtestAudio.currentTime = 0
@@ -3463,7 +3577,9 @@ if (bonusAudioVolumeBtn) {
 }
 const playBonusAudio = (audioUrl, mode) => {
   if (!bonusAudioPlayer || !audioUrl) return
-  bonusAudioPlayer.muted = mode === 'remote' ? false : !isHost
+  // Voir shouldPlayIrlAudio() (tâche 039) : hôte ou vue affichage selon qui
+  // porte le son en IRL.
+  bonusAudioPlayer.muted = mode === 'remote' ? false : !shouldPlayIrlAudio()
   bonusAudioPlayer.volume = effectiveVolume(bonusAudioVolumeSlider.getPct())
   bonusAudioPlayer.pause()
   bonusAudioPlayer.currentTime = 0
@@ -4435,7 +4551,12 @@ let roomMode = 'present'
 // (exclu des réponses/du classement, panneau de modération manuelle). Centralise
 // ce calcul plutôt que de répéter `isHost && roomMode !== 'auto'` à chaque
 // endroit concerné.
-const isPresenterHost = () => isHost && roomMode !== 'auto'
+// Tâche 039 (vue affichage) : isDisplayView inclus au même titre qu'isHost —
+// c'est EXACTEMENT le même rôle ("cet écran présente la partie, il n'y joue
+// jamais") que le host régie IRL déjà couvert ici, tuiles verrouillées comprises
+// (voir plus bas .answers-locked, jamais retiré pour isPresenterHost()). Reste
+// hors mode "Jouer" comme avant (hors périmètre tâche 039, voir Hors périmètre).
+const isPresenterHost = () => (isHost || isDisplayView) && roomMode !== 'auto'
 const hostAutoPanel = document.getElementById('hostAutoPanel')
 const autoCategoryList = document.getElementById('autoCategoryList')
 const autoTypeList = document.getElementById('autoTypeList')
@@ -5296,6 +5417,18 @@ socket.on('host:reconnected', () => {
 socket.on('connect', () => {
   clearConnBanner()
   window.myId = socket.id
+  // Vue affichage (tâche 039) : rejoint TOUJOURS en lecture seule
+  // (viewer:true), jamais les parcours joueur/hôte ci-dessous — y compris à
+  // chaque reconnexion socket.io automatique (coupure réseau, onglet mis en
+  // veille...), ce handler étant réexécuté à l'identique à chaque 'connect'.
+  // display:true (en plus de viewer:true) : distingue ce viewer de celui de
+  // result.html/results.js (voir server/index.js room:join) — sert à
+  // prévenir l'hôte qu'une vue affichage est connectée (display:status),
+  // pour lui céder le son (voir shouldPlayIrlAudio()).
+  if (isDisplayView) {
+    if (displayRoomCode) socket.emit('room:join', { roomCode: displayRoomCode, viewer: true, display: true })
+    return
+  }
   const lastJoin = readLastJoin()
   if (myJoinedRoomCode) {
     // Reconnexion (pas la toute première connexion de l'onglet) : on était
@@ -5446,7 +5579,15 @@ let gameMode = 'irl'
 // garanti.
 const updateIrlPlayerUI = () => {
   const gameActive = document.body.classList.contains('game-active')
-  const isPlayerInGame = !isHost && gameActive
+  // Tâche 039 : isDisplayView exclu ici volontairement, contrairement à
+  // isPresenterHost() plus haut — .irl-player-mode/.remote-player-mode
+  // pilotent une mise en page MOBILE joueur (ex. body.irl-player-mode
+  // #illustrationImgWrap masqué, voir style.css), incompatible avec la
+  // vue affichage qui doit au contraire montrer l'image. La vue affichage
+  // obtient déjà la mise en page régie via .is-host (isPresenterHost()
+  // ci-dessus) + masque sa propre navbar séparément (voir
+  // body.display-view-mode en CSS), sans passer par ces deux classes.
+  const isPlayerInGame = !isHost && !isDisplayView && gameActive
   document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && isPlayerInGame)
   document.body.classList.toggle('remote-player-mode', gameMode === 'remote' && isPlayerInGame)
   // Ligne d'info du menu roue crantée (voir #irlMenuModeInfo, index.html) —
@@ -6817,8 +6958,12 @@ socket.on('question:show', payload => {
   // régler pour lui). Même resynchronisation à CHAQUE question que le récap
   // juste au-dessus, même raison (rechargement/reconnexion en pleine
   // partie) — resetUI() le cache avec .d-none ET un style.display inline,
-  // donc un simple classList.remove ne suffit pas.
-  if ((isHost || gameMode === 'remote') && masterVolumeControl) {
+  // donc un simple classList.remove ne suffit pas. Vue affichage incluse
+  // (tâche 039) : c'est elle qui porte le son en IRL une fois connectée
+  // (voir shouldPlayIrlAudio()), doit donc pouvoir régler SON volume comme
+  // l'hôte le ferait sans elle — placeMasterVolumeControl() la laisse à sa
+  // position flottante d'origine plutôt que dans #hostPanel (masqué).
+  if ((isHost || isDisplayView || gameMode === 'remote') && masterVolumeControl) {
     masterVolumeControl.classList.remove('d-none')
     masterVolumeControl.style.display = ''
   }
@@ -8557,9 +8702,14 @@ const renderLiveClassementDock = () => {
     row.appendChild(name)
     row.appendChild(score)
     // Tâche 025 : ajustement manuel du score par le MJ, réservé au mode
-    // "Présenter" (isPresenterHost() — jamais visible pour un simple
-    // joueur, ni en mode "Jouer" où l'hôte est un joueur comme les autres).
-    if (isPresenterHost()) {
+    // "Présenter" — jamais visible pour un simple joueur, ni en mode
+    // "Jouer" où l'hôte est un joueur comme les autres. Volontairement PAS
+    // isPresenterHost() (tâche 039) : ce bouton ouvre une vraie action de
+    // contrôle (openScoreAdjustPopup), à réserver au vrai hôte — la vue
+    // affichage partage le rôle "ne joue pas" avec l'hôte régie, mais
+    // jamais ses actions de modération/contrôle (voir Objectif de la
+    // tâche : vue affichage "sans aucun contrôle").
+    if (isHost && roomMode !== 'auto') {
       const adjustBtn = document.createElement('button')
       adjustBtn.type = 'button'
       adjustBtn.className = 'live-classement-adjust-btn'
@@ -8798,10 +8948,11 @@ socket.on('question:reveal', payload => {
     revealAudioPlayer.classList.remove('d-none')
     // Même règle que blindtestAudio (voir buildBlindTestArea) : en "à
     // distance", chacun entend sur son poste ; en "irl" (par défaut), tout
-    // le monde est dans la même pièce, seul l'hôte doit faire sortir le son
-    // — sans ce mute, chaque téléphone joueur aurait rejoué le son en même
-    // temps que l'hôte.
-    revealAudioPlayer.muted = gameMode === 'remote' ? false : !isHost
+    // le monde est dans la même pièce, seul l'hôte (ou la vue affichage si
+    // connectée, tâche 039 — voir shouldPlayIrlAudio()) doit faire sortir le
+    // son — sans ce mute, chaque téléphone joueur aurait rejoué le son en
+    // même temps.
+    revealAudioPlayer.muted = gameMode === 'remote' ? false : !shouldPlayIrlAudio()
     // Pas de curseur personnel dédié pour ce son (contrairement à Blind
     // Test/son bonus) — le fader général (masterVolumePct) et le volume
     // réglé par le créateur pour CET extrait (payload.revealAudioVolumePct,

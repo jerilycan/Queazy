@@ -4468,9 +4468,27 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
        "sur place / à distance en bas") — #hostPanel est déjà étiré à toute
        la hauteur de la rangée (voir plus haut), donc une marge auto avant
        le dernier élément colle bien celui-ci au bord bas plutôt que de le
-       laisser juste après la musique. */
+       laisser juste après la musique. margin-top:auto UNIQUEMENT ici (pas
+       sur #displayStatusPill juste en dessous, order:7) : en flex-column,
+       seule la 1re marge auto rencontrée absorbe l'espace libre — les
+       pastilles suivantes s'empilent alors juste en dessous, groupées au
+       même bord bas plutôt que chacune avec son propre espace. */
     margin-top: auto;
     display: block;
+  }
+  /* Indicateur vue affichage (tâche 039, étape 6) : même pastille, juste en
+     dessous d'Ambiance (voir commentaire margin-top:auto ci-dessus). */
+  body.is-host.game-active .container #hostPanel #displayStatusPill {
+    order: 7;
+    display: block;
+  }
+  /* --color-teal (pas de token "succès/vert" dédié dans ce projet — voir
+     :root) : seul ton verdâtre déjà existant, réutilisé tel quel. */
+  body.is-host.game-active .container #hostPanel #displayStatusPill.is-connected {
+    border-color: var(--color-teal);
+  }
+  body.is-host.game-active .container #hostPanel #displayStatusPill.is-connected #displayStatusValue {
+    color: var(--color-teal);
   }
   body.is-host.game-active .container #stageWrap {
     grid-column: 2;
@@ -8915,6 +8933,47 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
   font-weight: 700; font-size: 14px; color: var(--color-text);
 }
 .irl-menu-item:hover { background: rgba(255,255,255,0.08); }
+
+/* Tâche 039 (vue affichage, étape 3) : "carte centrale" régie en plein
+   écran obtenue GRATUITEMENT via body.is-host.game-active (voir
+   isPresenterHost() côté index.js, qui inclut désormais isDisplayView) —
+   rien à dupliquer ici. Ne restent à masquer explicitement que le chrome
+   PAS DÉJÀ couvert par .is-host (jamais affiché pour un vrai hôte, mais
+   pas non plus gardé par isHost/isPresenterHost côté JS pour ces
+   éléments précis) : navbar (jamais masquée que via .irl-player-mode,
+   volontairement PAS posée pour la vue affichage — voir son commentaire
+   dans updateIrlPlayerUI, conflit avec #illustrationImgWrap), zone de
+   modération (pilotée par le nombre de réponses en attente, pas par un
+   rôle) et compteur "X joueurs ont répondu" (coin haut-droit, purement
+   hôte par convention mais alimenté par answer:progress pour tout le
+   monde dans la room). #hostPanel/#hostAutoPanel/#recapSidebar(+toggle)/
+   #persistentRoomCode restent déjà hors d'atteinte de la vue affichage
+   (gardés par isHost brut ou des évènements strictement hôte côté JS,
+   jamais reçus par un spectateur) — pas besoin de les répéter ici. */
+body.display-view-mode .navbar { display: none; }
+body.display-view-mode #moderationZone,
+body.display-view-mode #moderationModalOverlay {
+  display: none !important;
+}
+body.display-view-mode #gameProgressInfo { display: none; }
+/* Bouton plein écran (tâche 039, étape 5, voir index.html/index.js) : coin
+   haut-droit comme .irl-menu-btn (mais jamais les deux en même temps — voir
+   updateIrlPlayerUI, isDisplayView exclu de .irl-player-mode), pilule
+   plutôt que cercle pour porter un libellé (plus clair pour un bouton
+   présent en permanence sur un écran que personne ne manipule au clavier
+   ni à la souris habituellement). */
+#displayFullscreenBtn {
+  position: fixed; top: 14px; right: 14px; z-index: 1200;
+  padding: 10px 16px; border-radius: 999px;
+  background: rgba(5,5,12,0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,47,176,0.18);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+#displayFullscreenBtn:hover { background: rgba(5,5,12,0.92); }
 
 /* Tâche 025 : popup d'ajustement manuel de score (MJ, mode "Présenter"
    seulement — voir #scoreAdjustOverlay dans index.html, ouvert par le
