@@ -747,6 +747,20 @@ const enterGameScreen = () => {
     hostAutoPanel.classList.add('d-none')
     hostAutoPanel.style.display = 'none'
   }
+  // Tâche 039 : même oubli qu'#hostAutoPanel juste au-dessus — #displayViewScreen
+  // (placeholder "Connexion à la salle…" de la vue affichage) n'est pas non
+  // plus un enfant de #lobby, donc pas couvert par le masquage ci-dessus.
+  // Sans ce nettoyage explicite, il restait affiché EN PERMANENCE une fois
+  // une question lancée (constaté en test réel, capture d'écran) — pire, il
+  // occupait la place de #hostPanel dans la grille régie desktop (voir
+  // body.is-host.game-active .container), chevauchant la scène réelle.
+  // Inoffensif pour tout le monde d'autre (déjà caché, .classList.add
+  // idempotent) : pas besoin de condition isDisplayView ici.
+  const displayViewScreenEl = document.getElementById('displayViewScreen')
+  if (displayViewScreenEl) {
+    displayViewScreenEl.classList.add('d-none')
+    displayViewScreenEl.style.display = 'none'
+  }
   // Symétrique du masquage dans resetUI (voir son commentaire) : remet la
   // zone de jeu au premier plan si un Créer/Rejoindre l'avait cachée entre
   // deux parties dans le même onglet.

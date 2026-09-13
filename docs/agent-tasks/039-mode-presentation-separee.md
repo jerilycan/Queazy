@@ -378,9 +378,42 @@ non couvert par du code (adaptation plus poussée de la vue présentateur)
 est explicitement délégué à une tâche future par "Hors périmètre" — décision
 déjà actée au moment du plan, pas un oubli de ce diff.
 
+## Vérification visuelle post-merge (capture d'écran)
+Après le merge dans `main`, demande explicite de l'utilisateur : "teste en
+conditions réelles et envoie-moi le screen". Pas de Browser pane ni de
+second appareil physique dans cet environnement distant — capture réalisée
+via Playwright + Chromium headless, en pilotant le VRAI code client (clics
+réels sur le formulaire de connexion joueur, `createRoom()` réel côté hôte,
+`?display=1&room=CODE` réel côté vue affichage), pas des sockets bruts. La
+sélection d'un quiz réel étant impossible ici (catalogue Supabase
+inatteignable), la question a été lancée en rejouant directement l'évènement
+`question:show` avec un payload MCQ — même évènement, même payload que ce
+qu'émettrait normalement le flux "Sélectionner un Quiz" côté serveur.
+
+**Bug réel trouvé et corrigé grâce à ce test visuel** (invisible dans tous
+les checks Playwright précédents, qui ne vérifiaient que des classes/l'état
+JS, jamais le rendu réel) : `#displayViewScreen` (placeholder "Connexion à
+la salle…") n'était jamais masqué une fois une question réellement lancée —
+il restait affiché EN PERMANENCE, et pire, prenait la place de `#hostPanel`
+dans la grille régie desktop (`body.is-host.game-active .container`),
+chevauchant visuellement la scène réelle. Corrigé dans `enterGameScreen()`
+(`client/public/js/index.js`) — même endroit et même raison que le
+masquage déjà existant d'`#hostAutoPanel`, qui n'est pas non plus un enfant
+de `#lobby`. `node --check` OK après coup. Reconfirmé par une 2e capture :
+plus de chevauchement, scène propre.
+
+3 captures envoyées à l'utilisateur : (1) placeholder d'attente avant toute
+question (navbar/contrôles bien absents, bouton plein écran visible), (2)
+scène en pleine question MCQ (tuiles colorées, classement live, toujours
+aucun contrôle), (3) panneau hôte réel montrant l'indicateur "Vue
+affichage : connectée" (étape 6) fonctionnel en conditions quasi-réelles.
+
 ## Statut
 `en revue` — les 7 étapes du plan sont implémentées et testées (voir
-Checks effectués), diff complet relu (`/review`, voir section ci-dessus),
-`catch` vide corrigé. Validée par l'utilisateur pour commit/push. Reste
-idéalement une vérification visuelle en conditions réelles (voir Tests
-manuels recommandés) avant de passer à `terminée`.
+Checks effectués), diff complet relu (`/review`), `catch` vide corrigé,
+mergée dans `main`. Vérification visuelle post-merge effectuée (voir
+section ci-dessus) — a révélé et corrigé un bug réel (`#displayViewScreen`
+jamais masqué), ce correctif n'est PAS ENCORE poussé sur `main` (en attente
+de validation utilisateur, règle permanente CLAUDE.md). Reste idéalement un
+test en conditions RÉELLEMENT réelles (2 appareils physiques) avant de
+passer à `terminée`.
