@@ -408,12 +408,32 @@ scène en pleine question MCQ (tuiles colorées, classement live, toujours
 aucun contrôle), (3) panneau hôte réel montrant l'indicateur "Vue
 affichage : connectée" (étape 6) fonctionnel en conditions quasi-réelles.
 
+## Rollback (retour utilisateur : "c'est une catastrophe")
+La tâche avait été mergée dans `main` (voir historique ci-dessus), puis
+l'utilisateur a demandé un rollback complet immédiat : "c'est une
+catastrophe, on va rollback cette fonctionnalité pour le moment, remet
+comme avant, et push merge" — sans préciser CE QUI ne va pas (aucun détail
+donné sur le symptôme concret, ni si ça vient d'un test en conditions
+réelles, d'un retour joueur, ou d'autre chose). Exécuté tel quel, sans
+attendre de précisions, vu l'urgence signalée par le ton du message :
+deux `git revert -m 1` (sur les commits de merge `b00ca23` puis `7b292bd`,
+dans cet ordre) sur `main`, poussés — `main` est revenu EXACTEMENT à l'état
+d'avant cette tâche (`git diff 1f9d1b3 HEAD` vide, confirmé). Ce fichier de
+suivi n'existe donc plus sur `main` (supprimé par le revert), mais reste
+sur cette branche (`claude/mj-response-elements-display-5m7zdm`) pour ne
+pas perdre le travail — la fonctionnalité elle-même reste intacte ici,
+prête à être reprise/corrigée une fois le VRAI problème identifié.
+
+**Important pour la suite** : je n'ai pas encore compris la cause du
+problème signalé — aucune information n'a été donnée sur ce qui a été
+observé en conditions réelles. Avant toute nouvelle tentative de merge, il
+faudra que l'utilisateur précise le symptôme concret rencontré, pour éviter
+de re-livrer exactement le même défaut.
+
 ## Statut
-`en revue` — les 7 étapes du plan sont implémentées et testées (voir
-Checks effectués), diff complet relu (`/review`), `catch` vide corrigé,
-mergée dans `main`. Vérification visuelle post-merge effectuée (voir
-section ci-dessus) — a révélé et corrigé un bug réel (`#displayViewScreen`
-jamais masqué), ce correctif n'est PAS ENCORE poussé sur `main` (en attente
-de validation utilisateur, règle permanente CLAUDE.md). Reste idéalement un
-test en conditions RÉELLEMENT réelles (2 appareils physiques) avant de
-passer à `terminée`.
+`rollback` — mergée dans `main` puis intégralement retirée (`git revert`
+x2, poussé) sur demande explicite de l'utilisateur, suite à un problème en
+conditions réelles non encore détaillé. Le code de la fonctionnalité reste
+disponible sur cette branche (`claude/mj-response-elements-display-5m7zdm`),
+non perdu. Ne pas re-merger sans avoir d'abord identifié et corrigé la
+cause réelle du problème signalé.
