@@ -829,23 +829,6 @@
           </button>
         </div>
       </div>
-      <!-- Vue affichage (tâche 039, ?display=1&room=CODE) : caché par défaut,
-           n'apparaît que le temps de la connexion en mode affichage — dès
-           qu'une question arrive (rattrapage ou question:show normal),
-           #stageWrap prend le relais (voir index.js). Purement un état
-           d'attente, aucun contrôle de partie ici (voir Objectif de la
-           tâche : "sans aucun contrôle" concerne la modération/le pilotage
-           du quiz — pas les réglages propres à CETTE fenêtre, voir le
-           bouton plein écran juste en dessous). -->
-      <div id="displayViewScreen" class="card text-center max-w-500 m-auto mt-40 d-none">
-        <p id="displayViewStatus" class="font-18">Connexion à la salle…</p>
-      </div>
-      <!-- Bouton plein écran (tâche 039, étape 5) : caché par défaut, affiché
-           UNIQUEMENT en vue affichage (voir index.js) — persiste au-delà du
-           placeholder ci-dessus, reste accessible une fois #stageWrap affiché
-           (position fixe, hors flux). API Fullscreen : nécessite un geste
-           utilisateur, jamais de plein écran automatique au chargement. -->
-      <button type="button" id="displayFullscreenBtn" class="d-none" aria-label="Passer en plein écran">⛶ Plein écran</button>
       <!-- Panel de contrôle Hôte -->
       <div id="hostPanel" class="card d-none mt-20 border-accent-left d-flex align-center justify-between" style="padding: 20px 32px;">
         <div class="d-flex flex-column gap-xs">
@@ -907,14 +890,6 @@
              place fiable pour elle dans le bandeau horizontal d'origine. -->
         <div id="hostAmbiancePill" class="host-ambiance-pill">
           🎉 Ambiance : <span id="hostAmbianceValue">Sur place</span>
-        </div>
-        <!-- Indicateur vue affichage (tâche 039, étape 6) : même traitement
-             que la pastille Ambiance juste au-dessus (même classe, même
-             logique de placement en régie desktop — voir style.css) — mis à
-             jour via socket.on('display:status', ...) dans index.js, jamais
-             un nouvel état côté serveur au-delà de ça. -->
-        <div id="displayStatusPill" class="host-ambiance-pill">
-          🖥️ Vue affichage : <span id="displayStatusValue">en attente</span>
         </div>
       </div>
 
