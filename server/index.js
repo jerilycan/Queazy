@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.27.11'
+const APP_VERSION = '2.28.3'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1156,8 +1156,7 @@ const start = async () => {
         // inchangé et continue de s'appliquer normalement en mode "Présenter".
         gameMode: mode === 'auto' ? 'remote' : 'irl', // voir game:setMode ; 'irl' (par défaut) ou 'remote'
         mode, // voir commentaire ci-dessus ; 'present' (défaut) ou 'auto'
-        autoConfig, // voir commentaire ci-dessus ; modifiable via room:setAutoConfig
-        viewerCount: 0 // Tâche 039 : nombre de "vues affichage" (viewer:true) actuellement connectées — voir room:join/disconnect, diffusé via display:status
+        autoConfig // voir commentaire ci-dessus ; modifiable via room:setAutoConfig
       })
       socket.hostRoomCode = code // Store room code in socket to handle disconnect
       await socket.join(code)
@@ -1182,89 +1181,21 @@ const start = async () => {
       }
     })
 
-    // Rattrapage d'état de question pour un socket qui (re)rejoint une salle
-    // déjà en cours de partie — partagé entre un vrai joueur (reconnexion ou
-    // arrivée tardive) et un "spectateur" (viewer:true, voir plus bas). Sans
-    // ça, il restait bloqué sur l'écran salon d'attente jusqu'à la question
-    // SUIVANTE, sans jamais pouvoir répondre/voir celle en cours — alors que
-    // le serveur, lui, acceptait déjà sa réponse si on la lui envoyait
-    // directement (juste jamais présentée dans l'UI). Couvre 3 états
-    // possibles (trouvés en audit, tous distincts) : question active /
-    // question terminée+révélée / question terminée+modération en attente.
-    // Tâche 039 : à l'origine réservé aux vrais joueurs, appelé aussi depuis
-    // la branche viewer:true — question:show/timer:end/question:reveal/
-    // leaderboard:show sont déjà "sans spoiler" (voir
-    // payloadWithoutCorrectOrExplanation), donc aucun risque d'exposition
-    // nouveau pour un spectateur qui n'était pas censé voir la réponse.
-    const sendJoinCatchup = (room, socket) => {
-      const q = room.currentQuestion
-      if (q && !q.ended && Date.now() < q.startTs + q.timerMs && q.showPayload) {
-        socket.emit('question:show', q.showPayload)
-      } else if (q && q.ended && q.revealPayload) {
-        // Question déjà terminée (phase révélation ou classement) : sans ce
-        // rattrapage, un reconnectant (coupure réseau de l'hôte pendant le
-        // délai de grâce, par ex.) ne recevait RIEN et restait bloqué —
-        // côté hôte, un bouton "Suivant" grisé en permanence, sans recours,
-        // en plein direct (retour utilisateur). On rejoue la même séquence
-        // qu'un client resté connecté aurait vue : d'abord question:show
-        // (état de base, nécessaire aux handlers client qui en dépendent),
-        // puis question:reveal, puis leaderboard:show si l'hôte en était
-        // déjà là — chaque handler client remet lui-même hostPhase à jour à
-        // sa réception, aucun changement client requis.
-        socket.emit('question:show', q.showPayload)
-        // "révélation" : timer:end est ce qui livre l'image réponse côté
-        // client (voir plus haut timerEndPayload) — sans le rejouer ici,
-        // un reconnectant arrivant à CE stade ne la recevrait jamais et
-        // resterait bloqué sur l'image énigme malgré question:reveal.
-        if (q.type === 'reveal') socket.emit('timer:end', timerEndPayload(q))
-        socket.emit('question:reveal', q.revealPayload)
-        if (room.leaderboardShown) socket.emit('leaderboard:show')
-      } else if (q && q.ended && !q.revealPayload && room.pending.size > 0) {
-        // Troisième état possible, distinct des deux ci-dessus (trouvé en
-        // audit) : le chrono est fini mais au moins une réponse (texte
-        // libre/blindtest/pbac) attend encore une décision de l'hôte —
-        // revealQuestion n'a donc pas encore tourné (voir endQuestion, elle
-        // n'est appelée qu'une fois room.pending vide). Sans ce rattrapage,
-        // un hôte qui se déconnecte pile à ce moment (le délai de grâce de
-        // 45s existe justement pour ce genre de coupure) revenait sans
-        // question:show NI le panneau de modération — bloqué sans aucun
-        // recours pour trancher les réponses en attente et faire avancer la
-        // partie. Ne rejoue que les réponses de CETTE question précise
-        // (comparaison par historyEntry, pas juste "tout room.pending").
-        socket.emit('question:show', q.showPayload)
-        socket.emit('timer:end', timerEndPayload(q))
-        for (const [answerId, item] of room.pending) {
-          if (item.historyEntry !== q.historyEntry) continue
-          const currentPlayerId = resolvePendingId(room, item)
-          const playerName = room.players.get(currentPlayerId)?.name || 'Joueur'
-          if (item.fields) {
-            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, blindtest: true, fields: item.fields })
-          } else if (item.pbac) {
-            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content, pbac: true })
-          } else {
-            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content })
-          }
-        }
-      }
-    }
-
     socket.on('room:join', async payload => {
       const code = (payload?.roomCode || '').toUpperCase()
       const room = rooms.get(code)
       if (!room) return socket.emit('room:error', { message: 'room not found' })
       room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
 
-      // "Spectateur" (voir result.html/results.js, et tâche 039 vue
-      // affichage) : rejoint UNIQUEMENT pour recevoir les diffusions de la
-      // salle (history:sync/team:list/lobby:list/score:update, utiles pour
-      // afficher des résultats à jour, + le rattrapage d'état de question en
-      // cours ci-dessous) — jamais comme un vrai participant. Retour
-      // utilisateur : la page résultats faisait apparaître un faux joueur
-      // "Spectateur" dans le salon/le classement (ajouté à room.players
-      // comme n'importe quel joueur, comptant même dans expectedPlayers). Se
-      // contente de rejoindre la room socket.io + un instantané immédiat,
-      // sans jamais toucher room.players/room.tokens ni diffuser
-      // player:joined.
+      // "Spectateur" (voir result.html/results.js) : rejoint UNIQUEMENT pour
+      // recevoir les diffusions de la salle (history:sync/team:list/
+      // lobby:list/score:update, utiles pour afficher des résultats à jour)
+      // — jamais comme un vrai participant. Retour utilisateur : la page
+      // résultats faisait apparaître un faux joueur "Spectateur" dans le
+      // salon/le classement (ajouté à room.players comme n'importe quel
+      // joueur, comptant même dans expectedPlayers). Se contente de
+      // rejoindre la room socket.io + un instantané immédiat, sans jamais
+      // toucher room.players/room.tokens ni diffuser player:joined.
       if (payload?.viewer) {
         socket.roomCode = code
         await socket.join(code)
@@ -1280,21 +1211,6 @@ const start = async () => {
         // "Présenter"). Émis avant lobby:list, comme pour un vrai joueur.
         socket.emit('room:mode', { mode: room.mode || 'present' })
         socket.emit('lobby:list', buildPlayerList(room))
-        sendJoinCatchup(room, socket)
-        // Tâche 039 : sous-cas "vue affichage" du viewer (payload.display,
-        // posé UNIQUEMENT par le nouveau mode ?display=1 côté client —
-        // jamais par result.html/results.js, qui reste un simple
-        // viewer:true "nu"). Permet à l'hôte de savoir si une vue affichage
-        // est connectée pour lui céder le son (voir shouldPlayIrlAudio()
-        // côté index.js) — sans ce sous-cas, un simple visiteur de
-        // result.html en pleine partie (URL tapée à la main, cas marginal)
-        // ferait à tort croire à l'hôte qu'une vue affichage a pris le
-        // relais du son.
-        if (payload?.display) {
-          socket.isDisplayViewer = true
-          room.viewerCount = (room.viewerCount || 0) + 1
-          io.to(code).emit('display:status', { connected: room.viewerCount > 0 })
-        }
         return
       }
 
@@ -1384,10 +1300,62 @@ const start = async () => {
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
 
-      // Rattrapage d'état de question en cours (reconnexion en pleine
-      // partie, ou nouveau joueur qui rejoint en retard) — voir
-      // sendJoinCatchup ci-dessus, partagée avec la branche viewer:true.
-      sendJoinCatchup(room, socket)
+      // Rattrapage : une question est déjà active au moment où ce socket
+      // (re)rejoint — reconnexion en pleine partie, le cas le plus fréquent,
+      // mais ça couvre aussi un nouveau joueur qui rejoint en retard. Sans
+      // ça, il restait bloqué sur l'écran salon d'attente jusqu'à la
+      // question SUIVANTE, sans jamais pouvoir répondre à celle en cours —
+      // alors que le serveur, lui, acceptait déjà sa réponse si on la lui
+      // envoyait directement (juste jamais présentée dans l'UI).
+      const q = room.currentQuestion
+      if (q && !q.ended && Date.now() < q.startTs + q.timerMs && q.showPayload) {
+        socket.emit('question:show', q.showPayload)
+      } else if (q && q.ended && q.revealPayload) {
+        // Question déjà terminée (phase révélation ou classement) : sans ce
+        // rattrapage, un reconnectant (coupure réseau de l'hôte pendant le
+        // délai de grâce, par ex.) ne recevait RIEN et restait bloqué —
+        // côté hôte, un bouton "Suivant" grisé en permanence, sans recours,
+        // en plein direct (retour utilisateur). On rejoue la même séquence
+        // qu'un client resté connecté aurait vue : d'abord question:show
+        // (état de base, nécessaire aux handlers client qui en dépendent),
+        // puis question:reveal, puis leaderboard:show si l'hôte en était
+        // déjà là — chaque handler client remet lui-même hostPhase à jour à
+        // sa réception, aucun changement client requis.
+        socket.emit('question:show', q.showPayload)
+        // "révélation" : timer:end est ce qui livre l'image réponse côté
+        // client (voir plus haut timerEndPayload) — sans le rejouer ici,
+        // un reconnectant arrivant à CE stade ne la recevrait jamais et
+        // resterait bloqué sur l'image énigme malgré question:reveal.
+        if (q.type === 'reveal') socket.emit('timer:end', timerEndPayload(q))
+        socket.emit('question:reveal', q.revealPayload)
+        if (room.leaderboardShown) socket.emit('leaderboard:show')
+      } else if (q && q.ended && !q.revealPayload && room.pending.size > 0) {
+        // Troisième état possible, distinct des deux ci-dessus (trouvé en
+        // audit) : le chrono est fini mais au moins une réponse (texte
+        // libre/blindtest/pbac) attend encore une décision de l'hôte —
+        // revealQuestion n'a donc pas encore tourné (voir endQuestion, elle
+        // n'est appelée qu'une fois room.pending vide). Sans ce rattrapage,
+        // un hôte qui se déconnecte pile à ce moment (le délai de grâce de
+        // 45s existe justement pour ce genre de coupure) revenait sans
+        // question:show NI le panneau de modération — bloqué sans aucun
+        // recours pour trancher les réponses en attente et faire avancer la
+        // partie. Ne rejoue que les réponses de CETTE question précise
+        // (comparaison par historyEntry, pas juste "tout room.pending").
+        socket.emit('question:show', q.showPayload)
+        socket.emit('timer:end', timerEndPayload(q))
+        for (const [answerId, item] of room.pending) {
+          if (item.historyEntry !== q.historyEntry) continue
+          const currentPlayerId = resolvePendingId(room, item)
+          const playerName = room.players.get(currentPlayerId)?.name || 'Joueur'
+          if (item.fields) {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, blindtest: true, fields: item.fields })
+          } else if (item.pbac) {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content, pbac: true })
+          } else {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content })
+          }
+        }
+      }
     })
 
     socket.on('player:profile', payload => {
@@ -2818,19 +2786,6 @@ const start = async () => {
       if (!code) return
       const room = rooms.get(code)
       if (!room) return
-
-      // Tâche 039 : symétrique de l'incrément dans room:join (payload.display)
-      // — sans ça, viewerCount ne redescendait jamais et l'hôte restait
-      // convaincu qu'une vue affichage était connectée (donc muet) même
-      // après sa fermeture/déconnexion. Un simple joueur/hôte n'a jamais
-      // isDisplayViewer posé, ce bloc ne le concerne donc jamais. Retourne
-      // tout de suite : rien d'autre plus bas (room.hostId/room.players) ne
-      // concerne une vue affichage, jamais ajoutée ni à l'un ni à l'autre.
-      if (socket.isDisplayViewer) {
-        room.viewerCount = Math.max(0, (room.viewerCount || 0) - 1)
-        io.to(code).emit('display:status', { connected: room.viewerCount > 0 })
-        return
-      }
 
       // Si l'hôte se déconnecte avant la fin du quiz : on ne ferme plus la
       // salle tout de suite (une coupure wifi de quelques secondes tuerait
