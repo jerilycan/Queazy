@@ -476,4 +476,14 @@ sans aucune logique nouvelle côté serveur).
   ultérieure dédiée à chacun.
 
 ## Statut
-`ouverte`
+`en review` — mergée dans `main` via PR #10 (commit de merge `046c404`).
+Un conflit réel s'est présenté au merge (`main` avait avancé entre-temps
+avec la tâche 037 "cohérence canvas éditeur réponse chips") : résolu par un
+merge de `main` dans la branche avant la PR — conflits purement additifs
+sur `server/index.js` (le code de la tâche 040 n'existait nulle part côté
+`main` à ces emplacements) et un conflit modification/suppression sur
+`docs/agent-tasks/039-mode-presentation-separee.md` (supprimé par le
+revert de la tâche 039 sur `main`, modifié ici pour documenter ce
+rollback — conservé pour sa valeur historique). Revérifié après résolution
+(`node --check`, boot serveur, `/`, `/display.html`, `/editor.html` → 200)
+avant de pousser.
