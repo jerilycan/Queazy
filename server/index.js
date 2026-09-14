@@ -1369,10 +1369,62 @@ const start = async () => {
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
 
-      // Rattrapage d'état de question en cours (reconnexion en pleine
-      // partie, ou nouveau joueur qui rejoint en retard) — voir
-      // sendJoinCatchup ci-dessus, partagée avec la branche viewer:true.
-      sendJoinCatchup(room, socket)
+      // Rattrapage : une question est déjà active au moment où ce socket
+      // (re)rejoint — reconnexion en pleine partie, le cas le plus fréquent,
+      // mais ça couvre aussi un nouveau joueur qui rejoint en retard. Sans
+      // ça, il restait bloqué sur l'écran salon d'attente jusqu'à la
+      // question SUIVANTE, sans jamais pouvoir répondre à celle en cours —
+      // alors que le serveur, lui, acceptait déjà sa réponse si on la lui
+      // envoyait directement (juste jamais présentée dans l'UI).
+      const q = room.currentQuestion
+      if (q && !q.ended && Date.now() < q.startTs + q.timerMs && q.showPayload) {
+        socket.emit('question:show', q.showPayload)
+      } else if (q && q.ended && q.revealPayload) {
+        // Question déjà terminée (phase révélation ou classement) : sans ce
+        // rattrapage, un reconnectant (coupure réseau de l'hôte pendant le
+        // délai de grâce, par ex.) ne recevait RIEN et restait bloqué —
+        // côté hôte, un bouton "Suivant" grisé en permanence, sans recours,
+        // en plein direct (retour utilisateur). On rejoue la même séquence
+        // qu'un client resté connecté aurait vue : d'abord question:show
+        // (état de base, nécessaire aux handlers client qui en dépendent),
+        // puis question:reveal, puis leaderboard:show si l'hôte en était
+        // déjà là — chaque handler client remet lui-même hostPhase à jour à
+        // sa réception, aucun changement client requis.
+        socket.emit('question:show', q.showPayload)
+        // "révélation" : timer:end est ce qui livre l'image réponse côté
+        // client (voir plus haut timerEndPayload) — sans le rejouer ici,
+        // un reconnectant arrivant à CE stade ne la recevrait jamais et
+        // resterait bloqué sur l'image énigme malgré question:reveal.
+        if (q.type === 'reveal') socket.emit('timer:end', timerEndPayload(q))
+        socket.emit('question:reveal', q.revealPayload)
+        if (room.leaderboardShown) socket.emit('leaderboard:show')
+      } else if (q && q.ended && !q.revealPayload && room.pending.size > 0) {
+        // Troisième état possible, distinct des deux ci-dessus (trouvé en
+        // audit) : le chrono est fini mais au moins une réponse (texte
+        // libre/blindtest/pbac) attend encore une décision de l'hôte —
+        // revealQuestion n'a donc pas encore tourné (voir endQuestion, elle
+        // n'est appelée qu'une fois room.pending vide). Sans ce rattrapage,
+        // un hôte qui se déconnecte pile à ce moment (le délai de grâce de
+        // 45s existe justement pour ce genre de coupure) revenait sans
+        // question:show NI le panneau de modération — bloqué sans aucun
+        // recours pour trancher les réponses en attente et faire avancer la
+        // partie. Ne rejoue que les réponses de CETTE question précise
+        // (comparaison par historyEntry, pas juste "tout room.pending").
+        socket.emit('question:show', q.showPayload)
+        socket.emit('timer:end', timerEndPayload(q))
+        for (const [answerId, item] of room.pending) {
+          if (item.historyEntry !== q.historyEntry) continue
+          const currentPlayerId = resolvePendingId(room, item)
+          const playerName = room.players.get(currentPlayerId)?.name || 'Joueur'
+          if (item.fields) {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, blindtest: true, fields: item.fields })
+          } else if (item.pbac) {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content, pbac: true })
+          } else {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content })
+          }
+        }
+      }
     })
 
     socket.on('player:profile', payload => {
