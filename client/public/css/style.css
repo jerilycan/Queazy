@@ -83,12 +83,47 @@
   /* Mode équipe (voir .team-* plus bas) : violet réutilise --color-accent-2,
      manquait sa variante rgb pour les fonds/bordures translucides. */
   --color-accent-2-rgb: 123,47,247;
-  /* Podium final (voir .race-* plus bas) : argent/bronze n'existaient pas
-     encore dans la palette, l'or réutilise --tile-yellow. */
-  --tile-silver: #cfd8ea;
-  --tile-silver-deep: #6b7690;
-  --tile-bronze: #ff9f5a;
-  --tile-bronze-deep: #a1571f;
+  /* Podium final (voir .race-* plus bas). Bug corrigé (retour utilisateur :
+     "les trois couleurs du podium devraient être or argent bronze") : l'or
+     réutilisait --tile-yellow (même jaune vif que la 3e tuile QCM, voir
+     plus bas) — --color-gold, déjà présent dans la palette pour l'accent
+     "indice" côté éditeur, est un ton plus chaud/plus proche d'un vrai or ;
+     jamais utilisé pour un fond de grande surface jusqu'ici, d'où sa
+     variante -deep manquante, ajoutée ici. Argent/bronze retouchés dans le
+     même esprit : l'ancien argent tirait sur le bleu pâle (plus "tuile QCM
+     bleutée" que métal), l'ancien bronze était en réalité un orange vif —
+     tons neutres/cuivrés plus proches de vrais médailles. */
+  --tile-gold: var(--color-gold);
+  --tile-gold-deep: #a67e12;
+  --tile-gold-rgb: var(--color-gold-rgb);
+  --tile-silver: #d9dce2;
+  --tile-silver-deep: #868c96;
+  --tile-silver-rgb: 217,220,226;
+  --tile-bronze: #cd7f32;
+  --tile-bronze-deep: #8c5523;
+  --tile-bronze-rgb: 205,127,50;
+  /* Tuiles QCM/intrus au-delà de 4 options (jusqu'à 8, voir MCQ_MAX_OPTIONS
+     côté editor.js) — retour utilisateur : "ajouter de nouvelles couleurs
+     et formes aux QCM, pour ne pas avoir de redondance visuelle". Avant cet
+     ajout, la palette de 4 couleurs (rouge/bleu/jaune/vert) tournait dès la
+     5e tuile (identique à la 1re, etc.) : sur une question à 8 réponses,
+     chaque couleur/forme se répétait deux fois, prêtant à confusion (deux
+     tuiles semblent "aller ensemble" sans aucun rapport). Teintes reprises
+     de l'accent éditeur déjà en place (violet/cyan/flame), plutôt
+     qu'inventées ailleurs — cohérent avec le reste de la palette, jamais
+     utilisées pour des tuiles de réponse jusqu'ici. */
+  --tile-purple: var(--color-violet);
+  --tile-purple-deep: #6b1f99;
+  --tile-purple-rgb: 179,75,245;
+  --tile-cyan: var(--color-cyan);
+  --tile-cyan-deep: #0a7a99;
+  --tile-cyan-rgb: var(--color-cyan-rgb);
+  --tile-orange: var(--color-flame);
+  --tile-orange-deep: #a33d09;
+  --tile-orange-rgb: 255,106,26;
+  --tile-pink: #ff5fa8;
+  --tile-pink-deep: #a02d63;
+  --tile-pink-rgb: 255,95,168;
 
   --radius-lg: 24px;
   --radius-md: 16px;
@@ -1936,20 +1971,35 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    box-shadow que la règle de base (arête basse "pressée") + un glow diffus
    dans la teinte de la tuile, ajouté ici (une seule déclaration box-shadow
    par règle, la 2e ne s'ajoute pas à la 1re) plutôt que dans .option-btn —
-   sinon les 4 tuiles partageraient un seul halo neutre au lieu du leur. */
-.option-btn:nth-child(4n+1) { background: var(--tile-red); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-red-rgb),0.35); }
-.option-btn:nth-child(4n+1)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
-.option-btn:nth-child(4n+2) { background: var(--tile-blue); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-blue-rgb),0.35); }
-.option-btn:nth-child(4n+2)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
-/* color en plus du background (contrairement aux 3 autres tuiles) : le
-   blanc par défaut de .option-btn tombe à ~1.5:1 sur ce jaune clair, bien
+   sinon les tuiles partageraient un seul halo neutre au lieu du leur.
+   8n+X (pas 4n+X) : retour utilisateur ("ajouter de nouvelles couleurs et
+   formes aux QCM, pour ne pas avoir de redondance visuelle") — un QCM peut
+   monter jusqu'à 8 réponses (MCQ_MAX_OPTIONS, editor.js) ; boucler tous les
+   4 tons faisait qu'une question à 8 réponses affichait deux fois chaque
+   couleur/forme, laissant croire à tort que deux tuiles "vont ensemble". */
+.option-btn:nth-child(8n+1) { background: var(--tile-red); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-red-rgb),0.35); }
+.option-btn:nth-child(8n+1)::before { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+.option-btn:nth-child(8n+2) { background: var(--tile-blue); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-blue-rgb),0.35); }
+.option-btn:nth-child(8n+2)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+/* color en plus du background (contrairement aux tuiles rouge/bleu/verte) :
+   le blanc par défaut de .option-btn tombe à ~1.5:1 sur ce jaune clair, bien
    sous le minimum WCAG AA (4.5:1) — illisible en plein soleil sur mobile.
    Même brun foncé déjà choisi ailleurs pour ce même fond (voir
    .my-result-banner.is-close), repris ici pour rester cohérent. */
-.option-btn:nth-child(4n+3) { background: var(--tile-yellow); color: #3a2e00; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-yellow-rgb),0.35); }
-.option-btn:nth-child(4n+3)::before { border-radius: 50%; }
-.option-btn:nth-child(4n+4) { background: var(--tile-green); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-green-rgb),0.35); }
-.option-btn:nth-child(4n+4)::before { border-radius: 4px; }
+.option-btn:nth-child(8n+3) { background: var(--tile-yellow); color: #3a2e00; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-yellow-rgb),0.35); }
+.option-btn:nth-child(8n+3)::before { border-radius: 50%; }
+.option-btn:nth-child(8n+4) { background: var(--tile-green); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-green-rgb),0.35); }
+.option-btn:nth-child(8n+4)::before { border-radius: 4px; }
+.option-btn:nth-child(8n+5) { background: var(--tile-purple); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-purple-rgb),0.35); }
+.option-btn:nth-child(8n+5)::before { clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%); }
+/* Même raison de contraste que la tuile jaune ci-dessus : ce cyan est tout
+   aussi clair (~1.55:1 en blanc, mesuré) — même repli texte foncé. */
+.option-btn:nth-child(8n+6) { background: var(--tile-cyan); color: #053b44; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-cyan-rgb),0.35); }
+.option-btn:nth-child(8n+6)::before { clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%); }
+.option-btn:nth-child(8n+7) { background: var(--tile-orange); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-orange-rgb),0.35); }
+.option-btn:nth-child(8n+7)::before { clip-path: polygon(35% 0%, 65% 0%, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0% 65%, 0% 35%, 35% 35%); }
+.option-btn:nth-child(8n+8) { background: var(--tile-pink); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-pink-rgb),0.35); }
+.option-btn:nth-child(8n+8)::before { clip-path: polygon(0% 0%, 100% 0%, 50% 100%); }
 .option-btn:hover { transform: translateY(-2px); filter: brightness(1.08); }
 /* Ces tuiles sont maintenant navigables au clavier (voir index.js
    makeTileFocusable) — un vrai repère de focus visible, cohérent avec
@@ -3091,11 +3141,20 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   background: #000;
   --spot-x: 50%;
   --spot-y: 50%;
-  --spot-r: 0px;
+  /* Bug corrigé (retour utilisateur, iPhone : "l'image apparaît complètement
+     révélée par défaut, pas de filtre noir") : un rayon PILE à 0px rend le
+     radial-gradient dégénéré — Safari/iOS semble alors ignorer le masque
+     entier plutôt que masquer intégralement l'élément (calque noir censé
+     être plein s'affiche transparent), l'exact inverse de l'effet voulu au
+     repos. 0.01px : visuellement identique à 0 (aucun trou perceptible),
+     mais non-nul, donc jamais ce cas dégénéré. Comme le signalait déjà le
+     commentaire plus haut, cette recette n'avait jamais été testée sur un
+     vrai Safari avant ce retour. */
+  --spot-r: 0.01px;
   /* Trou transparent (image visible) du centre à (r - 16px), dégradé
      progressif jusqu'à r (bord adouci), opaque au-delà (calque noir =
      image cachée) — même recette dupliquée avec/sans préfixe -webkit- pour
-     Safari (jamais testé en pratique dans cette session, voir Risques). */
+     Safari. */
   mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
   -webkit-mask-image: radial-gradient(circle var(--spot-r) at var(--spot-x) var(--spot-y), transparent 0, transparent calc(var(--spot-r) - 16px), black var(--spot-r));
 }
@@ -3652,6 +3711,16 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   }
   body.is-host.game-active #hostPanel .volume-fill {
     box-shadow: 0 0 10px rgba(var(--color-accent-rgb), 0.5);
+  }
+  /* Fader général (retour utilisateur : "le bouton de volume ... doit se
+     placer dans les contrôles de l'hôte, et non pas sous les blocs") :
+     déplacé en enfant de #hostPanel en JS (voir placeMasterVolumeControl
+     dans index.js) pour l'hôte en régie "Présenter" — sort ici de sa
+     position:fixed d'origine (page entière) pour devenir un simple item de
+     cette colonne, comme #hostAmbiancePill juste en dessous. */
+  body.is-host.game-active #hostPanel #masterVolumeControl {
+    position: static;
+    align-self: flex-start;
   }
 }
 
@@ -4377,6 +4446,22 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     font-size: 15px;
     line-height: 1;
   }
+  /* Fader général (retour utilisateur : "le bouton de volume ... doit se
+     placer dans les contrôles de l'hôte, et non pas sous les blocs") :
+     déplacé en enfant de #hostPanel en JS (voir placeMasterVolumeControl
+     dans index.js) pour l'hôte en régie "Présenter" — sort de sa
+     position:fixed d'origine (coin bas-gauche de la page entière) pour
+     devenir un simple item de cette colonne (gap déjà posé sur #hostPanel
+     ci-dessus, pas besoin de marge propre). order:5 : juste au-dessus de la
+     pastille "Ambiance" (order:6, tout en bas via margin-top:auto), sous le
+     bouton "Question suivante" — emplacement déjà anticipé, jamais occupé
+     jusqu'ici (voir commentaire "musique en dessous" plus haut sur
+     #hostPanel > .d-flex.flex-column.gap-xs). */
+  body.is-host.game-active .container #hostPanel #masterVolumeControl {
+    order: 5;
+    align-self: flex-start;
+    position: static;
+  }
   body.is-host.game-active .container #hostPanel #hostAmbiancePill {
     order: 6;
     /* Pousse la pastille tout en bas du panneau (retour utilisateur :
@@ -4606,28 +4691,24 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     max-width: none;
     width: 100%;
   }
-  /* Retour utilisateur ("une zone à part entière dédiée à la validation
-     des réponses, sous le bloc central") : #moderationZone (index.js —
-     enveloppe barre œil + #moderationPanel, réponses à juger) a maintenant
-     sa PROPRE cellule de grille, sous #stageWrap (voir la 2e ligne "auto"
-     sur .container plus haut) — plus un enfant de #hostPanel comme essayé
-     au tour précédent. C'est la zone qui est placée (pas le panneau
-     directement) : sinon la barre œil, ajoutée à côté sans placement
-     explicite, tomberait dans une ligne de grille implicite. margin-top:0
-     en !important : #moderationZone pose 16px par défaut en CSS (repli pour
+  /* #moderationZone (index.js) a sa PROPRE cellule de grille, sous
+     #stageWrap (voir la 2e ligne "auto" sur .container plus haut) — plus un
+     enfant de #hostPanel comme essayé au tour précédent. margin-top:0 en
+     !important : #moderationZone pose 16px par défaut en CSS (repli pour
      les contextes hors régie desktop, où c'est juste un bloc de plus dans le
      flux normal) — ici le gap:24px de la grille fait déjà l'espacement avec
-     #stageWrap au-dessus. max-height/overflow-y restent sur le panneau
-     lui-même (pas la zone) : seule la liste de réponses défile, la barre
-     œil reste toujours visible au-dessus. */
+     #stageWrap au-dessus.
+     Bug corrigé (retour utilisateur : "modération fixe avec ouverture popup
+     pour modal" — la carte centrale rétrécissait à chaque nouvelle réponse
+     à juger) : #moderationZone ne contient plus QUE #moderationPanel et sa
+     barre œil ont déménagé dans #moderationModalOverlay (voir index.html/
+     index.js), qui n'a plus rien à voir avec la grille régie — la ligne
+     "auto" ci-dessus ne dépend donc plus du nombre de réponses en attente,
+     seulement du petit bouton compact qui reste ici. */
   body.is-host.game-active .container #moderationZone {
     grid-column: 2;
     grid-row: 2;
     margin-top: 0 !important;
-  }
-  body.is-host.game-active .container #moderationPanel {
-    max-height: 260px;
-    overflow-y: auto;
   }
   /* Tâche 038 (retour utilisateur : "garder les tuiles lisibles, ajouter
      des colonnes plutôt que pousser vers le bas puis tout réduire") :
@@ -4963,9 +5044,16 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 12px;
   display: flex; align-items: center; justify-content: center;
 }
-.live-classement-row:nth-child(1) .live-classement-rank { background: var(--tile-yellow); }
-.live-classement-row:nth-child(2) .live-classement-rank { background: var(--tile-green); }
-.live-classement-row:nth-child(3) .live-classement-rank { background: var(--tile-red); }
+/* Bug corrigé (retour utilisateur : "les 3 couleurs du joueur doivent être
+   visibles... dans le classement entre les questions aussi") : ce dock
+   utilisait déjà une couleur par rang, mais jaune/vert/rouge — sans rapport
+   avec le podium/la liste finale (or/argent/bronze, voir :root). Aligné ici
+   sur les mêmes tons. color foncé sur l'or, comme pour la tuile QCM jaune
+   (même style.css, .option-btn) : ce fond clair tombe sous le seuil de
+   lisibilité en blanc. */
+.live-classement-row:nth-child(1) .live-classement-rank { background: var(--tile-gold); color: #3a2e00; }
+.live-classement-row:nth-child(2) .live-classement-rank { background: var(--tile-silver); color: #2a2e36; }
+.live-classement-row:nth-child(3) .live-classement-rank { background: var(--tile-bronze); }
 .live-classement-name { flex: 1; font-weight: 700; font-size: 13px; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-classement-score { font-weight: 700; font-size: 13px; color: var(--color-accent); font-family: 'Baloo 2', sans-serif; }
 /* Tâche 025 : bouton "+" d'ajustement manuel de score (MJ, mode
@@ -7802,9 +7890,17 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   box-shadow: 0 0 0 2px rgba(var(--tile-red-rgb),0.4), var(--shadow-sm);
 }
 .leader-rank { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: var(--tile-blue); color: white; font-family: 'Baloo 2', sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.leader-row:nth-child(1) .leader-rank { background: var(--tile-yellow); }
-.leader-row:nth-child(2) .leader-rank { background: var(--tile-green); }
-.leader-row:nth-child(3) .leader-rank { background: var(--tile-red); }
+/* Bug corrigé (retour utilisateur : "les 3 couleurs du joueur doivent être
+   visibles... dans le classement entre les questions aussi") : ce
+   classement (#leaderOverlay, affiché après chaque question) utilisait déjà
+   une couleur par rang, mais jaune/vert/rouge — sans rapport avec le podium
+   final (or/argent/bronze, voir :root). Aligné ici sur les mêmes tons.
+   color foncé sur l'or/l'argent, comme pour la tuile QCM jaune (même
+   style.css, .option-btn) : ces fonds clairs tombent sous le seuil de
+   lisibilité en blanc. */
+.leader-row:nth-child(1) .leader-rank { background: var(--tile-gold); color: #3a2e00; }
+.leader-row:nth-child(2) .leader-rank { background: var(--tile-silver); color: #2a2e36; }
+.leader-row:nth-child(3) .leader-rank { background: var(--tile-bronze); }
 .leader-name { flex: 1; font-weight: 700; color: var(--color-text); font-family: 'Nunito', sans-serif; }
 .leader-score { color: var(--color-accent); font-weight: 700; font-family: 'Baloo 2', sans-serif; }
 
@@ -7955,9 +8051,14 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   box-shadow: 0 0 16px rgba(123,47,247,0.4);
   transition: height .38s cubic-bezier(0.34, 1.56, 0.64, 1), background .5s ease, box-shadow .5s ease;
 }
-.race-lane-bar.gold { background: linear-gradient(180deg, var(--tile-yellow) 0%, var(--tile-yellow-deep) 100%); box-shadow: 0 0 30px rgba(255,210,63,0.55); }
-.race-lane-bar.silver { background: linear-gradient(180deg, var(--tile-silver) 0%, var(--tile-silver-deep) 100%); box-shadow: 0 0 18px rgba(207,216,234,0.3); }
-.race-lane-bar.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(255,159,90,0.35); }
+/* Bug corrigé (retour utilisateur : "les trois couleurs du podium devraient
+   être or argent bronze") : .gold utilisait --tile-yellow (même jaune vif
+   que la 3e tuile QCM, voir plus haut dans ce fichier) — --tile-gold/
+   -silver/-bronze (voir :root) sont désormais des tons dédiés, jamais
+   réutilisés ailleurs pour une tuile de réponse. */
+.race-lane-bar.gold { background: linear-gradient(180deg, var(--tile-gold) 0%, var(--tile-gold-deep) 100%); box-shadow: 0 0 30px rgba(var(--tile-gold-rgb),0.55); }
+.race-lane-bar.silver { background: linear-gradient(180deg, var(--tile-silver) 0%, var(--tile-silver-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-silver-rgb),0.3); }
+.race-lane-bar.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-bronze-rgb),0.35); }
 
 .race-lane-avatar {
   position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, 50%);
@@ -7978,7 +8079,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   60% { transform: translate(calc(-50% - 2px), 50%); }
   100% { transform: translate(-50%, 50%); }
 }
-.race-lane.rank-1 .race-lane-avatar { border-color: var(--tile-yellow); }
+.race-lane.rank-1 .race-lane-avatar { border-color: var(--tile-gold); }
 .race-lane.rank-2 .race-lane-avatar { border-color: var(--tile-silver); }
 .race-lane.rank-3 .race-lane-avatar { border-color: var(--tile-bronze); }
 
@@ -8067,6 +8168,36 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   position: relative;
   box-shadow: inset 3px 0 0 rgba(var(--tile-red-rgb),0.4);
 }
+/* Bug corrigé (retour utilisateur : "les 3 couleurs du joueur doivent être
+   visibles sur le classement en liste") : #fullTable ("Détail" > liste
+   complète, distincte du podium animé juste au-dessus) ne distinguait pas
+   du tout le top 3 — contrairement au podium (or/argent/bronze) et au dock
+   régie MJ en cours de partie (voir renderLiveClassementDock). Même recette
+   que .result-row.rank-up/.rank-down ci-dessus (bordure de gauche colorée +
+   halo), mais PERMANENTE sur les 3 premières lignes plutôt que le temps
+   d'une animation de dépassement — :nth-child suffit, les lignes sont déjà
+   ajoutées dans l'ordre du classement (voir renderFullTable, index.js).
+   Mêmes tons que le podium (--tile-gold/-silver/-bronze, voir :root) +
+   médaille en repère visuel supplémentaire, cohérent avec les badges du
+   podium juste au-dessus. */
+#fullTable .result-row:nth-child(1) {
+  position: relative;
+  background: rgba(var(--tile-gold-rgb),0.12);
+  box-shadow: inset 3px 0 0 var(--tile-gold), 0 0 20px rgba(var(--tile-gold-rgb),0.35);
+}
+#fullTable .result-row:nth-child(1) .result-row-rank::before { content: '🥇 '; }
+#fullTable .result-row:nth-child(2) {
+  position: relative;
+  background: rgba(var(--tile-silver-rgb),0.12);
+  box-shadow: inset 3px 0 0 var(--tile-silver), 0 0 16px rgba(var(--tile-silver-rgb),0.3);
+}
+#fullTable .result-row:nth-child(2) .result-row-rank::before { content: '🥈 '; }
+#fullTable .result-row:nth-child(3) {
+  position: relative;
+  background: rgba(var(--tile-bronze-rgb),0.12);
+  box-shadow: inset 3px 0 0 var(--tile-bronze), 0 0 16px rgba(var(--tile-bronze-rgb),0.3);
+}
+#fullTable .result-row:nth-child(3) .result-row-rank::before { content: '🥉 '; }
 
 
 .history-tooltip {
@@ -8940,6 +9071,59 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
   text-align: center;
 }
 
+/* Popup de modération (#moderationModalOverlay, voir index.html/index.js) :
+   même carte que .score-adjust-card (fond/bordure/ombre), juste plus large
+   (liste de réponses à parcourir, pas un simple réglage) et scrollable en
+   hauteur — le contenu (#moderationPanel, ses lignes de réponses) peut
+   largement dépasser 80% de la hauteur d'écran sur une question à
+   nombreuses réponses en attente. */
+.moderation-modal-card {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: 28px var(--space-lg);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+  border: 2px solid rgba(var(--color-accent-rgb), 0.4);
+  box-shadow: var(--shadow-lg);
+  box-sizing: border-box;
+}
+/* #moderationPanel n'a plus besoin de son propre plafond/scroll une fois
+   dans la popup (voir la règle régie desktop retirée, style.css) : c'est
+   .moderation-modal-card ci-dessus qui scrolle désormais, panneau ET barre
+   œil ensemble — évite un double niveau de scroll imbriqué. */
+#moderationModalSlot #moderationPanel { max-height: none; overflow-y: visible; }
+/* Bouton compact de #moderationZone (voir index.js) qui ouvre la popup —
+   seul élément que la zone garde en permanence : sa taille FIXE, quel que
+   soit le nombre de réponses en attente, est tout le sens du correctif
+   (retour utilisateur : "modération fixe avec ouverture popup pour
+   modal") — avant, #moderationPanel grandissait directement dans cette
+   cellule de grille régie, rétrécissant d'autant la carte centrale. Même
+   habillage que .moderation-eye-bar/son bouton, avec un badge de compte en
+   plus. */
+.moderation-open-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.moderation-open-btn-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--tile-red);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 /* ============================================================
    Responsive — placé en fin de fichier pour primer sur les
    définitions de base (même spécificité, ordre du fichier).
@@ -8949,4 +9133,126 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
   .editor-layout { grid-template-columns: 1fr; height: auto; min-height: 0; }
   .question-sidebar { max-height: 260px; }
   /* .editor-top-bar-row bascule déjà en flex-wrap dans sa règle de base. */
+}
+
+/* ============================================================
+   Vue Joueur dédiée TV/vidéoprojecteur (tâche 040) — display.html/
+   display.js UNIQUEMENT. Tout ce bloc est scopé à `body.display-body`
+   (posée uniquement par display.html, jamais index.html) : ne touche
+   JAMAIS à la mise en page de l'écran de jeu régie MJ, qui réutilise les
+   mêmes classes de base (.question-text/.illustration-img/.options-grid/
+   .option-btn) sans aucun de ces styles. Placé en toute fin de fichier
+   (même raison que le bloc Responsive juste au-dessus) pour primer sur les
+   définitions de base à spécificité égale (ex. .options-grid.truefalse-grid
+   plus haut dans ce fichier).
+   ============================================================ */
+body.display-body {
+  height: 100vh;
+  overflow: hidden; /* jamais de scrollbar sur un écran projeté */
+  display: flex;
+}
+.display-root {
+  width: 100%;
+  max-width: 1700px;
+  margin: 0 auto;
+  padding: 5vh 5vw;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3vh;
+}
+.display-waiting {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: clamp(22px, 3.4vw, 38px);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.display-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0; /* laisse .options-grid se réduire plutôt que déborder (flex enfant) */
+}
+/* Image d'illustration : plus grande que sur l'écran de jeu MJ (.illustration-img
+   de base, pensée pour cohabiter avec timer/tuiles dans une carte compacte)
+   — ici elle a tout l'écran pour elle, en vh/vw pour suivre la résolution. */
+.display-root .illustration-img {
+  max-height: 32vh;
+  max-width: 80vw;
+  margin-bottom: 3vh;
+}
+/* Lisible à plusieurs mètres : gros texte, qui suit quand même la largeur
+   d'écran (clamp) plutôt qu'une taille fixe — un mobile en test n'affiche
+   pas un texte à peine plus petit qu'un titre de mire TV. */
+.display-root .question-text {
+  font-size: clamp(28px, 4.6vw, 64px);
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.display-root .options-grid {
+  width: 100%;
+  margin-top: 0;
+}
+/* Même logique que la régie desktop MJ (voir body.is-host.game-active
+   .container .options-grid:not(...) plus haut dans ce fichier) : le nombre
+   de colonnes suit --mcq-cols (posé en JS selon le nombre d'options, voir
+   display.js renderMcq) au lieu de rester figé à 2 — plus de place à
+   exploiter ici qu'en régie MJ. Gated par la même largeur mini que le reste
+   du fichier : en dessous, la grille de base (2 colonnes) reste la plus
+   lisible sur un petit écran de test. */
+@media (min-width: 900px) {
+  .display-root .options-grid:not(.truefalse-grid):not(.intrus-grid) {
+    grid-template-columns: repeat(var(--mcq-cols, 2), 1fr);
+  }
+}
+.display-root .option-btn {
+  min-height: 14vh;
+  font-size: clamp(18px, 2.4vw, 34px);
+  padding: 3vh 3vh 3vh 9vh;
+}
+.display-root .option-btn::before {
+  width: 4vh;
+  height: 4vh;
+  left: 3vh;
+}
+.display-root .option-btn.truefalse-btn {
+  min-height: 22vh;
+  font-size: clamp(20px, 3vw, 40px);
+}
+.display-root .option-btn.truefalse-btn::before {
+  width: 7vh;
+  height: 7vh;
+}
+.display-root .option-btn.intrus-tile {
+  min-height: 0; /* garde le ratio 4/3 de .intrus-tile — pas le plancher de .option-btn ci-dessus, pensé pour du texte */
+}
+
+.display-fullscreen-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10;
+  padding: 10px 18px;
+  font-size: 14px;
+  opacity: 0.5;
+}
+.display-fullscreen-btn:hover { opacity: 1; }
+
+@media (max-width: 640px) {
+  .display-root { padding: 4vh 4vw; gap: 2vh; }
+  .display-root .question-text { font-size: clamp(20px, 6vw, 30px); }
+  .display-root .option-btn { min-height: 76px; padding: 18px 18px 18px 56px; }
+  /* Bug trouvé en QA (passe design, capture mobile 390px) : le ::before
+     (pastille de forme) de la règle de base juste au-dessus (non scopée à un
+     media query, donc active à toute largeur) reste calculé en vh — à cette
+     hauteur d'écran mobile, `left:3vh; width:4vh` dépasse le padding-left
+     56px ci-dessus (icône ~25px→59px de large, texte dès 56px) : l'icône et
+     le texte se chevauchaient de quelques pixels. Valeurs fixes ici, comme
+     le reste de ce bloc mobile, pour rouvrir un vrai espace avant le texte. */
+  .display-root .option-btn::before { width: 24px; height: 24px; left: 16px; }
+  .display-root .option-btn.truefalse-btn { min-height: 120px; }
 }

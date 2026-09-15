@@ -244,6 +244,22 @@ const runRace = (top, raceHistory) => {
   }
 
   const finishRace = () => {
+    // Bug corrigé (retour utilisateur : "les 200 points ajoutés
+    // manuellement ne sont pas comptés dans le classement final") : la
+    // montée de la course n'additionne que les deltas PAR QUESTION (voir
+    // applyQuestion, raceHistory[i].deltas) — un ajustement manuel du MJ
+    // (score:adjust, tâche 025) n'est rattaché à aucune question, donc
+    // jamais compté dans cette somme. Le CLASSEMENT (l'ordre des joueurs
+    // dans `top`, déjà trié sur le vrai score) était donc correct, mais le
+    // score AFFICHÉ à l'arrivée s'arrêtait plus bas que la réalité pour qui
+    // avait reçu un tel ajustement. On recale ici sur le vrai score une
+    // fois la montée terminée (pas avant : ça casserait l'effet "montée
+    // progressive" en cours de course).
+    top.forEach(p => {
+      const h = Math.min(trackHeight, (p.score / maxScale) * trackHeight)
+      setLanePosition(p.id, h)
+      refs[p.id].score.textContent = `${p.score} pts`
+    })
     statusPill.className = 'race-status-pill done'
     statusPill.textContent = '🏁 Arrivée !'
     finishFlash.classList.add('go')

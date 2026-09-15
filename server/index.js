@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.28.1'
+const APP_VERSION = '2.28.4'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -895,17 +895,44 @@ const start = async () => {
     // ONLY if there are multiple correct answers defined
     if (normalizedAnswers.length > 1 && x.includes(',')) {
       const inputs = x.split(',').map(s => s.trim()).filter(s => s !== '').sort()
-      
+
       if (inputs.length === normalizedAnswers.length) {
         const allMatch = inputs.every((val, idx) => val === normalizedAnswers[idx])
         if (allMatch) return { ok: true, exact: true }
       }
-      return { ok: false }
+      // Bug corrigé (retour utilisateur, Blind Test : "l'artiste qu'un joueur
+      // a entré n'a pas été validé alors que la réponse faisait partie de la
+      // liste acceptée") : un `return { ok: false }` ici court-circuitait
+      // tout le reste de la fonction dès que la réponse contenait une
+      // virgule, MÊME si elle correspondait très bien à UNE SEULE réponse
+      // acceptée prise isolément (ex : une virgule parasite en fin de saisie
+      // — copier/coller, clavier téléphone). Pas de `return` : on retombe
+      // simplement sur la boucle exact/fuzzy ci-dessous, comme si cette
+      // tentative d'interprétation "plusieurs réponses à la fois" n'avait
+      // jamais eu lieu — ne peut qu'AJOUTER des correspondances, jamais en
+      // retirer (le cas où `allMatch` réussit retourne déjà plus haut).
     }
 
+    // Bug corrigé (retour utilisateur, Blind Test : "l'artiste qu'un joueur
+    // a entré n'a pas été validé alors que la réponse faisait partie de la
+    // liste acceptée" — 3e réponse de la liste, exactement identique à la
+    // saisie) : UNE SEULE boucle testait exact PUIS fuzzy réponse par
+    // réponse, et retournait dès le PREMIER succès rencontré — si une
+    // réponse acceptée PLUS TÔT dans le tableau (ex : une orthographe
+    // voisine) matchait déjà en fuzzy (distance <= seuil), la fonction
+    // s'arrêtait là avec exact:false SANS JAMAIS regarder les réponses
+    // suivantes, même si l'une d'elles était un match EXACT — repéré `res.
+    // exact` étant requis pour la validation automatique hors mode "Jouer"
+    // (voir evalField) : un match exact "raté" à cause de l'ordre du tableau
+    // retombait donc en attente de modération au lieu d'être validé tout de
+    // suite. Deux passes désormais : toutes les réponses testées en exact
+    // d'abord (un exact où qu'il soit dans la liste gagne toujours), la
+    // fuzzy ne sert de repli qu'en l'absence de tout match exact.
+    for (const ans of answers) {
+      if (x === norm(ans)) return { ok: true, exact: true }
+    }
     for (const ans of answers) {
       const y = norm(ans)
-      if (x === y) return { ok: true, exact: true }
       const d = lev(x, y)
       const thresh = Math.max(1, Math.floor(y.length * 0.2))
       if (d <= thresh) return { ok: true, exact: false }
@@ -1154,21 +1181,89 @@ const start = async () => {
       }
     })
 
+    // Rattrapage d'état de question pour un socket qui (re)rejoint une salle
+    // déjà en cours de partie — partagé entre un vrai joueur (reconnexion ou
+    // arrivée tardive) et un "spectateur" (viewer:true, voir plus bas). Sans
+    // ça, il restait bloqué sur l'écran salon d'attente jusqu'à la question
+    // SUIVANTE, sans jamais pouvoir répondre/voir celle en cours — alors que
+    // le serveur, lui, acceptait déjà sa réponse si on la lui envoyait
+    // directement (juste jamais présentée dans l'UI). Couvre 3 états
+    // possibles (trouvés en audit, tous distincts) : question active /
+    // question terminée+révélée / question terminée+modération en attente.
+    // Tâche 040 : à l'origine réservé aux vrais joueurs, appelé aussi depuis
+    // la branche viewer:true (vue Joueur TV) — question:show/timer:end/
+    // question:reveal/leaderboard:show sont déjà "sans spoiler" (voir
+    // payloadWithoutCorrectOrExplanation), donc aucun risque d'exposition
+    // nouveau pour un spectateur qui n'était pas censé voir la réponse.
+    const sendJoinCatchup = (room, socket) => {
+      const q = room.currentQuestion
+      if (q && !q.ended && Date.now() < q.startTs + q.timerMs && q.showPayload) {
+        socket.emit('question:show', q.showPayload)
+      } else if (q && q.ended && q.revealPayload) {
+        // Question déjà terminée (phase révélation ou classement) : sans ce
+        // rattrapage, un reconnectant (coupure réseau de l'hôte pendant le
+        // délai de grâce, par ex.) ne recevait RIEN et restait bloqué —
+        // côté hôte, un bouton "Suivant" grisé en permanence, sans recours,
+        // en plein direct (retour utilisateur). On rejoue la même séquence
+        // qu'un client resté connecté aurait vue : d'abord question:show
+        // (état de base, nécessaire aux handlers client qui en dépendent),
+        // puis question:reveal, puis leaderboard:show si l'hôte en était
+        // déjà là — chaque handler client remet lui-même hostPhase à jour à
+        // sa réception, aucun changement client requis.
+        socket.emit('question:show', q.showPayload)
+        // "révélation" : timer:end est ce qui livre l'image réponse côté
+        // client (voir plus haut timerEndPayload) — sans le rejouer ici,
+        // un reconnectant arrivant à CE stade ne la recevrait jamais et
+        // resterait bloqué sur l'image énigme malgré question:reveal.
+        if (q.type === 'reveal') socket.emit('timer:end', timerEndPayload(q))
+        socket.emit('question:reveal', q.revealPayload)
+        if (room.leaderboardShown) socket.emit('leaderboard:show')
+      } else if (q && q.ended && !q.revealPayload && room.pending.size > 0) {
+        // Troisième état possible, distinct des deux ci-dessus (trouvé en
+        // audit) : le chrono est fini mais au moins une réponse (texte
+        // libre/blindtest/pbac) attend encore une décision de l'hôte —
+        // revealQuestion n'a donc pas encore tourné (voir endQuestion, elle
+        // n'est appelée qu'une fois room.pending vide). Sans ce rattrapage,
+        // un hôte qui se déconnecte pile à ce moment (le délai de grâce de
+        // 45s existe justement pour ce genre de coupure) revenait sans
+        // question:show NI le panneau de modération — bloqué sans aucun
+        // recours pour trancher les réponses en attente et faire avancer la
+        // partie. Ne rejoue que les réponses de CETTE question précise
+        // (comparaison par historyEntry, pas juste "tout room.pending").
+        socket.emit('question:show', q.showPayload)
+        socket.emit('timer:end', timerEndPayload(q))
+        for (const [answerId, item] of room.pending) {
+          if (item.historyEntry !== q.historyEntry) continue
+          const currentPlayerId = resolvePendingId(room, item)
+          const playerName = room.players.get(currentPlayerId)?.name || 'Joueur'
+          if (item.fields) {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, blindtest: true, fields: item.fields })
+          } else if (item.pbac) {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content, pbac: true })
+          } else {
+            socket.emit('answer:queue', { answerId, playerId: currentPlayerId, playerName, content: item.content })
+          }
+        }
+      }
+    }
+
     socket.on('room:join', async payload => {
       const code = (payload?.roomCode || '').toUpperCase()
       const room = rooms.get(code)
       if (!room) return socket.emit('room:error', { message: 'room not found' })
       room.lastActivityAt = Date.now() // voir sweepAbandonedRooms
 
-      // "Spectateur" (voir result.html/results.js) : rejoint UNIQUEMENT pour
-      // recevoir les diffusions de la salle (history:sync/team:list/
-      // lobby:list/score:update, utiles pour afficher des résultats à jour)
-      // — jamais comme un vrai participant. Retour utilisateur : la page
-      // résultats faisait apparaître un faux joueur "Spectateur" dans le
-      // salon/le classement (ajouté à room.players comme n'importe quel
-      // joueur, comptant même dans expectedPlayers). Se contente de
-      // rejoindre la room socket.io + un instantané immédiat, sans jamais
-      // toucher room.players/room.tokens ni diffuser player:joined.
+      // "Spectateur" (voir result.html/results.js, et tâche 040 vue Joueur
+      // TV) : rejoint UNIQUEMENT pour recevoir les diffusions de la salle
+      // (history:sync/team:list/lobby:list/score:update, utiles pour
+      // afficher des résultats à jour, + le rattrapage d'état de question en
+      // cours ci-dessous) — jamais comme un vrai participant. Retour
+      // utilisateur : la page résultats faisait apparaître un faux joueur
+      // "Spectateur" dans le salon/le classement (ajouté à room.players
+      // comme n'importe quel joueur, comptant même dans expectedPlayers). Se
+      // contente de rejoindre la room socket.io + un instantané immédiat,
+      // sans jamais toucher room.players/room.tokens ni diffuser
+      // player:joined.
       if (payload?.viewer) {
         socket.roomCode = code
         await socket.join(code)
@@ -1184,6 +1279,7 @@ const start = async () => {
         // "Présenter"). Émis avant lobby:list, comme pour un vrai joueur.
         socket.emit('room:mode', { mode: room.mode || 'present' })
         socket.emit('lobby:list', buildPlayerList(room))
+        sendJoinCatchup(room, socket)
         return
       }
 
