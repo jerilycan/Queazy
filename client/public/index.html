@@ -867,6 +867,17 @@
         </div>
         <div class="d-flex gap-sm">
           <button id="selectQuizBtn" class="btn h-48 px-32">Sélectionner un Quiz</button>
+          <!-- Tâche 042 : ouvre la vue TV dédiée (display.html, miroir en
+               direct du centre MJ ci-dessous — voir index.js pushDisplayMirror)
+               dans une fenêtre séparée, pour brancher une TV/vidéoprojecteur
+               en 2e écran pendant une partie "Présenter" IRL. d-none par
+               défaut : visibilité pilotée en JS par updateDisplayButtonVisibility
+               (gameMode==='irl' && roomMode!=='auto', même garde que
+               isPresenterHost()) — jamais utile en mode "Jouer"/à distance.
+               Visible dès la création de salle, pas besoin d'attendre le
+               lancement du quiz (même esprit que #selectQuizBtn juste
+               au-dessus). -->
+          <button id="openDisplayBtn" class="btn h-48 px-32 d-none">🖥️ Mode présentation</button>
           <button id="startQuiz" class="btn btn-primary h-48 px-32">LANCER</button>
           <!-- "✨" isolé dans son propre <span> (retour utilisateur : une
                petite icône "shine" à part, pas juste un emoji collé en fin

@@ -6803,6 +6803,76 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   min-width: 160px;
 }
 
+/* Type "Texte libre" (tâche 037, étapes 6-8) — réglage de tolérance
+   orthographique (segmented control 3 valeurs) + testeur de réponse, dans
+   #correctFreeSection. Canvas source (FreeDispoTolerance.dc.html) retiré de
+   l'artifact après le choix de l'option 2 (chips) puis le revirement vers
+   l'option 3 : reconstruit ici dans le même esprit que
+   .truefalse-toggle/.truefalse-toggle-btn déjà présents (segmented control),
+   pas un composant générique puisqu'un seul point d'usage (CLAUDE.md). */
+.tolerance-panel {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+.tolerance-switch {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tolerance-switch-btn {
+  flex: 1;
+  padding: 8px 6px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tolerance-switch-btn:hover { border-color: var(--color-accent); }
+.tolerance-switch-btn.active {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: white;
+}
+.test-answer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.test-answer-row input {
+  flex: 1;
+}
+.test-pill {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 900;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  border: 2px solid var(--color-border);
+}
+.test-pill.match {
+  background: var(--tile-green);
+  color: white;
+  border-color: var(--tile-green);
+}
+.test-pill.no-match {
+  background: var(--color-danger);
+  color: white;
+  border-color: var(--color-danger);
+}
+
 .truefalse-toggle {
   display: flex;
   gap: var(--space-sm);
@@ -9133,4 +9203,530 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
   .editor-layout { grid-template-columns: 1fr; height: auto; min-height: 0; }
   .question-sidebar { max-height: 260px; }
   /* .editor-top-bar-row bascule déjà en flex-wrap dans sa règle de base. */
+}
+
+/* ============================================================
+   Vue TV/vidéoprojecteur en miroir direct (tâche 042) — display.html/
+   display.js UNIQUEMENT. Tout ce bloc est scopé à `body.display-body`
+   (posée uniquement par display.html, jamais index.html) : ne touche
+   JAMAIS à la mise en page de l'écran de jeu régie MJ, qui réutilise les
+   MÊMES classes/ids de base (#questionTypeBadge/#timerContainer/
+   #question/.illustration-img/.options-grid/.option-btn/.reveal-popup-card…)
+   sans aucun de ces styles. Contrairement à la tâche 040 (rollback,
+   .display-root/.display-content dédiés), le contenu de #displayStage/
+   #displayPopup est un miroir DIRECT du innerHTML de #stageWrap/
+   #revealPopupOverlay côté MJ (voir index.js pushDisplayMirror) — mêmes
+   ids/classes réelles, on se contente ici de les remettre en page pour du
+   plein écran, jamais de reconstruire leur rendu. Le fond/bordure/ombre
+   "carte" de #stageWrap (côté MJ uniquement, voir body.is-host.game-active
+   .container #stageWrap plus haut) n'existe même pas ici : on ne mirrore
+   que le CONTENU de #stageWrap, jamais l'élément lui-même — rien à
+   neutraliser explicitement pour obtenir un plein écran sans cadre.
+   Placé en toute fin de fichier (même raison que le bloc Responsive juste
+   au-dessus) pour primer sur les définitions de base à spécificité égale. */
+body.display-body {
+  height: 100vh;
+  overflow: hidden; /* jamais de scrollbar sur un écran projeté */
+  display: flex;
+  background: var(--color-bg-deep);
+}
+.display-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 5vh 5vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.display-waiting {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: clamp(22px, 3.4vw, 38px);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+#displayStage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* "safe center" (pas juste "center") : même raison que #stageWrap côté MJ
+     (voir plus haut dans ce fichier) — une question au contenu plus haut que
+     l'écran (ex. longue liste "ordre"/"timeline") ne doit jamais couper son
+     début de façon inatteignable, juste basculer en alignement départ dès
+     qu'elle déborde (#displayStage scrolle, voir overflow-y ci-dessous). */
+  justify-content: safe center;
+  overflow-y: auto;
+}
+/* #questionTypeBadge/#timerContainer : position:fixed/sticky + top:96px dans
+   leurs règles de base (voir plus haut dans ce fichier) pensées pour laisser
+   la place à la navbar MJ — absente ici. Repassés en flux normal, en haut de
+   #displayStage, plutôt que de dupliquer leur logique de rendu ailleurs. */
+body.display-body #questionTypeBadge {
+  position: static;
+  align-self: center;
+  margin-bottom: 2vh;
+  font-size: clamp(14px, 1.6vw, 22px);
+  padding: 7px 20px 7px 7px;
+  cursor: default;
+}
+body.display-body #questionTypeBadge:hover { transform: none; box-shadow: var(--shadow-md); }
+body.display-body #questionTypeBadgeIcon { width: clamp(26px, 2.2vw, 38px); height: clamp(26px, 2.2vw, 38px); font-size: clamp(15px, 1.6vw, 22px); }
+
+body.display-body #timerContainer {
+  position: static;
+  width: min(1300px, 92%);
+  max-width: none;
+  margin: 0 0 3vh;
+}
+body.display-body #timerContainer .timer-bar-wrapper { height: clamp(26px, 4.5vh, 54px); }
+body.display-body #timerContainer .timer-label { font-size: clamp(18px, 2.6vw, 34px); }
+
+body.display-body #main {
+  width: 100%;
+  max-width: min(1700px, 92vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0; /* laisse .options-grid se réduire plutôt que déborder (flex enfant) */
+}
+
+body.display-body #questionCategoryBadge { font-size: clamp(13px, 1.4vw, 20px); }
+
+/* Lisible à plusieurs mètres : gros texte, qui suit quand même la largeur
+   d'écran (clamp) plutôt qu'une taille fixe — même logique que la tâche 040.
+   Plafond relevé (68px -> 80px, retour utilisateur "occuper l'espace
+   réellement disponible" — voir le Plan de la tâche) après vérification
+   visuelle à 1920x1080 : le texte restait visiblement petit au milieu d'un
+   grand écran projeté avec le plafond d'origine. */
+body.display-body #question {
+  font-size: clamp(28px, 4.8vw, 80px);
+  margin-bottom: 3vh;
+}
+
+/* Image d'illustration : plus grande que sur l'écran de jeu MJ
+   (.illustration-img de base, pensée pour cohabiter avec timer/tuiles dans
+   une carte compacte) — ici elle a tout l'écran pour elle. */
+body.display-body .illustration-img {
+  max-height: 38vh;
+  max-width: 82vw;
+  margin-bottom: 3vh;
+}
+body.display-body .illustration-img-wrap.is-zoomed { width: min(1000px, 88vw); }
+/* Écart #5 relevé par l'agent design/responsive (tâche 042 étape 9) :
+   "zoomguess" sans payload.zoom (vieux quiz sauvegardé avant l'ajout de ce
+   champ — voir index.js, currentIllustrationZoom reste null dans ce cas)
+   ne pose jamais .is-zoomed, donc le wrap ci-dessus ne s'applique pas.
+   #illustrationImg garde pourtant le recadrage STATIQUE calculé par JS
+   (applyCropTransform, voir index.js) — cette fonction lit les dimensions
+   RÉELLES du wrap pour calculer sa transform de "couverture" (translate +
+   scale), et sans .is-zoomed le wrap n'a ni ratio ni overflow:hidden
+   définis : la transform résultante peut positionner l'image hors de la
+   boîte du wrap (mesuré : l'image chevauchait le badge/minuteur/question
+   au-dessus, jusqu'à ~200px hors de son propre wrap). Recalculer cette
+   transform correctement demanderait de toucher applyCropTransform
+   (JS partagé avec l'écran MJ, hors périmètre ici) — repli CSS simple et
+   sûr : borner le wrap lui-même (overflow:hidden + une boîte définie,
+   même hauteur que .illustration-img de base) pour que tout débordement de
+   la transform JS soit rogné à l'intérieur de sa propre zone plutôt que de
+   déborder sur le reste de la mise en page. N'affecte jamais le cas normal
+   (.is-zoomed présent, sélecteur plus spécifique ci-dessus prime). */
+body.display-body .illustration-img-wrap.zoomguess-visible:not(.is-zoomed) {
+  position: relative;
+  overflow: hidden;
+  max-height: 38vh;
+  border-radius: var(--radius-lg);
+}
+
+body.display-body #inputArea {
+  width: 100%;
+  max-width: min(1500px, 92vw);
+}
+
+body.display-body .options-grid {
+  width: 100%;
+  margin-top: 0;
+}
+/* Même logique que la régie desktop MJ (voir body.is-host.game-active
+   .container .options-grid:not(...) plus haut dans ce fichier) : le nombre
+   de colonnes suit --mcq-cols (posé en JS côté MJ selon le nombre d'options,
+   voir index.js renderQuestion — la valeur voyage telle quelle dans le style
+   inline mirroré, aucun recalcul ici) au lieu de rester figé à 2, plus de
+   place à exploiter sur un grand écran projeté. */
+@media (min-width: 900px) {
+  body.display-body .options-grid:not(.truefalse-grid):not(.intrus-grid) {
+    grid-template-columns: repeat(var(--mcq-cols, 2), 1fr);
+  }
+}
+body.display-body .option-btn {
+  min-height: 16vh;
+  font-size: clamp(18px, 2.6vw, 40px);
+  padding: 3vh 3vh 3vh 9vh;
+}
+body.display-body .option-btn::before {
+  width: 4vh;
+  height: 4vh;
+  left: 3vh;
+}
+body.display-body .option-btn.truefalse-btn {
+  min-height: 24vh;
+  font-size: clamp(20px, 3.2vw, 46px);
+}
+body.display-body .option-btn.truefalse-btn::before {
+  width: 7vh;
+  height: 7vh;
+}
+body.display-body .option-btn.intrus-tile {
+  min-height: 0; /* garde le ratio de .intrus-tile — pas le plancher de .option-btn ci-dessus, pensé pour du texte */
+  /* Écart #3 relevé par l'agent design/responsive (tâche 042 étape 9) :
+     aspect-ratio:4/3 (règle de base, voir .option-btn.intrus-tile plus haut
+     dans ce fichier) dérive toujours la hauteur depuis la largeur de
+     colonne — avec 3 rangées de tuiles larges (5-8 photos, plage autorisée
+     par l'éditeur), le total dépassait la hauteur dispo et #displayStage
+     devait scroller (vérifié avec 7-8 photos). Plafond en vh : aspect-ratio
+     reste la valeur PRÉFÉRÉE (tuiles proches du carré tant que la place le
+     permet), mais ne peut plus jamais pousser 3 rangées hors de l'écran. */
+  max-height: 22vh;
+}
+
+/* ------------------------------------------------------------------------
+   Types "carte MJ compacte" jamais retouchés jusqu'ici (écart #1 relevé par
+   l'agent design/responsive, tâche 042 étape 9) : graduation / order /
+   timeline / rangement / association / blindtest / recherche / halo /
+   indice gardaient leurs conteneurs à taille fixe (max-width/polices en px),
+   très clairsemés à l'échelle TV (1920×1080/1366×768) — pire cas rapporté :
+   association, 16 tuiles regroupées sur ~500px sur un écran de 1920px.
+   Même logique que le reste de ce bloc (clamp()/vh/vw, jamais de px fixe) :
+   on élargit les conteneurs, on agrandit les polices/espacements en
+   proportion, sans toucher au balisage ni à la mécanique (drag&drop,
+   masques, animations) — purement une mise à l'échelle visuelle. */
+
+/* Graduation (curseur) : .graduation-area/.grad-slider/.grad-value gardaient
+   leur gabarit desktop compact (700px/520px/40px, voir plus haut) — élargis
+   au même esprit que #timerContainer ci-dessus. .grad-slider-track/-thumb
+   agrandis en proportion : sans ça, un curseur 3× plus large gardait un
+   trait de 16px et un pouce de 32px, visuellement disproportionné. */
+body.display-body .graduation-area { max-width: min(1600px, 90vw); }
+body.display-body .grad-slider { max-width: min(1400px, 80vw); padding: 3vh 1vw; }
+body.display-body .grad-slider-track { height: clamp(20px, 3vh, 44px); }
+body.display-body .grad-slider-thumb { width: clamp(32px, 4vh, 56px); height: clamp(32px, 4vh, 56px); }
+body.display-body .grad-value { font-size: clamp(48px, 7vw, 120px); }
+body.display-body .graduation-labels { max-width: min(1400px, 80vw); }
+body.display-body .grad-bound { font-size: clamp(16px, 1.6vw, 28px); }
+
+/* Order / Timeline : listes glissables plafonnées à 560px de large, texte à
+   taille fixe (voir .order-area/.order-item/.timeline-area/.timeline-item
+   plus haut). .order-item porte directement son font-size (couvre
+   .order-item-text, enfant sans font-size propre) ; .timeline-item n'en a
+   pas (texte porté par .timeline-item-title/-desc, deux enfants), d'où le
+   ciblage direct de ces deux-là. */
+/* max-width élargi (correctif de la vérification tâche 042 étape A, après le
+   premier passage écart #1) : à 1300px/78vw, une description "timeline" un
+   peu longue (~45 caractères, cas réaliste — voir test réel avec des
+   énoncés historiques) enroulait systématiquement sur 2 lignes, et 6 items à
+   2 lignes de description dépassait la hauteur dispo à 1920×1080 (mesuré :
+   #displayStage débordait de ~96px, scroll). Élargir laisse le texte
+   respirer sur une seule ligne dans plus de cas SANS agrandir la police
+   (donc sans perdre en densité), ce qui règle le débordement à la racine
+   plutôt qu'en rognant encore le padding/gap ci-dessous. */
+body.display-body .order-area,
+body.display-body .timeline-area { max-width: min(1600px, 88vw); }
+body.display-body .order-list,
+body.display-body .timeline-list { gap: 0.6vh; }
+body.display-body .order-item,
+body.display-body .timeline-item { padding: 0.7vh 2.2vw; }
+/* Plafonds de police volontairement plus mesurés qu'ailleurs dans ce bloc
+   (28px au lieu de 36-40px) : une liste "order"/"timeline" a régulièrement
+   5-6 items — vérifié à l'œil ET par mesure DOM (getBoundingClientRect)
+   qu'un plafond plus généreux (36px/2.2vh) faisait déborder #displayStage
+   dès 6 items, régression que ce plafond réduit évite tout en restant
+   nettement au-dessus du gabarit MJ compact d'origine (16px/13px).
+   padding/gap resserrés une SECONDE fois (1.5vh/1.2vh d'origine -> 0.7vh/
+   0.6vh) lors de la vérification tâche 042 étape A, en 3 passes de mesure
+   DOM réelle avec 6 items à descriptions réalistes (~45 caractères) : la
+   1ère passe (max-width élargi seul) a supprimé le retour à la ligne des
+   descriptions mais laissait ~46px de débordement à 1920×1080 ; ce
+   resserrement progressif du padding/gap l'a comblé — mesuré SANS
+   débordement à 1920×1080 (972px = 972px, plus de scroll). À 800×600
+   (fenêtre volontairement extrême, plus petite qu'un vidéoprojecteur
+   réel), un résidu de ~76px reste malgré ce resserrement — les polices
+   sont déjà à leur PLAFOND BAS (18px/13px, clamp() ne peut plus rétrécir),
+   seul le scroll de #displayStage (safety net documenté plus haut, voir
+   justify-content: safe center) absorbe ce cas limite ; accepté tel quel,
+   pas un des 5 écarts nommés par l'agent design/responsive (qui ne
+   couvrent que rangement/intrus pour le débordement), contenu jamais
+   coupé/inatteignable grâce au scroll. */
+body.display-body .order-item { font-size: clamp(18px, 1.8vw, 28px); }
+body.display-body .timeline-item-title { font-size: clamp(18px, 1.8vw, 28px); }
+body.display-body .timeline-item-desc { font-size: clamp(13px, 1.3vw, 20px); }
+
+/* Rangement : écarts #1 ET #2 (débordement à 800×600) partagent la même
+   cause racine — .rangement-zone a un min-height FIXE (160px, voir plus
+   haut) au lieu d'une valeur qui rétrécit avec la fenêtre. Passer en
+   clamp()/vh ici règle les deux à la fois : plus grand sur un écran TV
+   1920×1080, plus petit (donc plus de chances de tenir sans scroll) à
+   800×600. IMPORTANT : gap de .rangement-zones volontairement PAS retouché
+   ici (contrairement aux autres conteneurs de ce bloc) — sa valeur de base
+   (var(--space-sm), voir plus haut dans ce fichier) est aussi utilisée TELLE
+   QUELLE dans le calc() qui calcule .rangement-zone.flex-basis (largeur par
+   zone selon --rangement-row-cols(-mobile)) : un gap réel différent de celui
+   supposé par ce calc() désynchronise les deux, et le nombre de zones par
+   rangée réellement obtenu (bug trouvé en testant ce correctif : gap élargi
+   ici faisait passer 2 zones/rangée à 1 seule à 800×600, MULTIPLIANT le
+   nombre de rangées au lieu de l'améliorer). */
+body.display-body .rangement-area { max-width: min(1500px, 88vw); }
+/* min-height mesuré ET corrigé par test réel (tâche 042 étape 9 correctifs,
+   cas réel reproduit : 5 zones/12 cartes) : un premier essai à 20vh (vh
+   pur) débordait largement #displayStage — l'écran de jeu peut avoir
+   PLUSIEURS rangées de zones (motif --rangement-row-cols posé en JS, 3
+   colonnes ≥900px mais SEULEMENT 2 en dessous, donc 5 zones = 2 rangées à
+   1920×1080 MAIS 3 rangées à 800×600 — pas juste "plus petit écran", un
+   agencement RÉELLEMENT différent), donc un même multiplicateur vh se
+   cumule une fois par rangée ET la largeur de fenêtre change ce nombre de
+   rangées. clamp() avec un plafond bas (130px) plutôt qu'un vh pur : borne
+   la casse même dans le pire cas (3 rangées à une hauteur de fenêtre
+   réduite), vérifié SANS scroll à 1920×1080 ET 800×600 avec ce cas réel. */
+body.display-body .rangement-zone { min-height: clamp(38px, 7vh, 130px); padding: 0.6vh 1vw; }
+body.display-body .rangement-zone-label { font-size: clamp(13px, 1.3vw, 19px); }
+body.display-body .rangement-tray { gap: 0.6vh 0.8vw; }
+body.display-body .rangement-card { padding: 0.6vh 1.1vw; font-size: clamp(12px, 1.2vw, 18px); }
+
+/* Association : PIRE CAS rapporté par l'agent design/responsive — 16 tuiles
+   regroupées sur ~500px sur un écran de 1920px (.association-area plafonné
+   à 640/960px, .assoc-item à 170px fixe dès 900px de large, voir plus haut
+   dans ce fichier). .assoc-item porte directement son font-size (couvre le
+   texte de la tuile). */
+body.display-body .association-area { max-width: min(1700px, 92vw); gap: 3vh; }
+body.display-body .association-col-list { gap: 1.6vh 1.6vw; }
+body.display-body .assoc-item { padding: 2vh 1.6vw; font-size: clamp(16px, 1.8vw, 30px); }
+/* Sous 900px, .association-col-list reste en colonne (voir la garde
+   @media (min-width:900px) juste en dessous) : les 8 tuiles du pire cas (8
+   paires) s'empilent alors TOUTES dans une seule colonne au lieu d'une
+   grille 4×4 — le padding/police ci-dessus, pensés pour la grille large
+   desktop, faisaient déborder #displayStage de ~176px à 800×600 (mesuré,
+   vérification tâche 042 étape A). Resserré ici spécifiquement pour ce cas
+   empilé, même esprit que .rangement-card ci-dessus (gabarit compact sous
+   900px) — la grille ≥900px n'est pas concernée, elle garde le gabarit
+   généreux ci-dessus. */
+@media (max-width: 899px) {
+  body.display-body .assoc-item { padding: 0.6vh 1.6vw; font-size: clamp(13px, 1.8vw, 20px); }
+  body.display-body .association-col-list { gap: 0.6vh 1.6vw; }
+}
+/* .flex-basis SEULEMENT à partir de 900px, comme la règle de base (voir
+   @media (min-width:900px) .assoc-item plus haut dans ce fichier) : en
+   dessous, .association-col-list reste en flex-direction:COLUMN (pas row),
+   où flex-basis dimensionne la HAUTEUR de chaque tuile, pas sa largeur — un
+   flex-basis inconditionnel ici (bug trouvé en testant ce correctif à
+   800×600) forçait chaque tuile à ~160-290px de haut, 8 empilées par
+   colonne : débordement massif (#displayStage scrollait sur ~2300px). Sans
+   cette règle en dessous de 900px, .assoc-item retombe sur son
+   comportement de base (stretch naturel dans la colonne), inchangé. */
+@media (min-width: 900px) {
+  body.display-body .assoc-item { flex: 0 1 min(320px, 20vw); }
+}
+
+/* Blindtest / Recherche / Halo / Indice : mêmes conteneurs que la régie
+   desktop (voir body.is-host.game-active .container .blindtest-orb etc.
+   plus haut dans ce fichier, plafonnés à 900px/280px pour une carte MJ),
+   poussés plus loin à l'échelle TV. .blindtest-orb-bars reste scalé en
+   transform (positions des 24 barres codées en dur en JS autour du centre,
+   voir buildBlindTestOrbBars). */
+body.display-body .blindtest-orb { width: min(38vh, 420px); height: min(38vh, 420px); }
+/* Correctif (vérification tâche 042 étape A) : le ratio 2.39 (calculé à
+   l'origine comme ~420/176, un rapport qui ne correspond en fait à rien de
+   cohérent dimensionnellement) appliqué à .blindtest-orb-bars — DÉJÀ de la
+   même taille que .blindtest-orb (410px à 1920×1080, voir .blindtest-orb
+   ci-dessus) avant transform — faisait déborder les barres jusqu'à ~285px
+   au-delà du bord de l'orbe de chaque côté (scale(2.39) sur une boîte de
+   410px = 980px, soit un rayon de 490px). #displayStage (overflow-y:auto)
+   comptait ce débordement décoratif dans son scrollable overflow : mesuré
+   ~129px de scroll vertical à 1920×1080 avec ce ratio, même sans aucun
+   autre contenu en cause. Remplacé par le VRAI ratio de la régie desktop
+   (1.591, voir body.is-host.game-active .container .blindtest-orb-bars
+   plus haut) — le commentaire d'origine prétendait déjà reprendre cette
+   "recette" mais utilisait un chiffre différent. À ce ratio, le débordement
+   décoratif tombe à ~121px de chaque côté de l'orbe (410×0.591/2), largement
+   sous la marge verticale disponible autour du centre de l'orbe (mesuré
+   ~362px vers le bas, le sens le plus contraint) — plus de scroll mesuré à
+   1920×1080. Les barres restent visuellement proportionnées à l'orbe
+   agrandi (scale appliqué à une boîte déjà 2.3× plus grande que la version
+   MJ compacte, donc un rayon de barres déjà bien plus généreux en absolu
+   malgré le même ratio). */
+body.display-body .blindtest-orb-bars { transform: scale(1.591); }
+body.display-body .blindtest-orb-core { width: min(16vh, 176px); height: min(16vh, 176px); }
+body.display-body .blindtest-orb-core svg { width: clamp(26px, 5vh, 62px); height: clamp(26px, 5vh, 62px); }
+
+body.display-body .recherche-area,
+body.display-body .halo-area { max-width: min(1400px, 84vw); }
+/* height plafonnée à 50vh (correctif vérification tâche 042 étape A, 2
+   passes de mesure DOM réelle) : à 72vh/880px d'origine, le cadre
+   (positionné APRÈS badge + timer + question dans le flux, voir le reste de
+   ce bloc) dépassait le bas de #displayStage de ~147px à 1920×1080 — la
+   place réellement disponible sous le badge/timer/question (~630px sur 972
+   à cette taille) est nettement inférieure à 72vh (778px), qui ne tenait
+   compte que de la hauteur de la fenêtre, pas du reste du contenu au-dessus.
+   Une 1ère passe à 56vh a réglé 1920×1080 mais laissait encore ~25-29px de
+   débordement à 1366×768/800×600 (chrome au-dessus proportionnellement plus
+   lourd sur un écran plus court) ; 50vh comble aussi ces deux cas — mesuré
+   SANS scroll aux 3 tailles. Toujours nettement au-dessus du gabarit MJ
+   compact d'origine (280px). */
+body.display-body .recherche-wrap,
+body.display-body .halo-wrap { width: min(1400px, 84vw); height: min(50vh, 880px); }
+
+body.display-body .indice-area { max-width: min(1300px, 78vw); }
+/* 44vh (au lieu de 46vh d'origine) : correctif mineur (vérification tâche
+   042 étape A) — avec les 4 indices max (voir editor.js) affichés en même
+   temps que la carte centrale + la rangée d'historique, le total dépassait
+   #displayStage de ~16px à 1920×1080. Écart faible, mais gratuit à combler
+   ici sans perte de lisibilité perceptible (540px de plafond jamais atteint
+   à cette taille de toute façon, seul le vh compte). */
+body.display-body .indice-central,
+body.display-body .indice-central-card { height: min(44vh, 540px); }
+body.display-body .indice-central-card .indice-card-text { font-size: clamp(22px, 3vw, 46px); }
+body.display-body .indice-history-card { width: clamp(84px, 7vw, 130px); height: clamp(84px, 7vw, 130px); }
+body.display-body .indice-history-card .indice-card-text { font-size: clamp(11px, 1.1vw, 17px); }
+
+/* Type "image" (clic sur l'image) : écart #4 relevé par l'agent design/
+   responsive — #imageWrap reçoit une largeur/hauteur posées UNE FOIS en
+   PIXELS par setupImageFrame (index.js, IMAGE_FRAME_MAX_HEIGHT = 480),
+   pensées pour la carte MJ compacte, mirrorées telles quelles (taille
+   inline, jamais recalculée côté TV puisque le miroir ne réexécute aucun
+   JS — voir index.js pushDisplayMirror). !important nécessaire pour
+   surclasser ce style inline. Volontairement PAS de taille fixe en
+   clamp()/vh comme les autres blocs ci-dessus : #imageWrap doit garder
+   EXACTEMENT le ratio de l'image affichée, sinon on réintroduit le bug de
+   "lettrebox" que setupImageFrame corrige déjà côté MJ (cadre à un ratio
+   différent de l'image) — les marqueurs de réponse mirrorés
+   (#imageMarker/.image-player-marker) sont positionnés en % DU CADRE, un
+   cadre au ratio différent de l'image réelle les désalignerait visuellement
+   de la photo. auto + max-width/max-height (recette "image responsive"
+   standard) fait retrouver au cadre le ratio EXACT de l'image affichée, à
+   n'importe quelle taille de fenêtre TV, sans dépendre de la valeur figée
+   calculée côté MJ. */
+/* #imageArea (correctif vérification tâche 042 étape B, en plus du travail
+   déjà en place ci-dessous) : max-width:640px en RÈGLE DE BASE (voir plus
+   haut dans ce fichier, .image-area, pensée pour la carte MJ compacte)
+   plafonnait TOUT le sous-arbre (#imageViewport en hérite via son propre
+   width:100%, donc #imageWrap ne pouvait jamais dépasser 640px quel que
+   soit son propre width:auto — la véritable cause de l'écart #4, pas
+   seulement le style inline de #imageWrap ciblé plus bas). Sans cette
+   ligne, l'image restait plafonnée à 640px de large même après avoir
+   neutralisé le style inline de #imageWrap ci-dessous (vérifié : mesuré
+   toujours 640px de large avec une photo 1200×700 tant que ce plafond
+   n'était pas levé ici). */
+body.display-body #imageArea { max-width: min(1700px, 92vw); }
+/* max-height 76vh->44vh (correctif vérification tâche 042 étape B, 2 passes
+   de mesure DOM réelle) : le cadre est positionné APRÈS badge + timer +
+   question dans le flux (même contrainte que .recherche-wrap/.halo-wrap
+   plus haut) — à 76vh, une photo assez large pour toucher ce plafond de
+   hauteur (ex. 1200×700 réelle, testée) dépassait le bas de #displayStage
+   de ~118px à 1920×1080. Une 1ère passe à 50vh (même plafond que
+   recherche/halo) réglait 1920×1080/1366×768 mais laissait ~42px de
+   débordement à 800×600 (chrome au-dessus proportionnellement plus lourd
+   sur un écran court, même cause que le même ajustement fait plus haut pour
+   recherche/halo) ; 44vh comble aussi ce cas — mesuré SANS scroll aux 3
+   tailles. */
+body.display-body #imageViewport {
+  width: 100%;
+  max-width: min(1700px, 92vw);
+  max-height: min(44vh, 620px);
+  align-items: center;
+}
+body.display-body #imageWrap {
+  width: auto !important;
+  height: auto !important;
+  max-width: 100%;
+  max-height: min(44vh, 620px);
+}
+body.display-body #imageImg {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(44vh, 620px);
+}
+
+/* Popup de révélation — #displayPopup joue le rôle de l'overlay plein écran
+   (voir index.js : popupHtml mirrore le CONTENU de #revealPopupOverlay, pas
+   l'élément overlay lui-même, pour que la carte mirrorée garde sa classe
+   .reveal-popup-card et son style de base) ; juste agrandie ici pour occuper
+   plus d'espace à distance. */
+body.display-body #displayPopup {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5vh 5vw;
+  box-sizing: border-box;
+  background: radial-gradient(circle at 50% 38%, rgba(30, 35, 50, 0.92) 0%, rgba(6, 7, 14, 0.96) 70%);
+}
+/* Plafond/largeur relevés après vérification visuelle à 1920x1080 (retour
+   utilisateur "occuper l'espace réellement disponible" — voir le Plan) :
+   min(960px, 92vw) laissait une carte visiblement petite, perdue au milieu
+   d'un grand écran projeté malgré le fond plein écran de #displayPopup. */
+body.display-body #displayPopup .reveal-popup-card {
+  width: min(1300px, 66vw);
+  max-height: calc(100vh - 10vh);
+  padding: 5vh 5vw;
+}
+body.display-body #displayPopup .reveal-popup-badge {
+  width: clamp(60px, 6.5vw, 96px);
+  height: clamp(60px, 6.5vw, 96px);
+  font-size: clamp(30px, 3.4vw, 48px);
+}
+body.display-body #displayPopup .reveal-popup-answer-title {
+  font-size: clamp(24px, 3.6vw, 56px);
+}
+body.display-body #displayPopup .reveal-explanation {
+  font-size: clamp(17px, 2.4vw, 34px);
+}
+body.display-body #displayPopup .reveal-media-img {
+  max-height: min(52vh, 620px);
+}
+/* Bouton de fermeture manuelle (#revealPopupCloseBtn) : inerte ici (aucun
+   listener câblé côté display.js, voir ce fichier) — mirroré tel quel
+   (fidélité au contenu réel de la popup MJ) plutôt que retiré, personne
+   n'interagit normalement avec l'écran projeté de toute façon. */
+
+.display-fullscreen-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 50;
+  padding: 10px 18px;
+  font-size: 14px;
+  opacity: 0.5;
+}
+.display-fullscreen-btn:hover,
+.display-fullscreen-btn:focus-visible { opacity: 1; }
+
+@media (max-width: 640px) {
+  .display-root { padding: 4vh 4vw; }
+  /* #questionTypeBadge repassé en flux normal/centré ici (position:static,
+     voir plus haut) : la règle de base qui cache le libellé sous 640px côté
+     MJ (voir .question-type-badge-label plus haut dans ce fichier) part
+     d'un badge position:fixed qui chevauche la barre de temps, elle aussi
+     fixed, au même top — pas assez de largeur pour séparer les deux. Ce
+     chevauchement n'existe plus ici (badge sur sa propre ligne, centré,
+     largement la place pour le libellé même à 390px) : réaffiché
+     explicitement, sinon ce même bug trouvé en QA (icône seule, sans
+     contexte, aucune information perdue mais confuse) réapparaît. */
+  body.display-body .question-type-badge-label { display: inline; }
+  body.display-body #question { font-size: clamp(20px, 6vw, 30px); }
+  body.display-body .option-btn { min-height: 76px; padding: 18px 18px 18px 56px; }
+  /* Bug trouvé en QA de la tâche 040 (même piège ici, même correctif) : le
+     ::before (pastille de forme) de la règle de base juste au-dessus (non
+     scopé à un media query, donc actif à toute largeur) reste calculé en
+     vh — à cette hauteur d'écran mobile, `left:3vh; width:4vh` dépasse le
+     padding-left 56px ci-dessus (icône ~25px→59px de large, texte dès
+     56px) : l'icône et le texte se chevauchaient de quelques pixels.
+     Valeurs fixes ici, comme le reste de ce bloc mobile, pour rouvrir un
+     vrai espace avant le texte. */
+  body.display-body .option-btn::before { width: 24px; height: 24px; left: 16px; }
+  body.display-body .option-btn.truefalse-btn { min-height: 120px; }
 }

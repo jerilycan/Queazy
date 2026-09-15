@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vue TV - QuEazy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;600;700;800;900&display=swap" />
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+    <meta name="theme-color" content="#0a0a1f" />
+  </head>
+  <body class="display-body">
+    <!-- Page miroir en direct (tâche 042) : contrairement à
+         result.html/results.js (et à l'ancienne tentative rollback de la
+         tâche 040), AUCUNE connexion Socket.io ici — le contenu vient
+         uniquement de la page MJ déjà connectée (index.html/index.js), via
+         postMessage (voir display.js). Tête volontairement allégée : pas de
+         navbar/profil/confetti/pwa.js/theme.js/supabase, cette page n'a rien
+         d'autre à faire qu'afficher le miroir en plein écran. -->
+    <div id="displayRoot" class="display-root">
+      <div id="displayWaiting" class="display-waiting">En attente du MJ…</div>
+
+      <!-- Miroir DIRECT du innerHTML de #stageWrap côté MJ (voir index.js
+           pushDisplayMirror/MutationObserver) — jamais de reconstruction du
+           rendu type par type, c'est tout l'intérêt de cette approche par
+           rapport à la tâche 040 (rollback). Vide/d-none tant qu'aucun
+           message queazy-display-sync n'a été reçu. -->
+      <div id="displayStage" class="d-none"></div>
+
+      <!-- Miroir de #revealPopupOverlay côté MJ — élément séparé (PAS
+           imbriqué dans #stageWrap côté source), donc conteneur séparé ici
+           aussi. Visibilité pilotée par le champ popupVisible du message
+           (voir display.js), pas seulement par la présence de HTML dedans. -->
+      <div id="displayPopup" class="d-none"></div>
+
+      <button type="button" id="displayFullscreenBtn" class="btn display-fullscreen-btn">⛶ Plein écran</button>
+    </div>
+
+    <script src="/js/display.js" defer></script>
+  </body>
+</html>
