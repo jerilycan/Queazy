@@ -9169,6 +9169,33 @@ body.display-body {
   font-weight: 700;
   color: var(--color-text-muted);
   text-align: center;
+  /* Logo + texte empilés (tâche 041, étape 5) — display:flex ajouté ici
+     (absent avant cette étape, le texte suffisait seul) ; font-family/
+     font-size/color/text-align ci-dessus restent hérités tel quel par
+     .display-waiting-text ci-dessous, pas besoin de les y redéfinir. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3vh;
+}
+/* Logo QuEazy sur l'écran d'attente (tâche 041, étape 5, retour
+   utilisateur : "il faut le logo de QuEazy, un peu animé"). Nettement plus
+   grand que la navbar (46px, .brand-logo-svg de base) : cette page n'a pas
+   de navbar, le logo est ici le seul élément de marque, sur un écran
+   potentiellement vu à plusieurs mètres. */
+.display-waiting-logo .brand-logo-svg { height: clamp(72px, 12vh, 140px); width: auto; }
+/* Respiration continue (retour utilisateur : "un peu animé") — réutilise
+   TEL QUEL @keyframes irl-logo-breathe (définie plus haut dans ce fichier
+   pour .irl-center-logo, keyframe globale donc partagée sans dupliquer la
+   moindre étape d'animation). Toujours active, jamais au survol
+   uniquement : une TV n'a pas de curseur, contrairement à .irl-center-logo
+   (écran joueur IRL, réservé au clavier/souris d'un vrai visiteur). */
+.display-waiting-logo {
+  display: inline-flex;
+  animation: irl-logo-breathe 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .display-waiting-logo { animation: none; }
 }
 .display-content {
   width: 100%;
@@ -9176,14 +9203,84 @@ body.display-body {
   flex-direction: column;
   align-items: center;
   min-height: 0; /* laisse .options-grid se réduire plutôt que déborder (flex enfant) */
+  /* Retour utilisateur (tâche 041, étape 2 — "le titre est trop proche des
+     éléments de réponse") : illustration/prompt/tuiles n'avaient ICI aucun
+     espacement propre — .question-text/.options-grid ont leurs marges
+     explicitement à 0 (voir plus bas), en s'appuyant à tort sur le `gap`
+     de .display-root, qui ne s'applique qu'à SES enfants directs
+     (.display-waiting/.display-content), jamais à ceux DE .display-content.
+     `gap` sur le conteneur flex réel plutôt que redonner des marges
+     individuelles : évite un espacement qui se cumule différemment selon
+     qu'une illustration est présente ou non. */
+  gap: 3vh;
 }
 /* Image d'illustration : plus grande que sur l'écran de jeu MJ (.illustration-img
    de base, pensée pour cohabiter avec timer/tuiles dans une carte compacte)
-   — ici elle a tout l'écran pour elle, en vh/vw pour suivre la résolution. */
+   — ici elle a tout l'écran pour elle, en vh/vw pour suivre la résolution.
+   Plus de margin-bottom ici (retour utilisateur, tâche 041 étape 2) : le
+   `gap` de .display-content ci-dessus fait déjà ce travail pour TOUT
+   .display-content (avec ou sans illustration) — une marge en plus aurait
+   doublé l'espacement après l'illustration précisément (elle seule) par
+   rapport aux autres espacements de cette page, plutôt qu'un rythme
+   régulier partout. */
 .display-root .illustration-img {
   max-height: 32vh;
   max-width: 80vw;
+}
+/* "zoomguess" uniquement (tâche 041, étape 1 — bug corrigé : l'image
+   complète non dézoomée était visible dès l'apparition de la question,
+   alors que côté MJ elle démarre volontairement très zoomée puis se
+   dézoome pendant le minuteur). Boîte de taille FIXE + overflow:hidden
+   nécessaire pour que le scale() posé par display.js reste "recadré" au
+   lieu de déborder — même principe que .illustration-img-wrap.is-zoomed
+   côté MJ (voir plus haut dans ce fichier), mais classe propre à cette
+   page (display-zoom-box, posée/retirée par display.js selon le type de
+   question) plutôt que réutiliser .is-zoomed telle quelle : le gabarit MJ
+   (carte de régie compacte, largeur fixe 640px) ne correspond pas au
+   budget de cette page plein écran (32vh/80vw, comme l'illustration
+   classique juste au-dessus) — éviter toute collision de spécificité entre
+   les deux plutôt que les faire cohabiter sur le même sélecteur global.
+   Ratio 640/420 repris tel quel (même cadrage qu'à l'édition, voir
+   ZOOMGUESS_CROP_ASPECT dans editor.js) : seule la TAILLE change, pas la
+   forme du cadre. */
+.display-root .illustration-img-wrap.display-zoom-box {
+  position: relative;
+  height: 32vh;
+  max-width: 80vw;
+  aspect-ratio: 640 / 420;
   margin-bottom: 3vh;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+/* Couche qui porte le scale()/transform-origin du dézoom (posés par
+   display.js, recalculés ~10x/seconde comme côté MJ) — jamais l'image
+   directement, pour ne pas entrer en conflit avec l'animation d'apparition
+   (tileRevealIn, étape 3 de cette tâche) qui anime elle aussi "transform"
+   sur ses propres éléments. Une petite transition adoucit les pas entre
+   deux mises à jour plutôt qu'un changement de valeur brutal (même recette
+   que côté MJ). */
+.display-root .illustration-img-wrap.display-zoom-box .illustration-zoom-layer {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.12s linear;
+}
+/* Pas de recadrage STATIQUE reproduit ici (applyCropTransform/imagePos,
+   voir index.js) — simplification volontaire, même choix déjà fait pour
+   les tuiles Intrus de la tâche 040 ("pas d'anneau de sélection ni de
+   cadrage avancé, juste la photo affichée pleine tuile") : object-fit:cover
+   recentre automatiquement l'image dans la boîte, sans respecter le cadrage
+   précis choisi à l'édition. Prend toute la boîte (width/height:100%,
+   jamais les max-width/max-height de la règle de base ci-dessus, qui ne
+   s'applique qu'à l'image NON zoomée). */
+.display-root .illustration-img-wrap.display-zoom-box .illustration-img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  object-fit: cover;
+  display: block;
 }
 /* Lisible à plusieurs mètres : gros texte, qui suit quand même la largeur
    d'écran (clamp) plutôt qu'une taille fixe — un mobile en test n'affiche
@@ -9229,6 +9326,84 @@ body.display-body {
 }
 .display-root .option-btn.intrus-tile {
   min-height: 0; /* garde le ratio 4/3 de .intrus-tile — pas le plancher de .option-btn ci-dessus, pensé pour du texte */
+}
+
+/* Classement entre les questions (tâche 041, étape 6, retour utilisateur)
+   — revient sur l'exclusion initiale de la tâche 040. Affiché en plein
+   centre, masque le contenu de la question pendant qu'il est visible (voir
+   display.js, toggle réciproque avec #displayContent). Rang/nom/score
+   seulement — pas de "c'est moi" (n'a pas de sens sur un écran partagé),
+   pas d'animation de gain de points (voir animateScoreGain côté MJ) :
+   simplification volontaire, même esprit que les autres reprises
+   simplifiées de cette page (Intrus, zoomguess). */
+.display-leaderboard {
+  width: 100%;
+  max-width: 900px;
+  max-height: 85vh;
+  overflow-y: auto; /* filet de sécurité pour une très grande salle — jamais de débordement visible, même si la liste tient normalement sans scroll */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3vh;
+}
+.display-leaderboard-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: clamp(28px, 4vw, 56px);
+  color: var(--color-text);
+}
+.display-leaderboard-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2vh;
+}
+.display-leaderboard-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+  padding: 1.6vh 2vw;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-card);
+  border: 1px solid var(--color-border);
+  box-sizing: border-box;
+}
+/* Même principe que .leader-rank côté MJ (badge rond, doré/argenté/bronze
+   pour le podium) — juste agrandi pour rester lisible à distance. */
+.display-leaderboard-rank {
+  width: clamp(32px, 4vh, 56px);
+  height: clamp(32px, 4vh, 56px);
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--tile-blue);
+  color: white;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(16px, 2vh, 26px);
+}
+.display-leaderboard-row:nth-child(1) .display-leaderboard-rank { background: var(--tile-gold); color: #3a2e00; }
+.display-leaderboard-row:nth-child(2) .display-leaderboard-rank { background: var(--tile-silver); color: #2a2e36; }
+.display-leaderboard-row:nth-child(3) .display-leaderboard-rank { background: var(--tile-bronze); }
+.display-leaderboard-name {
+  flex: 1;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  font-size: clamp(18px, 2.2vw, 32px);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.display-leaderboard-score {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: clamp(18px, 2.2vw, 32px);
+  color: var(--color-accent);
+  flex-shrink: 0;
 }
 
 .display-fullscreen-btn {
