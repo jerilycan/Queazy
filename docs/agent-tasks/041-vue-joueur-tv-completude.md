@@ -554,6 +554,4 @@ noté en Contexte) :
   limite déjà actée en tâche 040, pas remise en cause ici.
 
 ## Statut
-`en review` — les 7 étapes du plan sont terminées et vérifiées
-(individuellement puis en un parcours combiné de bout en bout). En attente
-de validation utilisateur avant commit/push.
+`clôturée` — mergée dans `main` via PR #12 (commit de merge `8926de5`).
