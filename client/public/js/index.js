@@ -4079,60 +4079,6 @@ if (selectQuizBtn) {
   selectQuizBtn.onclick = showQuizSelectPopup
 }
 
-// Tâche 040 : ouvre la vue Joueur dédiée (display.html/display.js, page
-// séparée — voir ces fichiers) dans une fenêtre à part, pour brancher une
-// TV/vidéoprojecteur en 2e écran pendant une partie "Présenter" IRL. Nom de
-// fenêtre FIXE ('queazy-display', pas un nom généré) : un clic répété
-// réutilise la même fenêtre (window.open la retrouve par son nom et la
-// navigue vers l'URL à jour) plutôt que d'en ouvrir une nouvelle à chaque
-// fois.
-const openDisplayBtn = document.getElementById('openDisplayBtn')
-if (openDisplayBtn) {
-  openDisplayBtn.onclick = () => {
-    const code = roomInput.value.trim()
-    if (!code) return
-    const url = `/display.html?room=${encodeURIComponent(code)}`
-    // window.open() DOIT rester synchrone ici, dans le geste utilisateur : un
-    // navigateur qui attend une réponse de getScreenDetails() (juste en
-    // dessous) AVANT d'ouvrir bloque silencieusement l'ouverture une fois le
-    // geste expiré (constaté en test — aucune erreur, la fenêtre n'apparaît
-    // simplement jamais). Donc on ouvre d'abord, normalement ; la détection
-    // d'écran secondaire ci-dessous ne fait que REPOSITIONNER cette fenêtre
-    // déjà ouverte, en tâche de fond, jamais sur le chemin critique de
-    // l'ouverture elle-même.
-    const displayWin = window.open(url, 'queazy-display')
-
-    // Détection best-effort de l'écran secondaire : window.getScreenDetails
-    // (API Window Management) n'existe que sur Chrome/Edge récents ET
-    // nécessite une permission utilisateur — sur tout autre navigateur (ou
-    // permission refusée/jamais tranchée), la fenêtre reste simplement là où
-    // le navigateur l'a ouverte (le MJ la déplace à la main). Pas
-    // d'architecture construite autour de cette API expérimentale, comme
-    // demandé — c'est un bonus.
-    if (displayWin && window.getScreenDetails) {
-      // Course contre un court timeout : une invite de permission jamais
-      // tranchée par l'utilisateur laisse cette promesse en attente
-      // indéfiniment (constaté en test) — sans ce filet, rien ne casse
-      // (la fenêtre reste ouverte normalement), mais autant se détacher
-      // proprement plutôt que de laisser une promesse pendre pour de bon.
-      Promise.race([
-        window.getScreenDetails(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
-      ]).then(details => {
-        const secondary = details.screens.find(s => !s.isPrimary)
-        if (secondary) {
-          displayWin.moveTo(secondary.left, secondary.top)
-          displayWin.resizeTo(secondary.width, secondary.height)
-        }
-      }).catch(() => {
-        // Permission refusée/jamais tranchée (timeout ci-dessus), fenêtre
-        // fermée entre-temps, ou API qui échoue en pratique — la fenêtre
-        // reste où le navigateur l'a ouverte, rien de plus à faire ici.
-      })
-    }
-  }
-}
-
 if (cancelQuizSelect) {
   cancelQuizSelect.onclick = hideQuizSelectPopup
 }
