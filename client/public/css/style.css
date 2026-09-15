@@ -9241,7 +9241,31 @@ body.display-body {
   align-items: center;
   justify-content: center;
 }
+/* Écran d'attente (tâche 043, étape 4) : logo QuEazy dupliqué tel quel
+   (même convention que login/editor/profile/select/result, voir index.html
+   ~L225-232 pour l'explication de cette duplication) + sous-texte, affiché
+   tant qu'aucune question n'a encore été montrée (voir display.js, la classe
+   d-none n'est posée qu'à réception d'un contenu de question réel). Remplace
+   l'ancien texte seul ("En attente du MJ…") — retour utilisateur, plus
+   accueillant au lancement du mode présentation. */
 .display-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4vh;
+}
+.display-waiting-logo {
+  width: min(560px, 46vw);
+}
+/* Écrase la hauteur fixe (46px) de la règle de base .brand-logo-svg — cette
+   instance n'est jamais dans la navbar, elle doit occuper toute la largeur
+   de .display-waiting-logo ci-dessus, pas rester minuscule à l'échelle TV. */
+.display-waiting-logo .brand-logo-svg {
+  width: 100%;
+  height: auto;
+}
+.display-waiting-text {
+  margin: 0;
   font-family: 'Baloo 2', sans-serif;
   font-size: clamp(22px, 3.4vw, 38px);
   font-weight: 700;
@@ -9647,6 +9671,48 @@ body.display-body #imageImg {
   height: auto;
   max-width: 100%;
   max-height: min(44vh, 620px);
+}
+
+/* Intro par question (tâche 043, étape 1) — #displayIntro mirrore le CONTENU
+   de #questionIntroOverlay (pas l'élément overlay lui-même, voir index.js
+   pushDisplayMirror), donc joue lui-même le rôle de l'overlay plein écran +
+   fond assombri/flouté (habillage repris de .question-intro-overlay côté MJ,
+   voir plus haut dans ce fichier) ; le contenu réel (#questionIntroCard)
+   garde sa classe .question-intro-card et réutilise TEL QUEL son CSS de
+   base (--qt-color/--qt-color-rgb posées par showQuestionIntro sur
+   questionIntroOverlay.style, héritées par ses enfants mirrorés) — juste
+   agrandi ci-dessous pour rester lisible à l'échelle TV, même logique que
+   #displayPopup un peu plus bas. */
+body.display-body #displayIntro {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(5, 5, 15, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+body.display-body #displayIntro .question-intro-card {
+  padding: 5vh 5vw;
+  max-width: min(1100px, 82vw);
+}
+body.display-body #displayIntro .question-intro-icon {
+  width: clamp(64px, 7vw, 110px);
+  height: clamp(64px, 7vw, 110px);
+  font-size: clamp(30px, 3.6vw, 54px);
+}
+body.display-body #displayIntro .question-intro-title {
+  font-size: clamp(24px, 3.6vw, 52px);
+}
+body.display-body #displayIntro .question-intro-hint {
+  font-size: clamp(16px, 1.8vw, 26px);
+  max-width: min(700px, 60vw);
+}
+body.display-body #displayIntro .question-intro-countdown {
+  font-size: clamp(40px, 6vw, 90px);
 }
 
 /* Popup de révélation — #displayPopup joue le rôle de l'overlay plein écran
