@@ -72,6 +72,27 @@ window.addEventListener('beforeunload', (e) => {
 // fiable : 'pagehide' se déclenche systématiquement au départ de la page.
 window.addEventListener('pagehide', () => { isNavigatingAway = true })
 
+// Salon quitté volontairement (retour utilisateur : "impossible de quitter
+// un quiz en cours, ça me ramène de force dedans") — root cause : l'URL de
+// la partie garde son ?room=CODE pour toujours (jamais nettoyée, voir plus
+// bas), et socket.on('connect') rejoint AUTOMATIQUEMENT ce salon à chaque
+// (re)connexion tant que preRoom + un profil enregistré existent (pratique
+// pour un joueur régulier qui rouvre le même lien/QR) — donc un simple
+// rechargement de page, retour arrière, ou nouveau scan du MÊME lien juste
+// après avoir cliqué "Quitter" ré-embarquait silencieusement, sans la
+// moindre confirmation, même en pleine partie. sessionStorage (pas
+// localStorage) : ne doit bloquer le réflexe QUE pour cet onglet/cette
+// session, pas coller au salon pour toujours sur cet appareil — un nouveau
+// scan du même QR dans un tout nouvel onglet reste un choix normal.
+const markRoomLeftVoluntarily = (roomCode) => {
+  if (!roomCode) return
+  try { sessionStorage.setItem('queazy_left_room', roomCode.toUpperCase()) } catch {}
+}
+const wasRoomLeftVoluntarily = (roomCode) => {
+  if (!roomCode) return false
+  try { return sessionStorage.getItem('queazy_left_room') === roomCode.toUpperCase() } catch { return false }
+}
+
 // Clic sur un lien de la page (navbar : logo, Créer, Rejoindre, Mes Quiz...)
 // EN PLEINE QUESTION : on peut l'intercepter à temps et proposer notre
 // propre popup, cohérente avec le reste de l'identité QuEazy, plutôt que la
@@ -91,6 +112,7 @@ document.addEventListener('click', (e) => {
     danger: true
   }).then((ok) => {
     if (!ok) return
+    markRoomLeftVoluntarily(myJoinedRoomCode)
     inActiveGame = false
     allowNavigation = true
     window.location.href = a.href
@@ -5385,7 +5407,11 @@ socket.on('connect', () => {
     // personnalisation comme d'habitude (le code salle reste pré-rempli,
     // voir plus haut).
     const savedName = localStorage.getItem('queazy_profile_name')
-    if (savedName) {
+    // wasRoomLeftVoluntarily : voir sa définition tout en haut du fichier —
+    // n'empêche QUE de se ré-embarquer dans CE salon précis juste après
+    // l'avoir quitté volontairement (retour utilisateur, bug bloquant) ;
+    // rejoindre un AUTRE salon avec le même profil enregistré reste inchangé.
+    if (savedName && !wasRoomLeftVoluntarily(preRoom)) {
       const av = selectedIcon || localStorage.getItem('queazy_profile_avatar') || AVATAR_CHOICES[0]
       rememberJoin(preRoom.toUpperCase(), savedName, av, getToken())
       socket.emit('room:join', { roomCode: preRoom.toUpperCase(), playerName: savedName, token: getToken(), avatar: av })
@@ -5553,7 +5579,7 @@ if (irlLeaveBtn) {
   irlLeaveBtn.onclick = () => {
     irlMenuDropdown.classList.remove('is-open')
     irlMenuBtn.setAttribute('aria-expanded', 'false')
-    const proceed = () => { inActiveGame = false; allowNavigation = true; window.location.href = '/' }
+    const proceed = () => { markRoomLeftVoluntarily(myJoinedRoomCode); inActiveGame = false; allowNavigation = true; window.location.href = '/' }
     // Même popup de confirmation que le clic sur un lien de navbar en pleine
     // partie (voir tout en haut du fichier) — pas de confirmation nécessaire
     // hors partie active (salon d'attente, classement...), quitter n'y coûte
