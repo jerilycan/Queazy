@@ -1279,6 +1279,16 @@ const start = async () => {
         // "Présenter"). Émis avant lobby:list, comme pour un vrai joueur.
         socket.emit('room:mode', { mode: room.mode || 'present' })
         socket.emit('lobby:list', buildPlayerList(room))
+        // Rattrapage de la tuile d'annonce de question (tâche 041, étape 4) —
+        // même bloc que la branche joueur réel plus bas (room.pendingTuto),
+        // manquait jusqu'ici pour un spectateur : sans ça, une vue TV qui
+        // (re)charge display.html PENDANT l'intro d'une question restait sur
+        // l'écran d'attente jusqu'à la question suivante, alors que le joueur
+        // réel la recevait déjà correctement. startTs repassé tel quel
+        // (horodatage absolu), comme pour sendJoinCatchup ci-dessous.
+        if (room.pendingTuto) {
+          socket.emit('tuto:show', { type: room.pendingTuto.type, durationMs: room.pendingTuto.durationMs, startTs: room.pendingTuto.startTs })
+        }
         sendJoinCatchup(room, socket)
         return
       }
