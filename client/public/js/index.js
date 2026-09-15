@@ -4079,6 +4079,161 @@ if (selectQuizBtn) {
   selectQuizBtn.onclick = showQuizSelectPopup
 }
 
+// Tâche 042 : ouvre la vue TV dédiée (display.html/display.js, page séparée
+// SANS Socket.io — voir ces fichiers) dans une fenêtre à part, pour brancher
+// une TV/vidéoprojecteur en 2e écran pendant une partie "Présenter" IRL.
+// Reprend la mécanique déjà testée en tâche 040 (rollback, voir
+// git show 6fe72b4:client/public/js/index.js) : nom de fenêtre FIXE
+// ('queazy-display', pas généré) pour qu'un clic répété réutilise la même
+// fenêtre plutôt que d'en ouvrir une nouvelle à chaque fois. `displayWin`
+// est aussi la référence utilisée par pushDisplayMirror (protocole de
+// synchronisation, voir plus bas dans ce fichier).
+const openDisplayBtn = document.getElementById('openDisplayBtn')
+let displayWin = null
+if (openDisplayBtn) {
+  openDisplayBtn.onclick = () => {
+    const roomCode = roomInput.value.trim()
+    if (!roomCode) return
+    const url = `/display.html?room=${encodeURIComponent(roomCode)}`
+    // window.open() DOIT rester synchrone ici, dans le geste utilisateur : un
+    // navigateur qui attend une réponse de getScreenDetails() (juste en
+    // dessous) AVANT d'ouvrir bloque silencieusement l'ouverture une fois le
+    // geste expiré (bug réel trouvé et corrigé en tâche 040 — aucune erreur,
+    // la fenêtre n'apparaît simplement jamais). Donc on ouvre d'abord,
+    // normalement ; la détection d'écran secondaire ci-dessous ne fait que
+    // REPOSITIONNER cette fenêtre déjà ouverte, en tâche de fond, jamais sur
+    // le chemin critique de l'ouverture elle-même.
+    displayWin = window.open(url, 'queazy-display')
+    // Repousse l'état courant tout de suite : couvre le cas où cette fenêtre
+    // EXISTAIT déjà et est réutilisée (nom 'queazy-display' réutilisé par
+    // window.open ci-dessus) — notamment si le MJ recharge SA PROPRE page en
+    // pleine question (son #stageWrap se repeuple via le rattrapage existant
+    // AVANT ce clic, voir room:join reconnect) puis reclique "Mode
+    // présentation" pour retrouver une référence à sa fenêtre TV, restée
+    // ouverte entre-temps. Sans effet si la fenêtre vient tout juste de
+    // s'ouvrir (document pas encore chargé, message perdu) — display.js
+    // rattrape ce cas via sa propre poignée de main 'queazy-display-ready'
+    // à son chargement, voir plus bas dans ce fichier.
+    pushDisplayMirror()
+
+    // Détection best-effort de l'écran secondaire : window.getScreenDetails
+    // (API Window Management) n'existe que sur Chrome/Edge récents ET
+    // nécessite une permission utilisateur — sur tout autre navigateur (ou
+    // permission refusée/jamais tranchée), la fenêtre reste simplement là où
+    // le navigateur l'a ouverte (le MJ la déplace à la main). Pas
+    // d'architecture construite autour de cette API expérimentale, juste un
+    // bonus.
+    if (displayWin && window.getScreenDetails) {
+      // Course contre un court timeout : une invite de permission jamais
+      // tranchée par l'utilisateur laisse cette promesse en attente
+      // indéfiniment (constaté en tâche 040) — sans ce filet, rien ne casse
+      // (la fenêtre reste ouverte normalement), mais autant se détacher
+      // proprement plutôt que de laisser une promesse pendre pour de bon.
+      Promise.race([
+        window.getScreenDetails(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500))
+      ]).then(details => {
+        const secondary = details.screens.find(s => !s.isPrimary)
+        if (secondary) {
+          displayWin.moveTo(secondary.left, secondary.top)
+          displayWin.resizeTo(secondary.width, secondary.height)
+        }
+      }).catch(() => {
+        // Permission refusée/jamais tranchée (timeout ci-dessus), fenêtre
+        // fermée entre-temps, ou API qui échoue en pratique — la fenêtre
+        // reste où le navigateur l'a ouverte, rien de plus à faire ici.
+      })
+    }
+  }
+}
+
+// Tâche 042 : protocole de synchronisation MJ -> TV (le cœur du mécanisme de
+// miroir). Contrairement à la tâche 040 (rollback — root cause du bug : une
+// logique de rendu par type de question DUPLIQUÉE dans display.js, jamais
+// garantie synchronisée avec le rendu réel), on pousse ici directement le
+// HTML déjà rendu côté MJ (#stageWrap) vers la fenêtre TV : aucune logique de
+// rendu séparée, donc aucune possibilité de divergence par construction.
+const stageWrapEl = document.getElementById('stageWrap')
+
+// Retire tout <audio> d'un clone avant de le poster à la fenêtre TV — filet
+// de sécurité EXPLICITE (décision utilisateur : le son reste uniquement sur
+// le poste du MJ, pas de sortie audio TV pour éviter un écho si les deux
+// appareils sont dans la même pièce) plutôt que de compter sur l'absence
+// actuelle d'<audio> dans #stageWrap/#revealPopupCard : le seul connu
+// aujourd'hui (#revealAudioPlayer) vit dans #revealPopupCard, mais un futur
+// type de question pourrait en ajouter un ailleurs dans ce sous-arbre.
+const stripAudioForDisplay = (html) => {
+  const tmp = document.createElement('div')
+  tmp.innerHTML = html
+  tmp.querySelectorAll('audio').forEach(a => a.remove())
+  return tmp.innerHTML
+}
+
+// pushDisplayMirror : poste l'état courant à la fenêtre TV si elle est
+// ouverte. location.origin explicite (jamais '*') — display.html est servi
+// par le même serveur Fastify qu'index.html, les deux pages sont same-origin
+// par construction, pas de raison de relâcher cette vérification.
+const pushDisplayMirror = () => {
+  if (!displayWin || displayWin.closed) return
+  displayWin.postMessage({
+    type: 'queazy-display-sync',
+    stageHtml: stageWrapEl ? stripAudioForDisplay(stageWrapEl.innerHTML) : '',
+    // Le contenu MIROITÉ, ici, est celui de #revealPopupOverlay (pas
+    // seulement #revealPopupCard) : conserve la structure carte/overlay
+    // d'origine (voir index.html) pour que #revealPopupCard garde sa classe
+    // .reveal-popup-card côté TV et réutilise TEL QUEL son CSS existant
+    // (taille/centrage de carte) — #displayPopup côté display.html ne fait
+    // que jouer le rôle du fond plein écran (voir style.css, bloc
+    // body.display-body).
+    popupHtml: revealPopupOverlay ? stripAudioForDisplay(revealPopupOverlay.innerHTML) : '',
+    popupVisible: !!(revealPopupOverlay && !revealPopupOverlay.classList.contains('d-none'))
+  }, location.origin)
+}
+
+// Batché en requestAnimationFrame : coalesce les mutations rapprochées (ex.
+// le minuteur, mis à jour 10x/s — voir timerContainer/setInterval plus bas
+// dans ce fichier) en un seul postMessage par frame peinte, plutôt qu'un par
+// mutation DOM individuelle.
+let displayMirrorRafId = null
+const scheduleDisplayMirrorPush = () => {
+  if (displayMirrorRafId !== null) return
+  displayMirrorRafId = requestAnimationFrame(() => {
+    displayMirrorRafId = null
+    pushDisplayMirror()
+  })
+}
+
+// MutationObserver générique sur #stageWrap plutôt qu'instrumenter chaque
+// site qui touche ce contenu (minuteur, question:show, tuiles qui se
+// révèlent...) — trop de points d'entrée, garantie de fidélité plus faible
+// qu'un observer générique. Trade-off documenté (voir le Plan de la tâche) :
+// coûte un peu plus cher qu'un hook ciblé, mais élimine la classe de bug qui
+// a fait échouer la tâche 040 (logique de rendu dupliquée qui diverge) —
+// accepté comme bon compromis vu l'historique.
+if (stageWrapEl) {
+  new MutationObserver(scheduleDisplayMirrorPush)
+    .observe(stageWrapEl, { childList: true, subtree: true, attributes: true, characterData: true })
+}
+// #revealPopupOverlay est un élément SÉPARÉ, PAS imbriqué dans #stageWrap
+// (voir index.html) — observer dédié, même mécanique.
+if (revealPopupOverlay) {
+  new MutationObserver(scheduleDisplayMirrorPush)
+    .observe(revealPopupOverlay, { childList: true, subtree: true, attributes: true, characterData: true })
+}
+
+// Rattrapage d'état : une fenêtre TV ouverte APRÈS le début d'une question,
+// ou rechargée par l'utilisateur, n'a manqué aucune mutation depuis son
+// ouverture/rechargement — display.js signale qu'il est prêt
+// ('queazy-display-ready') dès son chargement (voir display.js), on lui
+// repousse alors l'état courant immédiatement plutôt que d'attendre la
+// prochaine mutation (qui peut ne jamais arriver si la question est déjà
+// figée en révélation).
+window.addEventListener('message', (event) => {
+  if (event.origin !== location.origin) return
+  if (event.source !== displayWin) return
+  if (event.data?.type === 'queazy-display-ready') pushDisplayMirror()
+})
+
 if (cancelQuizSelect) {
   cancelQuizSelect.onclick = hideQuizSelectPopup
 }
@@ -4458,6 +4613,16 @@ let roomMode = 'present'
 // ce calcul plutôt que de répéter `isHost && roomMode !== 'auto'` à chaque
 // endroit concerné.
 const isPresenterHost = () => isHost && roomMode !== 'auto'
+// Tâche 042 : le bouton "Mode présentation" (#openDisplayBtn) n'a de sens
+// qu'en "Présenter" IRL avec MJ dédié — même exclusion que la vue TV
+// elle-même (mode "à distance"/remote et mode "Jouer"/auto en sont hors
+// périmètre, voir le Plan de la tâche). Centralisé ici et rappelé à chaque
+// changement possible de l'un des deux facteurs (roomMode via applyRoomMode,
+// gameMode via socket.on('game:mode'), isHost via lobby:list) — même
+// mécanique que updateIrlPlayerUI plus bas dans ce fichier.
+const updateDisplayButtonVisibility = () => {
+  if (openDisplayBtn) openDisplayBtn.classList.toggle('d-none', !(isPresenterHost() && gameMode === 'irl'))
+}
 const hostAutoPanel = document.getElementById('hostAutoPanel')
 const autoCategoryList = document.getElementById('autoCategoryList')
 const autoTypeList = document.getElementById('autoTypeList')
@@ -4704,6 +4869,7 @@ const applyRoomMode = (mode, autoConfig) => {
       hostAutoPanel.style.display = 'none'
     }
   }
+  updateDisplayButtonVisibility() // roomMode vient de changer, voir tâche 042
 }
 
 // Debounce (tâche 021) : évite une rafale de room:setAutoConfig sur une
@@ -5486,6 +5652,7 @@ socket.on('game:mode', ({ mode }) => {
   gameMode = mode === 'remote' ? 'remote' : 'irl'
   if (gameModeRemoteToggle) gameModeRemoteToggle.checked = gameMode === 'remote'
   updateIrlPlayerUI()
+  updateDisplayButtonVisibility() // gameMode vient de changer, voir tâche 042
   // Pastille "Ambiance" du panneau hôte régie (voir index.html) — même
   // donnée que ci-dessus, juste un 2e affichage.
   const ambianceValueEl = document.getElementById('hostAmbianceValue')
@@ -5712,6 +5879,7 @@ const renderLobbyGrid = (arr) => {
     // contraire (retour utilisateur : "un de mes joueurs avait les
     // contrôles du maître du jeu").
     if (isMe) isHost = !!p.isHost
+    updateDisplayButtonVisibility() // isHost vient potentiellement de changer, voir tâche 042
     // Bascule le panneau hôte en barre latérale gauche sur grand écran (voir
     // CSS body.is-host #hostPanel) — retour utilisateur : au centre, ce
     // panneau gênait une présentation IRL projetée, la place centrale doit
