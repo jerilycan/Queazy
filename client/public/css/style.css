@@ -2133,6 +2133,42 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 .option-btn.intrus-tile.selected {
   box-shadow: var(--shadow-md);
 }
+/* Option texte "intrus" (tâche 045) : alternative à une option photo dans la
+   même grille, jamais les deux à la fois — garde .intrus-tile pour le
+   dimensionnement par rangée (--intrus-row-cols, voir la règle @media juste
+   au-dessus) mais réactive le look ".option-btn" texte standard (fond
+   coloré tournant, icône ::before, padding) que .intrus-tile désactive par
+   défaut pour laisser toute la place à une photo. Spécificité (3 classes)
+   suffisante pour l'emporter sur .option-btn.intrus-tile ci-dessus sans
+   avoir à le retoucher. */
+.option-btn.intrus-tile.intrus-tile-text {
+  padding: var(--space-md) var(--space-md) var(--space-md) 56px;
+  overflow: visible;
+  aspect-ratio: auto;
+  display: flex;
+  align-items: center;
+  background: var(--tile-red);
+}
+.option-btn.intrus-tile.intrus-tile-text::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  background: rgba(255,255,255,0.9);
+}
+/* Même rotation de couleurs/formes que .option-btn:nth-child(8n+N) plus haut
+   dans ce fichier (mcq) — une option texte "intrus" doit rester lisible
+   comme n'importe quelle tuile texte, pas juste un gris neutre. */
+.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+2) { background: var(--tile-blue); }
+.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+3) { background: var(--tile-yellow); color: #3a2e00; }
+.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+4) { background: var(--tile-green); }
+.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+5) { background: var(--tile-purple); }
+.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+6) { background: var(--tile-cyan); color: #053b44; }
+.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+7) { background: var(--tile-orange); }
+.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+8) { background: var(--tile-pink); }
 .intrus-tile-img {
   position: absolute;
   top: 0;
@@ -2145,6 +2181,14 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   position: absolute;
   inset: 0;
   z-index: 2;
+  /* Bug remonté en test réel ("les encarts sélectionnés sont rectangle
+     alors que les formes sont arrondies") : border-radius n'est pas une
+     propriété héritée — sans cette ligne, cet anneau (élément DOM séparé,
+     voir le commentaire au-dessus sur .option-btn.intrus-tile.selected)
+     retombait sur des coins droits par défaut, alors que .option-btn (voir
+     plus haut, var(--radius-lg)) — et donc la tuile qu'il entoure — a des
+     coins arrondis. inherit reprend la même valeur sans la dupliquer. */
+  border-radius: inherit;
   outline: 4px solid var(--color-accent);
   outline-offset: -4px;
   box-shadow: 0 0 0 4px var(--color-accent-soft);
@@ -6988,11 +7032,23 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 
 /* Ligne d'édition "indice" (tâche 014) — même base .option-row, mais avec
    une vignette cliquable (mode image, remplace CET indice) OU un champ
-   texte (mode texte), suivis d'un petit champ délai en secondes. Pas de
-   glisser-déposer ici (contrairement à "ordre"/"intrus") : l'ordre
-   d'apparition est entièrement dérivé du délai, voir editor.js
-   renderIndiceHints. */
-.indice-edit-row { flex-wrap: wrap; }
+   texte (mode texte), suivis d'un petit champ délai en secondes. Glisser-
+   déposer disponible (tâche 044, wireIndiceEditDrag) : déplace le CONTENU
+   d'un indice, les délais déjà utilisés sont réassignés dans le nouvel
+   ordre — l'ordre d'apparition en jeu reste entièrement dérivé du délai,
+   voir editor.js renderIndiceHints. */
+.indice-edit-row { flex-wrap: wrap; position: relative; cursor: grab; touch-action: none; }
+.indice-edit-row.dragging { z-index: 10; box-shadow: var(--shadow-lg); cursor: grabbing; }
+.indice-edit-row input[type="text"],
+.indice-edit-row input[type="number"] { cursor: text; touch-action: auto; }
+.indice-edit-row button { cursor: pointer; touch-action: auto; }
+.indice-edit-row .q-drag-handle {
+  opacity: 0.4;
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+}
+.indice-edit-row:hover .q-drag-handle { opacity: 0.8; }
 .indice-thumb {
   width: 48px;
   height: 48px;
@@ -9261,7 +9317,12 @@ body.display-body {
   height: 100vh;
   overflow: hidden; /* jamais de scrollbar sur un écran projeté */
   display: flex;
-  background: var(--color-bg-deep);
+  /* Retour utilisateur : un simple aplat (--color-bg-deep) ne "ressemble
+     pas à QuEazy" sur un grand écran — repris le dégradé radial de marque
+     déjà utilisé partout ailleurs dans l'appli (voir la règle `body`
+     générique tout en haut de ce fichier), plutôt qu'un fond plat propre à
+     cette seule page. */
+  background: radial-gradient(2200px 1300px at 50% -10%, #3a1450 0%, #200a38 42%, var(--color-bg) 78%, var(--color-bg-deep) 100%);
 }
 .display-root {
   position: relative;
@@ -9318,30 +9379,89 @@ body.display-body {
      qu'elle déborde (#displayStage scrolle, voir overflow-y ci-dessous). */
   justify-content: safe center;
   overflow-y: auto;
+  /* Réserve la place du bandeau badge+minuteur, désormais position:fixed
+     (voir body.display-body #questionTypeBadge/#timerContainer plus bas) —
+     sans ce padding, le contenu centré ci-dessous pourrait passer SOUS ce
+     bandeau flottant sur une question courte. */
+  padding-top: 9vh;
 }
-/* #questionTypeBadge/#timerContainer : position:fixed/sticky + top:96px dans
-   leurs règles de base (voir plus haut dans ce fichier) pensées pour laisser
-   la place à la navbar MJ — absente ici. Repassés en flux normal, en haut de
-   #displayStage, plutôt que de dupliquer leur logique de rendu ailleurs. */
+/* Retour utilisateur ("la barre de timer va s'affiner pour ressembler à
+   celle qu'on a côté MJ, mettre le type de question sur la même ligne que
+   la timebar, allouer plus de place à Énoncé + Propositions") — reprend le
+   PRINCIPE déjà utilisé côté régie MJ desktop (voir body.is-host.game-active
+   .container #questionTypeBadge/#timerContainer plus haut dans ce fichier) :
+   badge ET minuteur sortis du flux normal (position:fixed), pas juste
+   repositionnés l'un sous l'autre — épinglés au MÊME top offset, badge à
+   gauche, minuteur centré, exactement comme côté MJ (position:fixed +
+   position:sticky au même top:96px, adaptés ici à une page sans navbar).
+   Conséquence recherchée : #timerContainer ne réserve plus DU TOUT de place
+   dans le flux de #main — #questionCategoryBadge/#question/#inputArea qui
+   suivent remontent d'autant, libérant de la hauteur pour Énoncé +
+   Propositions (bug remonté en test réel : tuiles "intrus" tronquées faute
+   de place). #displayStage récupère un padding-top (voir plus bas) pour que
+   le contenu centré ne passe jamais SOUS ce bandeau fixe. */
 body.display-body #questionTypeBadge {
-  position: static;
-  align-self: center;
-  margin-bottom: 2vh;
-  font-size: clamp(14px, 1.6vw, 22px);
-  padding: 7px 20px 7px 7px;
+  position: fixed;
+  top: 3vh;
+  left: 3vw;
+  margin-bottom: 0;
+  font-size: clamp(13px, 1.3vw, 18px);
+  padding: 6px 16px 6px 6px;
   cursor: default;
+  z-index: 1600; /* même palier que #displayIntro/#displayPopup, voir plus haut */
 }
 body.display-body #questionTypeBadge:hover { transform: none; box-shadow: var(--shadow-md); }
-body.display-body #questionTypeBadgeIcon { width: clamp(26px, 2.2vw, 38px); height: clamp(26px, 2.2vw, 38px); font-size: clamp(15px, 1.6vw, 22px); }
+body.display-body #questionTypeBadgeIcon { width: clamp(22px, 1.8vw, 30px); height: clamp(22px, 1.8vw, 30px); font-size: clamp(13px, 1.3vw, 18px); }
 
 body.display-body #timerContainer {
-  position: static;
-  width: min(1300px, 92%);
+  position: fixed;
+  /* Bug remonté en test réel ("pas aligné avec le type de question") :
+     même top:3vh que le badge ne les aligne PAS visuellement — le badge est
+     une pastille bien plus haute (padding+icône, ~38px) que la barre fine
+     ci-dessous (8px), donc un top commun cale leurs bords HAUTS, pas leurs
+     centres. calc(3vh + 19px) cible le centre vertical approximatif du
+     badge (~38px de haut / 2) plutôt que son bord — combiné à
+     translateY(-50%), la barre (quelle que soit sa propre hauteur) se
+     centre exactement sur cette ligne, au lieu de caler son propre bord
+     haut dessus. */
+  top: calc(3vh + 19px);
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1100px, 70vw);
   max-width: none;
-  margin: 0 0 3vh;
+  margin: 0;
+  z-index: 1600;
+  /* Même sobriété que côté MJ régie (retour utilisateur : "enlève le noir
+     autour") — la carte pleine (fond/ombre/padding, voir .timer-container
+     de base) avait du sens en overlay flottant sur du contenu qui défile ;
+     ici, posée sur le fond uni de la TV, elle n'apporte plus rien. */
+  background: none;
+  box-shadow: none;
+  padding: 0;
 }
-body.display-body #timerContainer .timer-bar-wrapper { height: clamp(26px, 4.5vh, 54px); }
-body.display-body #timerContainer .timer-label { font-size: clamp(18px, 2.6vw, 34px); }
+/* Barre affinée (8px, MÊME valeur que côté régie MJ desktop — voir
+   body.is-host.game-active .container #timerContainer .timer-bar-wrapper
+   plus haut dans ce fichier) : le chiffre ne peut plus tenir DEDANS à cette
+   épaisseur, sorti à côté (left:100%) exactement comme cette même règle MJ
+   — seule la mise en page change, jamais le contenu (#timerBar/#timerLabel
+   restent les mêmes éléments, voir index.js). */
+body.display-body #timerContainer .timer-bar-wrapper {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  overflow: visible;
+  box-shadow: none;
+}
+body.display-body #timerContainer .timer-bar-fill { border-radius: 999px; }
+body.display-body #timerContainer .timer-label {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  right: auto;
+  transform: translateY(-50%);
+  margin-left: 14px;
+  font-size: clamp(14px, 1.4vw, 22px);
+}
 
 body.display-body #main {
   width: 100%;
@@ -9352,8 +9472,22 @@ body.display-body #main {
      cet inline style est capturé tel quel par le miroir et bat n'importe
      quelle règle de feuille de style externe, donc sans !important #main
      redevenait un simple bloc côté TV (plus de centrage flex du tout,
-     minuteur/question alignés à gauche par défaut). */
+     minuteur/question alignés à gauche par défaut).
+     :not(.d-none) — RÉGRESSION corrigée (nouveau retour utilisateur, écran
+     d'attente pas centré) : .d-none pose LUI AUSSI display:none en
+     !important, mais avec une spécificité plus faible (une classe) que
+     cette règle-ci (classe + id) — cette règle gagnait donc aussi contre
+     .d-none, gardant #main visible (vide) tant qu'aucune question n'a
+     démarré (#main porte encore son d-none par défaut, voir index.html) et
+     poussant/écrasant le centrage de l'écran d'attente (#displayWaiting).
+     :not(.d-none) restaure la priorité normale de .d-none tant que #main
+     est censé rester cette caché. */
   display: flex !important;
+}
+body.display-body #main.d-none {
+  display: none !important;
+}
+body.display-body #main:not(.d-none) {
   flex-direction: column;
   align-items: center;
   min-height: 0; /* laisse .options-grid se réduire plutôt que déborder (flex enfant) */
@@ -9444,17 +9578,79 @@ body.display-body .option-btn.truefalse-btn::before {
   width: 7vh;
   height: 7vh;
 }
+/* Retour utilisateur ("les tuiles doivent toutes passer dans la taille de
+   l'écran, pas de troncage ni de scrollbar, les images doivent se réduire
+   si nécessaire") : un plafond fixe en vh (22vh, valeur précédente) ne
+   tenait compte que d'une rangée à la fois — jusqu'à 4 rangées peuvent
+   s'empiler (8 photos = motif [2,2,2,2], voir INTRUS_ROW_PATTERNS côté
+   index.js) et 4x22vh dépasse largement la hauteur dispo à lui seul, avant
+   même badge/minuteur/question au-dessus. --intrus-rows (posé par index.js
+   sur le conteneur #inputArea, hérité par chaque tuile) divise un budget
+   fixe (62vh — badge/minuteur sont désormais position:fixed, ils ne
+   réservent plus de place dans le flux, voir #questionTypeBadge/
+   #timerContainer plus haut : il reste donc bien plus de hauteur qu'avant
+   pour Énoncé + Propositions, retour utilisateur explicite là-dessus)
+   par le nombre RÉEL de
+   rangées, MOINS l'espace pris par les (rangées-1) espacements ENTRE les
+   rangées (var(--space-md), le gap de la grille — bug remonté en test réel :
+   un premier budget de 56vh sans cette soustraction débordait de tout
+   juste un gap, l'écart mesuré correspondait exactement à --space-md). La
+   hauteur totale des tuiles reste donc constante quel que soit le nombre
+   de photos, chaque tuile se réduisant d'autant plus qu'il y a de rangées,
+   plutôt que de compter sur #displayStage (overflow-y:auto, voir plus
+   haut) pour scroller.
+   UNIQUEMENT un PLAFOND (max-height), jamais une valeur forcée (pas de
+   min-height correspondant) : retour utilisateur, la vue TV devait garder
+   la MÊME variation naturelle de hauteur par rangée que les vues MJ/joueur
+   (aspect-ratio:4/3, rangées à 2 tuiles plus hautes que les rangées à 3 —
+   voir .option-btn.intrus-tile plus haut dans ce fichier), pas une hauteur
+   uniforme forcée sur toutes les rangées quel que soit leur nombre de
+   colonnes. align-items:stretch (par défaut sur la grille flex) aligne déjà
+   chaque tuile TEXTE sur la hauteur naturelle de sa voisine PHOTO dans la
+   même rangée — ce plafond ne sert qu'à empêcher qu'une rangée déborde
+   quand il y en a beaucoup (voir .intrus-tile-text juste en dessous pour le
+   plancher, séparé, qui couvre seulement le cas d'une rangée 100% texte). */
 body.display-body .option-btn.intrus-tile {
   min-height: 0; /* garde le ratio de .intrus-tile — pas le plancher de .option-btn ci-dessus, pensé pour du texte */
-  /* Écart #3 relevé par l'agent design/responsive (tâche 042 étape 9) :
-     aspect-ratio:4/3 (règle de base, voir .option-btn.intrus-tile plus haut
-     dans ce fichier) dérive toujours la hauteur depuis la largeur de
-     colonne — avec 3 rangées de tuiles larges (5-8 photos, plage autorisée
-     par l'éditeur), le total dépassait la hauteur dispo et #displayStage
-     devait scroller (vérifié avec 7-8 photos). Plafond en vh : aspect-ratio
-     reste la valeur PRÉFÉRÉE (tuiles proches du carré tant que la place le
-     permet), mais ne peut plus jamais pousser 3 rangées hors de l'écran. */
-  max-height: 22vh;
+  /* !important nécessaire (bug remonté en test réel sur un vrai écran TV,
+     pas reproduit dans le bac à sable qui n'avait testé que des tuiles
+     texte) : .options-grid.intrus-grid .option-btn.intrus-tile côté base
+     (4 classes, voir plus haut dans ce fichier) bat cette règle-ci (3
+     classes + body) sur la SEULE spécificité malgré le sélecteur plus
+     "spécifique en apparence" — son propre max-height (min(320px,36vh),
+     pensé pour la carte MJ) gagnait donc toujours pour une tuile PHOTO,
+     jamais rééchelonné par rangée, d'où le débordement observé (2e rangée
+     coupée en bas d'écran) alors que les tuiles TEXTE (déjà en !important,
+     voir .intrus-tile-text plus bas) étaient bien correctes. */
+  max-height: calc((62vh - (var(--intrus-rows, 2) - 1) * var(--space-md)) / var(--intrus-rows, 2)) !important;
+}
+/* Option texte "intrus" (tâche 045) — bug remonté en test réel ("les textes
+   ne sont pas adaptés... texte microscopique") : .intrus-tile-text côté
+   base (3 classes) bat le padding/police générique de .option-btn côté TV
+   ci-dessus (2 classes + body) sur la SEULE spécificité — le padding
+   restait donc à l'échelle carte MJ (20px/56px fixes) alors que la grille
+   étire la tuile à la hauteur des photos voisines (align-items:stretch
+   implicite de la grille), laissant un texte minuscule perdu dans un grand
+   bloc coloré vide. Reprend ICI, avec une spécificité suffisante pour
+   gagner (mêmes 3 classes + `body`). max-height posé au MÊME plafond que
+   .intrus-tile ci-dessus (jamais plus qu'une tuile photo voisine, même
+   raison anti-débordement) — mais min-height reste un simple plancher de
+   lisibilité (8vh, pas la valeur du plafond) : retour utilisateur, forcer
+   min=max ici uniformisait la hauteur de TOUTES les rangées, écrasant la
+   variation naturelle par rangée que les vues MJ/joueur gardent (voir le
+   commentaire sur .intrus-tile ci-dessus). Ce plancher ne sert donc qu'au
+   cas d'une rangée 100% texte (aucune tuile photo voisine dont
+   align-items:stretch pourrait reprendre la hauteur naturelle). */
+body.display-body .option-btn.intrus-tile.intrus-tile-text {
+  min-height: 8vh !important;
+  max-height: calc((62vh - (var(--intrus-rows, 2) - 1) * var(--space-md)) / var(--intrus-rows, 2)) !important;
+  font-size: clamp(15px, 2.6vw, 40px) !important;
+  padding: 1.6vh 1.6vh 1.6vh 6.5vh !important;
+}
+body.display-body .option-btn.intrus-tile.intrus-tile-text::before {
+  width: 3.2vh !important;
+  height: 3.2vh !important;
+  left: 2.4vh !important;
 }
 
 /* ------------------------------------------------------------------------
@@ -9785,6 +9981,28 @@ body.display-body #displayPopup {
   box-sizing: border-box;
   background: radial-gradient(circle at 50% 38%, rgba(30, 35, 50, 0.92) 0%, rgba(6, 7, 14, 0.96) 70%);
 }
+
+/* Animations de validation (retour utilisateur : "doivent aussi apparaître
+   côté présentation") — #displayReactionLayer/#displayModerationFeed, voir
+   display.html pour le choix d'un canal léger plutôt qu'un mirroring HTML.
+   .reaction-layer (classe réutilisée telle quelle sur #displayReactionLayer,
+   voir display.html) est déjà position:fixed/inset:0 par sa règle de base
+   — rien à ajouter ici, .floating-answer aussi déjà scopé indépendamment du
+   type de question. #displayModerationFeed en revanche vit normalement
+   DANS .moderation-wait-card côté MJ (mise en page contextuelle) — ici,
+   sans cette carte, positionné en overlay fixe dans un coin, à l'échelle TV. */
+body.display-body #displayModerationFeed {
+  position: fixed;
+  top: 4vh;
+  right: 4vw;
+  z-index: 1700; /* au-dessus de #displayIntro/#displayPopup (1600) : une validation reste visible même pendant l'intro/le popup suivants */
+  max-width: min(420px, 32vw);
+  max-height: 60vh;
+}
+body.display-body #displayModerationFeed .moderation-feed-line {
+  font-size: clamp(14px, 1.3vw, 20px);
+  padding: 8px 14px;
+}
 /* Plafond/largeur relevés après vérification visuelle à 1920x1080 (retour
    utilisateur "occuper l'espace réellement disponible" — voir le Plan) :
    min(960px, 92vw) laissait une carte visiblement petite, perdue au milieu
@@ -9812,6 +10030,49 @@ body.display-body #displayPopup .reveal-media-img {
    listener câblé côté display.js, voir ce fichier) — mirroré tel quel
    (fidélité au contenu réel de la popup MJ) plutôt que retiré, personne
    n'interagit normalement avec l'écran projeté de toute façon. */
+
+/* Classement entre deux questions (retour utilisateur : "le classement
+   n'est pas affiché lors des inter question sur la partie présentation") —
+   #displayLeaderboard mirrore le CONTENU de #leaderOverlay (pas l'élément
+   overlay lui-même, voir index.js : leaderHtml), donc la carte/liste
+   mirrorée garde ses classes .leader-title/.leaderboard-list/.leader-row et
+   leur style de base ; repositionné/agrandi ici comme #displayIntro et
+   #displayPopup juste au-dessus (même tier z-index:1600 — jamais affiché en
+   même temps que l'un ou l'autre, une question à la fois). */
+body.display-body #displayLeaderboard {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow-y: auto;
+  padding: 6vh 4vw 4vh;
+  box-sizing: border-box;
+  background: radial-gradient(2200px 1300px at 50% -10%, #3a1450 0%, #200a38 42%, var(--color-bg) 78%, var(--color-bg-deep) 100%);
+}
+body.display-body #displayLeaderboard .leader-title {
+  font-size: clamp(28px, 4vw, 56px);
+  margin-bottom: 4vh;
+}
+body.display-body #displayLeaderboard .leaderboard-list {
+  max-width: min(1000px, 70vw);
+  gap: 1.4vh;
+}
+body.display-body #displayLeaderboard .leader-row {
+  font-size: clamp(16px, 1.8vw, 28px);
+  padding: 1.4vh 2vw;
+}
+/* #leaderNextBtn ("Question suivante"/"Résultat") est un contrôle hôte,
+   jamais mirroré comme actionnable côté TV (voir le périmètre de la
+   tâche 042 : classement, bouton "Suivant", contrôles hôte restent
+   UNIQUEMENT sur la page MJ) — masqué plutôt que retiré du HTML mirroré,
+   pour rester cohérent avec le choix déjà fait sur #revealPopupCloseBtn
+   juste au-dessus (fidélité au contenu, inertie assumée par le CSS). */
+body.display-body #displayLeaderboard #leaderNextBtn {
+  display: none;
+}
 
 .display-fullscreen-btn {
   position: fixed;

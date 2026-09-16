@@ -185,6 +185,29 @@
            (voir display.js), pas seulement par la présence de HTML dedans. -->
       <div id="displayPopup" class="d-none"></div>
 
+      <!-- Miroir de #leaderOverlay côté MJ (classement affiché entre deux
+           questions) — élément séparé côté source (voir index.html), même
+           pattern que #displayPopup ci-dessus. Visibilité pilotée par le
+           champ leaderVisible du message (voir display.js). -->
+      <div id="displayLeaderboard" class="d-none"></div>
+
+      <!-- Animations de validation (retour utilisateur : "doivent aussi
+           apparaître côté présentation") — #reactionLayer/#moderationFeed
+           côté MJ sont des éléments SÉPARÉS de #stageWrap (jamais mirorrés
+           par le canal structurel ci-dessus). Contrairement à
+           displayStage/displayPopup/displayIntro, PAS de mirroring HTML —
+           ces deux zones changent à chaque animation/décision, un mirror
+           complet retomberait dans le même piège que le minuteur avant la
+           tâche 043 (reconstruction totale à chaque évènement, cette
+           fois-ci de TOUT #displayStage puisque pushDisplayMirror envoie un
+           seul message combiné). Canal léger dédié à la place (voir
+           display.js, queazy-display-floating-answer/
+           queazy-display-moderation-feed-line) : chaque animation/ligne est
+           recréée localement ici avec les mêmes classes CSS déjà partagées
+           (style.css), jamais reconstruite depuis du HTML cloné. -->
+      <div id="displayReactionLayer" class="reaction-layer"></div>
+      <div id="displayModerationFeed" class="moderation-feed d-none"></div>
+
       <button type="button" id="displayFullscreenBtn" class="btn display-fullscreen-btn">⛶ Plein écran</button>
     </div>
 
