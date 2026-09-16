@@ -87,6 +87,18 @@ window.addEventListener('pagehide', () => { isNavigatingAway = true })
 const markRoomLeftVoluntarily = (roomCode) => {
   if (!roomCode) return
   try { sessionStorage.setItem('queazy_left_room', roomCode.toUpperCase()) } catch {}
+  // Bug remonté en test réel ("j'arrive sur le menu, et je suis directement
+  // redirigé dans le salon que je viens de quitter") : ce fix couvrait bien
+  // la branche preRoom (voir wasRoomLeftVoluntarily plus bas), mais PAS la
+  // branche lastJoin de socket.on('connect') — un rechargement COMPLET de
+  // page (ex. window.location.href='/' après un clic "Quitter") retombe sur
+  // QUEAZY_LAST_JOIN_KEY (sessionStorage, voir rememberJoin/readLastJoin
+  // plus bas), jamais nettoyé par une navigation volontaire, ni gardé par
+  // aucun wasRoomLeftVoluntarily (cette branche est testée AVANT preRoom
+  // dans socket.on('connect')). forgetJoin() ici, au moment même où on
+  // marque un départ volontaire, coupe la source plutôt que d'ajouter une
+  // 2e garde symétrique à la branche lastJoin.
+  forgetJoin()
 }
 const wasRoomLeftVoluntarily = (roomCode) => {
   if (!roomCode) return false
@@ -760,6 +772,18 @@ const questionIntroHint = document.getElementById('questionIntroHint')
 const questionIntroCountdown = document.getElementById('questionIntroCountdown')
 let questionIntroTimerId = null
 let questionIntroExitTimerId = null
+// Tâche 043, étape 4 : latch "une question a déjà été montrée au moins une
+// fois" — sert UNIQUEMENT à décider quand masquer l'écran d'attente côté TV
+// (voir pushDisplayMirror plus bas dans ce fichier). Ni stageHtml (toujours
+// non-vide dès le chargement de la page : #stageWrap contient du balisage
+// caché en d-none, pas seulement pendant une vraie question) ni introVisible
+// (redevient false dès que l'intro se termine, donc inexploitable pour le
+// rattrapage d'état d'une fenêtre TV ouverte/rechargée EN COURS de question,
+// après la fin de l'intro) ne suffisaient comme signal fiable — ce booléen,
+// lui, ne redevient jamais false une fois vrai (sauf relance d'un nouveau
+// quiz dans la même salle, voir "Lancer le quiz" plus bas, même remise à
+// zéro que seenQuestionTypesThisGame juste en dessous).
+let anyQuestionShown = false
 const hideQuestionIntro = () => {
   if (questionIntroTimerId) { clearInterval(questionIntroTimerId); questionIntroTimerId = null }
   if (questionIntroExitTimerId) { clearTimeout(questionIntroExitTimerId); questionIntroExitTimerId = null }
@@ -794,11 +818,19 @@ const showQuestionIntro = (type, durationMs, startTs) => {
   // — voir INTRO_COUNTDOWN_MS plus haut).
   const tick = () => {
     const remaining = (startTs + durationMs) - syncedNow()
-    if (questionIntroCountdown) {
-      questionIntroCountdown.textContent = (remaining > 0 && remaining <= INTRO_COUNTDOWN_MS)
-        ? String(Math.ceil(remaining / 1000))
-        : ''
-    }
+    const text = (remaining > 0 && remaining <= INTRO_COUNTDOWN_MS)
+      ? String(Math.ceil(remaining / 1000))
+      : ''
+    if (questionIntroCountdown) questionIntroCountdown.textContent = text
+    // Tâche 043 (bug remonté en test réel, "saut d'image" sur l'intro) :
+    // avant ce correctif, ce setInterval(200ms) faisait comme n'importe
+    // quelle autre mutation de #questionIntroOverlay — reconstruction
+    // complète côté TV à CHAQUE tick (voir handleIntroMutations plus bas),
+    // rejouant l'animation d'entrée de la carte en boucle pendant toute la
+    // phase de décompte. Même fix que le minuteur principal (pushDisplayTick,
+    // étape 2) : canal léger dédié, la carte/icône/titre ne sont plus jamais
+    // reconstruits pour ce simple changement de chiffre.
+    pushDisplayIntroTick(text)
   }
   tick()
   questionIntroTimerId = setInterval(tick, 200)
@@ -827,6 +859,7 @@ socket.on('tuto:show', ({ type, durationMs, startTs }) => {
   enterGameScreen()
   updateQuestionTypeBadge(type)
   showQuestionIntro(type, durationMs, startTs)
+  anyQuestionShown = true // tâche 043, étape 4 — voir la déclaration plus haut
 })
 socket.on('tuto:done', () => {
   hideQuestionIntro()
@@ -843,6 +876,7 @@ socket.on('tuto:done', () => {
 const emitQuestionShow = (payload) => {
   const meta = QUESTION_TYPE_META[payload.type]
   if (!meta || !questionIntroOverlay) {
+    anyQuestionShown = true // tâche 043, étape 4 — voir la déclaration plus haut (filet de sécurité : pas d'intro pour ce type, donc pas de passage par tuto:show)
     socket.emit('question:show', payload)
     return Promise.resolve(true)
   }
@@ -4178,6 +4212,14 @@ const pushDisplayMirror = () => {
   displayWin.postMessage({
     type: 'queazy-display-sync',
     stageHtml: stageWrapEl ? stripAudioForDisplay(stageWrapEl.innerHTML) : '',
+    // Tâche 043, étape 1 : miroir de #questionIntroOverlay (décompte + type
+    // de question avant chaque question) — même principe que popupHtml plus
+    // bas, élément SÉPARÉ, PAS imbriqué dans #stageWrap (voir index.html).
+    // Jamais affiché EN MÊME TEMPS que le popup de révélation (l'un précède
+    // la question, l'autre la suit), mais on transmet les deux indépendamment
+    // plutôt que de supposer cette exclusivité côté display.js.
+    introHtml: questionIntroOverlay ? stripAudioForDisplay(questionIntroOverlay.innerHTML) : '',
+    introVisible: !!(questionIntroOverlay && !questionIntroOverlay.classList.contains('d-none')),
     // Le contenu MIROITÉ, ici, est celui de #revealPopupOverlay (pas
     // seulement #revealPopupCard) : conserve la structure carte/overlay
     // d'origine (voir index.html) pour que #revealPopupCard garde sa classe
@@ -4186,8 +4228,37 @@ const pushDisplayMirror = () => {
     // que jouer le rôle du fond plein écran (voir style.css, bloc
     // body.display-body).
     popupHtml: revealPopupOverlay ? stripAudioForDisplay(revealPopupOverlay.innerHTML) : '',
-    popupVisible: !!(revealPopupOverlay && !revealPopupOverlay.classList.contains('d-none'))
+    popupVisible: !!(revealPopupOverlay && !revealPopupOverlay.classList.contains('d-none')),
+    // Tâche 043, étape 4 : voir la déclaration d'anyQuestionShown plus haut —
+    // seul signal fiable pour que display.js sache quand masquer l'écran
+    // d'attente (ni stageHtml ni introVisible ne suffisent, voir ce
+    // commentaire pour le détail).
+    gameStarted: anyQuestionShown
   }, location.origin)
+}
+
+// Tâche 043, étape 2 : canal léger dédié au minuteur/zoom, posté directement
+// depuis le MÊME setInterval qui pilote déjà le minuteur côté MJ (voir plus
+// bas dans ce fichier, timerInt) — aucun nouvel intervalle créé. Distinct de
+// pushDisplayMirror (canal "structurel", HTML complet) : ces valeurs bougent
+// 10x/s, les pousser directement évite de reconstruire tout #displayStage à
+// chaque tick (root cause du clignotement/minuteur saccadé, voir le Plan de
+// la tâche 043). Même garde que pushDisplayMirror.
+const pushDisplayTick = (pct, label, urgent, zoomScale) => {
+  if (!displayWin || displayWin.closed) return
+  displayWin.postMessage({ type: 'queazy-display-tick', pct, label, urgent, zoomScale: zoomScale ?? null }, location.origin)
+}
+
+// Tâche 043 (bug remonté en test réel) : même principe que pushDisplayTick
+// ci-dessus, mais pour le décompte de l'intro par question (#questionIntroCountdown,
+// tick() dans showQuestionIntro) — sans ce canal dédié, chaque changement de
+// chiffre (200ms) déclenchait une reconstruction complète de la carte
+// d'intro côté TV, rejouant son animation d'entrée en boucle ("saut
+// d'image"). Voir handleIntroMutations plus bas, qui ignore désormais ces
+// mutations pour la reconstruction complète.
+const pushDisplayIntroTick = (text) => {
+  if (!displayWin || displayWin.closed) return
+  displayWin.postMessage({ type: 'queazy-display-intro-tick', text }, location.origin)
 }
 
 // Batché en requestAnimationFrame : coalesce les mutations rapprochées (ex.
@@ -4203,6 +4274,26 @@ const scheduleDisplayMirrorPush = () => {
   })
 }
 
+// Tâche 043, étape 3 : filtrage anti-clignotement — timerBarFill/timerLabel/
+// illustrationZoomLayer sont désormais couverts par le canal léger dédié
+// (pushDisplayTick, voir plus haut), posté 10x/s directement depuis le
+// setInterval du minuteur. Un batch de MutationRecords qui ne touche QUE ces
+// éléments (ou un de leurs descendants, ex. le nœud texte interne de
+// #timerLabel quand son textContent change) ne justifie donc plus une
+// reconstruction complète côté TV (scheduleDisplayMirrorPush) — c'est le
+// cœur du fix (root cause documentée dans le Plan de la tâche 043 : jusqu'à
+// 10-60 reconstructions/s pendant toute la durée d'une question, qui cassait
+// aussi bien le rendu que les transitions CSS de la barre de temps).
+const isVolatileMutationTarget = (node) => (
+  (timerBarFill && timerBarFill.contains(node)) ||
+  (timerLabel && timerLabel.contains(node)) ||
+  (illustrationZoomLayer && illustrationZoomLayer.contains(node))
+)
+const handleStageMutations = (mutations) => {
+  const hasRealMutation = mutations.some(m => !isVolatileMutationTarget(m.target))
+  if (!hasRealMutation) return
+  scheduleDisplayMirrorPush()
+}
 // MutationObserver générique sur #stageWrap plutôt qu'instrumenter chaque
 // site qui touche ce contenu (minuteur, question:show, tuiles qui se
 // révèlent...) — trop de points d'entrée, garantie de fidélité plus faible
@@ -4211,14 +4302,32 @@ const scheduleDisplayMirrorPush = () => {
 // a fait échouer la tâche 040 (logique de rendu dupliquée qui diverge) —
 // accepté comme bon compromis vu l'historique.
 if (stageWrapEl) {
-  new MutationObserver(scheduleDisplayMirrorPush)
+  new MutationObserver(handleStageMutations)
     .observe(stageWrapEl, { childList: true, subtree: true, attributes: true, characterData: true })
 }
 // #revealPopupOverlay est un élément SÉPARÉ, PAS imbriqué dans #stageWrap
-// (voir index.html) — observer dédié, même mécanique.
+// (voir index.html) — observer dédié, même mécanique. Pas de filtrage
+// volatil ici : rien de ce sous-arbre n'est couvert par le canal léger.
 if (revealPopupOverlay) {
   new MutationObserver(scheduleDisplayMirrorPush)
     .observe(revealPopupOverlay, { childList: true, subtree: true, attributes: true, characterData: true })
+}
+// #questionIntroOverlay (tâche 043, étape 1) : élément SÉPARÉ lui aussi, PAS
+// imbriqué dans #stageWrap (voir index.html) — même mécanique, MAIS avec le
+// même filtrage anti-clignotement que #stageWrap (voir isVolatileMutationTarget
+// plus haut) : #questionIntroCountdown change toutes les 200ms pendant le
+// décompte (voir tick() dans showQuestionIntro) et est désormais couvert par
+// son propre canal léger (pushDisplayIntroTick) — bug remonté en test réel
+// ("saut d'image" sur l'icône/carte d'intro), même root cause que le
+// minuteur principal avant l'étape 3.
+const handleIntroMutations = (mutations) => {
+  const hasRealMutation = mutations.some(m => !(questionIntroCountdown && questionIntroCountdown.contains(m.target)))
+  if (!hasRealMutation) return
+  scheduleDisplayMirrorPush()
+}
+if (questionIntroOverlay) {
+  new MutationObserver(handleIntroMutations)
+    .observe(questionIntroOverlay, { childList: true, subtree: true, attributes: true, characterData: true })
 }
 
 // Rattrapage d'état : une fenêtre TV ouverte APRÈS le début d'une question,
@@ -6861,6 +6970,10 @@ const launchQuiz = async () => {
   // relance un nouveau quiz dans la même salle sans recharger la page
   // hériterait à tort des types vus lors de la partie précédente.
   seenQuestionTypesThisGame.clear()
+  // Même remise à zéro pour anyQuestionShown (tâche 043, étape 4) : l'écran
+  // d'attente de la vue TV doit pouvoir réapparaître si l'hôte relance un
+  // nouveau quiz dans la même salle sans recharger la page.
+  anyQuestionShown = false
 
   // Hide setup buttons
   startQuizBtn.classList.add('d-none')
@@ -7467,10 +7580,18 @@ socket.on('question:show', payload => {
         timerBarFill.classList.remove('timer-urgent')
       }
       if (timerLabel) timerLabel.textContent = '···'
+      // Tâche 043, étape 2 : même canal léger pendant cette phase — sans ça,
+      // la TV garderait affichée la dernière valeur du tick précédent au lieu
+      // de repasser barre pleine/"···" comme côté MJ.
+      pushDisplayTick(100, '···', false, null)
       return
     }
     const remaining = Math.max(0, total - (now - start))
     const pct = (remaining / total) * 100
+    // Rempli par le bloc zoomguess ci-dessous si currentIllustrationZoom est
+    // actif — transmis tel quel au canal léger (voir pushDisplayTick plus
+    // bas), null sinon (aucun zoom à appliquer côté TV ce tick-ci).
+    let zoomScale = null
 
     // Dézoom progressif de l'illustration (voir "Zoomer progressivement sur
     // un détail", editor.js) : même tick que la barre de temps ci-dessous,
@@ -7483,6 +7604,7 @@ socket.on('question:show', payload => {
       const progress = zoomDuration > 0 ? Math.min(1, (now - start) / zoomDuration) : 1
       const scale = currentIllustrationZoom.startScale + (1 - currentIllustrationZoom.startScale) * progress
       illustrationZoomLayer.style.transform = `scale(${scale})`
+      zoomScale = scale
     }
 
     // Apparition progressive des indices (type "indice", tâche 014) — voir
@@ -7504,6 +7626,10 @@ socket.on('question:show', payload => {
     if (timerLabel) {
       timerLabel.textContent = Math.ceil(remaining / 1000)
     }
+
+    // Tâche 043, étape 2 : canal léger — mêmes valeurs que celles qu'on vient
+    // d'appliquer localement ci-dessus, poussées telles quelles à la TV.
+    pushDisplayTick(pct, String(Math.ceil(remaining / 1000)), pct <= 20, zoomScale)
 
     // Tic-tac dans les 5 dernières secondes, une fois par seconde entamée
     const secondsLeft = Math.ceil(remaining / 1000)
@@ -8043,12 +8169,20 @@ pbacGroupBar.appendChild(pbacGroupBtn)
 // #moderationZone plus haut) — dans une ligne de grille IMPLICITE en régie
 // desktop, sans placement explicite ni marge de la grille (grid-row "auto"
 // n°2, déjà occupée par #moderationZone) : poussée hors de la zone visible
-// de .container (hauteur fixe, calc(100vh - 170px)), inatteignable. Rendue
-// enfant de moderationZone (déjà la SEULE cellule de grille correcte pour
-// tout ce qui concerne la modération, voir son propre commentaire) au lieu
-// de .container directement — sa ligne de grille "auto" s'agrandit pour
-// accueillir tout son contenu, bandeau compris.
-moderationZone.appendChild(pbacGroupBar)
+// de .container (hauteur fixe, calc(100vh - 170px)), inatteignable.
+//
+// RÉGRESSION corrigée (nouveau retour utilisateur, "le bouton n'est pas sur
+// la modal") : ce correctif date d'avant le passage de la modération en
+// popup modale (voir le commentaire sur moderationModalSlot un peu plus
+// haut) — moderationDiv/moderationEyeBar ont depuis déménagé dans
+// #moderationModalOverlay, mais cette barre était restée dans
+// #moderationZone, qui n'affiche plus désormais que le petit bouton
+// compact d'OUVERTURE de la modale (voir moderationOpenBtn) — jamais la
+// modale elle-même. Bouton "Valider la famille" donc bien présent dans le
+// DOM mais invisible tant que la modale reste fermée, inatteignable une
+// fois ouverte (pas dedans). Suit maintenant moderationDiv dans le même
+// conteneur (moderationModalSlot), juste après la liste des réponses.
+if (moderationModalSlot) moderationModalSlot.appendChild(pbacGroupBar)
 
 // Rafraîchit le libellé/l'état du bandeau à partir des cases actuellement
 // cochées — appelée à chaque coche/décoche ainsi qu'après tout ajout/retrait
@@ -8849,6 +8983,23 @@ socket.on('timer:end', (payload) => {
   // (voir server/index.js emitProgress) ; appel systématique, sans effet
   // si aucun son facultatif n'était en cours.
   stopBonusAudio()
+  // "halo" (retour utilisateur) : le MJ doit pouvoir juger les réponses en
+  // connaissance de cause AVANT de faire avancer la partie — jusqu'ici,
+  // l'image restait cachée derrière le calque noir jusqu'à question:reveal
+  // (déclenché par le MJ lui-même), qui la révèle à TOUT LE MONDE en même
+  // temps. Le MJ ne pouvait donc jamais voir l'image tant qu'il n'avait pas
+  // déjà validé/fait avancer la partie — impossible de juger quoi que ce
+  // soit avec. Retire le calque ICI, à timer:end (fin du chrono normal OU
+  // anticipée dès que tout le monde a répondu, comme le reste de ce
+  // handler), mais SEULEMENT côté MJ (isPresenterHost — même garde que le
+  // reste de ce handler) : les joueurs continuent de découvrir l'image au
+  // moment officiel de question:reveal, inchangé (chaque client est
+  // indépendant, ce déblocage ne touche que le propre écran du MJ). Simple
+  // classList.add('d-none') idempotent — question:reveal la repose sans
+  // effet si déjà posée.
+  if (currentQuestionType === 'halo' && isPresenterHost() && haloOverlay) {
+    haloOverlay.classList.add('d-none')
+  }
   // Tâche 024 : verrouillage de révélation appliqué à l'hôte aussi en mode
   // "Jouer" (il répond comme un joueur) — réservé au mode "Présenter" avant.
   if (!isPresenterHost()) {

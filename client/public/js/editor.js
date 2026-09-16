@@ -342,14 +342,14 @@ const intrusPhotosUploadInput = document.getElementById('intrusPhotosUpload')
 const INTRUS_MIN_OPTIONS = 3
 const INTRUS_MAX_OPTIONS = 8
 
-// Question "indice" (tâche 014) : 1 à 4 indices (texte OU image chacun,
+// Question "indice" (tâche 014) : 1 à 6 indices (texte OU image chacun,
 // jamais les deux à la fois) qui apparaissent progressivement pendant la
 // question, chacun à un délai (en secondes depuis le début) configurable
 // individuellement. Constantes + validation seulement ici — le DOM de la
 // section (#indiceSection) et son rendu arrivent aux étapes suivantes du
 // plan, `editor.html` ne le porte pas encore à ce stade.
 const INDICE_MIN_HINTS = 1
-const INDICE_MAX_HINTS = 4
+const INDICE_MAX_HINTS = 6
 
 // Valide le tableau `hints` d'une question "indice" au moment de la
 // sauvegarde (même esprit que les vérifs INTRUS_MIN/MAX_OPTIONS plus bas) :
@@ -741,7 +741,16 @@ const createDefaultQuestion = () => ({
   prompt: '',
   options: [],
   correct: [''],
-  timerMs: 15000
+  timerMs: 15000,
+  // Bug remonté par un utilisateur : ajouter plusieurs questions vides pour
+  // structurer un quiz (avant de les remplir une à une) rendait TOUT le quiz
+  // impossible à sauvegarder — validateQuestion boucle sur TOUTES les
+  // questions, pas seulement celle en cours d'édition, donc une question
+  // fraîchement créée (sans énoncé) bloquait la sauvegarde même si la case
+  // "Brouillon" était cochée sur une AUTRE question. Une nouvelle question
+  // est par nature un brouillon tant qu'elle n'a pas été remplie — cochée
+  // par défaut, à décocher explicitement une fois terminée.
+  draft: true
 })
 
 const moveQuestion = (fromIdx, toIdx) => {
@@ -4307,7 +4316,7 @@ const renderIntrusOptions = () => {
   })
 }
 
-// --- Question "Indice" (tâche 014) : 1 à 4 indices texte OU image, chacun
+// --- Question "Indice" (tâche 014) : 1 à 6 indices texte OU image, chacun
 // avec son délai d'apparition -------------------------------------------
 //
 // Pas de flag "hintType" séparé (voir modèle de données du fichier de
@@ -5287,7 +5296,7 @@ const validateQuestion = (q, i) => {
     }
   }
 
-  // Pour "indice" (tâche 014), 1 à 4 indices chacun avec EXACTEMENT un
+  // Pour "indice" (tâche 014), 1 à 6 indices chacun avec EXACTEMENT un
   // contenu (texte OU image), un délai croissant/cohérent et ≤ au timer de
   // la question (isValidIndiceHints couvre déjà tout ça — un indice
   // configuré trop tard ne s'afficherait jamais, règle explicite du

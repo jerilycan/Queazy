@@ -7440,6 +7440,39 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   transform: translate(-50%, -50%);
 }
 
+/* Retour utilisateur : "la sélection de quizz dans le lobby doit être plus
+   rapprochée, et avoir une scrollbar" — avec beaucoup de quiz, la modale
+   grandissait sans limite (.modal-content, partagée avec d'autres popups,
+   n'a volontairement aucune hauteur max par défaut) jusqu'à dépasser
+   l'écran, sans aucun moyen d'atteindre les quiz/boutons hors champ. Scopé à
+   #quizSelectPopup (pas .modal-content directement, pour ne pas changer le
+   comportement des AUTRES popups qui la réutilisent) : la modale elle-même
+   passe en colonne flex à hauteur plafonnée, seul #quizList (la liste)
+   défile — le titre et les boutons Annuler/Confirmer restent toujours
+   visibles, jamais poussés hors écran par une longue liste.
+   min-height:0 indispensable (piège flex déjà documenté ailleurs dans ce
+   fichier) : sans lui, un enfant flex ne peut jamais rétrécir sous la
+   hauteur de son contenu, l'overflow-y:auto n'aurait alors aucun effet. */
+#quizSelectPopup .modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+#quizSelectPopup #quizList {
+  overflow-y: auto;
+  min-height: 0;
+  /* gap-md (20px, classe utilitaire posée dans le HTML) rapproché à
+     --space-xs (8px) : trop espacé pour une liste qui peut compter
+     plusieurs dizaines de quiz. Spécificité ID > classe, prime sans
+     !important. */
+  gap: var(--space-xs);
+}
+#quizSelectPopup .quiz-item {
+  /* p-md (20px, classe utilitaire) resserré à --space-sm (12px) — même
+     raison que le gap ci-dessus. */
+  padding: var(--space-sm);
+}
+
 /* Classement plein écran */
 /* Popup "en attente de validation" (modération d'une réponse libre) — flotte
    PAR-DESSUS l'écran de jeu (qui reste visible, juste flouté/assombri en
@@ -9241,7 +9274,31 @@ body.display-body {
   align-items: center;
   justify-content: center;
 }
+/* Écran d'attente (tâche 043, étape 4) : logo QuEazy dupliqué tel quel
+   (même convention que login/editor/profile/select/result, voir index.html
+   ~L225-232 pour l'explication de cette duplication) + sous-texte, affiché
+   tant qu'aucune question n'a encore été montrée (voir display.js, la classe
+   d-none n'est posée qu'à réception d'un contenu de question réel). Remplace
+   l'ancien texte seul ("En attente du MJ…") — retour utilisateur, plus
+   accueillant au lancement du mode présentation. */
 .display-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4vh;
+}
+.display-waiting-logo {
+  width: min(560px, 46vw);
+}
+/* Écrase la hauteur fixe (46px) de la règle de base .brand-logo-svg — cette
+   instance n'est jamais dans la navbar, elle doit occuper toute la largeur
+   de .display-waiting-logo ci-dessus, pas rester minuscule à l'échelle TV. */
+.display-waiting-logo .brand-logo-svg {
+  width: 100%;
+  height: auto;
+}
+.display-waiting-text {
+  margin: 0;
   font-family: 'Baloo 2', sans-serif;
   font-size: clamp(22px, 3.4vw, 38px);
   font-weight: 700;
@@ -9289,7 +9346,14 @@ body.display-body #timerContainer .timer-label { font-size: clamp(18px, 2.6vw, 3
 body.display-body #main {
   width: 100%;
   max-width: min(1700px, 92vw);
-  display: flex;
+  /* !important nécessaire (bug remonté en test réel, "timer pas centré") :
+     index.js pose display:'block' en style INLINE sur #main au lancement de
+     la partie (garde-fou historique côté écran MJ, voir index.js ~L705) —
+     cet inline style est capturé tel quel par le miroir et bat n'importe
+     quelle règle de feuille de style externe, donc sans !important #main
+     redevenait un simple bloc côté TV (plus de centrage flex du tout,
+     minuteur/question alignés à gauche par défaut). */
+  display: flex !important;
   flex-direction: column;
   align-items: center;
   min-height: 0; /* laisse .options-grid se réduire plutôt que déborder (flex enfant) */
@@ -9649,6 +9713,60 @@ body.display-body #imageImg {
   max-height: min(44vh, 620px);
 }
 
+/* Intro par question (tâche 043, étape 1) — #displayIntro mirrore le CONTENU
+   de #questionIntroOverlay (pas l'élément overlay lui-même, voir index.js
+   pushDisplayMirror), donc joue lui-même le rôle de l'overlay plein écran +
+   fond assombri/flouté (habillage repris de .question-intro-overlay côté MJ,
+   voir plus haut dans ce fichier) ; le contenu réel (#questionIntroCard)
+   garde sa classe .question-intro-card et réutilise TEL QUEL son CSS de
+   base (--qt-color/--qt-color-rgb posées par showQuestionIntro sur
+   questionIntroOverlay.style, héritées par ses enfants mirrorés) — juste
+   agrandi ci-dessous pour rester lisible à l'échelle TV, même logique que
+   #displayPopup un peu plus bas. */
+body.display-body #displayIntro {
+  position: fixed;
+  inset: 0;
+  /* z-index 1600 (pas 21) — bug remonté en test réel ("le type de question
+     est en plein dessus, on ne devrait pas le voir pendant l'animation") :
+     #questionTypeBadge/#timerContainer portent z-index:500 en base (pensé
+     pour flotter au-dessus du jeu côté écran MJ, voir leurs règles de base
+     plus haut dans ce fichier) — restent visibles d'une question à l'autre
+     (jamais masqués entre deux), et comme ce sont des enfants flex de
+     #displayStage, leur z-index continue de s'appliquer même une fois
+     `position` repassé à `static` ci-dessus (spécificité CSS : un enfant
+     flex/grid respecte son z-index quel que soit position, hors `static`
+     inclus). 21 les laissait passer AU-DESSUS de cet overlay — repris à
+     1600, au-delà du z-index:1500 de .question-intro-overlay côté MJ (même
+     ordre de grandeur que l'écran qu'on mirrore). */
+  z-index: 1600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(5, 5, 15, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+body.display-body #displayIntro .question-intro-card {
+  padding: 5vh 5vw;
+  max-width: min(1100px, 82vw);
+}
+body.display-body #displayIntro .question-intro-icon {
+  width: clamp(64px, 7vw, 110px);
+  height: clamp(64px, 7vw, 110px);
+  font-size: clamp(30px, 3.6vw, 54px);
+}
+body.display-body #displayIntro .question-intro-title {
+  font-size: clamp(24px, 3.6vw, 52px);
+}
+body.display-body #displayIntro .question-intro-hint {
+  font-size: clamp(16px, 1.8vw, 26px);
+  max-width: min(700px, 60vw);
+}
+body.display-body #displayIntro .question-intro-countdown {
+  font-size: clamp(40px, 6vw, 90px);
+}
+
 /* Popup de révélation — #displayPopup joue le rôle de l'overlay plein écran
    (voir index.js : popupHtml mirrore le CONTENU de #revealPopupOverlay, pas
    l'élément overlay lui-même, pour que la carte mirrorée garde sa classe
@@ -9657,7 +9775,9 @@ body.display-body #imageImg {
 body.display-body #displayPopup {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  /* z-index 1600 (pas 20), même correctif et même valeur que #displayIntro
+     juste au-dessus — .reveal-popup-overlay côté MJ utilise aussi 1600. */
+  z-index: 1600;
   display: flex;
   align-items: center;
   justify-content: center;

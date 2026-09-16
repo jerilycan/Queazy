@@ -31,8 +31,20 @@ socket.on('connect', () => clearConnBanner())
 
 const fanfareSound = new Audio('/audio/fanfare.wav')
 
+// Bug remonté en test réel ("j'arrive sur le menu, et je suis directement
+// redirigé dans le salon que je viens de quitter") : index.js persiste la
+// dernière salle rejointe en sessionStorage (QUEAZY_LAST_JOIN_KEY =
+// 'queazy_last_join', voir rememberJoin/readLastJoin dans index.js) pour
+// survivre à un rechargement de page (micro-coupures réseau) — mais cette
+// page-ci (résultats, salle déjà terminée côté serveur) ne le nettoyait
+// jamais avant de renvoyer vers '/', qui retombait alors dessus au
+// prochain socket.on('connect') et rerejoignait silencieusement. Même clé
+// que index.js (pas d'import possible entre ces deux scripts séparés).
 const backBtn = document.getElementById('backHome')
-if (backBtn) backBtn.onclick = () => { window.location.href = '/' }
+if (backBtn) backBtn.onclick = () => {
+  try { sessionStorage.removeItem('queazy_last_join') } catch {}
+  window.location.href = '/'
+}
 
 // N'apparaît que côté hôte : ?quiz= n'est ajouté à l'URL que par l'hôte
 // (voir index.js quiz:end, seul à connaître loadedQuiz.id) — un joueur qui
@@ -43,7 +55,13 @@ const replayQuizId = params.get('quiz')
 const replayBtn = document.getElementById('replayQuiz')
 if (replayBtn && replayQuizId) {
   replayBtn.classList.remove('d-none')
-  replayBtn.onclick = () => { window.location.href = `/?quiz=${encodeURIComponent(replayQuizId)}` }
+  // Même nettoyage que backBtn ci-dessus (même bug) : sans ça, le
+  // rechargement de '/' rerejoignait l'ancienne salle terminée au lieu de
+  // suivre ?quiz= vers une nouvelle partie.
+  replayBtn.onclick = () => {
+    try { sessionStorage.removeItem('queazy_last_join') } catch {}
+    window.location.href = `/?quiz=${encodeURIComponent(replayQuizId)}`
+  }
 }
 
 const checkAuth = async () => {
