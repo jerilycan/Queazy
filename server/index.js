@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.30.0'
+const APP_VERSION = '2.30.1'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -471,9 +471,15 @@ const start = async () => {
     // des tuiles envoyé aux joueurs pour CETTE question (question.options,
     // voir plus haut) ; id introuvable (vieux quiz, désync) -> valeur brute
     // en repli plutôt que de masquer la réponse.
+    // Tâche 045 (options texte) : une tuile texte n'a jamais été une "Image"
+    // — question.intrusTexts (id -> texte, voir plus haut) est vérifié EN
+    // PREMIER, avant de retomber sur "Image N" pour une tuile réellement
+    // photo.
     const intrusOptionIds = question.type === 'intrus' && Array.isArray(question.options) ? question.options : null
+    const intrusTexts = question.type === 'intrus' && question.intrusTexts && typeof question.intrusTexts === 'object' ? question.intrusTexts : null
     const labelFor = (raw) => {
       if (!intrusOptionIds) return raw
+      if (intrusTexts && typeof intrusTexts[raw] === 'string' && intrusTexts[raw].trim()) return intrusTexts[raw]
       const idx = intrusOptionIds.indexOf(raw)
       return idx === -1 ? raw : `Image ${idx + 1}`
     }
@@ -690,7 +696,14 @@ const start = async () => {
     const room = rooms.get(req.params.code)
     if (!room) return reply.code(404).send({ error: 'room_not_found' })
     const images = req.body?.images
-    const valid = Array.isArray(images) && images.length >= 3 && images.length <= 8 &&
+    // Tâche 045 (options texte pour "intrus") : le client ne filtre plus ici
+    // que le SOUS-ENSEMBLE d'options ayant une photo (voir index.js
+    // emitQuestion, uploads) — une question "intrus" à 3-8 options mixtes
+    // peut n'avoir que 1 ou 2 photos (le reste en texte, rien à uploader
+    // pour ces options-là). Plancher abaissé à 1 (au lieu de 3, hérité de
+    // l'époque où "intrus" ne pouvait être que 100% photo) ; le plafond à 8
+    // reste inchangé (borne globale INTRUS_MAX_OPTIONS côté éditeur).
+    const valid = Array.isArray(images) && images.length >= 1 && images.length <= 8 &&
       images.every(item =>
         item && typeof item.id === 'string' && /^[a-z0-9]{1,16}$/.test(item.id) && isValidImageValue(item.image)
       )
@@ -1686,7 +1699,11 @@ const start = async () => {
       // bien. revealPos/revealBg purement cosmétiques (cadrage choisi côté
       // éditeur, voir editor.js openImageCropModal), jamais validés ici —
       // même traitement que pair.aPos/bPos pour "association".
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length + (room.mode === 'auto' ? 1 : 0), options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined, revealAudioVolumePct: Number.isFinite(Number(payload?.revealAudioVolumePct)) ? Math.min(100, Math.max(0, Number(payload.revealAudioVolumePct))) : 100 }
+      // intrusTexts (tâche 045, options texte pour "intrus") : même raison
+      // que options juste au-dessus — sert à buildRecap à retraduire l'id
+      // d'une option TEXTE en son contenu réel (plutôt qu'en "Image N", qui
+      // n'aurait aucun sens pour une option qui n'a jamais été une photo).
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length + (room.mode === 'auto' ? 1 : 0), options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, intrusTexts: payload?.type === 'intrus' && payload?.intrusTexts && typeof payload.intrusTexts === 'object' ? payload.intrusTexts : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined, revealAudioVolumePct: Number.isFinite(Number(payload?.revealAudioVolumePct)) ? Math.min(100, Math.max(0, Number(payload.revealAudioVolumePct))) : 100 }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est

@@ -383,15 +383,32 @@ const indiceSection = document.getElementById('indiceSection')
 const indiceList = document.getElementById('indiceList')
 const addIndiceBtn = document.getElementById('addIndiceBtn')
 
-// Chaque photo reçoit un petit id stable (alphanumérique minuscule, sûr pour
-// la comparaison serveur — voir fuzzy()/norm() qui met tout en minuscules :
-// jamais le contenu de l'image elle-même comme "valeur" comparée). q.correct
-// référence cet id, pas la position dans le tableau : survit sans effort à
-// un réordonnancement par glisser (wireIntrusEditDrag ne fait que déplacer
-// les objets {id, image} dans le tableau, l'id voyage avec).
+// Chaque photo/texte reçoit un petit id stable (alphanumérique minuscule,
+// sûr pour la comparaison serveur — voir fuzzy()/norm() qui met tout en
+// minuscules : jamais le contenu de l'image/du texte lui-même comme "valeur"
+// comparée). q.correct référence cet id, pas la position dans le tableau :
+// survit sans effort à un réordonnancement par glisser (wireIntrusEditDrag
+// ne fait que déplacer les objets {id, image} / {id, text} dans le tableau,
+// l'id voyage avec).
 const genIntrusOptionId = () => Math.random().toString(36).slice(2, 8)
+// Tâche 045 : une option "intrus" est SOIT une photo ({id, image, pos?, bg?})
+// SOIT un texte ({id, text}), jamais les deux — vérif STRUCTURELLE seulement
+// (présence de la bonne clé, pas son contenu) : utilisée au rendu et au
+// changement de type pour détecter une forme totalement étrangère héritée
+// d'un autre type de question (ex. tableau de textes QCM), pas pour valider
+// qu'un champ est rempli. Une option texte fraîchement ajoutée démarre à
+// `text: ''` (voir addIntrusTextBtn plus bas) : si ce garde-fou exigeait un
+// contenu non vide, ne serait-ce que taper le premier caractère ferait
+// passer q.options par un état "invalide" qui viderait toute la liste au
+// prochain renderIntrusOptions() — le contenu non vide est vérifié à part,
+// seulement à la sauvegarde (voir validateQuestion, hasMissingIntrusContent).
 const isValidIntrusOptions = (options) =>
-  Array.isArray(options) && options.every(o => o && typeof o.id === 'string' && typeof o.image === 'string')
+  Array.isArray(options) && options.every(o => {
+    if (!o || typeof o.id !== 'string') return false
+    const hasImage = typeof o.image === 'string'
+    const hasText = typeof o.text === 'string'
+    return hasImage !== hasText // ni les deux, ni aucun des deux
+  })
 
 const imageSection = document.getElementById('imageSection')
 const imageUploadInput = document.getElementById('imageUpload')
@@ -664,7 +681,7 @@ const applyReadOnly = () => {
   const controls = [
     titleEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, addToBankCheckbox, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
-    addAssociationPairBtn, addTimelineEventBtn, addRangementZoneBtn, addRangementItemBtn, intrusPhotosUploadInput, addIndiceBtn, replayTutorialBtn,
+    addAssociationPairBtn, addTimelineEventBtn, addRangementZoneBtn, addRangementItemBtn, intrusPhotosUploadInput, addIntrusTextBtn, addIndiceBtn, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
     clearImageZoneBtn, illustrationUploadInput, removeIllustrationBtn,
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn, zoomGuessZoomInput,
@@ -4256,34 +4273,55 @@ const renderIntrusOptions = () => {
       wireIntrusEditDrag(row)
     }
 
-    const thumb = document.createElement('img')
-    thumb.className = 'intrus-photo-thumb'
-    thumb.src = opt.image
-    thumb.alt = ''
-    if (opt.pos && Number.isFinite(opt.pos.x) && Number.isFinite(opt.pos.y)) {
-      thumb.style.objectPosition = `${opt.pos.x * 100}% ${opt.pos.y * 100}%`
-    }
-    // Cliquer la vignette ouvre le même recadreur "glisser pour repositionner"
-    // que pour l'image association (voir openImageCropModal) — remplacer la
-    // photo reste possible depuis cette popup, sans perdre la place de la
-    // photo dans la liste ni son statut d'intrus éventuel.
-    if (!readOnly) {
-      thumb.title = 'Cliquer pour recadrer cette photo'
-      thumb.classList.add('cursor-pointer')
-      thumb.onclick = () => {
-        openImageCropModal(opt.image, opt.pos, opt.bg, {
-          onSave: (pos) => { q.options[idx].pos = pos; renderIntrusOptions() },
-          onBgReady: (bg) => { q.options[idx].bg = bg },
-          onReplace: (dataUrl) => {
-            q.options[idx].image = dataUrl
-            delete q.options[idx].pos
-            delete q.options[idx].bg
-            renderIntrusOptions()
-          }
-        })
+    // Tâche 045 : une option est SOIT une photo SOIT un texte (jamais les
+    // deux, voir isValidIntrusOptions) — deux branches de rendu distinctes,
+    // le reste de la ligne (poignée, radio "intrus", bouton supprimer) est
+    // partagé.
+    if (typeof opt.image === 'string') {
+      const thumb = document.createElement('img')
+      thumb.className = 'intrus-photo-thumb'
+      thumb.src = opt.image
+      thumb.alt = ''
+      if (opt.pos && Number.isFinite(opt.pos.x) && Number.isFinite(opt.pos.y)) {
+        thumb.style.objectPosition = `${opt.pos.x * 100}% ${opt.pos.y * 100}%`
       }
+      // Cliquer la vignette ouvre le même recadreur "glisser pour repositionner"
+      // que pour l'image association (voir openImageCropModal) — remplacer la
+      // photo reste possible depuis cette popup, sans perdre la place de la
+      // photo dans la liste ni son statut d'intrus éventuel.
+      if (!readOnly) {
+        thumb.title = 'Cliquer pour recadrer cette photo'
+        thumb.classList.add('cursor-pointer')
+        thumb.onclick = () => {
+          openImageCropModal(opt.image, opt.pos, opt.bg, {
+            onSave: (pos) => { q.options[idx].pos = pos; renderIntrusOptions() },
+            onBgReady: (bg) => { q.options[idx].bg = bg },
+            onReplace: (dataUrl) => {
+              q.options[idx].image = dataUrl
+              delete q.options[idx].pos
+              delete q.options[idx].bg
+              renderIntrusOptions()
+            }
+          })
+        }
+      }
+      row.appendChild(thumb)
+    } else {
+      // Option texte (alternative à une photo, jamais une légende ajoutée
+      // sous une photo — voir cadrage tâche 045). Même input générique que
+      // les autres listes de ce fichier (renderOptions/renderCorrects) :
+      // maxlength court, une case texte simple.
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.value = opt.text || ''
+      input.placeholder = 'Texte de l\'option...'
+      input.className = 'intrus-text-input'
+      input.style.flex = '1'
+      input.disabled = readOnly
+      input.maxLength = TEXT_SHORT_MAXLENGTH
+      input.oninput = (e) => { q.options[idx].text = e.target.value }
+      row.appendChild(input)
     }
-    row.appendChild(thumb)
 
     const radio = document.createElement('input')
     radio.type = 'radio'
@@ -4301,7 +4339,7 @@ const renderIntrusOptions = () => {
       del.innerHTML = '&times;'
       del.onclick = () => {
         if (q.options.length <= INTRUS_MIN_OPTIONS) {
-          showToast(`Il faut au moins ${INTRUS_MIN_OPTIONS} photos`, 'error')
+          showToast(`Il faut au moins ${INTRUS_MIN_OPTIONS} options`, 'error')
           return
         }
         const wasIntrus = q.correct[0] === q.options[idx].id
@@ -4531,6 +4569,26 @@ function addIntrusPhotos (files) {
       renderIntrusOptions()
     }, TILE_IMAGE_MAX_DIMENSION)
   })
+}
+
+// Tâche 045 : option texte, alternative à une photo dans la même liste (pas
+// une légende ajoutée sous une photo, voir cadrage) — même bouton "+
+// Ajouter un ..." que addIndiceBtn juste au-dessus, à côté de
+// #intrusPhotosUpload (voir editor.html). Démarre à text:'' (rempli via
+// l'input de renderIntrusOptions) plutôt qu'un placeholder tout fait.
+const addIntrusTextBtn = document.getElementById('addIntrusTextBtn')
+if (addIntrusTextBtn) {
+  addIntrusTextBtn.onclick = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    if (!Array.isArray(q.options)) q.options = []
+    if (q.options.length >= INTRUS_MAX_OPTIONS) {
+      showToast(`Maximum ${INTRUS_MAX_OPTIONS} options`, 'error')
+      return
+    }
+    q.options.push({ id: genIntrusOptionId(), text: '' })
+    renderIntrusOptions()
+  }
 }
 
 // Coller une image (Ctrl+V) plutôt que devoir passer par le sélecteur de
@@ -5273,25 +5331,30 @@ const validateQuestion = (q, i) => {
     }
   }
 
-  // Pour "intrus", entre 3 et 8 photos toutes importées, et exactement un
-  // intrus désigné (le radio garantit déjà "au plus un" côté UI ; ici on
-  // vérifie qu'il y en a bien "au moins un").
+  // Pour "intrus", entre 3 et 8 options (mélange libre de photos et de
+  // textes, tâche 045 — chacune SOIT une photo SOIT un texte, jamais aucun
+  // des deux) toutes remplies, et exactement un intrus désigné (le radio
+  // garantit déjà "au plus un" côté UI ; ici on vérifie qu'il y en a bien
+  // "au moins un").
   if (q.type === 'intrus') {
     const opts = Array.isArray(q.options) ? q.options : []
     if (opts.length < INTRUS_MIN_OPTIONS || opts.length > INTRUS_MAX_OPTIONS) {
       selectQuestion(i)
-      showToast(`La question ${i + 1} : il faut entre ${INTRUS_MIN_OPTIONS} et ${INTRUS_MAX_OPTIONS} photos`, 'error')
+      showToast(`La question ${i + 1} : il faut entre ${INTRUS_MIN_OPTIONS} et ${INTRUS_MAX_OPTIONS} options`, 'error')
       return false
     }
-    const hasMissingImage = opts.some(o => !o || !o.image)
-    if (hasMissingImage) {
+    // Contenu non vide requis — la vérif structurelle (isValidIntrusOptions,
+    // utilisée au rendu) accepte volontairement un texte vide en cours de
+    // frappe, seule la sauvegarde exige que tout soit rempli.
+    const hasMissingContent = opts.some(o => !o || (!(typeof o.image === 'string' && o.image) && !(typeof o.text === 'string' && o.text.trim())))
+    if (hasMissingContent) {
       selectQuestion(i)
-      showToast(`La question ${i + 1} : chaque emplacement doit avoir une photo`, 'error')
+      showToast(`La question ${i + 1} : chaque option doit avoir une photo ou un texte`, 'error')
       return false
     }
     if (!Array.isArray(q.correct) || q.correct.length !== 1 || !opts.some(o => o.id === q.correct[0])) {
       selectQuestion(i)
-      showToast(`La question ${i + 1} : désigne l'intrus parmi les photos`, 'error')
+      showToast(`La question ${i + 1} : désigne l'intrus parmi les options`, 'error')
       return false
     }
   }
