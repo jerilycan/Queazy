@@ -1128,13 +1128,51 @@ const HALO_DEFAULT_RADIUS_PCT = 15
 let haloClicksState = [] // [{x, y}] normalisés 0-1, dans l'ordre des clics
 let haloRadiusPct = HALO_DEFAULT_RADIUS_PCT
 
+// Le calque du masque (.halo-overlay) couvre TOUT .halo-wrap, mais l'image
+// elle-même (.halo-img, object-fit:contain) peut ne remplir qu'UNE PARTIE
+// de cette boîte si son ratio diffère du ratio de la boîte (bandes vides
+// sur les côtés, ou en haut/bas) — retour utilisateur : "la configuration
+// ne prend pas correctement en compte la valeur de la largeur configurée".
+// editor.html décrit explicitement le réglage comme "% de la largeur de
+// l'IMAGE" (voir #haloRadiusInput), mais le calcul se basait jusqu'ici sur
+// la largeur du WRAP — souvent plus grande que l'image réellement affichée
+// (bandes vides comprises), d'où un rayon systématiquement trop petit (ou
+// trop grand) par rapport à ce que le créateur avait réglé. Calcule les
+// dimensions/décalage RÉELS de l'image affichée dans le wrap — réutilisé à
+// la fois pour le rayon ci-dessous ET pour normaliser la position d'un
+// clic (voir le pointerdown plus bas) : les deux doivent rester dans le
+// même référentiel, sans quoi un clic near-bord ne correspondrait plus à
+// la même zone que le rond qu'il révèle.
+const getHaloImageBox = (rect) => {
+  const natW = haloImg?.naturalWidth || 0
+  const natH = haloImg?.naturalHeight || 0
+  if (!natW || !natH || !rect.width || !rect.height) {
+    return { width: rect.width || 1, height: rect.height || 1, offsetX: 0, offsetY: 0 }
+  }
+  const wrapAspect = rect.width / rect.height
+  const imgAspect = natW / natH
+  let width, height
+  if (imgAspect > wrapAspect) {
+    // Image plus "large" que la boîte : remplit toute la largeur, bandes
+    // vides en haut/bas.
+    width = rect.width
+    height = rect.width / imgAspect
+  } else {
+    // Image plus "haute"/étroite que la boîte : remplit toute la hauteur,
+    // bandes vides à gauche/droite.
+    height = rect.height
+    width = rect.height * imgAspect
+  }
+  return { width, height, offsetX: (rect.width - width) / 2, offsetY: (rect.height - height) / 2 }
+}
 // Reconstruit entièrement le(s) dégradé(s) du masque à partir de
-// haloClicksState — coordonnées stockées NORMALISÉES (0-1, comme les zones
-// de "image"/le point de zoom "zoomguess") plutôt qu'en pixels bruts :
-// reconverties en pixels RÉELS à chaque appel (getBoundingClientRect), pour
-// rester justes même si la fenêtre est redimensionnée entre deux clics (voir
-// ResizeObserver plus bas). Rayon en px = haloRadiusPct% de la LARGEUR de la
-// boîte (choix simple et suffisant, pas un calcul par diagonale/hauteur).
+// haloClicksState — coordonnées stockées NORMALISÉES (0-1 sur l'IMAGE
+// réellement affichée, comme les zones de "image"/le point de zoom
+// "zoomguess") plutôt qu'en pixels bruts : reconverties en pixels RÉELS à
+// chaque appel (getBoundingClientRect), pour rester justes même si la
+// fenêtre est redimensionnée entre deux clics (voir ResizeObserver plus
+// bas). Rayon en px = haloRadiusPct% de la LARGEUR RÉELLE DE L'IMAGE
+// (getHaloImageBox ci-dessus), pas de la boîte qui la contient.
 // 0 clic : aucun mask posé, le fond noir plein (background:#000, CSS) suffit
 // déjà tel quel — inutile de construire quoi que ce soit.
 const renderHaloMask = () => {
@@ -1147,16 +1185,20 @@ const renderHaloMask = () => {
     return
   }
   const rect = haloWrap.getBoundingClientRect()
-  const w = rect.width || 1
-  const h = rect.height || 1
+  const box = getHaloImageBox(rect)
+  const w = box.width || 1
+  const h = box.height || 1
   const rPx = (haloRadiusPct / 100) * w
   // Chaque couche : opaque (noir) PARTOUT, SAUF un trou transparent (adouci
   // sur les 16 derniers px, même feather que .recherche-overlay) autour de
   // CE clic — jamais l'inverse (voir commentaire au-dessus, c'est cette
   // inversion + mask-composite:intersect qui donne l'union des trous).
+  // offsetX/Y : décale du référentiel "image" vers le référentiel "wrap"
+  // (dans lequel le masque est posé) — sans ça, les trous se décaleraient
+  // vers le coin haut-gauche dès qu'il y a une bande vide.
   const layers = haloClicksState.map(c => {
-    const cx = c.x * w
-    const cy = c.y * h
+    const cx = box.offsetX + c.x * w
+    const cy = box.offsetY + c.y * h
     return `radial-gradient(circle ${rPx}px at ${cx}px ${cy}px, transparent 0, transparent calc(${rPx}px - 16px), black ${rPx}px)`
   })
   haloOverlay.style.maskImage = layers.join(', ')
@@ -1192,9 +1234,17 @@ if (haloWrap) {
     if (haloClicksState.length >= HALO_MAX_CLICKS) return
     const rect = haloWrap.getBoundingClientRect()
     if (rect.width === 0 || rect.height === 0) return
+    // Normalisé sur l'image réellement affichée (getHaloImageBox), pas sur
+    // tout le wrap — même référentiel que renderHaloMask ci-dessus, sinon
+    // le rond révélé ne serait plus centré sous le point cliqué dès qu'il y
+    // a une bande vide (object-fit:contain, image au ratio différent du
+    // wrap). Un clic dans une bande vide se clampe au bord de l'image le
+    // plus proche (0/1), comportement raisonnable plutôt qu'un no-op.
+    const box = getHaloImageBox(rect)
+    if (box.width === 0 || box.height === 0) return
     haloClicksState.push({
-      x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
-      y: Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+      x: Math.min(1, Math.max(0, (e.clientX - rect.left - box.offsetX) / box.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - rect.top - box.offsetY) / box.height))
     })
     renderHaloMask()
     updateHaloCounter()
@@ -2518,6 +2568,19 @@ const applyCropTransform = (wrapEl, imgEl, pos) => {
   imgEl.style.width = `${imgEl.naturalWidth}px`
   imgEl.style.height = `${imgEl.naturalHeight}px`
   imgEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
+  // Bug remonté en test réel (vue TV : "les images sont catastrophiques") :
+  // ce transform est calculé en PIXELS ABSOLUS à partir de la taille de
+  // wrapEl côté MJ (boxW/boxH) — collé tel quel par le miroir sur une tuile
+  // TV bien plus grande, l'image garde son échelle/position MJ (minuscule,
+  // coincée dans un coin). data-crop-box-w mémorise la largeur de RÉFÉRENCE
+  // utilisée pour ce calcul — display.js (côté TV) mesure la largeur RÉELLE
+  // de chaque tuile une fois le miroir injecté et corrige le transform au
+  // même ratio (le rapport largeur/hauteur de la tuile est identique des
+  // deux côtés — 4:3 pour "intrus" par ex. — donc un simple facteur
+  // d'échelle uniforme suffit, voir la dérivation dans le commentaire de
+  // rescaleCroppedImages). Purement une correction géométrique, aucune
+  // logique de rendu par type dupliquée.
+  imgEl.dataset.cropBoxW = boxW
 }
 
 // Vignette optionnelle insérée AVANT le texte d'une tuile association (voir
@@ -3936,7 +3999,20 @@ const hideModerationWait = () => {
 // grosse salle de modération. Purement informatif pour les joueurs — l'hôte
 // a déjà son propre récap détaillé dans moderationDiv.
 const MODERATION_FEED_MAX_LINES = 6
-socket.on('moderation:decision', ({ name, correct, content }) => {
+// Retour utilisateur : quand l'hôte valide une réponse PENDANT que la
+// question est encore en cours (modération en direct, avant la fin du
+// chrono), ce feed + l'animation flottante (spawnFloatingAnswer) ne
+// doivent PAS apparaître tout de suite chez les joueurs — ça revèlerait
+// qu'une réponse vient d'être jugée (et son contenu/sa couleur) alors que
+// d'autres joueurs répondent peut-être encore à la MÊME question. Même
+// principe que score:update un peu plus bas (mise à jour silencieuse tant
+// que la question n'est pas révélée) : mis en file ici, rejoué d'un coup à
+// question:reveal (voir plus bas) plutôt qu'affiché au fil de l'eau. Une
+// fois la question terminée, la modération qui continue de trancher les
+// dernières réponses s'affiche en direct comme avant (rien à retenir).
+let questionRevealedForModerationFeed = true
+let moderationFeedQueue = []
+const renderModerationDecision = ({ name, correct, content }) => {
   if (!moderationFeed || typeof name !== 'string' || !name.trim()) return
   const line = document.createElement('div')
   line.className = `moderation-feed-line ${correct ? 'is-correct' : 'is-incorrect'}`
@@ -3951,6 +4027,17 @@ socket.on('moderation:decision', ({ name, correct, content }) => {
   // réactions (voir spawnFloatingReaction ci-dessous), avec le texte de la
   // réponse à la place d'un emoji.
   if (typeof content === 'string' && content.trim()) spawnFloatingAnswer(content.trim(), correct)
+  // Retour utilisateur : "les animations de validation doivent aussi
+  // apparaître côté présentation" — canal léger dédié (voir display.js),
+  // pas de mirroring HTML (voir le commentaire sur #displayModerationFeed
+  // dans display.html pour la raison). Posté APRÈS le rendu ci-dessus, donc
+  // respecte déjà la même mise en file tant que la question n'est pas
+  // révélée (voir socket.on('moderation:decision') juste en dessous).
+  pushDisplayModerationFeedLine({ name, correct, content })
+}
+socket.on('moderation:decision', (decision) => {
+  if (!questionRevealedForModerationFeed) { moderationFeedQueue.push(decision); return }
+  renderModerationDecision(decision)
 })
 
 // Emoji qui monte à l'écran et se retire seul une fois l'animation finie —
@@ -3966,6 +4053,12 @@ const spawnFloatingReaction = (emoji) => {
   el.style.setProperty('--spin', `${Math.round((Math.random() - 0.5) * 60)}deg`)
   reactionLayer.appendChild(el)
   el.addEventListener('animationend', () => el.remove(), { once: true })
+  // Bug remonté en test réel ("les réactions ne sont pas reproduites côté
+  // TV, emoji coeur/feu...") — spawnFloatingAnswer juste en dessous appelait
+  // déjà pushDisplayFloatingAnswer (validation), mais rien n'était posté ici
+  // pour les réactions emoji des joueurs (fun:react) : oubli, pas un choix
+  // volontaire. Même canal léger (voir pushDisplayFloatingReaction plus bas).
+  pushDisplayFloatingReaction(emoji)
 }
 
 // Réponse d'un joueur qui volette à l'écran au moment où l'hôte la juge
@@ -3987,6 +4080,7 @@ const spawnFloatingAnswer = (text, correct) => {
   el.style.setProperty('--zig', zig.toFixed(2))
   reactionLayer.appendChild(el)
   el.addEventListener('animationend', () => el.remove(), { once: true })
+  pushDisplayFloatingAnswer(text, correct)
 }
 
 let lastReactionSentTs = 0
@@ -4229,6 +4323,15 @@ const pushDisplayMirror = () => {
     // body.display-body).
     popupHtml: revealPopupOverlay ? stripAudioForDisplay(revealPopupOverlay.innerHTML) : '',
     popupVisible: !!(revealPopupOverlay && !revealPopupOverlay.classList.contains('d-none')),
+    // Retour utilisateur ("le classement n'est pas affiché lors des inter
+    // question sur la partie présentation") — #leaderOverlay est lui aussi un
+    // élément SÉPARÉ, PAS imbriqué dans #stageWrap (voir index.html), donc
+    // jamais couvert par stageHtml ci-dessus. Même traitement que popupHtml :
+    // visibilité pilotée par la classe .d-none ET le style.display inline
+    // (voir leaderboard:show/goNext plus bas dans ce fichier, qui basculent
+    // les deux).
+    leaderHtml: leaderOverlay ? stripAudioForDisplay(leaderOverlay.innerHTML) : '',
+    leaderVisible: !!(leaderOverlay && !leaderOverlay.classList.contains('d-none') && leaderOverlay.style.display !== 'none'),
     // Tâche 043, étape 4 : voir la déclaration d'anyQuestionShown plus haut —
     // seul signal fiable pour que display.js sache quand masquer l'écran
     // d'attente (ni stageHtml ni introVisible ne suffisent, voir ce
@@ -4261,6 +4364,52 @@ const pushDisplayIntroTick = (text) => {
   displayWin.postMessage({ type: 'queazy-display-intro-tick', text }, location.origin)
 }
 
+// Retour utilisateur : "les animations de validation doivent aussi
+// apparaître côté présentation" — #reactionLayer est un élément SÉPARÉ de
+// #stageWrap (jamais couvert par pushDisplayMirror), et une carte flottante
+// apparaît à chaque décision de modération (potentiellement plusieurs par
+// question) : même raison que pushDisplayTick/pushDisplayIntroTick
+// ci-dessus, un canal léger dédié évite de redéclencher une reconstruction
+// complète de #displayStage à chaque fois. display.js recrée la carte
+// localement (mêmes classes CSS que .floating-answer, voir style.css),
+// jamais via du HTML cloné.
+const pushDisplayFloatingAnswer = (text, correct) => {
+  if (!displayWin || displayWin.closed) return
+  displayWin.postMessage({ type: 'queazy-display-floating-answer', text, correct }, location.origin)
+}
+
+// Bug remonté en test réel ("les réactions ne sont pas reproduites côté TV,
+// emoji coeur/feu...") — même canal léger, pour les emoji envoyés par les
+// joueurs (fun:react, voir spawnFloatingReaction plus haut). Pas de dérive/
+// rotation calculées ici : display.js les retire lui-même au hasard, comme
+// spawnFloatingReaction le fait déjà côté MJ (aucune raison que les deux
+// écrans montrent exactement la même trajectoire).
+const pushDisplayFloatingReaction = (emoji) => {
+  if (!displayWin || displayWin.closed) return
+  displayWin.postMessage({ type: 'queazy-display-floating-reaction', emoji }, location.origin)
+}
+
+// Même principe, pour une ligne du feed de modération (#moderationFeed,
+// lui aussi séparé de #stageWrap). Posté par renderModerationDecision
+// (voir plus bas), qui respecte déjà la mise en file tant que la question
+// n'est pas révélée — ce canal hérite donc du même timing, rien à refaire
+// ici.
+const pushDisplayModerationFeedLine = ({ name, correct, content }) => {
+  if (!displayWin || displayWin.closed) return
+  displayWin.postMessage({ type: 'queazy-display-moderation-feed-line', name, correct, content }, location.origin)
+}
+
+// Bug remonté en test réel ("la notif des joueurs ayant eu juste/faux à la
+// question précédente reste affichée") : posté à chaque nouvelle question
+// (voir socket.on('question:show') plus bas) pour vider #displayModerationFeed
+// côté TV — le pendant de la remise à zéro de moderationFeedQueue ci-dessus,
+// qui elle ne fait qu'empêcher un NOUVEL affichage, pas disparaître les
+// lignes déjà là.
+const pushDisplayClearModerationFeed = () => {
+  if (!displayWin || displayWin.closed) return
+  displayWin.postMessage({ type: 'queazy-display-clear-moderation-feed' }, location.origin)
+}
+
 // Batché en requestAnimationFrame : coalesce les mutations rapprochées (ex.
 // le minuteur, mis à jour 10x/s — voir timerContainer/setInterval plus bas
 // dans ce fichier) en un seul postMessage par frame peinte, plutôt qu'un par
@@ -4289,8 +4438,38 @@ const isVolatileMutationTarget = (node) => (
   (timerLabel && timerLabel.contains(node)) ||
   (illustrationZoomLayer && illustrationZoomLayer.contains(node))
 )
+// Bug remonté en test réel ("à chaque apparition d'image, l'énoncé
+// clignote côté TV") — même filtrage anti-clignotement que ci-dessus, pour
+// deux mutations posées sur #main lui-même, DE FAÇON ASYNCHRONE (dans
+// l'évènement onload de l'image, donc APRÈS le tout premier miroir déjà
+// posté) par applyPortraitLayout/fitStageContent : la classe
+// .regie-portrait-layout (mise en page 2 colonnes réservée à la régie MJ
+// desktop — voir style.css, tous ses sélecteurs sont scopés
+// body.is-host.game-active, jamais body.display-body) et le style inline
+// `zoom` (recalage de taille propre à la carte MJ compacte, voir
+// fitStageContent — la TV a déjà son propre système de mise à l'échelle en
+// CSS, cette valeur ne lui sert jamais et la lui appliquer telle quelle
+// serait même faux). Sans ce filtre, le simple chargement d'une image
+// déclenchait une reconstruction complète de #displayStage, rejouant
+// l'animation d'entrée de tout le contenu (dont l'énoncé) — même root
+// cause que le clignotement du décompte d'intro (tâche 043). Le style est
+// toujours ignoré sans condition (jamais utile côté TV) ; la classe ne
+// l'est QUE si le token d-none (le seul qui compte pour le miroir) n'a pas
+// changé — un futur ajout de classe cosmétique sur #main profite du même
+// filtre sans y penser, un vrai show/hide continue de mirorrer normalement.
+const mainElForMirror = document.getElementById('main')
+const isMainCosmeticOnlyMutation = (m) => {
+  if (m.target !== mainElForMirror || m.type !== 'attributes') return false
+  if (m.attributeName === 'style') return true
+  if (m.attributeName === 'class') {
+    const hadDNone = (m.oldValue || '').split(/\s+/).includes('d-none')
+    const hasDNone = mainElForMirror.classList.contains('d-none')
+    return hadDNone === hasDNone
+  }
+  return false
+}
 const handleStageMutations = (mutations) => {
-  const hasRealMutation = mutations.some(m => !isVolatileMutationTarget(m.target))
+  const hasRealMutation = mutations.some(m => !isVolatileMutationTarget(m.target) && !isMainCosmeticOnlyMutation(m))
   if (!hasRealMutation) return
   scheduleDisplayMirrorPush()
 }
@@ -4302,8 +4481,12 @@ const handleStageMutations = (mutations) => {
 // a fait échouer la tâche 040 (logique de rendu dupliquée qui diverge) —
 // accepté comme bon compromis vu l'historique.
 if (stageWrapEl) {
+  // attributeOldValue:true : nécessaire à isMainCosmeticOnlyMutation
+  // ci-dessus (compare l'ancienne et la nouvelle liste de classes de #main
+  // pour ne filtrer QUE le cas .regie-portrait-layout, jamais un vrai
+  // changement de d-none).
   new MutationObserver(handleStageMutations)
-    .observe(stageWrapEl, { childList: true, subtree: true, attributes: true, characterData: true })
+    .observe(stageWrapEl, { childList: true, subtree: true, attributes: true, attributeOldValue: true, characterData: true })
 }
 // #revealPopupOverlay est un élément SÉPARÉ, PAS imbriqué dans #stageWrap
 // (voir index.html) — observer dédié, même mécanique. Pas de filtrage
@@ -4311,6 +4494,14 @@ if (stageWrapEl) {
 if (revealPopupOverlay) {
   new MutationObserver(scheduleDisplayMirrorPush)
     .observe(revealPopupOverlay, { childList: true, subtree: true, attributes: true, characterData: true })
+}
+// #leaderOverlay (classement entre les questions) : élément SÉPARÉ, même
+// mécanique — pas de filtrage volatil ici non plus, les mises à jour du
+// classement (ajustement manuel de score, ex.) restent rares comparées au
+// minuteur.
+if (leaderOverlay) {
+  new MutationObserver(scheduleDisplayMirrorPush)
+    .observe(leaderOverlay, { childList: true, subtree: true, attributes: true, characterData: true })
 }
 // #questionIntroOverlay (tâche 043, étape 1) : élément SÉPARÉ lui aussi, PAS
 // imbriqué dans #stageWrap (voir index.html) — même mécanique, MAIS avec le
@@ -4627,6 +4818,23 @@ const loadQuizById = (id) => {
           ? (q.correct && !Array.isArray(q.correct) ? q.correct : { title: [], artist: [] })
           : (Array.isArray(q.correct) ? q.correct : []),
         options: Array.isArray(q.options) ? q.options : [],
+        // Même piège, une 7e fois (retour utilisateur, en test réel : "peu
+        // importe si je mets 5 ou 30, j'ai la même taille de révélation au
+        // clic") — q.haloRadius disparaissait silencieusement à CE
+        // chargement précis (celui utilisé pour lancer une vraie partie) :
+        // emitQuestion (voir plus bas) retombait alors TOUJOURS sur son
+        // repli par défaut (HALO_DEFAULT_RADIUS_PCT), quel que soit le
+        // réglage choisi dans l'éditeur — qui, lui, ne repasse jamais par ce
+        // chemin (lit l'objet question en mémoire directement).
+        haloRadius: q.haloRadius,
+        // Même piège, une 8e fois (tâche 045, options texte "intrus") —
+        // repéré en corrigeant le bug ci-dessus, avant tout retour
+        // utilisateur dessus : q.intrusTexts aurait disparu au même endroit,
+        // pour la même raison. emitQuestion (voir plus bas) serait alors
+        // TOUJOURS retombé sur "aucune option texte", quelles que soient
+        // celles ajoutées dans l'éditeur, pour une vraie partie lancée
+        // depuis un quiz sauvegardé.
+        intrusTexts: q.intrusTexts && typeof q.intrusTexts === 'object' ? q.intrusTexts : undefined,
         min: q.min,
         max: q.max,
         tolerance: q.tolerance,
@@ -6574,16 +6782,29 @@ const emitQuestion = (index) => {
     // l'ordre correct saisi dans l'éditeur, ni toujours le même mélange) —
     // le mélange est fait une fois ici, avant l'envoi ; le serveur retire
     // 'correct' de la diffusion (anti-triche), 'options' seul est visible.
-    // "intrus" (photos) : jamais les data-URI ici (voir uploads plus bas,
-    // même relais HTTP que "image"/"illustration") — seulement les petits id
-    // de chaque photo, dans l'ordre. Sert aussi de tileCount côté serveur
-    // (computeRevealMs) : la longueur doit rester correcte même avant que
-    // l'upload des images elles-mêmes ait résolu.
+    // "intrus" (photos + textes, tâche 045) : jamais les data-URI ici (voir
+    // uploads plus bas, même relais HTTP que "image"/"illustration") —
+    // seulement les petits id de chaque tuile, dans l'ordre (photo OU texte,
+    // le format ne change pas : un id reste un id). Sert aussi de tileCount
+    // côté serveur (computeRevealMs) : la longueur doit rester correcte même
+    // avant que l'upload des images elles-mêmes ait résolu.
     options: q.type === 'order'
       ? shuffleArray(correctOrder)
       : q.type === 'intrus'
         ? (Array.isArray(q.options) ? q.options.map(o => o?.id ?? '') : [])
         : (Array.isArray(q.options) ? q.options : []),
+    // "intrus" : contenu des options TEXTE seulement (id -> texte) — une
+    // option photo n'apparaît pas dans cet objet, le client déduit "cette
+    // tuile est une photo" de son absence ici plutôt que d'un flag séparé.
+    // Contrairement aux photos (relais HTTP, uploadRoomIntrusImages plus
+    // bas), un texte n'a rien à uploader : transmis directement dans ce
+    // payload, comme n'importe quel autre champ public de la question.
+    intrusTexts: q.type === 'intrus' && Array.isArray(q.options)
+      ? q.options.reduce((acc, o) => {
+        if (o && typeof o.text === 'string' && o.text.trim() !== '') acc[o.id] = o.text
+        return acc
+      }, {})
+      : undefined,
     // "association" : la colonne A garde son ordre d'origine (sert de repère
     // stable pour le scoring serveur, voir server/index.js), seule la
     // colonne B est mélangée avant l'envoi — jamais dans l'ordre correct.
@@ -6761,8 +6982,17 @@ const emitQuestion = (index) => {
   } else if (reponseImageToUpload) {
     uploads.push(uploadRoomRevealAnswer(roomCode, reponseImageToUpload))
   }
-  if (q.type === 'intrus' && Array.isArray(q.options) && q.options.length > 0) {
-    uploads.push(uploadRoomIntrusImages(roomCode, q.options).then(url => { payload.intrusImagesUrl = url }))
+  if (q.type === 'intrus' && Array.isArray(q.options)) {
+    // Tâche 045 : ne relaie QUE les options photo (celles avec .image) — une
+    // option texte n'a rien à uploader (voir payload.intrusTexts plus haut),
+    // et /api/room-intrus-images validerait à tort chaque élément comme une
+    // image si on lui passait aussi les options texte. Rien à uploader du
+    // tout (intrus 100% texte) : uploads reste vide pour ce champ, comme un
+    // type sans photo.
+    const photoOptions = q.options.filter(o => o && typeof o.image === 'string' && o.image)
+    if (photoOptions.length > 0) {
+      uploads.push(uploadRoomIntrusImages(roomCode, photoOptions).then(url => { payload.intrusImagesUrl = url }))
+    }
   }
   if (q.type === 'association') {
     // id "<indexPaire><a|b>" (ex. "3b") : indexPaire toujours l'index
@@ -7775,6 +8005,16 @@ socket.on('question:show', payload => {
         : count % 2 === 0 ? Array(count / 2).fill(2)
           : [...Array(Math.floor(count / 3)).fill(3), count % 3])
     optionsDiv.style.removeProperty('--intrus-cols')
+    // Retour utilisateur (vue TV, "toutes les tuiles doivent passer dans la
+    // taille de l'écran, pas de troncage ni de scrollbar") — posé sur le
+    // CONTENEUR (hérité par toutes les tuiles via les custom properties CSS,
+    // pas besoin de le répéter par tuile comme --intrus-row-cols juste en
+    // dessous) : le nombre de RANGÉES (1 à 4 selon le nombre de photos, voir
+    // INTRUS_ROW_PATTERNS ci-dessus) pilote la hauteur max de chaque tuile
+    // côté TV (voir body.display-body .option-btn.intrus-tile, style.css) —
+    // un plafond fixe en vh, lui, ne tenait pas compte du fait que jusqu'à 4
+    // rangées peuvent s'empiler (8 photos = 4x2), débordant l'écran.
+    optionsDiv.style.setProperty('--intrus-rows', rowPattern.length)
     // Aplati le motif de rangées en une largeur (nombre de tuiles sur SA
     // rangée) par index de tuile — ex. [3,2,2] => [3,3,3,2,2,2,2].
     const tileRowCols = rowPattern.flatMap(rowSize => Array(rowSize).fill(rowSize))
@@ -7785,14 +8025,29 @@ socket.on('question:show', payload => {
       el.style.setProperty('--intrus-row-cols', tileRowCols[i] || 3)
       el.dataset.optionId = id
       makeTileFocusable(el)
-      // Pas de texte dans la tuile (juste une photo) : role="button" seul ne
-      // suffit pas à un lecteur d'écran pour identifier laquelle est
-      // laquelle, d'où ce label explicite basé sur la position affichée.
-      el.setAttribute('aria-label', `Photo ${i + 1}`)
-      const img = document.createElement('img')
-      img.className = 'intrus-tile-img'
-      img.alt = ''
-      el.appendChild(img)
+      // Tâche 045 : une tuile "intrus" est SOIT une photo SOIT un texte —
+      // payload.intrusTexts ne contient que les options texte (id -> texte),
+      // absence = c'est une option photo (voir emitQuestion côté editor
+      // pour la construction de ce champ).
+      const tileText = payload.intrusTexts && typeof payload.intrusTexts[id] === 'string' ? payload.intrusTexts[id] : null
+      if (tileText) {
+        // Réutilise le look ".option-btn" texte standard (fond coloré,
+        // icône ::before, voir style.css .intrus-tile-text) au lieu d'une
+        // <img> — même mécanique de sélection (anneau + clic) que la tuile
+        // photo juste en dessous, seul le contenu change.
+        el.classList.add('intrus-tile-text')
+        el.textContent = tileText
+        el.setAttribute('aria-label', tileText)
+      } else {
+        // Pas de texte dans la tuile (juste une photo) : role="button" seul
+        // ne suffit pas à un lecteur d'écran pour identifier laquelle est
+        // laquelle, d'où ce label explicite basé sur la position affichée.
+        el.setAttribute('aria-label', `Photo ${i + 1}`)
+        const img = document.createElement('img')
+        img.className = 'intrus-tile-img'
+        img.alt = ''
+        el.appendChild(img)
+      }
       // Anneau de sélection (voir style.css .intrus-tile-ring, retour
       // utilisateur persistant) : un VRAI élément, ajouté APRÈS l'image dans
       // le DOM plutôt qu'un ::before avec z-index (essayé en premier,
@@ -7811,6 +8066,10 @@ socket.on('question:show', payload => {
       }
       optionsDiv.appendChild(el)
       applyTileReveal(el, i)
+      // Même ajustement automatique de taille de police que le QCM (voir
+      // fitTileText plus haut) — seulement utile pour une tuile texte, mais
+      // sans effet sur une tuile photo (pas de texte à mesurer dedans).
+      if (tileText) fitTileText(el)
       intrusTileElById[id] = el
     })
     if (payload.intrusImagesUrl) {
@@ -9088,6 +9347,15 @@ socket.on('question:recap', payload => {
 })
 
 socket.on('question:reveal', payload => {
+  // Voir moderation:decision/socket.on('question:show') plus haut : rejoue
+  // maintenant, d'un coup, les décisions de modération prises PENDANT que
+  // la question était encore en cours (mises en file plutôt qu'affichées
+  // au fil de l'eau) — à partir d'ici, la modération continue de s'afficher
+  // en direct normalement (questionRevealedForModerationFeed reste true
+  // jusqu'à la prochaine question).
+  questionRevealedForModerationFeed = true
+  moderationFeedQueue.forEach(renderModerationDecision)
+  moderationFeedQueue = []
   // Pour une question texte libre/blindtest passée par la modération hôte,
   // ce reveal peut arriver bien après timer:end (le temps que l'hôte
   // tranche toutes les réponses en attente) — l'écran "en attente de
@@ -9556,6 +9824,22 @@ socket.on('question:show', () => {
   leaderOverlay.style.display = 'none'
   hideModerationWait()
   if (isHost) { hostPhase = 'answering'; clearAutoAdvanceTimer(); updateHostControls() }
+  // Voir moderation:decision plus haut : chaque nouvelle question reparte
+  // en file d'attente (une modération en direct pendant CETTE question ne
+  // doit rien montrer aux joueurs avant sa révélation).
+  questionRevealedForModerationFeed = false
+  moderationFeedQueue = []
+  // Bug remonté en test réel ("il y a toujours la notif des joueurs ayant
+  // eu juste/faux à la question précédente") : moderationFeedQueue est bien
+  // remise à zéro ci-dessus (rien de NOUVEAU ne s'affiche), mais rien ne
+  // vidait #displayModerationFeed côté TV — les lignes déjà affichées pour
+  // la question précédente restaient visibles jusqu'à être poussées hors de
+  // la liste par de nouvelles lignes (DISPLAY_MODERATION_FEED_MAX_LINES,
+  // voir display.js), potentiellement toute la question suivante s'il y a
+  // eu moins de validations. Même canal léger que pushDisplayFloatingAnswer/
+  // pushDisplayModerationFeedLine (jamais de mirroring HTML pour cette
+  // zone, voir display.html).
+  pushDisplayClearModerationFeed()
 })
 
 socket.on('score:update', ({ playerId, total, delta }) => {
