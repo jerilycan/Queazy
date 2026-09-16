@@ -91,6 +91,18 @@ window.addEventListener('message', (event) => {
   }
 })
 
+// Tâche 043 (bug remonté en test réel, "saut d'image" sur l'intro) : même
+// principe que le canal ci-dessus, mais pour le chiffre du décompte
+// d'intro (#questionIntroCountdown, voir index.js pushDisplayIntroTick) —
+// jamais de innerHTML ici non plus, juste le textContent appliqué
+// directement sur l'élément déjà présent dans #displayIntro.
+window.addEventListener('message', (event) => {
+  if (event.origin !== location.origin) return
+  if (event.data?.type !== 'queazy-display-intro-tick') return
+  const countdown = document.getElementById('questionIntroCountdown')
+  if (countdown) countdown.textContent = event.data.text || ''
+})
+
 // --- Plein écran (étape 6) ---------------------------------------------
 // Bouton dédié, jamais de plein écran automatique au chargement (exige un
 // geste utilisateur, l'API Fullscreen le refuserait de toute façon) —

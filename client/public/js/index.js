@@ -87,6 +87,18 @@ window.addEventListener('pagehide', () => { isNavigatingAway = true })
 const markRoomLeftVoluntarily = (roomCode) => {
   if (!roomCode) return
   try { sessionStorage.setItem('queazy_left_room', roomCode.toUpperCase()) } catch {}
+  // Bug remonté en test réel ("j'arrive sur le menu, et je suis directement
+  // redirigé dans le salon que je viens de quitter") : ce fix couvrait bien
+  // la branche preRoom (voir wasRoomLeftVoluntarily plus bas), mais PAS la
+  // branche lastJoin de socket.on('connect') — un rechargement COMPLET de
+  // page (ex. window.location.href='/' après un clic "Quitter") retombe sur
+  // QUEAZY_LAST_JOIN_KEY (sessionStorage, voir rememberJoin/readLastJoin
+  // plus bas), jamais nettoyé par une navigation volontaire, ni gardé par
+  // aucun wasRoomLeftVoluntarily (cette branche est testée AVANT preRoom
+  // dans socket.on('connect')). forgetJoin() ici, au moment même où on
+  // marque un départ volontaire, coupe la source plutôt que d'ajouter une
+  // 2e garde symétrique à la branche lastJoin.
+  forgetJoin()
 }
 const wasRoomLeftVoluntarily = (roomCode) => {
   if (!roomCode) return false
@@ -806,11 +818,19 @@ const showQuestionIntro = (type, durationMs, startTs) => {
   // — voir INTRO_COUNTDOWN_MS plus haut).
   const tick = () => {
     const remaining = (startTs + durationMs) - syncedNow()
-    if (questionIntroCountdown) {
-      questionIntroCountdown.textContent = (remaining > 0 && remaining <= INTRO_COUNTDOWN_MS)
-        ? String(Math.ceil(remaining / 1000))
-        : ''
-    }
+    const text = (remaining > 0 && remaining <= INTRO_COUNTDOWN_MS)
+      ? String(Math.ceil(remaining / 1000))
+      : ''
+    if (questionIntroCountdown) questionIntroCountdown.textContent = text
+    // Tâche 043 (bug remonté en test réel, "saut d'image" sur l'intro) :
+    // avant ce correctif, ce setInterval(200ms) faisait comme n'importe
+    // quelle autre mutation de #questionIntroOverlay — reconstruction
+    // complète côté TV à CHAQUE tick (voir handleIntroMutations plus bas),
+    // rejouant l'animation d'entrée de la carte en boucle pendant toute la
+    // phase de décompte. Même fix que le minuteur principal (pushDisplayTick,
+    // étape 2) : canal léger dédié, la carte/icône/titre ne sont plus jamais
+    // reconstruits pour ce simple changement de chiffre.
+    pushDisplayIntroTick(text)
   }
   tick()
   questionIntroTimerId = setInterval(tick, 200)
@@ -4229,6 +4249,18 @@ const pushDisplayTick = (pct, label, urgent, zoomScale) => {
   displayWin.postMessage({ type: 'queazy-display-tick', pct, label, urgent, zoomScale: zoomScale ?? null }, location.origin)
 }
 
+// Tâche 043 (bug remonté en test réel) : même principe que pushDisplayTick
+// ci-dessus, mais pour le décompte de l'intro par question (#questionIntroCountdown,
+// tick() dans showQuestionIntro) — sans ce canal dédié, chaque changement de
+// chiffre (200ms) déclenchait une reconstruction complète de la carte
+// d'intro côté TV, rejouant son animation d'entrée en boucle ("saut
+// d'image"). Voir handleIntroMutations plus bas, qui ignore désormais ces
+// mutations pour la reconstruction complète.
+const pushDisplayIntroTick = (text) => {
+  if (!displayWin || displayWin.closed) return
+  displayWin.postMessage({ type: 'queazy-display-intro-tick', text }, location.origin)
+}
+
 // Batché en requestAnimationFrame : coalesce les mutations rapprochées (ex.
 // le minuteur, mis à jour 10x/s — voir timerContainer/setInterval plus bas
 // dans ce fichier) en un seul postMessage par frame peinte, plutôt qu'un par
@@ -4281,9 +4313,20 @@ if (revealPopupOverlay) {
     .observe(revealPopupOverlay, { childList: true, subtree: true, attributes: true, characterData: true })
 }
 // #questionIntroOverlay (tâche 043, étape 1) : élément SÉPARÉ lui aussi, PAS
-// imbriqué dans #stageWrap (voir index.html) — même mécanique.
+// imbriqué dans #stageWrap (voir index.html) — même mécanique, MAIS avec le
+// même filtrage anti-clignotement que #stageWrap (voir isVolatileMutationTarget
+// plus haut) : #questionIntroCountdown change toutes les 200ms pendant le
+// décompte (voir tick() dans showQuestionIntro) et est désormais couvert par
+// son propre canal léger (pushDisplayIntroTick) — bug remonté en test réel
+// ("saut d'image" sur l'icône/carte d'intro), même root cause que le
+// minuteur principal avant l'étape 3.
+const handleIntroMutations = (mutations) => {
+  const hasRealMutation = mutations.some(m => !(questionIntroCountdown && questionIntroCountdown.contains(m.target)))
+  if (!hasRealMutation) return
+  scheduleDisplayMirrorPush()
+}
 if (questionIntroOverlay) {
-  new MutationObserver(scheduleDisplayMirrorPush)
+  new MutationObserver(handleIntroMutations)
     .observe(questionIntroOverlay, { childList: true, subtree: true, attributes: true, characterData: true })
 }
 
@@ -8126,12 +8169,20 @@ pbacGroupBar.appendChild(pbacGroupBtn)
 // #moderationZone plus haut) — dans une ligne de grille IMPLICITE en régie
 // desktop, sans placement explicite ni marge de la grille (grid-row "auto"
 // n°2, déjà occupée par #moderationZone) : poussée hors de la zone visible
-// de .container (hauteur fixe, calc(100vh - 170px)), inatteignable. Rendue
-// enfant de moderationZone (déjà la SEULE cellule de grille correcte pour
-// tout ce qui concerne la modération, voir son propre commentaire) au lieu
-// de .container directement — sa ligne de grille "auto" s'agrandit pour
-// accueillir tout son contenu, bandeau compris.
-moderationZone.appendChild(pbacGroupBar)
+// de .container (hauteur fixe, calc(100vh - 170px)), inatteignable.
+//
+// RÉGRESSION corrigée (nouveau retour utilisateur, "le bouton n'est pas sur
+// la modal") : ce correctif date d'avant le passage de la modération en
+// popup modale (voir le commentaire sur moderationModalSlot un peu plus
+// haut) — moderationDiv/moderationEyeBar ont depuis déménagé dans
+// #moderationModalOverlay, mais cette barre était restée dans
+// #moderationZone, qui n'affiche plus désormais que le petit bouton
+// compact d'OUVERTURE de la modale (voir moderationOpenBtn) — jamais la
+// modale elle-même. Bouton "Valider la famille" donc bien présent dans le
+// DOM mais invisible tant que la modale reste fermée, inatteignable une
+// fois ouverte (pas dedans). Suit maintenant moderationDiv dans le même
+// conteneur (moderationModalSlot), juste après la liste des réponses.
+if (moderationModalSlot) moderationModalSlot.appendChild(pbacGroupBar)
 
 // Rafraîchit le libellé/l'état du bandeau à partir des cases actuellement
 // cochées — appelée à chaque coche/décoche ainsi qu'après tout ajout/retrait
@@ -8932,6 +8983,23 @@ socket.on('timer:end', (payload) => {
   // (voir server/index.js emitProgress) ; appel systématique, sans effet
   // si aucun son facultatif n'était en cours.
   stopBonusAudio()
+  // "halo" (retour utilisateur) : le MJ doit pouvoir juger les réponses en
+  // connaissance de cause AVANT de faire avancer la partie — jusqu'ici,
+  // l'image restait cachée derrière le calque noir jusqu'à question:reveal
+  // (déclenché par le MJ lui-même), qui la révèle à TOUT LE MONDE en même
+  // temps. Le MJ ne pouvait donc jamais voir l'image tant qu'il n'avait pas
+  // déjà validé/fait avancer la partie — impossible de juger quoi que ce
+  // soit avec. Retire le calque ICI, à timer:end (fin du chrono normal OU
+  // anticipée dès que tout le monde a répondu, comme le reste de ce
+  // handler), mais SEULEMENT côté MJ (isPresenterHost — même garde que le
+  // reste de ce handler) : les joueurs continuent de découvrir l'image au
+  // moment officiel de question:reveal, inchangé (chaque client est
+  // indépendant, ce déblocage ne touche que le propre écran du MJ). Simple
+  // classList.add('d-none') idempotent — question:reveal la repose sans
+  // effet si déjà posée.
+  if (currentQuestionType === 'halo' && isPresenterHost() && haloOverlay) {
+    haloOverlay.classList.add('d-none')
+  }
   // Tâche 024 : verrouillage de révélation appliqué à l'hôte aussi en mode
   // "Jouer" (il répond comme un joueur) — réservé au mode "Présenter" avant.
   if (!isPresenterHost()) {
