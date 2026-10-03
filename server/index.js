@@ -1127,6 +1127,41 @@ const start = async () => {
     }
   }
 
+  // Tâche 048 : enregistre le résultat de chaque joueur CONNECTÉ à la fin d'une
+  // partie terminée (quiz:end) d'un quiz de la table `quizzes` en mode
+  // "Présenter" (room.quizId n'est posé que dans ce cas, voir room:setQuiz).
+  // Le serveur n'a que la clé anon : chaque ligne est insérée avec le JETON DE
+  // SESSION du joueur concerné (room.playerAuth), ce qui laisse la policy RLS
+  // "player_id = auth.uid()" (supabase/schema.sql) faire foi — le score, lui,
+  // est celui du serveur, jamais fourni par le client. L'hôte, les invités
+  // (pas de jeton) et le mode équipe (score individuel conservé) : hôte
+  // exclu, invités ignorés. Un jeton expiré (partie très longue) fait échouer
+  // CETTE ligne seulement : journalisé, jamais bloquant pour la fin de partie.
+  const saveQuizResults = async (code, room) => {
+    if (!room.quizId || room.resultsSaved || !room.playerAuth) return
+    room.resultsSaved = true
+    const rows = []
+    for (const p of room.players.values()) {
+      if (p.token === room.hostToken) continue
+      const auth = room.playerAuth.get(p.token)
+      if (!auth) continue
+      rows.push({ auth, row: { quiz_id: room.quizId, player_id: auth.userId, player_name: p.name, score: room.scores.get(p.id) ?? p.score ?? 0, room_code: code } })
+    }
+    await Promise.all(rows.map(async ({ auth, row }) => {
+      try {
+        const asPlayer = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          global: { headers: { Authorization: `Bearer ${auth.jwt}` } },
+          auth: { persistSession: false, autoRefreshToken: false }
+        })
+        const { error } = await asPlayer.from('quiz_results').insert(row)
+        if (error) app.log.warn({ roomCode: code, userId: auth.userId, err: error.message }, 'résultat de quiz non enregistré')
+        else app.log.info({ roomCode: code, userId: auth.userId, score: row.score }, 'résultat de quiz enregistré')
+      } catch (err) {
+        app.log.warn({ roomCode: code, userId: auth.userId, err: err.message }, 'résultat de quiz non enregistré')
+      }
+    }))
+  }
+
   io.on('connection', socket => {
     // Synchronisation d'horloge (retour utilisateur : "le téléphone a 2
     // secondes d'avance sur le PC, même sur l'hôte") — tous les minuteurs
@@ -2897,6 +2932,9 @@ const start = async () => {
       if (room) {
         room.ended = true
         io.to(code).emit('quiz:end')
+        // Seul l'hôte clôt réellement la partie : ce handler n'a historiquement
+        // pas de garde d'hôte, un autre socket ne doit pas déclencher d'écriture.
+        if (socket.id === room.hostId) saveQuizResults(code, room)
         // Nettoyage différé : laisse le temps à tout le monde de consulter les
         // résultats avant de libérer la salle (elle n'est plus auto-supprimée
         // au disconnect une fois "ended").
