@@ -6351,6 +6351,15 @@ const renderHostPlayerStrip = (arr) => {
   })
 }
 
+// Tâche 048 : joueurs du salon ayant déjà terminé le quiz choisi (reçu de
+// l'hôte seul, voir server/index.js notifyAlreadyPlayed) — sert à poser un
+// avertissement sur leur tuile.
+let alreadyPlayedIds = new Set()
+socket.on('lobby:alreadyPlayed', ({ players }) => {
+  alreadyPlayedIds = new Set((players || []).map(p => p.id))
+  if (lastLobbyArr && lastLobbyArr.length) renderLobbyGrid(lastLobbyArr)
+})
+
 const renderLobbyGrid = (arr) => {
   lastLobbyArr = arr || []
   renderHostPlayerStrip(arr)
@@ -6626,6 +6635,18 @@ const renderLobbyGrid = (arr) => {
             if (ok) socket.emit('player:kick', { roomCode: roomInput.value.trim(), playerId: p.id })
           }
         }
+      }
+
+      // Tâche 048 : avertissement + bulle au survol (hôte seulement) quand ce
+      // joueur a déjà terminé le quiz choisi.
+      if (iAmHost && !isMe && alreadyPlayedIds.has(p.id)) {
+        const warn = document.createElement('div')
+        warn.className = 'already-played-badge'
+        warn.textContent = '⚠'
+        warn.setAttribute('data-tip', `Attention, ${p.name} a déjà participé à ce quiz`)
+        warn.setAttribute('aria-label', `Attention, ${p.name} a déjà participé à ce quiz`)
+        warn.tabIndex = 0
+        tile.appendChild(warn)
       }
 
       grid.appendChild(tile)

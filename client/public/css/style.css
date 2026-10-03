@@ -10384,3 +10384,51 @@ body.display-body .manual-adjust-badge { font-size: clamp(18px, 1.8vw, 30px); pa
 }
 .quiz-top-name { flex: 1; text-align: left; }
 .quiz-top-score { color: var(--color-gold, #ffd24d); }
+
+/* Avertissement "a déjà participé" sur une tuile du salon (tâche 048, voir
+   index.js renderLobbyGrid) : pastille ⚠ + bulle au survol/focus. */
+.player-tile { position: relative; }
+.already-played-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tile-yellow);
+  color: #3a2e00;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: help;
+}
+.already-played-badge::after {
+  content: attr(data-tip);
+  position: absolute;
+  /* Sous le badge (et non au-dessus) : la grille des joueurs coupe tout ce qui
+     dépasse vers le haut. */
+  top: calc(100% + 8px);
+  left: 0;
+  width: max-content;
+  max-width: 200px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  border: 1px solid rgba(var(--tile-yellow-rgb), 0.7);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 20;
+}
+.already-played-badge:hover::after,
+.already-played-badge:focus-visible::after { opacity: 1; transform: translateY(0); }

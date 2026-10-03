@@ -1137,6 +1137,24 @@ const start = async () => {
   // (pas de jeton) et le mode équipe (score individuel conservé) : hôte
   // exclu, invités ignorés. Un jeton expiré (partie très longue) fait échouer
   // CETTE ligne seulement : journalisé, jamais bloquant pour la fin de partie.
+  // Tâche 048 : signale à l'HÔTE (seul destinataire) quels joueurs connectés du
+  // salon ont déjà terminé le quiz choisi — appelé à la sélection du quiz et à
+  // chaque arrivée d'un joueur identifié. Liste vide envoyée aussi quand plus
+  // personne n'est concerné (changement de quiz), pour effacer les alertes.
+  // Invités jamais signalés : pas d'identité fiable (voir tâche 048).
+  const notifyAlreadyPlayed = async (code, room) => {
+    if (!room.hostId) return
+    const candidates = room.quizId ? Array.from(room.players.values()).filter(p => p.userId && p.token !== room.hostToken) : []
+    let played = []
+    if (candidates.length) {
+      const { data, error } = await supabaseAdmin.rpc('quiz_has_played', { p_quiz_id: room.quizId, p_player_ids: candidates.map(p => p.userId) })
+      if (error) { app.log.warn({ roomCode: code, err: error.message }, 'participation passée indisponible'); return }
+      const ids = new Set(data || [])
+      played = candidates.filter(p => ids.has(p.userId)).map(p => ({ id: p.id, name: p.name }))
+    }
+    io.to(room.hostId).emit('lobby:alreadyPlayed', { players: played })
+  }
+
   const saveQuizResults = async (code, room) => {
     if (!room.quizId || room.resultsSaved || !room.playerAuth) return
     room.resultsSaved = true
@@ -1360,6 +1378,7 @@ const start = async () => {
           if (!room.playerAuth) room.playerAuth = new Map()
           room.playerAuth.set(token, { userId, jwt: socket.handshake.auth.accessToken })
           app.log.info({ roomCode: code, userId }, 'joueur connecté identifié')
+          if (room.quizId) notifyAlreadyPlayed(code, room)
         }
       }
 
@@ -1547,6 +1566,7 @@ const start = async () => {
       if (typeof quizId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quizId)) return
       room.quizId = quizId
       app.log.info({ roomCode: code, quizId }, 'quiz déclaré pour la salle')
+      notifyAlreadyPlayed(code, room)
     })
 
     socket.on('game:setMode', payload => {
