@@ -7883,6 +7883,7 @@ socket.on('question:show', payload => {
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
     timerBarFill.style.transform = 'scaleX(1)'
+    timerBarFill.classList.remove('timer-empty')
   }
 
   // Déverrouillage à startTs (aligné sur REVEAL_QUESTION_BEAT_MS — voir
@@ -7915,7 +7916,6 @@ socket.on('question:show', payload => {
       imageDisabled = false
       freeTextEl.classList.remove('d-none')
       applyTileReveal(freeTextEl, 0)
-    timerBarFill.classList.remove('timer-empty')
     }, Math.max(0, start - syncedNow()))
   }
   // La musique démarre pile à startTs comme le reste (même rendez-vous que le
@@ -7936,6 +7936,7 @@ socket.on('question:show', payload => {
       // Phase de révélation : la barre reste pleine, pas de décompte affiché.
       if (timerBarFill) {
         timerBarFill.style.transform = 'scaleX(1)'
+        timerBarFill.classList.remove('timer-empty')
         timerBarFill.classList.remove('timer-urgent')
       }
       if (timerLabel) timerLabel.textContent = '···'
@@ -7968,7 +7969,6 @@ socket.on('question:show', payload => {
 
     // Apparition progressive des indices (type "indice", tâche 014) — voir
     // updateIndiceArea, appelé à chaque tick avec le temps écoulé depuis
-        timerBarFill.classList.remove('timer-empty')
     // start. Jamais de setTimeout isolé par indice : ce recalcul systématique
     // permet le rattrapage automatique d'un late-joiner/refresh (même
     // garantie que le dézoom "zoomguess" ci-dessus).
@@ -7978,6 +7978,7 @@ socket.on('question:show', payload => {
 
     if (timerBarFill) {
       timerBarFill.style.transform = `scaleX(${pct / 100})`
+    timerBarFill.classList.toggle('timer-empty', pct <= 0.5)
       if (pct <= 20) {
         timerBarFill.classList.add('timer-urgent')
       }
@@ -8010,7 +8011,6 @@ socket.on('question:show', payload => {
     // donc attemptAutoSubmit() ne soumet jamais deux fois même appelé deux
     // fois (voir plus bas, filet de sécurité en fin de chrono).
     const attemptAutoSubmit = () => {
-    timerBarFill.classList.toggle('timer-empty', pct <= 0.5)
       // Tâche 024 : filet de sécurité aussi pour l'hôte en mode "Jouer" (il
       // répond comme tout le monde) — réservé au mode "Présenter" avant.
       if (isPresenterHost() || hasAnsweredThisQuestion) return
@@ -8078,9 +8078,15 @@ socket.on('question:show', payload => {
   if (payload.type === 'mcq' && Array.isArray(payload.options)) {
     const mcqCols = payload.options.length <= 4 ? 2 : payload.options.length <= 6 ? 3 : 4
     optionsDiv.style.setProperty('--mcq-cols', mcqCols)
+    // Dernière rangée incomplète (5 réponses = 3 + 2, 7 = 4 + 3...) : la 1re
+    // tuile de cette rangée démarre décalée (--gc-start, en demi-colonnes, voir
+    // style.css) pour que la rangée soit CENTRÉE au lieu de coller à gauche.
+    const mcqLastRowStart = (Math.ceil(payload.options.length / mcqCols) - 1) * mcqCols
+    const mcqLastRowCount = payload.options.length - mcqLastRowStart
     payload.options.forEach((opt, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn'
+      if (i === mcqLastRowStart && mcqLastRowCount < mcqCols) el.style.setProperty('--gc-start', mcqCols - mcqLastRowCount + 1)
       el.textContent = opt
       makeTileFocusable(el)
       el.onclick = () => {
@@ -8110,15 +8116,9 @@ socket.on('question:show', payload => {
     // l'animation d'entrée), les photos arrivent un instant après via une
     // requête HTTP à part.
     // Découpage en rangées adapté au nombre de photos (retour utilisateur,
-    // Dernière rangée incomplète (5 réponses = 3 + 2, 7 = 4 + 3...) : la 1re
-    // tuile de cette rangée démarre décalée (--gc-start, en demi-colonnes, voir
-    // style.css) pour que la rangée soit CENTRÉE au lieu de coller à gauche.
-    const mcqLastRowStart = (Math.ceil(payload.options.length / mcqCols) - 1) * mcqCols
-    const mcqLastRowCount = payload.options.length - mcqLastRowStart
     // affiné ensuite : "pour 7 images : 3, 2 et 2" plutôt que 3/3/1 qui
     // laissait une tuile seule orpheline). Pas un simple "N colonnes
     // uniformes" — chaque rangée peut avoir sa propre largeur de tuile
-      if (i === mcqLastRowStart && mcqLastRowCount < mcqCols) el.style.setProperty('--gc-start', mcqCols - mcqLastRowCount + 1)
     // (voir --intrus-row-cols posé PAR TUILE plus bas, pas sur le
     // conteneur). Table figée plutôt qu'une formule générale : l'éditeur
     // borne "intrus" à 3-8 photos (voir editor.js), donc les 6 cas
@@ -9341,6 +9341,7 @@ socket.on('timer:end', (payload) => {
   clearInterval(timerInt)
   if (timerBarFill) {
     timerBarFill.style.transform = 'scaleX(0)'
+    timerBarFill.classList.add('timer-empty')
     timerBarFill.classList.remove('timer-urgent')
   }
   if (timerLabel) timerLabel.textContent = '0'
@@ -9388,7 +9389,6 @@ socket.on('timer:end', (payload) => {
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).
   if (currentQuestionType === 'blindtest') stopBlindTestAudio()
-    timerBarFill.classList.add('timer-empty')
   // Tâche 027 : même coupure pour le son facultatif (n'importe quel type)
   // — timer:end est déjà le signal de fin de question, qu'il arrive au
   // bout du chrono normal OU en avance dès que tout le monde a répondu
