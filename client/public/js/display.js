@@ -27,18 +27,13 @@ if (window.opener) {
   window.opener.postMessage({ type: 'queazy-display-ready' }, location.origin)
 }
 
-let lastStageSig = null
-let lastIntroHtml = ''
-let lastPopupHtml = ''
-let lastLeaderHtml = ''
-
 // event.origin vérifié explicitement (jamais de '*' en émission côté MJ non
 // plus, voir index.js pushDisplayMirror) : les deux pages sont same-origin
 // par construction, pas de raison d'accepter un message d'ailleurs.
 window.addEventListener('message', (event) => {
   if (event.origin !== location.origin) return
   if (event.data?.type !== 'queazy-display-sync') return
-  const { stageSig, stageHtml, popupHtml, popupVisible, introHtml, introVisible, leaderHtml, leaderVisible, gameStarted } = event.data
+  const { stageHtml, popupHtml, popupVisible, introHtml, introVisible, leaderHtml, leaderVisible, gameStarted } = event.data
 
   // Tâche 043, étape 4 : l'écran d'attente (logo + sous-texte) ne se masque
   // que dès que gameStarted est vrai (voir index.js, anyQuestionShown) — ni
@@ -60,15 +55,7 @@ window.addEventListener('message', (event) => {
   // rendu type par type ici (voir le contexte de la tâche 042 dans le Plan) :
   // c'est justement ce qui élimine le risque de divergence qui avait fait
   // échouer la tâche 040 (rollback).
-  // Pas de réinjection si le contenu du stage n'a pas changé (stageSig, voir
-  // index.js stageSignature) : chaque réinjection recrée l'énoncé et rejoue son
-  // animation d'entrée — clignotement du titre dès qu'un évènement sans
-  // rapport (classement, compteur de joueurs...) déclenchait un miroir.
-  const stageChanged = stageSig === undefined || stageSig !== lastStageSig
-  if (stageChanged) {
-    lastStageSig = stageSig
-    displayStage.innerHTML = stageHtml || ''
-  }
+  displayStage.innerHTML = stageHtml || ''
   // RÉGRESSION corrigée (nouveau retour utilisateur, écran d'attente pas
   // centré) : `!stageHtml` ne devient JAMAIS vrai (même piège documenté
   // juste au-dessus pour displayWaiting — stageHtml porte toujours du
@@ -78,46 +65,18 @@ window.addEventListener('message', (event) => {
   // disponible même vide de contenu VISIBLE (#main garde son propre d-none),
   // écrasant le centrage flex de #displayWaiting à côté de lui dans
   // #displayRoot. Même signal fiable que displayWaiting (gameStarted).
-  const stageWasHidden = displayStage.classList.contains('d-none')
   displayStage.classList.toggle('d-none', !gameStarted)
-  const stageNeedsFit = stageChanged || stageWasHidden !== !gameStarted
-
-  // Retour utilisateur ("l'image est microscopique pour une TV") : côté MJ,
-  // fitStageContent() (index.js) réduit #main avec `zoom` (0.55 à 1) pour tenir
-  // dans SA petite carte régie, et ce zoom voyage tel quel dans le style inline
-  // de #main mirroré — la TV, qui a bien plus de place, affichait donc tout
-  // (image, textes) à 55-65 % de sa taille prévue. On repart de zoom:1 et on ne
-  // réduit ici que si le contenu déborde réellement de #displayStage.
-  if (stageNeedsFit) {
-    refitStage()
-    // Une image qui finit de charger APRÈS ce calcul change la hauteur du
-    // contenu (mesuré : QCM à réponses longues + image, débordement de 1000px+
-    // alors que l'ajustement avait conclu que tout tenait) — on refait l'ajustement.
-    displayStage.querySelectorAll('img').forEach(img => {
-      if (!img.complete) img.addEventListener('load', refitStage, { once: true })
-    })
-    // Filet pour les décalages de mise en page tardifs (police web, animations
-    // d'entrée) qui ne déclenchent aucun évènement : un dernier ajustement peu
-    // après, seulement si le stage n'a pas encore été remplacé entre-temps.
-    const sigAtInject = lastStageSig
-    setTimeout(() => { if (lastStageSig === sigAtInject) refitStage() }, 300)
-  }
 
   // Tâche 043, étape 1 : miroir de #questionIntroOverlay (décompte + type de
   // question avant chaque question) — même traitement que displayPopup
-  // ci-dessous, élément séparé côté source (voir index.js). Même garde
-  // anti-réinjection que le stage : un HTML identique ne rejoue pas ses
-  // animations d'entrée.
-  const introChanged = (introHtml || '') !== lastIntroHtml
-  if (introChanged) { lastIntroHtml = introHtml || ''; displayIntro.innerHTML = lastIntroHtml }
+  // ci-dessous, élément séparé côté source (voir index.js).
+  displayIntro.innerHTML = introHtml || ''
   displayIntro.classList.toggle('d-none', !introVisible)
 
-  const popupChanged = (popupHtml || '') !== lastPopupHtml
-  if (popupChanged) { lastPopupHtml = popupHtml || ''; displayPopup.innerHTML = lastPopupHtml }
+  displayPopup.innerHTML = popupHtml || ''
   displayPopup.classList.toggle('d-none', !popupVisible)
 
-  const leaderChanged = (leaderHtml || '') !== lastLeaderHtml
-  if (leaderChanged) { lastLeaderHtml = leaderHtml || ''; displayLeaderboard.innerHTML = lastLeaderHtml }
+  displayLeaderboard.innerHTML = leaderHtml || ''
   displayLeaderboard.classList.toggle('d-none', !leaderVisible)
 
   // Bug remonté en test réel ("les images sont catastrophiques") : voir le
@@ -131,142 +90,7 @@ window.addEventListener('message', (event) => {
   // (clientWidth force un reflow synchrone, pas besoin d'attendre une frame).
   rescaleCroppedImages(displayStage)
   rescaleCroppedImages(displayPopup)
-
-  // Bug remonté en test réel ("le minuteur fait des allers-retours gauche/
-  // droite, comme si des secondes étaient ajoutées") : stageHtml est un
-  // instantané capturé côté MJ à un moment potentiellement bien antérieur au
-  // tick temps réel (ex. juste avant l'ouverture de la fenêtre TV, ou lors
-  // d'une reconstruction complète déclenchée par une tout autre mutation —
-  // une image "association"/"zoomguess" qui finit de charger, par exemple) —
-  // #timerBar/#timerLabel qu'il contient reflètent donc l'AVANCEMENT DU
-  // MINUTEUR AU MOMENT DU MIROIR, pas l'instant présent. displayStage venant
-  // d'être entièrement réinjecté juste au-dessus, la barre "sautait" vers
-  // cette valeur figée avant que le prochain tick (jusqu'à 100ms plus tard,
-  // voir pushDisplayTick côté index.js) ne la rattrape — répété à chaque
-  // reconstruction survenue PENDANT une question. Réappliquer ici le DERNIER
-  // tick réellement reçu (lastTickData, voir plus bas) élimine le saut à la
-  // source, quelle que soit la cause de la reconstruction.
-  if (lastTickData) applyDisplayTick(lastTickData)
-  if (lastOrbData && stageChanged) applyDisplayOrb(lastOrbData)
 })
-
-// Même piège que le zoom ci-dessus : fitTileText (index.js) réduit la police
-// des tuiles de réponse EN INLINE (jusqu'à 12px) pour tenir dans les petites
-// tuiles du MJ ; mirroré tel quel, ça écrasait la taille TV (clamp 18-40px du
-// CSS) — réponses QCM illisibles à distance (retour utilisateur). On retire
-// le style inline : la taille TV du CSS reprend la main.
-const resetTileFontSizes = () => {
-  displayStage.querySelectorAll('.option-btn, .question-text').forEach(el => el.style.removeProperty('font-size'))
-}
-
-// Réponses LONGUES (ex. 70 caractères en QCM à 3 colonnes) : à la taille TV
-// agrandie (jusqu'à 64px), chaque tuile pouvait dépasser 900px de haut et faire
-// déborder l'écran de plus de 1000px, hors de portée du zoom de secours. On
-// réduit donc la police des tuiles par paliers de 8 % (plancher 22px) tant que
-// le contenu déborde de #displayStage — les réponses courtes gardent leur
-// grande taille, seules les longues rétrécissent.
-const fitOptionText = () => {
-  const btns = displayStage.querySelectorAll('.option-btn')
-  if (!btns.length) return
-  const title = displayStage.querySelector('.question-text')
-  let size = parseFloat(getComputedStyle(btns[0]).fontSize)
-  let titleSize = title ? parseFloat(getComputedStyle(title).fontSize) : 0
-  let guard = 0
-  while (displayStage.scrollHeight > displayStage.clientHeight + 1 && guard++ < 40) {
-    // D'abord les réponses (plancher 30px), puis l'énoncé (plancher 44px) —
-    // un énoncé de 100+ caractères à 80px occupe à lui seul 4 lignes.
-    if (size > 30) {
-      size = Math.max(30, size * 0.92)
-      btns.forEach(el => { el.style.fontSize = `${size.toFixed(1)}px` })
-    } else if (title && titleSize > 44) {
-      titleSize = Math.max(44, titleSize * 0.92)
-      title.style.fontSize = `${titleSize.toFixed(1)}px`
-    } else {
-      break
-    }
-  }
-}
-
-// Transitions coupées PENDANT la mesure : les tuiles ont une transition sur
-// font-size/padding, donc juste après un changement de police getComputedStyle/
-// scrollHeight renvoient la valeur en cours d'animation, pas la valeur finale —
-// l'ajustement partait sur de faux chiffres (réduisait au plancher sans effet
-// visible, puis la police repartait à sa grande taille en fin de transition).
-// Reflow forcé AVANT de retirer la classe : les valeurs finales sont déjà
-// "calculées", aucune transition ne se déclenche au retrait.
-// Budget de hauteur (retour utilisateur : "l'énoncé <= 20 % de la page, l'image
-// 30-40 %, les propositions 30-40 %") — on ne réduit une police que si son bloc
-// dépasse sa part, les cas simples gardent la taille maximale du CSS.
-// Les tuiles "intrus" (photos) ont leurs propres règles et sont exclues.
-const LAYOUT_QUESTION_MAX = 0.20
-const LAYOUT_OPTIONS_MAX_WITH_IMAGE = 0.38
-const LAYOUT_OPTIONS_MAX = 0.50
-const isVisibleBox = (el) => !!el && el.getBoundingClientRect().height > 0
-const fitLayoutBudget = () => {
-  const mainEl = document.getElementById('main')
-  if (!mainEl) return
-  const H = window.innerHeight
-  const title = displayStage.querySelector('.question-text')
-  const optionsEl = displayStage.querySelector('#options')
-  const btns = Array.from(displayStage.querySelectorAll('.option-btn:not(.intrus-tile)'))
-  const hasOptions = btns.length > 0 && isVisibleBox(optionsEl)
-  const hasImage = isVisibleBox(displayStage.querySelector('.illustration-img, .illustration-img-wrap'))
-  mainEl.classList.toggle('tv-has-options', hasOptions)
-  mainEl.classList.toggle('tv-has-image', hasImage)
-  // Image d'illustration simple : le CSS ne fait que la PLAFONNER, une image de
-  // petite taille naturelle restait donc minuscule (constaté : 18 % de la
-  // hauteur avec des propositions). On la dimensionne à sa part (36 % avec
-  // propositions, 52 % sinon), ratio conservé, largeur bornée à 82 %. Les
-  // images cadrées (transform inline) ont leur propre géométrie : exclues.
-  displayStage.querySelectorAll('.illustration-img').forEach(img => {
-    // Cadrées = transform inline posé (data-crop-box-w seul ne suffit pas : il
-    // est aussi présent sur une illustration simple sans cadrage, qui doit,
-    // elle, être agrandie).
-    if (img.style.transform && img.style.transform !== 'none') return
-    if (!isVisibleBox(img) || !img.naturalWidth || !img.naturalHeight) return
-    const k = Math.min(window.innerWidth * 0.82 / img.naturalWidth, H * (hasOptions ? 0.36 : 0.52) / img.naturalHeight)
-    img.style.width = `${Math.round(img.naturalWidth * k)}px`
-    img.style.height = `${Math.round(img.naturalHeight * k)}px`
-  })
-  if (title && (hasOptions || hasImage)) {
-    let ts = parseFloat(getComputedStyle(title).fontSize)
-    let guard = 0
-    while (title.getBoundingClientRect().height > H * LAYOUT_QUESTION_MAX && ts > 28 && guard++ < 30) {
-      ts = Math.max(28, ts * 0.94)
-      title.style.fontSize = `${ts.toFixed(1)}px`
-    }
-  }
-  if (hasOptions) {
-    const budget = H * (hasImage ? LAYOUT_OPTIONS_MAX_WITH_IMAGE : LAYOUT_OPTIONS_MAX)
-    let size = parseFloat(getComputedStyle(btns[0]).fontSize)
-    let guard = 0
-    while (optionsEl.getBoundingClientRect().height > budget && size > 20 && guard++ < 30) {
-      size = Math.max(20, size * 0.94)
-      btns.forEach(el => { el.style.fontSize = `${size.toFixed(1)}px` })
-    }
-  }
-}
-
-const refitStage = () => {
-  displayStage.classList.add('display-fitting')
-  resetTileFontSizes()
-  fitLayoutBudget()
-  fitOptionText()
-  fitDisplayContent()
-  void displayStage.offsetHeight
-  displayStage.classList.remove('display-fitting')
-}
-
-const DISPLAY_FIT_MIN_ZOOM = 0.55
-const fitDisplayContent = () => {
-  const mainEl = document.getElementById('main')
-  if (!mainEl) return
-  mainEl.style.zoom = ''
-  const overflow = displayStage.scrollHeight - displayStage.clientHeight
-  if (overflow > 0 && mainEl.offsetHeight > overflow) {
-    mainEl.style.zoom = Math.max(DISPLAY_FIT_MIN_ZOOM, (mainEl.offsetHeight - overflow) / mainEl.offsetHeight)
-  }
-}
 
 // Le ratio largeur/hauteur d'une tuile cadrée (ex. 4:3 pour "intrus") est
 // le MÊME des deux côtés (mêmes règles CSS de base, seule l'échelle change
@@ -282,53 +106,12 @@ const rescaleCroppedImages = (container) => {
     const mjBoxW = Number(img.dataset.cropBoxW)
     const tvBoxW = img.parentElement?.clientWidth
     if (!mjBoxW || !tvBoxW) return
-    // [-+\d.eE]+ (pas seulement [-\d.]+) : le navigateur sérialise un résidu
-    // de calcul flottant en notation scientifique (ex. "-1.42109e-14px") —
-    // sans ça la regex échouait et l'image gardait son transform MJ non
-    // rééchelonné (photo trop petite/décalée dans sa tuile, constaté sur un
-    // drapeau "intrus" en test réel).
-    // Transform MJ d'origine mémorisé au 1er passage : la fonction est ainsi
-    // idempotente (relancée à chaque miroir, notamment quand la popup devient
-    // visible SANS que son HTML change — cachée, son cadre mesure 0 de large et
-    // le rééchelonnage était sauté pour de bon).
-    if (!img.dataset.mjTransform) img.dataset.mjTransform = img.style.transform
-    const m = img.dataset.mjTransform.match(/translate\(([-+\d.eE]+)px,\s*([-+\d.eE]+)px\)\s*scale\(([-+\d.eE]+)\)/)
-    if (!m) return
-    const mjTx = parseFloat(m[1])
-    const mjTy = parseFloat(m[2])
-    const mjSc = parseFloat(m[3])
-    const natW = parseFloat(img.style.width)
-    const natH = parseFloat(img.style.height)
-    const mjBoxH = Number(img.dataset.cropBoxH)
-    const tvBoxH = img.parentElement.clientHeight
-    if (mjBoxH && tvBoxH && natW && natH) {
-      // Boîte TV de RATIO potentiellement différent de celle du MJ (ex. tuiles
-      // "intrus" : 4:3 côté MJ, bien plus larges que hautes côté TV pour tenir
-      // en hauteur) : un simple facteur uniforme coupait alors l'image à
-      // l'envers du cadrage choisi (drapeaux tronqués). On retrouve donc le
-      // point de cadrage de l'auteur {x,y,zoom} à partir du transform MJ, puis
-      // on recalcule la géométrie pour la vraie boîte TV — même formule que
-      // computeCropGeometry (index.js).
-      const mjCover = Math.max(mjBoxW / natW, mjBoxH / natH)
-      const zoom = mjSc / mjCover
-      const mjOverX = natW * mjSc - mjBoxW
-      const mjOverY = natH * mjSc - mjBoxH
-      const posX = mjOverX > 0 ? Math.min(1, Math.max(0, -mjTx / mjOverX)) : 0.5
-      const posY = mjOverY > 0 ? Math.min(1, Math.max(0, -mjTy / mjOverY)) : 0.5
-      const sc = Math.max(tvBoxW / natW, tvBoxH / natH) * zoom
-      const renderedW = natW * sc
-      const renderedH = natH * sc
-      const tx = renderedW > tvBoxW ? -(renderedW - tvBoxW) * posX : (tvBoxW - renderedW) / 2
-      const ty = renderedH > tvBoxH ? -(renderedH - tvBoxH) * posY : (tvBoxH - renderedH) / 2
-      img.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${sc.toFixed(4)})`
-      return
-    }
-    // Repli (MJ sans hauteur de référence) : facteur uniforme, valable tant
-    // que le ratio de la boîte est le même des deux côtés.
     const k = tvBoxW / mjBoxW
-    const tx = mjTx * k
-    const ty = mjTy * k
-    const sc = mjSc * k
+    const m = img.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([-\d.]+)\)/)
+    if (!m) return
+    const tx = parseFloat(m[1]) * k
+    const ty = parseFloat(m[2]) * k
+    const sc = parseFloat(m[3]) * k
     img.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${sc.toFixed(4)})`
   })
 }
@@ -340,52 +123,21 @@ const rescaleCroppedImages = (container) => {
 // le DOM mirroré (retrouvés via getElementById à CHAQUE tick, jamais mis en
 // cache : #displayStage est entièrement reconstruit à chaque sync structurel
 // ci-dessus, une référence gardée entre deux syncs deviendrait obsolète).
-// lastTickData : dernier tick reçu, réappliqué après CHAQUE reconstruction de
-// #displayStage (voir le handler queazy-display-sync plus haut) — voir son
-// commentaire pour le bug que ça corrige. null tant qu'aucun tick n'est
-// encore arrivé (première question pas encore démarrée) : rien à réappliquer
-// dans ce cas, stageHtml lui-même porte alors déjà l'état initial correct.
-let lastTickData = null
-const applyDisplayTick = ({ pct, label, urgent, zoomScale }) => {
+window.addEventListener('message', (event) => {
+  if (event.origin !== location.origin) return
+  if (event.data?.type !== 'queazy-display-tick') return
+  const { pct, label, urgent, zoomScale } = event.data
   const timerBarFill = document.getElementById('timerBar')
   const timerLabel = document.getElementById('timerLabel')
   if (timerBarFill) {
     timerBarFill.style.transform = `scaleX(${pct / 100})`
     timerBarFill.classList.toggle('timer-urgent', !!urgent)
-    timerBarFill.classList.toggle('timer-empty', pct <= 0.5)
   }
   if (timerLabel) timerLabel.textContent = label
   if (zoomScale != null) {
     const illustrationZoomLayer = document.getElementById('illustrationZoomLayer')
     if (illustrationZoomLayer) illustrationZoomLayer.style.transform = `scale(${zoomScale})`
   }
-}
-// Orbe du Blind Test (voir index.js pushDisplayOrb) : appliquée directement sur
-// #blindtestOrb, jamais via une reconstruction du stage.
-let lastOrbData = null
-const applyDisplayOrb = ({ transform, boxShadow, bars }) => {
-  const orb = document.getElementById('blindtestOrb')
-  if (!orb) return
-  orb.style.transform = transform || ''
-  orb.style.boxShadow = boxShadow || ''
-  const barEls = orb.querySelectorAll('.blindtest-orb-bar')
-  barEls.forEach((el, i) => {
-    if (bars && bars[i] != null) el.style.setProperty('--lvl', bars[i])
-    else el.style.removeProperty('--lvl')
-  })
-}
-window.addEventListener('message', (event) => {
-  if (event.origin !== location.origin) return
-  if (event.data?.type !== 'queazy-display-orb') return
-  lastOrbData = { transform: event.data.transform, boxShadow: event.data.boxShadow, bars: event.data.bars }
-  applyDisplayOrb(lastOrbData)
-})
-window.addEventListener('message', (event) => {
-  if (event.origin !== location.origin) return
-  if (event.data?.type !== 'queazy-display-tick') return
-  const { pct, label, urgent, zoomScale } = event.data
-  lastTickData = { pct, label, urgent, zoomScale }
-  applyDisplayTick(lastTickData)
 })
 
 // Tâche 043 (bug remonté en test réel, "saut d'image" sur l'intro) : même
@@ -503,14 +255,3 @@ fullscreenBtn.addEventListener('click', () => {
   }
 })
 document.addEventListener('fullscreenchange', updateFullscreenLabel)
-
-// Le bouton plein écran n'apparaît qu'au mouvement de la souris (voir
-// .display-fullscreen-btn côté CSS) : sur une TV/vidéoprojecteur sans souris,
-// il n'occupe plus l'écran en permanence.
-let uiIdleTimeoutId = null
-document.addEventListener('mousemove', () => {
-  document.body.classList.add('display-ui-active')
-  clearTimeout(uiIdleTimeoutId)
-  uiIdleTimeoutId = setTimeout(() => document.body.classList.remove('display-ui-active'), 2500)
-})
-
