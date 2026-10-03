@@ -1500,6 +1500,20 @@ const start = async () => {
     // côté client, body.irl-player-mode) : ne change jamais le calcul du
     // score ni aucune règle de jeu, seulement ce qui s'affiche sur le
     // téléphone des JOUEURS (navbar/image décorative masquées en IRL).
+    // Tâche 048 : l'hôte déclare l'id (uuid, table `quizzes`) du quiz choisi.
+    // Même garde que game:setMode (hôte seul, avant le lancement) ; ignoré en
+    // mode "Jouer" (quiz généré, rien à enregistrer). Un id mal formé est
+    // refusé : il servira plus tard de clé d'écriture en base.
+    socket.on('room:setQuiz', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || room.hostId !== socket.id || gameStarted(room) || room.mode === 'auto') return
+      const quizId = payload?.quizId
+      if (typeof quizId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quizId)) return
+      room.quizId = quizId
+      app.log.info({ roomCode: code, quizId }, 'quiz déclaré pour la salle')
+    })
+
     socket.on('game:setMode', payload => {
       const code = payload?.roomCode
       const room = rooms.get(code)

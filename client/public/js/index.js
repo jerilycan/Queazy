@@ -4992,6 +4992,20 @@ socket.on('player:kicked', ({ message }) => {
 // abouti. loadedInfo (déjà l'endroit où le statut "Aucun quiz sélectionné"/
 // "Quiz chargé: ..." s'affiche) sert aussi d'indicateur de chargement, visible
 // même après la fermeture du popup.
+// Tâche 048 : le serveur ne connaît pas le quiz de la partie (il vit dans
+// loadedQuiz, côté hôte) — or c'est lui qui enregistre les résultats et
+// signale "X a déjà participé". Déclaré à la sélection du quiz ET à la
+// création de la salle (le quiz peut finir de se charger AVANT room:created,
+// voir le lancement direct "Quiz publics"). Seuls les quiz de la table
+// `quizzes` (id uuid) sont déclarés : les quiz "Jouer" (auto-...) et l'aperçu
+// banque n'ont pas d'id stable, jamais enregistrés.
+const QUIZ_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const declareQuizToServer = () => {
+  const roomCode = roomInput.value.trim()
+  const quizId = loadedQuiz?.id
+  if (!isHost || !roomCode || typeof quizId !== 'string' || !QUIZ_UUID_RE.test(quizId)) return
+  socket.emit('room:setQuiz', { roomCode, quizId })
+}
 const loadQuizById = (id) => {
   if (loadedInfo) loadedInfo.textContent = 'Chargement du quiz...'
   return window.supabaseClient
@@ -5106,6 +5120,7 @@ const loadQuizById = (id) => {
       // de loadedQuiz.title, pas de nouvel état.
       const hostQuizTitleEl = document.getElementById('hostQuizTitle')
       if (hostQuizTitleEl) hostQuizTitleEl.textContent = loadedQuiz.title || ''
+      declareQuizToServer()
     })
     .catch((err) => {
       // Bug corrigé (audit UX) : catch vide sans commentaire, qui avalait
@@ -5520,6 +5535,7 @@ socket.on('room:created', ({ roomCode, serverUrl, hostToken, mode, autoConfig })
   // server/index.js room:create), pas besoin d'attendre un aller-retour
   // supplémentaire pour afficher le bon panneau hôte dès le lobby.
   applyRoomMode(mode, autoConfig)
+  declareQuizToServer()
   showLobby()
   hideBuilder()
   const jc = document.getElementById('joinCard')
