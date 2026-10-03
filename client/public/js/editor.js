@@ -5591,6 +5591,7 @@ const persistQuiz = async (successMessage) => {
         .single()
       if (error) throw error
       currentId = data.id
+      if (participantsQuizBtn) participantsQuizBtn.classList.remove('d-none')
       showSaveSuccess('Quiz créé et sauvegardé !')
       markSaved()
     }
@@ -5722,6 +5723,70 @@ if (reportQuizBtn && reportPopup) {
   }
 }
 
+// Tâche 048 : "Liste des joueurs ayant participé" — réservée au propriétaire
+// (le bouton n'est montré qu'à lui, et la fonction SQL quiz_participants
+// renvoie de toute façon une liste vide à tout autre appelant). Seuls les
+// joueurs CONNECTÉS ayant terminé une partie y figurent (voir supabase/schema.sql).
+const participantsQuizBtn = document.getElementById('participantsQuizBtn')
+if (participantsQuizBtn) {
+  participantsQuizBtn.onclick = async () => {
+    if (!currentId) return
+    const overlay = document.createElement('div')
+    overlay.className = 'modal-overlay'
+    const card = document.createElement('div')
+    card.className = 'modal-content card participants-modal'
+    const title = document.createElement('h2')
+    title.className = 'mb-lg font-32'
+    title.textContent = 'Joueurs ayant participé'
+    const body = document.createElement('div')
+    body.textContent = 'Chargement…'
+    const actions = document.createElement('div')
+    actions.className = 'd-flex gap-sm justify-end mt-lg'
+    const closeBtn = document.createElement('button')
+    closeBtn.className = 'btn btn-primary h-48'
+    closeBtn.type = 'button'
+    closeBtn.textContent = 'Fermer'
+    actions.appendChild(closeBtn)
+    card.append(title, body, actions)
+    overlay.appendChild(card)
+    document.body.appendChild(overlay)
+    const close = () => overlay.remove()
+    closeBtn.onclick = close
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close() })
+
+    const { data, error } = await sb.rpc('quiz_participants', { p_quiz_id: currentId })
+    body.textContent = ''
+    if (error) {
+      body.textContent = 'Impossible de charger la liste pour le moment.'
+      return
+    }
+    if (!data || !data.length) {
+      body.textContent = "Personne n'a encore terminé ce quiz (seuls les joueurs connectés sont comptés)."
+      return
+    }
+    const table = document.createElement('table')
+    table.className = 'participants-table'
+    const head = document.createElement('tr')
+    ;['Joueur', 'Parties', 'Meilleur score', 'Dernière partie'].forEach(h => {
+      const th = document.createElement('th')
+      th.textContent = h
+      head.appendChild(th)
+    })
+    table.appendChild(head)
+    data.forEach(row => {
+      const tr = document.createElement('tr')
+      const cells = [row.player_name, String(row.plays), `${row.best_score} pts`, new Date(row.last_played).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })]
+      cells.forEach(c => {
+        const td = document.createElement('td')
+        td.textContent = c
+        tr.appendChild(td)
+      })
+      table.appendChild(tr)
+    })
+    body.appendChild(table)
+  }
+}
+
 deleteQuizBtn.onclick = async () => {
   if (readOnly) return
   if (!currentId) return
@@ -5806,6 +5871,7 @@ const init = () => {
         if (!session || session.user.id !== data.owner_id) {
           applyReadOnly()
         } else if (duplicateQuizBtn) {
+          if (participantsQuizBtn) participantsQuizBtn.classList.remove('d-none')
           // Jusqu'ici visible uniquement en lecture seule (quiz d'un autre
           // créateur) — retour utilisateur : aucun moyen de dupliquer son
           // PROPRE quiz pour en créer une variante, un usage tout aussi

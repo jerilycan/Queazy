@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.30.2'
+const APP_VERSION = '2.31.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -1104,6 +1104,82 @@ const start = async () => {
   // l'attente complète de toutes les tuiles.
   const ANSWER_WINDOW_BUFFER_MS = 900
 
+  // Tâche 048 : identité d'un joueur connecté. Le client joint son jeton de
+  // session Supabase à la connexion (socket.handshake.auth.accessToken) ; on le
+  // fait vérifier par Supabase (auth.getUser) plutôt que de croire un id reçu.
+  // Résultat mémorisé par socket : pas d'aller-retour à chaque room:join.
+  const resolveSocketUserId = async (socket) => {
+    if (socket.data.userIdResolved) return socket.data.userId || null
+    socket.data.userIdResolved = true
+    const jwt = socket.handshake?.auth?.accessToken
+    if (!jwt || typeof jwt !== 'string') return null
+    try {
+      const { data, error } = await supabaseAdmin.auth.getUser(jwt)
+      if (error) {
+        app.log.warn({ err: error.message }, 'jeton de session refusé')
+        return null
+      }
+      socket.data.userId = data?.user?.id || null
+      return socket.data.userId
+    } catch (err) {
+      app.log.warn({ err: err.message }, 'vérification du jeton de session impossible')
+      return null
+    }
+  }
+
+  // Tâche 048 : enregistre le résultat de chaque joueur CONNECTÉ à la fin d'une
+  // partie terminée (quiz:end) d'un quiz de la table `quizzes` en mode
+  // "Présenter" (room.quizId n'est posé que dans ce cas, voir room:setQuiz).
+  // Le serveur n'a que la clé anon : chaque ligne est insérée avec le JETON DE
+  // SESSION du joueur concerné (room.playerAuth), ce qui laisse la policy RLS
+  // "player_id = auth.uid()" (supabase/schema.sql) faire foi — le score, lui,
+  // est celui du serveur, jamais fourni par le client. L'hôte, les invités
+  // (pas de jeton) et le mode équipe (score individuel conservé) : hôte
+  // exclu, invités ignorés. Un jeton expiré (partie très longue) fait échouer
+  // CETTE ligne seulement : journalisé, jamais bloquant pour la fin de partie.
+  // Tâche 048 : signale à l'HÔTE (seul destinataire) quels joueurs connectés du
+  // salon ont déjà terminé le quiz choisi — appelé à la sélection du quiz et à
+  // chaque arrivée d'un joueur identifié. Liste vide envoyée aussi quand plus
+  // personne n'est concerné (changement de quiz), pour effacer les alertes.
+  // Invités jamais signalés : pas d'identité fiable (voir tâche 048).
+  const notifyAlreadyPlayed = async (code, room) => {
+    if (!room.hostId) return
+    const candidates = room.quizId ? Array.from(room.players.values()).filter(p => p.userId && p.token !== room.hostToken) : []
+    let played = []
+    if (candidates.length) {
+      const { data, error } = await supabaseAdmin.rpc('quiz_has_played', { p_quiz_id: room.quizId, p_player_ids: candidates.map(p => p.userId) })
+      if (error) { app.log.warn({ roomCode: code, err: error.message }, 'participation passée indisponible'); return }
+      const ids = new Set(data || [])
+      played = candidates.filter(p => ids.has(p.userId)).map(p => ({ id: p.id, name: p.name }))
+    }
+    io.to(room.hostId).emit('lobby:alreadyPlayed', { players: played })
+  }
+
+  const saveQuizResults = async (code, room) => {
+    if (!room.quizId || room.resultsSaved || !room.playerAuth) return
+    room.resultsSaved = true
+    const rows = []
+    for (const p of room.players.values()) {
+      if (p.token === room.hostToken) continue
+      const auth = room.playerAuth.get(p.token)
+      if (!auth) continue
+      rows.push({ auth, row: { quiz_id: room.quizId, player_id: auth.userId, player_name: p.name, score: room.scores.get(p.id) ?? p.score ?? 0, room_code: code } })
+    }
+    await Promise.all(rows.map(async ({ auth, row }) => {
+      try {
+        const asPlayer = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          global: { headers: { Authorization: `Bearer ${auth.jwt}` } },
+          auth: { persistSession: false, autoRefreshToken: false }
+        })
+        const { error } = await asPlayer.from('quiz_results').insert(row)
+        if (error) app.log.warn({ roomCode: code, userId: auth.userId, err: error.message }, 'résultat de quiz non enregistré')
+        else app.log.info({ roomCode: code, userId: auth.userId, score: row.score }, 'résultat de quiz enregistré')
+      } catch (err) {
+        app.log.warn({ roomCode: code, userId: auth.userId, err: err.message }, 'résultat de quiz non enregistré')
+      }
+    }))
+  }
+
   io.on('connection', socket => {
     // Synchronisation d'horloge (retour utilisateur : "le téléphone a 2
     // secondes d'avance sur le PC, même sur l'hôte") — tous les minuteurs
@@ -1290,6 +1366,22 @@ const start = async () => {
       }
       room.tokens.set(token, { id: socket.id, name, score: room.scores.get(socket.id), teamId: player.teamId })
 
+      // Joueur connecté (hors hôte) : on retient son compte et son jeton de
+      // session, indexés par son token de salle (stable d'une reconnexion à
+      // l'autre). Le jeton servira à enregistrer SON résultat en fin de partie
+      // (le serveur n'a que la clé anon : l'écriture passe par la policy RLS
+      // "player_id = auth.uid()", voir supabase/schema.sql, quiz_results).
+      if (!isHostJoining) {
+        const userId = await resolveSocketUserId(socket)
+        if (userId) {
+          player.userId = userId
+          if (!room.playerAuth) room.playerAuth = new Map()
+          room.playerAuth.set(token, { userId, jwt: socket.handshake.auth.accessToken })
+          app.log.info({ roomCode: code, userId }, 'joueur connecté identifié')
+          if (room.quizId) notifyAlreadyPlayed(code, room)
+        }
+      }
+
       await socket.join(code)
       socket.emit('player:token', { token })
       io.to(code).emit('player:joined', { id: socket.id, name })
@@ -1462,6 +1554,21 @@ const start = async () => {
     // côté client, body.irl-player-mode) : ne change jamais le calcul du
     // score ni aucune règle de jeu, seulement ce qui s'affiche sur le
     // téléphone des JOUEURS (navbar/image décorative masquées en IRL).
+    // Tâche 048 : l'hôte déclare l'id (uuid, table `quizzes`) du quiz choisi.
+    // Même garde que game:setMode (hôte seul, avant le lancement) ; ignoré en
+    // mode "Jouer" (quiz généré, rien à enregistrer). Un id mal formé est
+    // refusé : il servira plus tard de clé d'écriture en base.
+    socket.on('room:setQuiz', payload => {
+      const code = payload?.roomCode
+      const room = rooms.get(code)
+      if (!room || room.hostId !== socket.id || gameStarted(room) || room.mode === 'auto') return
+      const quizId = payload?.quizId
+      if (typeof quizId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(quizId)) return
+      room.quizId = quizId
+      app.log.info({ roomCode: code, quizId }, 'quiz déclaré pour la salle')
+      notifyAlreadyPlayed(code, room)
+    })
+
     socket.on('game:setMode', payload => {
       const code = payload?.roomCode
       const room = rooms.get(code)
@@ -1625,6 +1732,19 @@ const start = async () => {
       // Nouvelle question : le classement affiché pour la précédente n'a
       // plus lieu d'être resynchronisé à un reconnectant (voir room:join).
       room.leaderboardShown = false
+
+      // Tâche 048 : "score à battre" annoncé à toute la salle au lancement de la
+      // 1re question (quiz de la table `quizzes` uniquement, room.quizId). Rien
+      // n'est envoyé si le quiz n'a jamais été terminé. Asynchrone : n'allonge
+      // jamais le démarrage de la question, un échec est juste journalisé.
+      if (room.history.length === 0 && room.quizId) {
+        const quizId = room.quizId
+        supabaseAdmin.rpc('quiz_top_scores', { p_quiz_id: quizId, p_limit: 1 }).then(({ data, error }) => {
+          if (error) { app.log.warn({ roomCode: code, err: error.message }, 'score à battre indisponible'); return }
+          const best = data && data[0]
+          if (best) io.to(code).emit('quiz:bestScore', { name: best.player_name, score: best.score })
+        })
+      }
 
       const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {}, deltas: {}, answers: {} }
       room.history.push(historyEntry)
@@ -2844,7 +2964,10 @@ const start = async () => {
       const room = rooms.get(code)
       if (room) {
         room.ended = true
-        io.to(code).emit('quiz:end')
+        io.to(code).emit('quiz:end', { quizId: room.quizId || null })
+        // Seul l'hôte clôt réellement la partie : ce handler n'a historiquement
+        // pas de garde d'hôte, un autre socket ne doit pas déclencher d'écriture.
+        if (socket.id === room.hostId) saveQuizResults(code, room)
         // Nettoyage différé : laisse le temps à tout le monde de consulter les
         // résultats avant de libérer la salle (elle n'est plus auto-supprimée
         // au disconnect une fois "ended").

@@ -359,3 +359,85 @@ create policy "bank_questions: ajout par un utilisateur connecte" on public.bank
 create index if not exists bank_questions_category_idx on public.bank_questions (category);
 create index if not exists bank_questions_difficulty_idx on public.bank_questions (difficulty);
 create index if not exists bank_questions_type_idx on public.bank_questions (type);
+
+-- ============================================================
+-- quiz_results (tâche 048) : un résultat par joueur CONNECTÉ et par partie
+-- terminée d'un quiz (mode "Présenter" uniquement — jamais les quiz "Jouer"
+-- générés, sans id stable ni les invités, sans compte). Alimente le "score à
+-- battre", le top 3 de fin de partie, l'avertissement "X a déjà participé" et
+-- la liste des participants du propriétaire.
+--
+-- Écriture : le serveur n'a que la clé anon (pas de service_role). Il insère
+-- donc chaque ligne AVEC LE JETON DE SESSION du joueur concerné (voir
+-- server/index.js) : la policy ci-dessous n'autorise que player_id = auth.uid(),
+-- le score reste calculé côté serveur, jamais fourni par le client.
+-- Lecture : la table elle-même n'est lisible que par le PROPRIÉTAIRE du quiz ;
+-- le top 3 et "a déjà participé" passent par des fonctions security definer
+-- qui n'exposent que le strict minimum (pseudo, score, date / ids).
+-- À exécuter une fois dans le SQL Editor de Supabase.
+-- ============================================================
+create table if not exists public.quiz_results (
+  id uuid primary key default gen_random_uuid(),
+  quiz_id uuid not null references public.quizzes(id) on delete cascade,
+  player_id uuid not null references auth.users(id) on delete cascade,
+  player_name text not null,
+  score integer not null,
+  room_code text,
+  played_at timestamptz not null default now()
+);
+create index if not exists quiz_results_quiz_score_idx on public.quiz_results (quiz_id, score desc);
+create index if not exists quiz_results_quiz_player_idx on public.quiz_results (quiz_id, player_id);
+
+alter table public.quiz_results enable row level security;
+
+drop policy if exists "quiz_results: un joueur enregistre son propre resultat" on public.quiz_results;
+create policy "quiz_results: un joueur enregistre son propre resultat" on public.quiz_results
+  for insert to authenticated with check (player_id = auth.uid());
+
+drop policy if exists "quiz_results: lecture par le proprietaire du quiz" on public.quiz_results;
+create policy "quiz_results: lecture par le proprietaire du quiz" on public.quiz_results
+  for select to authenticated using (
+    exists (select 1 from public.quizzes q where q.id = quiz_results.quiz_id and q.owner_id = auth.uid())
+  );
+
+-- Top N d'un quiz : meilleur score de CHAQUE joueur (pas plusieurs lignes du
+-- même joueur), pseudo + score + date seulement. Lisible par tout le monde.
+create or replace function public.quiz_top_scores(p_quiz_id uuid, p_limit integer default 3)
+returns table (player_name text, score integer, played_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select t.player_name, t.score, t.played_at
+  from (
+    select distinct on (r.player_id) r.player_name, r.score, r.played_at
+    from public.quiz_results r
+    where r.quiz_id = p_quiz_id
+    order by r.player_id, r.score desc, r.played_at asc
+  ) t
+  order by t.score desc, t.played_at asc
+  limit greatest(p_limit, 1);
+$$;
+
+-- Parmi ces joueurs, lesquels ont déjà terminé ce quiz (ids seulement).
+create or replace function public.quiz_has_played(p_quiz_id uuid, p_player_ids uuid[])
+returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select distinct r.player_id
+  from public.quiz_results r
+  where r.quiz_id = p_quiz_id and r.player_id = any(p_player_ids);
+$$;
+
+-- Liste des participants, RÉSERVÉE au propriétaire du quiz (vérifié dans la
+-- fonction : tout autre appelant obtient une liste vide).
+create or replace function public.quiz_participants(p_quiz_id uuid)
+returns table (player_name text, plays bigint, best_score integer, last_played timestamptz)
+language sql stable security definer set search_path = public as $$
+  select (array_agg(r.player_name order by r.played_at desc))[1], count(*), max(r.score), max(r.played_at)
+  from public.quiz_results r
+  where r.quiz_id = p_quiz_id
+    and exists (select 1 from public.quizzes q where q.id = p_quiz_id and q.owner_id = auth.uid())
+  group by r.player_id
+  order by max(r.score) desc;
+$$;
+
+grant execute on function public.quiz_top_scores(uuid, integer) to anon, authenticated;
+grant execute on function public.quiz_has_played(uuid, uuid[]) to anon, authenticated;
+grant execute on function public.quiz_participants(uuid) to authenticated;

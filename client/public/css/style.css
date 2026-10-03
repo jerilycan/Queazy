@@ -1618,6 +1618,9 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   pointer-events: none;
 }
 
+/* Barre vide (scaleX ~ 0) : son box-shadow (lueur cyan/rouge) survivait en fine
+   ligne verticale au bord gauche du rail — masquée explicitement. */
+.timer-bar-fill.timer-empty { opacity: 0; box-shadow: none; }
 .timer-urgent {
   background: linear-gradient(90deg, var(--tile-red), #f97316) !important;
   animation: timer-pulse 0.5s infinite alternate;
@@ -1668,9 +1671,6 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
-/* Barre vide (scaleX ~ 0) : son box-shadow (lueur cyan/rouge) survivait en fine
-   ligne verticale au bord gauche du rail — masquée explicitement. */
-.timer-bar-fill.timer-empty { opacity: 0; box-shadow: none; }
 .grad-step-btn:hover {
   background: rgba(var(--color-accent-rgb), 0.3);
   border-color: var(--color-accent);
@@ -3385,6 +3385,31 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   opacity: 1;
   border-color: rgba(var(--color-gold-rgb), 0.6);
 }
+/* Galerie de fin de question (voir index.js showIndiceGallery) : tous les
+   indices visibles en même temps, grille de cartes de taille égale. */
+.indice-area.indice-gallery { max-width: 900px; }
+.indice-area.indice-gallery .indice-central { display: none; }
+.indice-area.indice-gallery .indice-history {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-md);
+  min-height: 0;
+}
+.indice-gallery-card {
+  height: 170px;
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  box-shadow: var(--shadow-md);
+  border: 2px solid rgba(var(--color-gold-rgb), 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  box-sizing: border-box;
+  overflow: hidden;
+  animation: fadeIn 0.4s ease both;
+}
+.indice-gallery-card .indice-card-text { font-size: 18px; }
 .indice-card-text {
   font-weight: 700;
   font-size: 20px;
@@ -3461,6 +3486,17 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   background: linear-gradient(180deg, var(--color-cyan), var(--color-accent));
   transform-origin: 50% 0%;
   animation: orbBarFlicker 1.2s ease-in-out infinite;
+  /* Hauteur = base (--h, posée en JS) x facteur lié à SA bande de fréquences
+     (--lvl 0..1, voir startBlindTestPulse) : les barres bougent au rythme du
+     morceau. Sans --lvl (repos/pas de son), petit facteur neutre. */
+  height: calc(var(--h, 20px) * (0.55 + var(--lvl, 0.3) * 1.6));
+  transition: height 0.06s linear;
+}
+/* Pendant la lecture, l'opacité suit aussi le niveau (plus de scintillement
+   générique) ; au repos (.orb-idle) le scintillement d'origine est conservé. */
+.blindtest-orb:not(.orb-idle) .blindtest-orb-bar {
+  animation: none;
+  opacity: calc(0.45 + var(--lvl, 0.3) * 0.55);
 }
 @keyframes orbBarFlicker {
   0%, 100% { opacity: 0.55; }
@@ -3525,17 +3561,6 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 }
 
 /* Tâche 033 (retour utilisateur : "le son pendant la question était trop
-  /* Hauteur = base (--h, posée en JS) x facteur lié à SA bande de fréquences
-     (--lvl 0..1, voir startBlindTestPulse) : les barres bougent au rythme du
-     morceau. Sans --lvl (repos/pas de son), petit facteur neutre. */
-  height: calc(var(--h, 20px) * (0.55 + var(--lvl, 0.3) * 1.6));
-  transition: height 0.06s linear;
-}
-/* Pendant la lecture, l'opacité suit aussi le niveau (plus de scintillement
-   générique) ; au repos (.orb-idle) le scintillement d'origine est conservé. */
-.blindtest-orb:not(.orb-idle) .blindtest-orb-bar {
-  animation: none;
-  opacity: calc(0.45 + var(--lvl, 0.3) * 0.55);
    fort") : petite icône flottante pour le son facultatif (#bonusAudioPlayer,
    tâche 027) — visible UNIQUEMENT pendant que ce son joue (toggle en JS,
    voir playBonusAudio/stopBonusAudio). Coin bas-droit : seul endroit
@@ -4783,6 +4808,8 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
        permet de centrer une dernière rangée incomplète (--gc-start, posé en JS). */
     grid-template-columns: repeat(calc(var(--mcq-cols, 2) * 2), 1fr);
   }
+  body.is-host.game-active .container .options-grid:not(.truefalse-grid):not(.intrus-grid) > .option-btn { grid-column: span 2; }
+  body.is-host.game-active .container .options-grid:not(.truefalse-grid):not(.intrus-grid) > .option-btn[style*="--gc-start"] { grid-column: var(--gc-start) / span 2; }
   /* Tâche 030 (disposition dédiée par type de question) : Blind Test est
      le type où l'hôte n'a QUE l'orbe à regarder pendant toute la question
      (pas de tuiles à lire) — le garder à sa taille mobile (176px) sur une
@@ -4847,8 +4874,6 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
     /* !important : #inputArea reçoit display:block en INLINE à chaque
        question (voir index.js, question:show — même piège déjà rencontré/
        déjà corrigé pour #main plus haut dans ce fichier, voir son
-  body.is-host.game-active .container .options-grid:not(.truefalse-grid):not(.intrus-grid) > .option-btn { grid-column: span 2; }
-  body.is-host.game-active .container .options-grid:not(.truefalse-grid):not(.intrus-grid) > .option-btn[style*="--gc-start"] { grid-column: var(--gc-start) / span 2; }
        commentaire). Sans ça, cette règle est ignorée : #inputArea reste
        display:block, .reveal-area/etc. ci-dessous n'ont alors aucune
        hauteur définie à hériter (leurs propres enfants — .reveal-img-wrap
@@ -6035,6 +6060,19 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .reveal-popup-answer-title.is-incorrect { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
 .reveal-popup-answer-title.is-close { background: var(--tile-yellow); color: #3a2e00; }
 
+/* Popup de révélation sur grand écran (retour utilisateur : "la popup est trop
+   petite" sur l'écran du MJ — carte plafonnée à 560px, image à 420px, titre à
+   20px, minuscule au milieu d'un écran desktop). Téléphones (< 900px) inchangés.
+   Largeur de l'image aussi bornée par la hauteur d'écran (52vh, ratio 4/3) pour
+   que la carte reste entière à l'écran ; la TV a ses propres règles plus bas
+   (body.display-body #displayPopup ...), plus spécifiques. */
+@media (min-width: 900px) {
+  .reveal-popup-card { width: min(900px, 92vw); }
+  .reveal-popup-answer-title { font-size: 30px; padding: 18px 28px; }
+  .reveal-popup-card > .reveal-explanation { font-size: 20px; }
+  .reveal-popup-card > .reveal-media-img-wrap { width: min(640px, 100%, 52vh); }
+}
+
 .log-message { margin-top: 40px; font-size: 14px; text-align: center; color: rgba(255,255,255,0.85); font-weight: 700; }
 
 .bg-accent { background: var(--color-accent) !important; }
@@ -6120,19 +6158,6 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   height: 2px;
   border-radius: 2px;
   background: white;
-/* Popup de révélation sur grand écran (retour utilisateur : "la popup est trop
-   petite" sur l'écran du MJ — carte plafonnée à 560px, image à 420px, titre à
-   20px, minuscule au milieu d'un écran desktop). Téléphones (< 900px) inchangés.
-   Largeur de l'image aussi bornée par la hauteur d'écran (52vh, ratio 4/3) pour
-   que la carte reste entière à l'écran ; la TV a ses propres règles plus bas
-   (body.display-body #displayPopup ...), plus spécifiques. */
-@media (min-width: 900px) {
-  .reveal-popup-card { width: min(900px, 92vw); }
-  .reveal-popup-answer-title { font-size: 30px; padding: 18px 28px; }
-  .reveal-popup-card > .reveal-explanation { font-size: 20px; }
-  .reveal-popup-card > .reveal-media-img-wrap { width: min(640px, 100%, 52vh); }
-}
-
   transition: transform 0.25s ease, opacity 0.2s ease;
 }
 .navbar.nav-open .menu-toggle-btn span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
@@ -9484,6 +9509,11 @@ body.display-body #timerContainer {
      centre exactement sur cette ligne, au lieu de caler son propre bord
      haut dessus. */
   top: calc(3vh + 19px);
+  /* Centrée (retour utilisateur : "la barre n'est pas centrée en haut") mais
+     RACCOURCIE symétriquement pour que son bord gauche reste à droite du badge de
+     type, même avec un libellé long ("Choix multiples", "ZoomOut Devinette"...) :
+     réserve 3vw (marge du badge) + 300px (largeur max du badge) de chaque côté.
+     Centrée sur 70vw, elle passait SOUS le badge à 1280x720. */
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(1100px, calc(100vw - 2 * (3vw + 300px)));
@@ -9550,6 +9580,13 @@ body.display-body #main:not(.d-none) {
   flex-direction: column;
   align-items: center;
   min-height: 0; /* laisse .options-grid se réduire plutôt que déborder (flex enfant) */
+  /* Bug remonté en test réel ("marge géante entre la timebar et le libellé
+     de la question") : #main porte la classe .mt-40 dans le HTML source
+     (voir index.html — pensée pour la carte MJ, sous la navbar), jamais
+     neutralisée côté TV jusqu'ici — s'ajoutait au-dessus du padding-top déjà
+     réservé sur #displayStage pour le bandeau badge/minuteur fixe (voir plus
+     bas), creusant un espace mort avant même le premier enfant visible. */
+  margin-top: 0;
 }
 
 body.display-body #questionCategoryBadge { font-size: clamp(13px, 1.4vw, 20px); }
@@ -9566,12 +9603,16 @@ body.display-body #question {
      hauteur dès qu'il y a une image ou des propositions (retour utilisateur). */
   font-size: clamp(26px, 4vw, 64px);
   margin-bottom: 3vh;
+  /* Évite le "?" (ou un seul mot) seul sur la 2e ligne d'un énoncé long. */
+  text-wrap: balance;
 }
 
 /* Image d'illustration : plus grande que sur l'écran de jeu MJ
    (.illustration-img de base, pensée pour cohabiter avec timer/tuiles dans
    une carte compacte) — ici elle a tout l'écran pour elle. */
 body.display-body .illustration-img {
+  /* 38vh -> 52vh (retour utilisateur : images minuscules sur TV) ; un éventuel
+     débordement est absorbé par fitDisplayContent (display.js). */
   max-height: 52vh;
   max-width: 82vw;
   margin-bottom: 3vh;
@@ -9598,8 +9639,6 @@ body.display-body .illustration-img-wrap.is-zoomed { width: min(1000px, 88vw); }
 body.display-body .illustration-img-wrap.zoomguess-visible:not(.is-zoomed) {
   position: relative;
   overflow: hidden;
-  /* 38vh -> 52vh (retour utilisateur : images minuscules sur TV) ; un éventuel
-     débordement est absorbé par fitDisplayContent (display.js). */
   max-height: 52vh;
   border-radius: var(--radius-lg);
 }
@@ -9614,11 +9653,6 @@ body.display-body .options-grid {
   margin-top: 0;
 }
 /* Même logique que la régie desktop MJ (voir body.is-host.game-active
-  /* Centrée (retour utilisateur : "la barre n'est pas centrée en haut") mais
-     RACCOURCIE symétriquement pour que son bord gauche reste à droite du badge de
-     type, même avec un libellé long ("Choix multiples", "ZoomOut Devinette"...) :
-     réserve 3vw (marge du badge) + 300px (largeur max du badge) de chaque côté.
-     Centrée sur 70vw, elle passait SOUS le badge à 1280x720. */
    .container .options-grid:not(...) plus haut dans ce fichier) : le nombre
    de colonnes suit --mcq-cols (posé en JS côté MJ selon le nombre d'options,
    voir index.js renderQuestion — la valeur voyage telle quelle dans le style
@@ -9628,6 +9662,8 @@ body.display-body .options-grid {
   body.display-body .options-grid:not(.truefalse-grid):not(.intrus-grid) {
     grid-template-columns: repeat(calc(var(--mcq-cols, 2) * 2), 1fr);
   }
+  body.display-body .options-grid:not(.truefalse-grid):not(.intrus-grid) > .option-btn { grid-column: span 2; }
+  body.display-body .options-grid:not(.truefalse-grid):not(.intrus-grid) > .option-btn[style*="--gc-start"] { grid-column: var(--gc-start) / span 2; }
 }
 body.display-body .option-btn {
   min-height: 16vh;
@@ -9688,13 +9724,6 @@ body.display-body .option-btn.intrus-tile {
      pas reproduit dans le bac à sable qui n'avait testé que des tuiles
      texte) : .options-grid.intrus-grid .option-btn.intrus-tile côté base
      (4 classes, voir plus haut dans ce fichier) bat cette règle-ci (3
-  /* Bug remonté en test réel ("marge géante entre la timebar et le libellé
-     de la question") : #main porte la classe .mt-40 dans le HTML source
-     (voir index.html — pensée pour la carte MJ, sous la navbar), jamais
-     neutralisée côté TV jusqu'ici — s'ajoutait au-dessus du padding-top déjà
-     réservé sur #displayStage pour le bandeau badge/minuteur fixe (voir plus
-     bas), creusant un espace mort avant même le premier enfant visible. */
-  margin-top: 0;
      classes + body) sur la SEULE spécificité malgré le sélecteur plus
      "spécifique en apparence" — son propre max-height (min(320px,36vh),
      pensé pour la carte MJ) gagnait donc toujours pour une tuile PHOTO,
@@ -9708,8 +9737,6 @@ body.display-body .option-btn.intrus-tile {
    base (3 classes) bat le padding/police générique de .option-btn côté TV
    ci-dessus (2 classes + body) sur la SEULE spécificité — le padding
    restait donc à l'échelle carte MJ (20px/56px fixes) alors que la grille
-  /* Évite le "?" (ou un seul mot) seul sur la 2e ligne d'un énoncé long. */
-  text-wrap: balance;
    étire la tuile à la hauteur des photos voisines (align-items:stretch
    implicite de la grille), laissant un texte minuscule perdu dans un grand
    bloc coloré vide. Reprend ICI, avec une spécificité suffisante pour
@@ -9765,8 +9792,6 @@ body.display-body .grad-bound { font-size: clamp(16px, 1.6vw, 28px); }
    .order-item-text, enfant sans font-size propre) ; .timeline-item n'en a
    pas (texte porté par .timeline-item-title/-desc, deux enfants), d'où le
    ciblage direct de ces deux-là. */
-  body.display-body .options-grid:not(.truefalse-grid):not(.intrus-grid) > .option-btn { grid-column: span 2; }
-  body.display-body .options-grid:not(.truefalse-grid):not(.intrus-grid) > .option-btn[style*="--gc-start"] { grid-column: var(--gc-start) / span 2; }
 /* max-width élargi (correctif de la vérification tâche 042 étape A, après le
    premier passage écart #1) : à 1300px/78vw, une description "timeline" un
    peu longue (~45 caractères, cas réaliste — voir test réel avec des
@@ -9972,6 +9997,10 @@ body.display-body .indice-central,
 body.display-body .indice-central-card { height: min(44vh, 540px); }
 body.display-body .indice-central-card .indice-card-text { font-size: clamp(22px, 3vw, 46px); }
 body.display-body .indice-history-card { width: clamp(110px, 9vw, 170px); height: clamp(110px, 9vw, 170px); }
+body.display-body .indice-area.indice-gallery { max-width: min(1500px, 90vw); }
+body.display-body .indice-area.indice-gallery .indice-history { grid-template-columns: repeat(auto-fit, minmax(clamp(220px, 20vw, 380px), 1fr)); }
+body.display-body .indice-gallery-card { height: clamp(150px, 20vh, 260px); }
+body.display-body .indice-gallery-card .indice-card-text { font-size: clamp(20px, 2.2vw, 36px); }
 body.display-body .indice-history-card .indice-card-text { font-size: clamp(14px, 1.5vw, 24px); }
 
 /* Type "image" (clic sur l'image) : écart #4 relevé par l'agent design/
@@ -10032,6 +10061,25 @@ body.display-body #imageImg {
   max-width: 100%;
   max-height: min(54vh, 700px);
 }
+
+/* Contrôles réservés au MJ, sans sens sur une TV passive (aucune interaction
+   possible) : zoom manuel de l'image et curseur de volume du Blind Test (le
+   son reste sur le poste du MJ, voir tâche 042). Libère aussi la hauteur qu'ils
+   occupaient sous l'image/l'orbe (débordement + barre de défilement TV). */
+/* Bandeau "Bonne réponse : ..." sous la question : 16px de base (gabarit carte
+   MJ), illisible à distance sur une TV alors que l'énoncé fait ~60px. */
+/* Retour utilisateur : texte blanc sur fond vert peu lisible sur la TV. */
+body.display-body .reveal-answer:not(.is-incorrect):not(.is-close),
+body.display-body #displayPopup .reveal-popup-answer-title:not(.is-incorrect):not(.is-close) { color: #0a2a18; }
+body.display-body #revealAnswerText {
+  font-size: clamp(22px, 2.8vw, 48px);
+  padding: 1.6vh 2vw;
+}
+body.display-body .halo-counter { font-size: clamp(16px, 1.8vw, 28px); }
+body.display-body #imageZoomControls,
+body.display-body #gradDecBtn,
+body.display-body #gradIncBtn,
+body.display-body .blindtest-volume-row { display: none !important; }
 
 /* Intro par question (tâche 043, étape 1) — #displayIntro mirrore le CONTENU
    de #questionIntroOverlay (pas l'élément overlay lui-même, voir index.js
@@ -10150,6 +10198,16 @@ body.display-body #displayPopup .reveal-explanation {
 body.display-body #displayPopup .reveal-media-img {
   max-height: min(52vh, 620px);
 }
+/* Cadre de l'image de révélation : plafonné à 420px par la règle de base
+   (gabarit carte MJ), donc minuscule au milieu d'une carte TV de ~850px+
+   (retour utilisateur : "les images de reveal sont pas bien rendues").
+   Ratio 4/3 conservé (aspect-ratio de base) ; le transform de cadrage posé
+   côté MJ est rééchelonné à cette nouvelle largeur par rescaleCroppedImages
+   (display.js). 62vh borne la largeur pour que la hauteur (largeur x 0,75) tienne
+   dans la carte avec le titre. */
+body.display-body #displayPopup .reveal-media-img-wrap {
+  width: min(960px, 100%, 68vh);
+}
 /* Bouton de fermeture manuelle (#revealPopupCloseBtn) : inerte ici (aucun
    listener câblé côté display.js, voir ce fichier) — mirroré tel quel
    (fidélité au contenu réel de la popup MJ) plutôt que retiré, personne
@@ -10158,22 +10216,6 @@ body.display-body #displayPopup .reveal-media-img {
 /* Classement entre deux questions (retour utilisateur : "le classement
    n'est pas affiché lors des inter question sur la partie présentation") —
    #displayLeaderboard mirrore le CONTENU de #leaderOverlay (pas l'élément
-/* Contrôles réservés au MJ, sans sens sur une TV passive (aucune interaction
-   possible) : zoom manuel de l'image et curseur de volume du Blind Test (le
-   son reste sur le poste du MJ, voir tâche 042). Libère aussi la hauteur qu'ils
-   occupaient sous l'image/l'orbe (débordement + barre de défilement TV). */
-/* Bandeau "Bonne réponse : ..." sous la question : 16px de base (gabarit carte
-   MJ), illisible à distance sur une TV alors que l'énoncé fait ~60px. */
-body.display-body #revealAnswerText {
-  font-size: clamp(22px, 2.8vw, 48px);
-  padding: 1.6vh 2vw;
-}
-body.display-body .halo-counter { font-size: clamp(16px, 1.8vw, 28px); }
-body.display-body #imageZoomControls,
-body.display-body #gradDecBtn,
-body.display-body #gradIncBtn,
-body.display-body .blindtest-volume-row { display: none !important; }
-
    overlay lui-même, voir index.js : leaderHtml), donc la carte/liste
    mirrorée garde ses classes .leader-title/.leaderboard-list/.leader-row et
    leur style de base ; repositionné/agrandi ici comme #displayIntro et
@@ -10228,6 +10270,7 @@ body.display-body #displayLeaderboard #leaderNextBtn {
   opacity: 0;
   transition: opacity 0.25s;
 }
+body.display-ui-active .display-fullscreen-btn { opacity: 0.6; }
 .display-fullscreen-btn:hover,
 .display-fullscreen-btn:focus-visible { opacity: 1; }
 
@@ -10256,14 +10299,142 @@ body.display-body #displayLeaderboard #leaderNextBtn {
   body.display-body .option-btn::before { width: 24px; height: 24px; left: 16px; }
   body.display-body .option-btn.truefalse-btn { min-height: 120px; }
 }
-/* Cadre de l'image de révélation : plafonné à 420px par la règle de base
-   (gabarit carte MJ), donc minuscule au milieu d'une carte TV de ~850px+
-   (retour utilisateur : "les images de reveal sont pas bien rendues").
-   Ratio 4/3 conservé (aspect-ratio de base) ; le transform de cadrage posé
-   côté MJ est rééchelonné à cette nouvelle largeur par rescaleCroppedImages
-   (display.js). 62vh borne la largeur pour que la hauteur (largeur x 0,75) tienne
-   dans la carte avec le titre. */
-body.display-body #displayPopup .reveal-media-img-wrap {
-  width: min(960px, 100%, 68vh);
+
+/* Points ajoutés à la main par le MJ (voir index.js flashManualAdjust) :
+   pastille "+200"/"-100" qui apparaît à côté du score puis s'efface, et ligne
+   brièvement mise en évidence. */
+.manual-adjust-badge {
+  margin-left: auto;
+  margin-right: 10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.9em;
+  white-space: nowrap;
+  animation: manualAdjustPop 4.5s ease both;
 }
-body.display-ui-active .display-fullscreen-btn { opacity: 0.6; }
+.manual-adjust-badge.is-plus { background: var(--tile-green); color: #0a2a18; }
+.manual-adjust-badge.is-minus { background: var(--color-danger); color: white; }
+.has-manual-adjust { animation: manualAdjustRow 1.6s ease-out; }
+@keyframes manualAdjustPop {
+  0% { transform: scale(0.4) translateY(8px); opacity: 0; }
+  8% { transform: scale(1.25); opacity: 1; }
+  16% { transform: scale(1); }
+  85% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1) translateY(-6px); opacity: 0; }
+}
+@keyframes manualAdjustRow {
+  0% { box-shadow: 0 0 0 0 rgba(var(--color-gold-rgb), 0.9); }
+  100% { box-shadow: 0 0 0 14px rgba(var(--color-gold-rgb), 0); }
+}
+body.display-body .manual-adjust-badge { font-size: clamp(18px, 1.8vw, 30px); padding: 4px 16px; }
+@media (prefers-reduced-motion: reduce) {
+  .manual-adjust-badge, .has-manual-adjust { animation: none; }
+}
+
+/* Bandeau "Réponse attendue" de la popup de validation (voir index.js
+   setModerationExpected) : la bonne réponse, pour savoir quoi valider. */
+.moderation-expected {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-md);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(var(--tile-green-rgb), 0.16);
+  border: 1px solid rgba(var(--tile-green-rgb), 0.5);
+}
+.moderation-expected.d-none { display: none; }
+.moderation-expected-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); }
+.moderation-expected-value { font-size: 20px; font-weight: 800; color: var(--color-text); }
+
+/* Score à battre (tâche 048, voir index.js quiz:bestScore) : bandeau éphémère. */
+.best-score-banner {
+  position: fixed;
+  top: 84px;
+  left: 50%;
+  transform: translate(-50%, -12px);
+  z-index: 1700;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: var(--color-card);
+  border: 2px solid rgba(var(--color-gold-rgb), 0.7);
+  box-shadow: var(--shadow-lg);
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.best-score-banner.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* Top 3 du quiz sur la page de résultats (tâche 048, voir results.js). */
+.quiz-top-scores { max-width: 560px; margin: var(--space-lg) auto 0; }
+.quiz-top-title { font-size: 20px; margin-bottom: var(--space-sm); }
+.quiz-top-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  border: 1px solid rgba(var(--color-gold-rgb), 0.4);
+  font-weight: 700;
+  animation: fadeIn 0.4s ease both;
+}
+.quiz-top-name { flex: 1; text-align: left; }
+.quiz-top-score { color: var(--color-gold, #ffd24d); }
+
+/* Avertissement "a déjà participé" sur une tuile du salon (tâche 048, voir
+   index.js renderLobbyGrid) : pastille ⚠ + bulle au survol/focus. */
+.player-tile { position: relative; }
+.already-played-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tile-yellow);
+  color: #3a2e00;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: help;
+}
+.already-played-badge::after {
+  content: attr(data-tip);
+  position: absolute;
+  /* Sous le badge (et non au-dessus) : la grille des joueurs coupe tout ce qui
+     dépasse vers le haut. */
+  top: calc(100% + 8px);
+  left: 0;
+  width: max-content;
+  max-width: 200px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  border: 1px solid rgba(var(--tile-yellow-rgb), 0.7);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 20;
+}
+.already-played-badge:hover::after,
+.already-played-badge:focus-visible::after { opacity: 1; transform: translateY(0); }
+
+/* Liste des participants d'un quiz (tâche 048, voir editor.js participantsQuizBtn). */
+.participants-modal { max-width: 640px; width: calc(100% - 32px); max-height: 80vh; overflow-y: auto; }
+.participants-table { width: 100%; border-collapse: collapse; text-align: left; }
+.participants-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); padding: 6px 10px; }
+.participants-table td { padding: 10px; border-top: 1px solid var(--color-border); font-weight: 600; }

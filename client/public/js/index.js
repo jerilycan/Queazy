@@ -1,4 +1,22 @@
-const socket = io()
+// Tâche 048 : jeton de session Supabase joint à la connexion (fonction : relue
+// à CHAQUE (re)connexion, donc toujours le jeton rafraîchi). Le serveur le
+// vérifie avant de s'en servir pour savoir QUEL compte est ce joueur — jamais
+// un identifiant envoyé en clair. Invité / pas de session : pas de jeton,
+// comportement inchangé.
+const socket = io({
+  auth: async (cb) => {
+    let accessToken = null
+    try {
+      const { data } = await window.supabaseClient.auth.getSession()
+      accessToken = data?.session?.access_token || null
+    } catch (err) {
+      // supabase-js indisponible (réseau/CDN) : on se connecte sans jeton, le
+      // joueur sera simplement traité comme un invité pour l'historique.
+      console.warn('Jeton de session indisponible', err)
+    }
+    cb({ accessToken })
+  }
+})
 
 // Décalage d'horloge client/serveur (retour utilisateur : "le téléphone a
 // 2 secondes d'avance sur le PC, même sur l'hôte") — tous les minuteurs
@@ -2309,6 +2327,7 @@ const buildIndiceArea = (hints) => {
   indiceHistory.innerHTML = ''
   indiceHints = (hints || []).slice().sort((a, b) => (Number(a.delayS) || 0) - (Number(b.delayS) || 0))
   indiceState = { shown: [] }
+  if (indiceArea) indiceArea.classList.remove('indice-gallery')
 }
 
 // Contenu (texte ou image) d'une carte d'indice — réutilisé pour
@@ -2411,6 +2430,27 @@ const updateIndiceArea = (elapsedMs) => {
     card.appendChild(buildIndiceCardContent(hint))
     indiceCentral.appendChild(card)
   })
+}
+
+// Fin de question "indice" (retour utilisateur : "afficher tous les indices
+// sous forme de galerie pour qu'on puisse tout voir en même temps") : l'indice
+// central + la rangée de petites vignettes cèdent la place à une grille de
+// TOUS les indices, dans l'ordre d'apparition — y compris ceux qui n'avaient
+// pas encore eu le temps de sortir (question close en avance). Passe par les
+// mêmes éléments (#indiceArea/#indiceHistory) : le miroir TV la reprend tel
+// quel, sans canal dédié.
+const showIndiceGallery = () => {
+  if (!indiceArea || !indiceCentral || !indiceHistory || !indiceHints.length) return
+  indiceCentral.innerHTML = ''
+  indiceHistory.innerHTML = ''
+  indiceHints.forEach((hint, i) => {
+    const card = document.createElement('div')
+    card.className = 'indice-gallery-card'
+    card.style.animationDelay = `${i * 70}ms`
+    card.appendChild(buildIndiceCardContent(hint))
+    indiceHistory.appendChild(card)
+  })
+  indiceArea.classList.add('indice-gallery')
 }
 
 // --- Question "association" : relier les éléments A aux éléments B -------
@@ -3800,11 +3840,48 @@ if (scoreAdjustMinus100Btn) scoreAdjustMinus100Btn.onclick = () => applyScoreAdj
 // plus bas, volontairement silencieux jusqu'à la révélation) — celui-ci doit
 // au contraire se répercuter tout de suite partout, sans les effets de bord
 // propres à la mécanique de question (son de révélation, questionDeltas...).
-socket.on('score:adjust', ({ playerId, total }) => {
+// Retour utilisateur : "un visuel sur les points ajoutés manuellement par le MJ
+// (dans le classement qui suit l'ajout)". Pastille "+200"/"-100" accrochée à la
+// ligne du joueur (classement plein ET dock de la régie) pendant quelques
+// secondes. Mémorisée par joueur : le dock est reconstruit à chaque rendu, la
+// pastille doit y être remise tant que le délai n'est pas écoulé. Posée sur
+// des nœuds de #leaderOverlay/#liveClassementDock : le miroir TV la reprend
+// via ses MutationObserver habituels.
+const MANUAL_ADJUST_BADGE_MS = 4500
+const recentManualAdjust = new Map() // playerId -> { delta, until }
+const buildManualAdjustBadge = (delta) => {
+  const el = document.createElement('span')
+  el.className = `manual-adjust-badge ${delta >= 0 ? 'is-plus' : 'is-minus'}`
+  el.textContent = `${delta > 0 ? '+' : ''}${delta}`
+  return el
+}
+const flashManualAdjust = (playerId, delta) => {
+  if (!delta) return
+  recentManualAdjust.set(playerId, { delta, until: Date.now() + MANUAL_ADJUST_BADGE_MS })
+  const row = leaderRows.get(playerId)
+  if (row) {
+    row.querySelector('.manual-adjust-badge')?.remove()
+    row.classList.remove('has-manual-adjust')
+    void row.offsetWidth
+    row.classList.add('has-manual-adjust')
+    row.insertBefore(buildManualAdjustBadge(delta), row.querySelector('.leader-score'))
+  }
+  renderLiveClassementDock()
+  setTimeout(() => {
+    const cur = recentManualAdjust.get(playerId)
+    if (!cur || cur.until > Date.now()) return
+    recentManualAdjust.delete(playerId)
+    const r = leaderRows.get(playerId)
+    if (r) { r.querySelector('.manual-adjust-badge')?.remove(); r.classList.remove('has-manual-adjust') }
+    renderLiveClassementDock()
+  }, MANUAL_ADJUST_BADGE_MS + 50)
+}
+socket.on('score:adjust', ({ playerId, delta, total }) => {
   const s = scores.get(playerId) || { name: playerId, total: 0 }
   s.total = total
   scores.set(playerId, s)
   renderLeaderboard()
+  flashManualAdjust(playerId, delta)
   if (scoreAdjustFeedback && scoreAdjustTargetId === playerId) {
     scoreAdjustFeedback.textContent = `Score mis à jour : ${total} pts`
   }
@@ -4915,6 +4992,20 @@ socket.on('player:kicked', ({ message }) => {
 // abouti. loadedInfo (déjà l'endroit où le statut "Aucun quiz sélectionné"/
 // "Quiz chargé: ..." s'affiche) sert aussi d'indicateur de chargement, visible
 // même après la fermeture du popup.
+// Tâche 048 : le serveur ne connaît pas le quiz de la partie (il vit dans
+// loadedQuiz, côté hôte) — or c'est lui qui enregistre les résultats et
+// signale "X a déjà participé". Déclaré à la sélection du quiz ET à la
+// création de la salle (le quiz peut finir de se charger AVANT room:created,
+// voir le lancement direct "Quiz publics"). Seuls les quiz de la table
+// `quizzes` (id uuid) sont déclarés : les quiz "Jouer" (auto-...) et l'aperçu
+// banque n'ont pas d'id stable, jamais enregistrés.
+const QUIZ_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const declareQuizToServer = () => {
+  const roomCode = roomInput.value.trim()
+  const quizId = loadedQuiz?.id
+  if (!isHost || !roomCode || typeof quizId !== 'string' || !QUIZ_UUID_RE.test(quizId)) return
+  socket.emit('room:setQuiz', { roomCode, quizId })
+}
 const loadQuizById = (id) => {
   if (loadedInfo) loadedInfo.textContent = 'Chargement du quiz...'
   return window.supabaseClient
@@ -5029,6 +5120,7 @@ const loadQuizById = (id) => {
       // de loadedQuiz.title, pas de nouvel état.
       const hostQuizTitleEl = document.getElementById('hostQuizTitle')
       if (hostQuizTitleEl) hostQuizTitleEl.textContent = loadedQuiz.title || ''
+      declareQuizToServer()
     })
     .catch((err) => {
       // Bug corrigé (audit UX) : catch vide sans commentaire, qui avalait
@@ -5443,6 +5535,7 @@ socket.on('room:created', ({ roomCode, serverUrl, hostToken, mode, autoConfig })
   // server/index.js room:create), pas besoin d'attendre un aller-retour
   // supplémentaire pour afficher le bon panneau hôte dès le lobby.
   applyRoomMode(mode, autoConfig)
+  declareQuizToServer()
   showLobby()
   hideBuilder()
   const jc = document.getElementById('joinCard')
@@ -6258,6 +6351,15 @@ const renderHostPlayerStrip = (arr) => {
   })
 }
 
+// Tâche 048 : joueurs du salon ayant déjà terminé le quiz choisi (reçu de
+// l'hôte seul, voir server/index.js notifyAlreadyPlayed) — sert à poser un
+// avertissement sur leur tuile.
+let alreadyPlayedIds = new Set()
+socket.on('lobby:alreadyPlayed', ({ players }) => {
+  alreadyPlayedIds = new Set((players || []).map(p => p.id))
+  if (lastLobbyArr && lastLobbyArr.length) renderLobbyGrid(lastLobbyArr)
+})
+
 const renderLobbyGrid = (arr) => {
   lastLobbyArr = arr || []
   renderHostPlayerStrip(arr)
@@ -6533,6 +6635,18 @@ const renderLobbyGrid = (arr) => {
             if (ok) socket.emit('player:kick', { roomCode: roomInput.value.trim(), playerId: p.id })
           }
         }
+      }
+
+      // Tâche 048 : avertissement + bulle au survol (hôte seulement) quand ce
+      // joueur a déjà terminé le quiz choisi.
+      if (iAmHost && !isMe && alreadyPlayedIds.has(p.id)) {
+        const warn = document.createElement('div')
+        warn.className = 'already-played-badge'
+        warn.textContent = '⚠'
+        warn.setAttribute('data-tip', `Attention, ${p.name} a déjà participé à ce quiz`)
+        warn.setAttribute('aria-label', `Attention, ${p.name} a déjà participé à ce quiz`)
+        warn.tabIndex = 0
+        tile.appendChild(warn)
       }
 
       grid.appendChild(tile)
@@ -6884,6 +6998,7 @@ const emitQuestion = (index) => {
   // jour) — retour utilisateur : "laisse toujours afficher l'info".
   updateGameProgressInfo(lastLobbyArr.filter(p => !p.isHost).length, 0)
   const correctOrder = Array.isArray(q.correct) ? q.correct : []
+  setModerationExpected(q)
   // "association" : un seul mélange d'index, réutilisé pour dériver à la
   // fois pairsB (textes mélangés) et pairsBKeys (index d'origine de chaque
   // position mélangée) — les deux doivent rester synchronisés position par
@@ -7883,6 +7998,7 @@ socket.on('question:show', payload => {
   if (timerBarFill) {
     timerBarFill.classList.remove('timer-urgent')
     timerBarFill.style.transform = 'scaleX(1)'
+    timerBarFill.classList.remove('timer-empty')
   }
 
   // Déverrouillage à startTs (aligné sur REVEAL_QUESTION_BEAT_MS — voir
@@ -7915,7 +8031,6 @@ socket.on('question:show', payload => {
       imageDisabled = false
       freeTextEl.classList.remove('d-none')
       applyTileReveal(freeTextEl, 0)
-    timerBarFill.classList.remove('timer-empty')
     }, Math.max(0, start - syncedNow()))
   }
   // La musique démarre pile à startTs comme le reste (même rendez-vous que le
@@ -7936,6 +8051,7 @@ socket.on('question:show', payload => {
       // Phase de révélation : la barre reste pleine, pas de décompte affiché.
       if (timerBarFill) {
         timerBarFill.style.transform = 'scaleX(1)'
+        timerBarFill.classList.remove('timer-empty')
         timerBarFill.classList.remove('timer-urgent')
       }
       if (timerLabel) timerLabel.textContent = '···'
@@ -7968,7 +8084,6 @@ socket.on('question:show', payload => {
 
     // Apparition progressive des indices (type "indice", tâche 014) — voir
     // updateIndiceArea, appelé à chaque tick avec le temps écoulé depuis
-        timerBarFill.classList.remove('timer-empty')
     // start. Jamais de setTimeout isolé par indice : ce recalcul systématique
     // permet le rattrapage automatique d'un late-joiner/refresh (même
     // garantie que le dézoom "zoomguess" ci-dessus).
@@ -7978,6 +8093,7 @@ socket.on('question:show', payload => {
 
     if (timerBarFill) {
       timerBarFill.style.transform = `scaleX(${pct / 100})`
+    timerBarFill.classList.toggle('timer-empty', pct <= 0.5)
       if (pct <= 20) {
         timerBarFill.classList.add('timer-urgent')
       }
@@ -8010,7 +8126,6 @@ socket.on('question:show', payload => {
     // donc attemptAutoSubmit() ne soumet jamais deux fois même appelé deux
     // fois (voir plus bas, filet de sécurité en fin de chrono).
     const attemptAutoSubmit = () => {
-    timerBarFill.classList.toggle('timer-empty', pct <= 0.5)
       // Tâche 024 : filet de sécurité aussi pour l'hôte en mode "Jouer" (il
       // répond comme tout le monde) — réservé au mode "Présenter" avant.
       if (isPresenterHost() || hasAnsweredThisQuestion) return
@@ -8078,9 +8193,15 @@ socket.on('question:show', payload => {
   if (payload.type === 'mcq' && Array.isArray(payload.options)) {
     const mcqCols = payload.options.length <= 4 ? 2 : payload.options.length <= 6 ? 3 : 4
     optionsDiv.style.setProperty('--mcq-cols', mcqCols)
+    // Dernière rangée incomplète (5 réponses = 3 + 2, 7 = 4 + 3...) : la 1re
+    // tuile de cette rangée démarre décalée (--gc-start, en demi-colonnes, voir
+    // style.css) pour que la rangée soit CENTRÉE au lieu de coller à gauche.
+    const mcqLastRowStart = (Math.ceil(payload.options.length / mcqCols) - 1) * mcqCols
+    const mcqLastRowCount = payload.options.length - mcqLastRowStart
     payload.options.forEach((opt, i) => {
       const el = document.createElement('div')
       el.className = 'option-btn'
+      if (i === mcqLastRowStart && mcqLastRowCount < mcqCols) el.style.setProperty('--gc-start', mcqCols - mcqLastRowCount + 1)
       el.textContent = opt
       makeTileFocusable(el)
       el.onclick = () => {
@@ -8110,15 +8231,9 @@ socket.on('question:show', payload => {
     // l'animation d'entrée), les photos arrivent un instant après via une
     // requête HTTP à part.
     // Découpage en rangées adapté au nombre de photos (retour utilisateur,
-    // Dernière rangée incomplète (5 réponses = 3 + 2, 7 = 4 + 3...) : la 1re
-    // tuile de cette rangée démarre décalée (--gc-start, en demi-colonnes, voir
-    // style.css) pour que la rangée soit CENTRÉE au lieu de coller à gauche.
-    const mcqLastRowStart = (Math.ceil(payload.options.length / mcqCols) - 1) * mcqCols
-    const mcqLastRowCount = payload.options.length - mcqLastRowStart
     // affiné ensuite : "pour 7 images : 3, 2 et 2" plutôt que 3/3/1 qui
     // laissait une tuile seule orpheline). Pas un simple "N colonnes
     // uniformes" — chaque rangée peut avoir sa propre largeur de tuile
-      if (i === mcqLastRowStart && mcqLastRowCount < mcqCols) el.style.setProperty('--gc-start', mcqCols - mcqLastRowCount + 1)
     // (voir --intrus-row-cols posé PAR TUILE plus bas, pas sur le
     // conteneur). Table figée plutôt qu'une formule générale : l'éditeur
     // borne "intrus" à 3-8 photos (voir editor.js), donc les 6 cas
@@ -8463,6 +8578,7 @@ moderationEyeBtn.className = 'btn'
 moderationEyeBtn.style.padding = '8px 12px'
 const applyModerationEyeState = () => {
   moderationDiv.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
+  document.getElementById('moderationExpected')?.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
   moderationEyeBtn.textContent = moderationAnswersHidden ? '🙈 Réponses masquées' : '👁️ Réponses visibles'
   moderationEyeBtn.title = moderationAnswersHidden
     ? 'Réponses masquées — clique pour les réafficher'
@@ -8479,8 +8595,43 @@ moderationEyeBar.appendChild(moderationEyeBtn)
 // #moderationModalOverlay (voir index.html), jamais dans #moderationZone —
 // celle-ci ne garde qu'un petit bouton compact ci-dessous, de taille FIXE
 // quel que soit le nombre de réponses en attente.
+// Retour utilisateur : "dans la popup de validation, il faudrait que le MJ puisse
+// voir la réponse pour savoir quoi valider". Bandeau "Réponse attendue" en tête
+// de la popup, mis à jour à chaque question émise par l'hôte (seul à connaître
+// la bonne réponse, voir emitQuestion). Le texte porte .moderation-answer-text :
+// il est masqué avec le reste par l'œil (écran partagé aux joueurs).
+const moderationExpectedEl = document.createElement('div')
+moderationExpectedEl.id = 'moderationExpected'
+moderationExpectedEl.className = 'moderation-expected d-none'
+const expectedAnswerText = (q) => {
+  const flat = (arr) => (Array.isArray(arr) ? arr : []).filter(v => typeof v === 'string' || typeof v === 'number').map(String).filter(Boolean)
+  if (q.type === 'blindtest' && q.correct && !Array.isArray(q.correct)) {
+    const parts = []
+    const titles = flat(q.correct.title), artists = flat(q.correct.artist)
+    if (titles.length) parts.push(`Titre : ${titles.join(' / ')}`)
+    if (artists.length) parts.push(`Artiste : ${artists.join(' / ')}`)
+    return parts.join(' — ')
+  }
+  if (q.type === 'graduation' || q.type === 'truefalse') return flat(q.correct).join(' / ')
+  return flat(q.correct).join(' / ')
+}
+const setModerationExpected = (q) => {
+  const text = q ? expectedAnswerText(q) : ''
+  moderationExpectedEl.textContent = ''
+  moderationExpectedEl.classList.toggle('d-none', !text)
+  moderationExpectedEl.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
+  if (!text) return
+  const label = document.createElement('span')
+  label.className = 'moderation-expected-label'
+  label.textContent = 'Réponse attendue'
+  const value = document.createElement('span')
+  value.className = 'moderation-expected-value moderation-answer-text'
+  value.textContent = text
+  moderationExpectedEl.append(label, value)
+}
 const moderationModalSlot = document.getElementById('moderationModalSlot')
 if (moderationModalSlot) {
+  moderationModalSlot.appendChild(moderationExpectedEl)
   moderationModalSlot.appendChild(moderationEyeBar)
   moderationModalSlot.appendChild(moderationDiv)
 }
@@ -9279,6 +9430,11 @@ const renderLiveClassementDock = () => {
     score.textContent = `${s.total} pts`
     row.appendChild(rank)
     row.appendChild(name)
+    const manual = recentManualAdjust.get(id)
+    if (manual && manual.until > Date.now()) {
+      row.classList.add('has-manual-adjust')
+      row.appendChild(buildManualAdjustBadge(manual.delta))
+    }
     row.appendChild(score)
     // Tâche 025 : ajustement manuel du score par le MJ, réservé au mode
     // "Présenter" (isPresenterHost() — jamais visible pour un simple
@@ -9312,7 +9468,7 @@ const showResults = () => {
   socket.emit('quiz:end', { roomCode })
 }
 
-socket.on('quiz:end', () => {
+socket.on('quiz:end', (endPayload) => {
   inActiveGame = false // voir beforeunload : navigation volontaire vers les résultats
   const roomCode = roomInput.value.trim()
   if (!roomCode) return
@@ -9324,7 +9480,29 @@ socket.on('quiz:end', () => {
   // lui faire retraverser tout l'écran de sélection (retour utilisateur :
   // aucun moyen de relancer la même partie une fois sur les résultats).
   const quizParam = loadedQuiz?.id ? `&quiz=${encodeURIComponent(loadedQuiz.id)}` : ''
-  window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}`
+  // qid : id du quiz côté serveur (voir quiz:end), pour que la page de résultats
+  // affiche le top 3 de CE quiz — contrairement à `quiz` ci-dessus, tous les
+  // joueurs le reçoivent, pas seulement l'hôte.
+  const qidParam = endPayload?.quizId ? `&qid=${encodeURIComponent(endPayload.quizId)}` : ''
+  window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}${qidParam}`
+})
+
+// Tâche 048 : "score à battre" (voir server/index.js, 1re question) — bandeau
+// éphémère, jamais affiché si le quiz n'a jamais été terminé.
+let bestScoreBannerTimer = null
+socket.on('quiz:bestScore', ({ name, score }) => {
+  if (!Number.isFinite(Number(score))) return
+  let banner = document.getElementById('bestScoreBanner')
+  if (!banner) {
+    banner = document.createElement('div')
+    banner.id = 'bestScoreBanner'
+    banner.className = 'best-score-banner'
+    document.body.appendChild(banner)
+  }
+  banner.textContent = `🏆 Score à battre : ${score} pts — ${name}`
+  banner.classList.add('is-visible')
+  clearTimeout(bestScoreBannerTimer)
+  bestScoreBannerTimer = setTimeout(() => banner.classList.remove('is-visible'), 8000)
 })
 
 socket.on('player:joined', ({ id, name }) => {
@@ -9341,6 +9519,7 @@ socket.on('timer:end', (payload) => {
   clearInterval(timerInt)
   if (timerBarFill) {
     timerBarFill.style.transform = 'scaleX(0)'
+    timerBarFill.classList.add('timer-empty')
     timerBarFill.classList.remove('timer-urgent')
   }
   if (timerLabel) timerLabel.textContent = '0'
@@ -9374,6 +9553,7 @@ socket.on('timer:end', (payload) => {
     // cette liste corrige par ailleurs).
     pushDisplayTick(0, '0', false, 1)
   }
+  if (currentQuestionType === 'indice') showIndiceGallery()
   // "révélation" : timer:end est le SEUL moment où l'image réponse arrive
   // enfin du serveur (voir server/index.js, jamais transmise avant) — pour
   // TOUT LE MONDE, hôte compris (c'est souvent son écran qui est projeté en
@@ -9388,7 +9568,6 @@ socket.on('timer:end', (payload) => {
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).
   if (currentQuestionType === 'blindtest') stopBlindTestAudio()
-    timerBarFill.classList.add('timer-empty')
   // Tâche 027 : même coupure pour le son facultatif (n'importe quel type)
   // — timer:end est déjà le signal de fin de question, qu'il arrive au
   // bout du chrono normal OU en avance dès que tout le monde a répondu
