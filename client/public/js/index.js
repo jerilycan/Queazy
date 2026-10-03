@@ -2309,6 +2309,7 @@ const buildIndiceArea = (hints) => {
   indiceHistory.innerHTML = ''
   indiceHints = (hints || []).slice().sort((a, b) => (Number(a.delayS) || 0) - (Number(b.delayS) || 0))
   indiceState = { shown: [] }
+  if (indiceArea) indiceArea.classList.remove('indice-gallery')
 }
 
 // Contenu (texte ou image) d'une carte d'indice — réutilisé pour
@@ -2411,6 +2412,27 @@ const updateIndiceArea = (elapsedMs) => {
     card.appendChild(buildIndiceCardContent(hint))
     indiceCentral.appendChild(card)
   })
+}
+
+// Fin de question "indice" (retour utilisateur : "afficher tous les indices
+// sous forme de galerie pour qu'on puisse tout voir en même temps") : l'indice
+// central + la rangée de petites vignettes cèdent la place à une grille de
+// TOUS les indices, dans l'ordre d'apparition — y compris ceux qui n'avaient
+// pas encore eu le temps de sortir (question close en avance). Passe par les
+// mêmes éléments (#indiceArea/#indiceHistory) : le miroir TV la reprend tel
+// quel, sans canal dédié.
+const showIndiceGallery = () => {
+  if (!indiceArea || !indiceCentral || !indiceHistory || !indiceHints.length) return
+  indiceCentral.innerHTML = ''
+  indiceHistory.innerHTML = ''
+  indiceHints.forEach((hint, i) => {
+    const card = document.createElement('div')
+    card.className = 'indice-gallery-card'
+    card.style.animationDelay = `${i * 70}ms`
+    card.appendChild(buildIndiceCardContent(hint))
+    indiceHistory.appendChild(card)
+  })
+  indiceArea.classList.add('indice-gallery')
 }
 
 // --- Question "association" : relier les éléments A aux éléments B -------
@@ -3800,11 +3822,48 @@ if (scoreAdjustMinus100Btn) scoreAdjustMinus100Btn.onclick = () => applyScoreAdj
 // plus bas, volontairement silencieux jusqu'à la révélation) — celui-ci doit
 // au contraire se répercuter tout de suite partout, sans les effets de bord
 // propres à la mécanique de question (son de révélation, questionDeltas...).
-socket.on('score:adjust', ({ playerId, total }) => {
+// Retour utilisateur : "un visuel sur les points ajoutés manuellement par le MJ
+// (dans le classement qui suit l'ajout)". Pastille "+200"/"-100" accrochée à la
+// ligne du joueur (classement plein ET dock de la régie) pendant quelques
+// secondes. Mémorisée par joueur : le dock est reconstruit à chaque rendu, la
+// pastille doit y être remise tant que le délai n'est pas écoulé. Posée sur
+// des nœuds de #leaderOverlay/#liveClassementDock : le miroir TV la reprend
+// via ses MutationObserver habituels.
+const MANUAL_ADJUST_BADGE_MS = 4500
+const recentManualAdjust = new Map() // playerId -> { delta, until }
+const buildManualAdjustBadge = (delta) => {
+  const el = document.createElement('span')
+  el.className = `manual-adjust-badge ${delta >= 0 ? 'is-plus' : 'is-minus'}`
+  el.textContent = `${delta > 0 ? '+' : ''}${delta}`
+  return el
+}
+const flashManualAdjust = (playerId, delta) => {
+  if (!delta) return
+  recentManualAdjust.set(playerId, { delta, until: Date.now() + MANUAL_ADJUST_BADGE_MS })
+  const row = leaderRows.get(playerId)
+  if (row) {
+    row.querySelector('.manual-adjust-badge')?.remove()
+    row.classList.remove('has-manual-adjust')
+    void row.offsetWidth
+    row.classList.add('has-manual-adjust')
+    row.insertBefore(buildManualAdjustBadge(delta), row.querySelector('.leader-score'))
+  }
+  renderLiveClassementDock()
+  setTimeout(() => {
+    const cur = recentManualAdjust.get(playerId)
+    if (!cur || cur.until > Date.now()) return
+    recentManualAdjust.delete(playerId)
+    const r = leaderRows.get(playerId)
+    if (r) { r.querySelector('.manual-adjust-badge')?.remove(); r.classList.remove('has-manual-adjust') }
+    renderLiveClassementDock()
+  }, MANUAL_ADJUST_BADGE_MS + 50)
+}
+socket.on('score:adjust', ({ playerId, delta, total }) => {
   const s = scores.get(playerId) || { name: playerId, total: 0 }
   s.total = total
   scores.set(playerId, s)
   renderLeaderboard()
+  flashManualAdjust(playerId, delta)
   if (scoreAdjustFeedback && scoreAdjustTargetId === playerId) {
     scoreAdjustFeedback.textContent = `Score mis à jour : ${total} pts`
   }
@@ -9279,6 +9338,11 @@ const renderLiveClassementDock = () => {
     score.textContent = `${s.total} pts`
     row.appendChild(rank)
     row.appendChild(name)
+    const manual = recentManualAdjust.get(id)
+    if (manual && manual.until > Date.now()) {
+      row.classList.add('has-manual-adjust')
+      row.appendChild(buildManualAdjustBadge(manual.delta))
+    }
     row.appendChild(score)
     // Tâche 025 : ajustement manuel du score par le MJ, réservé au mode
     // "Présenter" (isPresenterHost() — jamais visible pour un simple
@@ -9375,6 +9439,7 @@ socket.on('timer:end', (payload) => {
     // cette liste corrige par ailleurs).
     pushDisplayTick(0, '0', false, 1)
   }
+  if (currentQuestionType === 'indice') showIndiceGallery()
   // "révélation" : timer:end est le SEUL moment où l'image réponse arrive
   // enfin du serveur (voir server/index.js, jamais transmise avant) — pour
   // TOUT LE MONDE, hôte compris (c'est souvent son écran qui est projeté en
