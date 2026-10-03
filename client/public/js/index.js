@@ -6943,6 +6943,7 @@ const emitQuestion = (index) => {
   // jour) — retour utilisateur : "laisse toujours afficher l'info".
   updateGameProgressInfo(lastLobbyArr.filter(p => !p.isHost).length, 0)
   const correctOrder = Array.isArray(q.correct) ? q.correct : []
+  setModerationExpected(q)
   // "association" : un seul mélange d'index, réutilisé pour dériver à la
   // fois pairsB (textes mélangés) et pairsBKeys (index d'origine de chaque
   // position mélangée) — les deux doivent rester synchronisés position par
@@ -8522,6 +8523,7 @@ moderationEyeBtn.className = 'btn'
 moderationEyeBtn.style.padding = '8px 12px'
 const applyModerationEyeState = () => {
   moderationDiv.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
+  document.getElementById('moderationExpected')?.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
   moderationEyeBtn.textContent = moderationAnswersHidden ? '🙈 Réponses masquées' : '👁️ Réponses visibles'
   moderationEyeBtn.title = moderationAnswersHidden
     ? 'Réponses masquées — clique pour les réafficher'
@@ -8538,8 +8540,43 @@ moderationEyeBar.appendChild(moderationEyeBtn)
 // #moderationModalOverlay (voir index.html), jamais dans #moderationZone —
 // celle-ci ne garde qu'un petit bouton compact ci-dessous, de taille FIXE
 // quel que soit le nombre de réponses en attente.
+// Retour utilisateur : "dans la popup de validation, il faudrait que le MJ puisse
+// voir la réponse pour savoir quoi valider". Bandeau "Réponse attendue" en tête
+// de la popup, mis à jour à chaque question émise par l'hôte (seul à connaître
+// la bonne réponse, voir emitQuestion). Le texte porte .moderation-answer-text :
+// il est masqué avec le reste par l'œil (écran partagé aux joueurs).
+const moderationExpectedEl = document.createElement('div')
+moderationExpectedEl.id = 'moderationExpected'
+moderationExpectedEl.className = 'moderation-expected d-none'
+const expectedAnswerText = (q) => {
+  const flat = (arr) => (Array.isArray(arr) ? arr : []).filter(v => typeof v === 'string' || typeof v === 'number').map(String).filter(Boolean)
+  if (q.type === 'blindtest' && q.correct && !Array.isArray(q.correct)) {
+    const parts = []
+    const titles = flat(q.correct.title), artists = flat(q.correct.artist)
+    if (titles.length) parts.push(`Titre : ${titles.join(' / ')}`)
+    if (artists.length) parts.push(`Artiste : ${artists.join(' / ')}`)
+    return parts.join(' — ')
+  }
+  if (q.type === 'graduation' || q.type === 'truefalse') return flat(q.correct).join(' / ')
+  return flat(q.correct).join(' / ')
+}
+const setModerationExpected = (q) => {
+  const text = q ? expectedAnswerText(q) : ''
+  moderationExpectedEl.textContent = ''
+  moderationExpectedEl.classList.toggle('d-none', !text)
+  moderationExpectedEl.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
+  if (!text) return
+  const label = document.createElement('span')
+  label.className = 'moderation-expected-label'
+  label.textContent = 'Réponse attendue'
+  const value = document.createElement('span')
+  value.className = 'moderation-expected-value moderation-answer-text'
+  value.textContent = text
+  moderationExpectedEl.append(label, value)
+}
 const moderationModalSlot = document.getElementById('moderationModalSlot')
 if (moderationModalSlot) {
+  moderationModalSlot.appendChild(moderationExpectedEl)
   moderationModalSlot.appendChild(moderationEyeBar)
   moderationModalSlot.appendChild(moderationDiv)
 }

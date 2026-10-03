@@ -10331,3 +10331,19 @@ body.display-body .manual-adjust-badge { font-size: clamp(18px, 1.8vw, 30px); pa
 @media (prefers-reduced-motion: reduce) {
   .manual-adjust-badge, .has-manual-adjust { animation: none; }
 }
+
+/* Bandeau "Réponse attendue" de la popup de validation (voir index.js
+   setModerationExpected) : la bonne réponse, pour savoir quoi valider. */
+.moderation-expected {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-md);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(var(--tile-green-rgb), 0.16);
+  border: 1px solid rgba(var(--tile-green-rgb), 0.5);
+}
+.moderation-expected.d-none { display: none; }
+.moderation-expected-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); }
+.moderation-expected-value { font-size: 20px; font-weight: 800; color: var(--color-text); }
