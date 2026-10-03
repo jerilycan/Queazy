@@ -10432,3 +10432,9 @@ body.display-body .manual-adjust-badge { font-size: clamp(18px, 1.8vw, 30px); pa
 }
 .already-played-badge:hover::after,
 .already-played-badge:focus-visible::after { opacity: 1; transform: translateY(0); }
+
+/* Liste des participants d'un quiz (tâche 048, voir editor.js participantsQuizBtn). */
+.participants-modal { max-width: 640px; width: calc(100% - 32px); max-height: 80vh; overflow-y: auto; }
+.participants-table { width: 100%; border-collapse: collapse; text-align: left; }
+.participants-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); padding: 6px 10px; }
+.participants-table td { padding: 10px; border-top: 1px solid var(--color-border); font-weight: 600; }
