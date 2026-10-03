@@ -1104,6 +1104,29 @@ const start = async () => {
   // l'attente complète de toutes les tuiles.
   const ANSWER_WINDOW_BUFFER_MS = 900
 
+  // Tâche 048 : identité d'un joueur connecté. Le client joint son jeton de
+  // session Supabase à la connexion (socket.handshake.auth.accessToken) ; on le
+  // fait vérifier par Supabase (auth.getUser) plutôt que de croire un id reçu.
+  // Résultat mémorisé par socket : pas d'aller-retour à chaque room:join.
+  const resolveSocketUserId = async (socket) => {
+    if (socket.data.userIdResolved) return socket.data.userId || null
+    socket.data.userIdResolved = true
+    const jwt = socket.handshake?.auth?.accessToken
+    if (!jwt || typeof jwt !== 'string') return null
+    try {
+      const { data, error } = await supabaseAdmin.auth.getUser(jwt)
+      if (error) {
+        app.log.warn({ err: error.message }, 'jeton de session refusé')
+        return null
+      }
+      socket.data.userId = data?.user?.id || null
+      return socket.data.userId
+    } catch (err) {
+      app.log.warn({ err: err.message }, 'vérification du jeton de session impossible')
+      return null
+    }
+  }
+
   io.on('connection', socket => {
     // Synchronisation d'horloge (retour utilisateur : "le téléphone a 2
     // secondes d'avance sur le PC, même sur l'hôte") — tous les minuteurs
@@ -1289,6 +1312,21 @@ const start = async () => {
         player.teamId = smallestTeamId(room)
       }
       room.tokens.set(token, { id: socket.id, name, score: room.scores.get(socket.id), teamId: player.teamId })
+
+      // Joueur connecté (hors hôte) : on retient son compte et son jeton de
+      // session, indexés par son token de salle (stable d'une reconnexion à
+      // l'autre). Le jeton servira à enregistrer SON résultat en fin de partie
+      // (le serveur n'a que la clé anon : l'écriture passe par la policy RLS
+      // "player_id = auth.uid()", voir supabase/schema.sql, quiz_results).
+      if (!isHostJoining) {
+        const userId = await resolveSocketUserId(socket)
+        if (userId) {
+          player.userId = userId
+          if (!room.playerAuth) room.playerAuth = new Map()
+          room.playerAuth.set(token, { userId, jwt: socket.handshake.auth.accessToken })
+          app.log.info({ roomCode: code, userId }, 'joueur connecté identifié')
+        }
+      }
 
       await socket.join(code)
       socket.emit('player:token', { token })

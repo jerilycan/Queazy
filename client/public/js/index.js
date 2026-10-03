@@ -1,4 +1,22 @@
-const socket = io()
+// Tâche 048 : jeton de session Supabase joint à la connexion (fonction : relue
+// à CHAQUE (re)connexion, donc toujours le jeton rafraîchi). Le serveur le
+// vérifie avant de s'en servir pour savoir QUEL compte est ce joueur — jamais
+// un identifiant envoyé en clair. Invité / pas de session : pas de jeton,
+// comportement inchangé.
+const socket = io({
+  auth: async (cb) => {
+    let accessToken = null
+    try {
+      const { data } = await window.supabaseClient.auth.getSession()
+      accessToken = data?.session?.access_token || null
+    } catch (err) {
+      // supabase-js indisponible (réseau/CDN) : on se connecte sans jeton, le
+      // joueur sera simplement traité comme un invité pour l'historique.
+      console.warn('Jeton de session indisponible', err)
+    }
+    cb({ accessToken })
+  }
+})
 
 // Décalage d'horloge client/serveur (retour utilisateur : "le téléphone a
 // 2 secondes d'avance sur le PC, même sur l'hôte") — tous les minuteurs
