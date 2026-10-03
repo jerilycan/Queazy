@@ -9447,7 +9447,7 @@ const showResults = () => {
   socket.emit('quiz:end', { roomCode })
 }
 
-socket.on('quiz:end', () => {
+socket.on('quiz:end', (endPayload) => {
   inActiveGame = false // voir beforeunload : navigation volontaire vers les résultats
   const roomCode = roomInput.value.trim()
   if (!roomCode) return
@@ -9459,7 +9459,29 @@ socket.on('quiz:end', () => {
   // lui faire retraverser tout l'écran de sélection (retour utilisateur :
   // aucun moyen de relancer la même partie une fois sur les résultats).
   const quizParam = loadedQuiz?.id ? `&quiz=${encodeURIComponent(loadedQuiz.id)}` : ''
-  window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}`
+  // qid : id du quiz côté serveur (voir quiz:end), pour que la page de résultats
+  // affiche le top 3 de CE quiz — contrairement à `quiz` ci-dessus, tous les
+  // joueurs le reçoivent, pas seulement l'hôte.
+  const qidParam = endPayload?.quizId ? `&qid=${encodeURIComponent(endPayload.quizId)}` : ''
+  window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}${qidParam}`
+})
+
+// Tâche 048 : "score à battre" (voir server/index.js, 1re question) — bandeau
+// éphémère, jamais affiché si le quiz n'a jamais été terminé.
+let bestScoreBannerTimer = null
+socket.on('quiz:bestScore', ({ name, score }) => {
+  if (!Number.isFinite(Number(score))) return
+  let banner = document.getElementById('bestScoreBanner')
+  if (!banner) {
+    banner = document.createElement('div')
+    banner.id = 'bestScoreBanner'
+    banner.className = 'best-score-banner'
+    document.body.appendChild(banner)
+  }
+  banner.textContent = `🏆 Score à battre : ${score} pts — ${name}`
+  banner.classList.add('is-visible')
+  clearTimeout(bestScoreBannerTimer)
+  bestScoreBannerTimer = setTimeout(() => banner.classList.remove('is-visible'), 8000)
 })
 
 socket.on('player:joined', ({ id, name }) => {

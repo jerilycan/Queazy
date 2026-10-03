@@ -1713,6 +1713,19 @@ const start = async () => {
       // plus lieu d'être resynchronisé à un reconnectant (voir room:join).
       room.leaderboardShown = false
 
+      // Tâche 048 : "score à battre" annoncé à toute la salle au lancement de la
+      // 1re question (quiz de la table `quizzes` uniquement, room.quizId). Rien
+      // n'est envoyé si le quiz n'a jamais été terminé. Asynchrone : n'allonge
+      // jamais le démarrage de la question, un échec est juste journalisé.
+      if (room.history.length === 0 && room.quizId) {
+        const quizId = room.quizId
+        supabaseAdmin.rpc('quiz_top_scores', { p_quiz_id: quizId, p_limit: 1 }).then(({ data, error }) => {
+          if (error) { app.log.warn({ roomCode: code, err: error.message }, 'score à battre indisponible'); return }
+          const best = data && data[0]
+          if (best) io.to(code).emit('quiz:bestScore', { name: best.player_name, score: best.score })
+        })
+      }
+
       const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {}, deltas: {}, answers: {} }
       room.history.push(historyEntry)
 
@@ -2931,7 +2944,7 @@ const start = async () => {
       const room = rooms.get(code)
       if (room) {
         room.ended = true
-        io.to(code).emit('quiz:end')
+        io.to(code).emit('quiz:end', { quizId: room.quizId || null })
         // Seul l'hôte clôt réellement la partie : ce handler n'a historiquement
         // pas de garde d'hôte, un autre socket ne doit pas déclencher d'écriture.
         if (socket.id === room.hostId) saveQuizResults(code, room)

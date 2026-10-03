@@ -776,3 +776,50 @@ if (brand) {
   })
 }
 
+
+
+// Tâche 048 : top 3 de CE quiz (tous temps confondus), révélé sous le podium.
+// qid vient de la fin de partie (voir index.js, quiz:end). Les résultats sont
+// écrits côté serveur juste APRÈS quiz:end : une 1re lecture légèrement
+// décalée, puis une 2e pour rattraper un enregistrement un peu lent. Rien
+// n'est affiché si personne n'a de résultat (quiz jamais terminé / invités).
+const quizIdForTop = params.get('qid')
+if (quizIdForTop) {
+  const MEDALS = ['🥇', '🥈', '🥉']
+  const renderQuizTop = async () => {
+    const sb = window.supabaseClient
+    if (!sb) return
+    const { data, error } = await sb.rpc('quiz_top_scores', { p_quiz_id: quizIdForTop, p_limit: 3 })
+    if (error || !data || !data.length) return
+    let box = document.getElementById('quizTopScores')
+    if (!box) {
+      box = document.createElement('div')
+      box.id = 'quizTopScores'
+      box.className = 'quiz-top-scores'
+      document.getElementById('resultsPodium')?.insertAdjacentElement('afterend', box)
+    }
+    box.textContent = ''
+    const title = document.createElement('h3')
+    title.className = 'quiz-top-title'
+    title.textContent = 'Meilleurs scores sur ce quiz'
+    box.appendChild(title)
+    data.forEach((row, i) => {
+      const line = document.createElement('div')
+      line.className = 'quiz-top-row'
+      const medal = document.createElement('span')
+      medal.textContent = MEDALS[i] || String(i + 1)
+      const name = document.createElement('span')
+      name.className = 'quiz-top-name'
+      name.textContent = row.player_name
+      const score = document.createElement('span')
+      score.className = 'quiz-top-score'
+      score.textContent = `${row.score} pts`
+      line.append(medal, name, score)
+      box.appendChild(line)
+    })
+  }
+  window.addEventListener('load', () => {
+    setTimeout(renderQuizTop, 1500)
+    setTimeout(renderQuizTop, 5000)
+  })
+}
