@@ -111,11 +111,35 @@ const wasRoomLeftVoluntarily = (roomCode) => {
 // boîte de dialogue générique et impersonnelle du navigateur (celle-ci reste
 // le filet de sécurité pour un rafraîchissement/fermeture d'onglet/retour
 // arrière, qu'on ne peut techniquement pas intercepter autrement).
+//
+// Couvre aussi le salon d'attente (lobby), pas seulement la partie en cours
+// (retour utilisateur : "cliquer sur le logo depuis le lobby ne le ferme
+// pas") — un clic y rechargeait bien "/", mais sans jamais appeler
+// markRoomLeftVoluntarily (qui appelle aussi forgetJoin()) : le prochain
+// socket.on('connect') retombait sur la branche `lastJoin`, INCONDITIONNELLE
+// (voir plus bas — contrairement à la branche `preRoom`, elle ne vérifie pas
+// wasRoomLeftVoluntarily), et rejoignait la même salle tout seul — le lobby
+// "fermé" réapparaissait aussitôt. Même logique que #irlLeaveBtn plus bas :
+// pas de confirmation nécessaire hors partie active, rien à perdre avant le
+// lancement.
 document.addEventListener('click', (e) => {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
   const a = e.target.closest('a[href]')
-  if (!a || a.target === '_blank' || !inActiveGame) return
+  if (!a || a.target === '_blank') return
+  const inRoom = inActiveGame || !!myJoinedRoomCode || (isHost && !!roomInput.value)
+  if (!inRoom) return
   e.preventDefault()
+  const proceed = () => {
+    // Hôte : ferme la salle pour de bon (même geste que navCreate/navPlay/
+    // navJoin) plutôt que de la laisser vivante côté serveur avec un hôte
+    // qui a juste disparu.
+    if (isHost && roomInput.value) socket.emit('room:close', { roomCode: roomInput.value })
+    markRoomLeftVoluntarily(myJoinedRoomCode || roomInput.value)
+    inActiveGame = false
+    allowNavigation = true
+    window.location.href = a.href
+  }
+  if (!inActiveGame) { proceed(); return }
   QzUI.confirm({
     title: 'Quitter la partie ?',
     message: 'Une partie est en cours. Si tu quittes maintenant, tu risques de perdre ta place et ta progression.',
@@ -124,10 +148,7 @@ document.addEventListener('click', (e) => {
     danger: true
   }).then((ok) => {
     if (!ok) return
-    markRoomLeftVoluntarily(myJoinedRoomCode)
-    inActiveGame = false
-    allowNavigation = true
-    window.location.href = a.href
+    proceed()
   })
 })
 
@@ -2581,6 +2602,10 @@ const applyCropTransform = (wrapEl, imgEl, pos) => {
   // rescaleCroppedImages). Purement une correction géométrique, aucune
   // logique de rendu par type dupliquée.
   imgEl.dataset.cropBoxW = boxW
+  // Hauteur de référence aussi : la TV recalcule le cadrage pour SA boîte
+  // (même point de cadrage {x,y,zoom}, ratio éventuellement différent — ex.
+  // tuiles "intrus" 4:3 côté MJ, plus larges que hautes côté TV).
+  imgEl.dataset.cropBoxH = boxH
 }
 
 // Vignette optionnelle insérée AVANT le texte d'une tuile association (voir
@@ -2632,6 +2657,23 @@ const bindAssocTap = (el, handler) => {
 const renderAssociationColumns = () => {
   if (!associationState || !associationColA || !associationColB) return
   const { pairsA, pairsB, pairsBKeys, matches, selected } = associationState
+  // Bug remonté en test réel (vue TV, "les images sont minuscules... ne
+  // prennent pas la place disponible") : .assoc-item était plafonné à une
+  // largeur fixe (320px) pensée pour le PIRE cas (8 paires, 16 tuiles au
+  // total, voir style.css) — pour une question à 3-4 paires, largement
+  // moins dense, les tuiles restaient tout aussi petites alors que
+  // beaucoup de place était disponible. --assoc-pairs (hérité par chaque
+  // .assoc-item via ces conteneurs) laisse le CSS calculer un plafond
+  // inversement proportionnel au nombre de paires, même principe déjà
+  // utilisé pour "intrus" (--intrus-rows).
+  associationColA.style.setProperty('--assoc-pairs', pairsA.length || 1)
+  associationColB.style.setProperty('--assoc-pairs', pairsA.length || 1)
+  // Nombre de tuiles PAR RANGÉE côté TV : jusqu'à 5 paires sur une seule
+  // rangée, au-delà on répartit sur 2 rangées équilibrées (6 -> 3+3, 8 -> 4+4)
+  // plutôt que de laisser 5 tuiles se casser en 4+1 (tuile orpheline centrée).
+  const assocCols = pairsA.length <= 5 ? Math.max(pairsA.length, 1) : Math.ceil(pairsA.length / 2)
+  associationColA.style.setProperty('--assoc-cols', assocCols)
+  associationColB.style.setProperty('--assoc-cols', assocCols)
   associationColA.innerHTML = ''
   pairsA.forEach((text, i) => {
     const el = document.createElement('div')
@@ -3426,7 +3468,9 @@ const buildBlindTestOrbBars = () => {
     const angle = (i / count) * 360
     const bar = document.createElement('div')
     bar.className = 'blindtest-orb-bar'
-    bar.style.height = `${heights[i % heights.length]}px`
+    // --h (et non height) : la hauteur réelle = --h x un facteur piloté par le son
+    // (--lvl, voir style.css et startBlindTestPulse).
+    bar.style.setProperty('--h', `${heights[i % heights.length]}px`)
     bar.style.transform = `rotate(${angle}deg) translate(-50%, ${radius}px)`
     bar.style.animationDelay = `${-(i % 6) * 0.2}s`
     frag.appendChild(bar)
@@ -3442,6 +3486,8 @@ const stopBlindTestPulse = () => {
     blindtestOrb.style.transform = ''
     blindtestOrb.style.boxShadow = ''
     blindtestOrb.classList.add('orb-idle')
+    if (blindtestOrbBars) Array.from(blindtestOrbBars.children).forEach(el => el.style.removeProperty('--lvl'))
+    pushDisplayOrb('', '', null)
   }
 }
 
@@ -3458,6 +3504,20 @@ const startBlindTestPulse = () => {
     const scale = 1 + avg * 0.5
     blindtestOrb.style.transform = `scale(${scale.toFixed(3)})`
     blindtestOrb.style.boxShadow = `0 0 ${40 + avg * 60}px ${10 + avg * 20}px rgba(var(--color-accent-rgb), ${0.35 + avg * 0.4})`
+    // Une bande de fréquences par barre (24), sur la partie basse/médium du
+    // spectre où vit l'essentiel de la musique : chaque barre se raccourcit/
+    // s'allonge au rythme de sa bande, pas juste en oscillation générique.
+    const levels = []
+    const usable = Math.max(24, Math.floor(data.length * 0.6))
+    const band = Math.max(1, Math.floor(usable / 24))
+    for (let b = 0; b < 24; b++) {
+      let bs = 0
+      for (let k = 0; k < band; k++) bs += data[b * band + k] || 0
+      levels.push(Math.min(1, Math.pow(bs / band / 255, 0.8) * 1.15))
+    }
+    const barEls = blindtestOrbBars ? blindtestOrbBars.children : []
+    for (let b = 0; b < barEls.length; b++) barEls[b].style.setProperty('--lvl', levels[b].toFixed(2))
+    pushDisplayOrb(blindtestOrb.style.transform, blindtestOrb.style.boxShadow, levels.map(v => Number(v.toFixed(2))))
     blindtestPulseRAF = requestAnimationFrame(loop)
   }
   loop()
@@ -4301,10 +4361,40 @@ const stripAudioForDisplay = (html) => {
 // ouverte. location.origin explicite (jamais '*') — display.html est servi
 // par le même serveur Fastify qu'index.html, les deux pages sont same-origin
 // par construction, pas de raison de relâcher cette vérification.
+// Empreinte du contenu de #stageWrap SANS les valeurs déjà couvertes par le
+// canal léger (barre/label du minuteur, calque de zoom) : deux miroirs qui ne
+// diffèrent que par le minuteur ont la même empreinte, et display.js peut alors
+// ne pas réinjecter le stage (donc ne pas rejouer l'animation d'entrée de
+// l'énoncé). Un classement/une popup/un compteur de joueurs qui bouge côté MJ
+// déclenchait sinon une reconstruction complète, donc un clignotement du titre
+// (constaté en test avec un joueur renvoyant "prêt" en boucle).
+// Canal léger de l'orbe du Blind Test (transform/box-shadow réécrits ~60x/s par
+// startBlindTestPulse, au rythme du son) : chaque écriture déclenchait sinon une
+// reconstruction complète de la TV, donc un clignotement de l'image et de
+// l'icône pendant toute la musique (retour utilisateur). Limité à ~30 msg/s.
+let lastOrbPushTs = 0
+const pushDisplayOrb = (transform, boxShadow, bars) => {
+  if (!displayWin || displayWin.closed) return
+  const now = performance.now()
+  if (transform && now - lastOrbPushTs < 33) return
+  lastOrbPushTs = now
+  displayWin.postMessage({ type: 'queazy-display-orb', transform, boxShadow, bars: bars || null }, location.origin)
+}
+const stageSignature = () => {
+  if (!stageWrapEl) return ''
+  const clone = stageWrapEl.cloneNode(true)
+  clone.querySelectorAll('#blindtestOrb').forEach(el => el.removeAttribute('style'))
+  clone.querySelectorAll('.blindtest-orb-bar').forEach(el => el.style.removeProperty('--lvl'))
+  clone.querySelectorAll('#timerBar, #illustrationZoomLayer').forEach(el => el.removeAttribute('style'))
+  clone.querySelectorAll('#timerBar').forEach(el => el.removeAttribute('class'))
+  clone.querySelectorAll('#timerLabel').forEach(el => { el.textContent = '' })
+  return clone.innerHTML
+}
 const pushDisplayMirror = () => {
   if (!displayWin || displayWin.closed) return
   displayWin.postMessage({
     type: 'queazy-display-sync',
+    stageSig: stageSignature(),
     stageHtml: stageWrapEl ? stripAudioForDisplay(stageWrapEl.innerHTML) : '',
     // Tâche 043, étape 1 : miroir de #questionIntroOverlay (décompte + type
     // de question avant chaque question) — même principe que popupHtml plus
@@ -4468,10 +4558,48 @@ const isMainCosmeticOnlyMutation = (m) => {
   }
   return false
 }
+// Bug remonté en test réel ("les titres clignotent encore sur certaines
+// questions") — applyCropTransform (association/zoomguess/reveal/intrus,
+// voir ce fichier) pose son transform corrigé de façon ASYNCHRONE, dans
+// l'évènement onload de CHAQUE image (potentiellement plusieurs à la suite
+// sur une question "association") — mutation de style sur l'<img>
+// elle-même, jamais filtrée jusqu'ici (isMainCosmeticOnlyMutation ne couvre
+// que #main). Chaque déclenchement reconstruit tout #displayStage, rejouant
+// l'animation d'entrée de TOUT le contenu (dont l'énoncé) — même root cause
+// que le clignotement de l'intro (tâche 043), mais ici la donnée transportée
+// (la correction de cadrage) reste réelle et doit atteindre la TV — jamais
+// filtrée en silence comme .regie-portrait-layout plus haut (perdrait le
+// cadrage choisi par le créateur pour le reste de la question). Compromis :
+// ne PAS reconstruire immédiatement (élimine le clignotement dans le cas
+// courant, image déjà en cache/chargée quasi instantanément, donc AVANT que
+// la fenêtre TV n'ait même reçu son tout premier miroir) mais programmer un
+// rattrapage différé (scheduleDelayedCropSync plus bas) pour le cas d'un
+// chargement lent, où la correction doit quand même finir par arriver.
+let delayedCropSyncTimeoutId = null
+const scheduleDelayedCropSync = () => {
+  if (delayedCropSyncTimeoutId !== null) return
+  delayedCropSyncTimeoutId = setTimeout(() => {
+    delayedCropSyncTimeoutId = null
+    pushDisplayMirror()
+  }, 1500)
+}
+const isOrbStyleMutation = (m) => (
+  m.type === 'attributes' && m.attributeName === 'style' &&
+  (m.target === blindtestOrb || (blindtestOrbBars && blindtestOrbBars.contains(m.target)))
+)
+const isImageStyleOnlyMutation = (m) => (
+  m.type === 'attributes' && m.attributeName === 'style' && m.target?.tagName === 'IMG'
+)
 const handleStageMutations = (mutations) => {
-  const hasRealMutation = mutations.some(m => !isVolatileMutationTarget(m.target) && !isMainCosmeticOnlyMutation(m))
-  if (!hasRealMutation) return
-  scheduleDisplayMirrorPush()
+  let hasRealMutation = false
+  let hasImageStyleMutation = false
+  for (const m of mutations) {
+    if (isVolatileMutationTarget(m.target) || isMainCosmeticOnlyMutation(m) || isOrbStyleMutation(m)) continue
+    if (isImageStyleOnlyMutation(m)) { hasImageStyleMutation = true; continue }
+    hasRealMutation = true
+  }
+  if (hasRealMutation) { scheduleDisplayMirrorPush(); return }
+  if (hasImageStyleMutation) scheduleDelayedCropSync()
 }
 // MutationObserver générique sur #stageWrap plutôt qu'instrumenter chaque
 // site qui touche ce contenu (minuteur, question:show, tuiles qui se
@@ -7787,6 +7915,7 @@ socket.on('question:show', payload => {
       imageDisabled = false
       freeTextEl.classList.remove('d-none')
       applyTileReveal(freeTextEl, 0)
+    timerBarFill.classList.remove('timer-empty')
     }, Math.max(0, start - syncedNow()))
   }
   // La musique démarre pile à startTs comme le reste (même rendez-vous que le
@@ -7839,6 +7968,7 @@ socket.on('question:show', payload => {
 
     // Apparition progressive des indices (type "indice", tâche 014) — voir
     // updateIndiceArea, appelé à chaque tick avec le temps écoulé depuis
+        timerBarFill.classList.remove('timer-empty')
     // start. Jamais de setTimeout isolé par indice : ce recalcul systématique
     // permet le rattrapage automatique d'un late-joiner/refresh (même
     // garantie que le dézoom "zoomguess" ci-dessus).
@@ -7880,6 +8010,7 @@ socket.on('question:show', payload => {
     // donc attemptAutoSubmit() ne soumet jamais deux fois même appelé deux
     // fois (voir plus bas, filet de sécurité en fin de chrono).
     const attemptAutoSubmit = () => {
+    timerBarFill.classList.toggle('timer-empty', pct <= 0.5)
       // Tâche 024 : filet de sécurité aussi pour l'hôte en mode "Jouer" (il
       // répond comme tout le monde) — réservé au mode "Présenter" avant.
       if (isPresenterHost() || hasAnsweredThisQuestion) return
@@ -7979,9 +8110,15 @@ socket.on('question:show', payload => {
     // l'animation d'entrée), les photos arrivent un instant après via une
     // requête HTTP à part.
     // Découpage en rangées adapté au nombre de photos (retour utilisateur,
+    // Dernière rangée incomplète (5 réponses = 3 + 2, 7 = 4 + 3...) : la 1re
+    // tuile de cette rangée démarre décalée (--gc-start, en demi-colonnes, voir
+    // style.css) pour que la rangée soit CENTRÉE au lieu de coller à gauche.
+    const mcqLastRowStart = (Math.ceil(payload.options.length / mcqCols) - 1) * mcqCols
+    const mcqLastRowCount = payload.options.length - mcqLastRowStart
     // affiné ensuite : "pour 7 images : 3, 2 et 2" plutôt que 3/3/1 qui
     // laissait une tuile seule orpheline). Pas un simple "N colonnes
     // uniformes" — chaque rangée peut avoir sa propre largeur de tuile
+      if (i === mcqLastRowStart && mcqLastRowCount < mcqCols) el.style.setProperty('--gc-start', mcqCols - mcqLastRowCount + 1)
     // (voir --intrus-row-cols posé PAR TUILE plus bas, pas sur le
     // conteneur). Table figée plutôt qu'une formule générale : l'éditeur
     // borne "intrus" à 3-8 photos (voir editor.js), donc les 6 cas
@@ -9221,7 +9358,22 @@ socket.on('timer:end', (payload) => {
   // d'où l'impression d'un "rezoom" dans l'image à ce moment précis. Corrigé
   // en ciblant le bon élément, illustrationZoomLayer, qui ne porte lui que
   // le zoom et n'a donc plus rien d'autre à préserver.
-  if (currentIllustrationZoom && illustrationZoomLayer) { illustrationZoomLayer.style.transform = 'scale(1)' }
+  if (currentIllustrationZoom && illustrationZoomLayer) {
+    illustrationZoomLayer.style.transform = 'scale(1)'
+    // Tâche 047 (retour utilisateur IRL : "la révélation arrive beaucoup
+    // trop tard côté TV") — illustrationZoomLayer est volontairement
+    // ignorée par le MutationObserver du miroir (voir isVolatileMutationTarget,
+    // couverte par le canal léger pushDisplayTick/zoomScale pendant le
+    // décompte). Mais ce forçage a lieu APRÈS clearInterval(timerInt)
+    // juste au-dessus : plus aucun tick ne part, donc ce scale(1) final
+    // n'atteignait jamais la TV, qui restait zoomée sur l'image jusqu'à la
+    // question suivante. Un dernier tick explicite, hors de l'intervalle
+    // arrêté, referme la boucle avec les mêmes valeurs que ci-dessus
+    // (barre à 0, non urgente) plutôt que de sortir illustrationZoomLayer
+    // de la liste volatile (risquerait de réintroduire le clignotement que
+    // cette liste corrige par ailleurs).
+    pushDisplayTick(0, '0', false, 1)
+  }
   // "révélation" : timer:end est le SEUL moment où l'image réponse arrive
   // enfin du serveur (voir server/index.js, jamais transmise avant) — pour
   // TOUT LE MONDE, hôte compris (c'est souvent son écran qui est projeté en
@@ -9236,6 +9388,7 @@ socket.on('timer:end', (payload) => {
   // court que le clip) — pour l'hôte ET les joueurs, chacun ayant sa propre
   // instance <audio> (voir buildBlindTestArea).
   if (currentQuestionType === 'blindtest') stopBlindTestAudio()
+    timerBarFill.classList.add('timer-empty')
   // Tâche 027 : même coupure pour le son facultatif (n'importe quel type)
   // — timer:end est déjà le signal de fin de question, qu'il arrive au
   // bout du chrono normal OU en avance dès que tout le monde a répondu
