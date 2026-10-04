@@ -161,6 +161,14 @@
           </svg>
         </span>
         <p class="display-waiting-text">Le quizz va bientôt commencer</p>
+        <!-- QR code d'accès à la salle + code (retour utilisateur : "afficher le
+             QR code au lancement du mode présentation") — URL reçue du MJ
+             (joinUrl dans le message de sync), QR généré ICI avec la même
+             librairie que index.html pour rester net à la taille TV. -->
+        <div id="displayQr" class="display-qr d-none">
+          <div id="displayQrBox" class="display-qr-box"></div>
+          <div id="displayQrCode" class="display-qr-code"></div>
+        </div>
       </div>
 
       <!-- Mirroring de l'intro par question (tâche 043, étape 1) : miroir de
@@ -211,6 +219,7 @@
       <button type="button" id="displayFullscreenBtn" class="btn display-fullscreen-btn">⛶ Plein écran</button>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
     <script src="/js/display.js" defer></script>
   </body>
 </html>

@@ -2333,33 +2333,37 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   border-color: var(--color-accent);
   box-shadow: 0 0 0 4px var(--color-accent-soft), var(--shadow-md);
 }
-/* pair-0 évite volontairement --tile-red : c'est LA couleur "faux/incorrect"
+/* Palette (retour utilisateur : "couleurs plus distinctes") : 8 teintes bien
+   espacées sur le cercle chromatique (violet, orange, lime, cyan, rose,
+   jaune, bleu, émeraude), aucune proche du rouge "faux". Même palette pour
+   les tuiles et les traits.
+   pair-0 évite volontairement --tile-red : c'est LA couleur "faux/incorrect"
    partout ailleurs dans l'appli (order-compare, marker-incorrect, reveal
    association ci-dessus...) — l'utiliser aussi pour la toute première paire
    choisie ici (donc systématiquement la première couleur vue par le joueur)
    donnait l'impression trompeuse d'une erreur alors que c'est juste une
    couleur d'appariement (retour utilisateur : "a perturbé un de mes
    joueurs"). Indigo la remplace, libre de toute connotation dans l'appli. */
-.assoc-item.is-matched.pair-0 { background: rgba(var(--color-indigo-rgb),0.18); border-color: var(--color-indigo); }
-.assoc-item.is-matched.pair-1 { background: rgba(var(--tile-blue-rgb),0.18); border-color: var(--tile-blue); }
-.assoc-item.is-matched.pair-2 { background: rgba(var(--tile-yellow-rgb),0.18); border-color: var(--tile-yellow); }
-.assoc-item.is-matched.pair-3 { background: rgba(var(--tile-green-rgb),0.18); border-color: var(--tile-green); }
-.assoc-item.is-matched.pair-4 { background: rgba(var(--color-cyan-rgb),0.18); border-color: var(--color-cyan); }
-.assoc-item.is-matched.pair-5 { background: rgba(var(--color-accent-2-rgb),0.18); border-color: var(--color-accent-2); }
-.assoc-item.is-matched.pair-6 { background: rgba(var(--color-accent-rgb),0.18); border-color: var(--color-accent); }
-.assoc-item.is-matched.pair-7 { background: rgba(255,159,90,0.18); border-color: var(--tile-bronze); }
+.assoc-item.is-matched.pair-0 { background: rgba(139,92,246,0.28); border-color: rgb(139,92,246); }
+.assoc-item.is-matched.pair-1 { background: rgba(255,138,31,0.28); border-color: rgb(255,138,31); }
+.assoc-item.is-matched.pair-2 { background: rgba(163,230,53,0.28); border-color: rgb(163,230,53); }
+.assoc-item.is-matched.pair-3 { background: rgba(34,211,238,0.28); border-color: rgb(34,211,238); }
+.assoc-item.is-matched.pair-4 { background: rgba(255,79,163,0.28); border-color: rgb(255,79,163); }
+.assoc-item.is-matched.pair-5 { background: rgba(255,214,10,0.28); border-color: rgb(255,214,10); }
+.assoc-item.is-matched.pair-6 { background: rgba(59,130,246,0.28); border-color: rgb(59,130,246); }
+.assoc-item.is-matched.pair-7 { background: rgba(16,185,129,0.28); border-color: rgb(16,185,129); }
 .assoc-item.correct-reveal { border-color: var(--tile-green); box-shadow: 0 0 0 4px rgba(var(--tile-green-rgb),0.35); }
 .assoc-item.incorrect-reveal { border-color: var(--color-danger); opacity: 0.75; }
 /* Mêmes couleurs que les tuiles .assoc-item.is-matched.pair-N ci-dessus,
    appliquées au trait plutôt qu'au fond. */
-.association-link.pair-0 { stroke: var(--color-indigo); }
-.association-link.pair-1 { stroke: var(--tile-blue); }
-.association-link.pair-2 { stroke: var(--tile-yellow); }
-.association-link.pair-3 { stroke: var(--tile-green); }
-.association-link.pair-4 { stroke: var(--color-cyan); }
-.association-link.pair-5 { stroke: var(--color-accent-2); }
-.association-link.pair-6 { stroke: var(--color-accent); }
-.association-link.pair-7 { stroke: var(--tile-bronze); }
+.association-link.pair-0 { stroke: rgb(139,92,246); }
+.association-link.pair-1 { stroke: rgb(255,138,31); }
+.association-link.pair-2 { stroke: rgb(163,230,53); }
+.association-link.pair-3 { stroke: rgb(34,211,238); }
+.association-link.pair-4 { stroke: rgb(255,79,163); }
+.association-link.pair-5 { stroke: rgb(255,214,10); }
+.association-link.pair-6 { stroke: rgb(59,130,246); }
+.association-link.pair-7 { stroke: rgb(16,185,129); }
 .association-link.correct-reveal { stroke: var(--tile-green); opacity: 1; }
 .association-link.incorrect-reveal { stroke: var(--color-danger); opacity: 0.5; }
 .assoc-correct-hint { color: var(--tile-green); font-weight: 800; margin-left: 6px; }
@@ -2398,7 +2402,20 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 @media (min-width: 900px) {
   .association-area { grid-template-columns: 1fr; max-width: 960px; gap: var(--space-lg); }
   .association-col-list { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-  .assoc-item { flex: 0 1 170px; }
+  /* Largeur = part égale de la rangée selon --assoc-cols (posé par index.js,
+     renderAssociationColumns : jusqu'à 5 paires par rangée) au lieu de 170px
+     fixes : un nom plus large que la tuile ("Tryndamère") empêchait celle-ci
+     de rétrécir et rejetait la 5e tuile de B sur une ligne à part (4+1). Le
+     min-width:0 + le retour à la ligne forcé la laissent se comprimer. */
+  .assoc-item {
+    flex: 0 1 calc((100% - (var(--assoc-cols, 4) - 1) * 10px) / var(--assoc-cols, 4));
+    max-width: 240px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* Ligne de séparation entre le groupe A (haut) et le groupe B (bas)
+     (retour utilisateur) — les traits d'appariement la traversent. */
+  #associationColB { border-top: 3px dashed rgba(255, 255, 255, 0.45); padding-top: var(--space-lg); }
 }
 
 /* Liste réordonnable (question "order") */
@@ -2690,6 +2707,17 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 @media (max-width: 640px) {
   .order-compare { grid-template-columns: 1fr; }
 }
+/* Révélation "ordre" côté MJ (retour utilisateur : "très laid", liste en
+   colonne étroite qui débordait de la carte régie) : la seule colonne
+   "Réponse correcte" passe sur 2 colonnes de rangées compactes. Rangs lus
+   rangée par rangée (1 | 2 / 3 | 4...), le numéro reste affiché sur chaque ligne. */
+body.is-host.game-active .container .order-compare.mine-hidden .order-compare-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+body.is-host.game-active .container .order-compare.mine-hidden .order-compare-row { padding: 8px 14px; font-size: 16px; }
+body.is-host.game-active .container .order-compare.mine-hidden .order-compare-rank { font-size: 13px; }
 
 /* Question "image" : le joueur clique directement sur l'image (coordonnées
    au pixel, pas de grille — voir index.js buildImageAnswerArea) : plus
@@ -4855,6 +4883,14 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
      propre conteneur les fait grandir ET s'écarter ensemble,
      proportionnellement, sans toucher au JS. Ratio 280/176 ≈ 1.591 pour
      rester synchronisé avec le nouveau diamètre de l'orbe ci-dessous. */
+  /* Blind test AVEC illustration (retour utilisateur : "image microscopique"
+     côté MJ) : le cadre de l'image (flex:1, min-height:0) ne recevait que le
+     reste après l'orbe, mesuré à 80px de haut (image réduite à une vignette).
+     Hauteur réservée à l'image ; fitStageContent réduit l'ensemble si besoin. */
+  body.is-host.game-active .container #main:has(#blindtestArea:not(.d-none)) #illustrationImgWrap:has(.illustration-img:not(.d-none)) {
+    flex: 0 0 auto !important;
+    height: clamp(150px, 24vh, 260px);
+  }
   body.is-host.game-active .container .blindtest-orb { width: 280px; height: 280px; }
   body.is-host.game-active .container .blindtest-orb-bars { transform: scale(1.591); }
   body.is-host.game-active .container .blindtest-orb-core { width: 120px; height: 120px; }
@@ -5372,6 +5408,9 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
 @media (prefers-reduced-motion: reduce) {
   .qr-scan-viewfinder { animation: none; }
 }
+/* Curseur de zoom du scanner de QR (voir index.js applyQrScanZoom). */
+.qr-scan-zoom { display: flex; align-items: center; gap: 10px; width: min(320px, 80vw); color: white; }
+.qr-scan-zoom input[type="range"] { flex: 1; accent-color: var(--color-accent-2); }
 .qr-scan-hint {
   color: white;
   font-weight: 700;
@@ -5842,8 +5881,13 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    réponse (voir index.js, blindtest seulement pour l'instant) : les autres
    types n'affichent ici que LA bonne réponse (jamais "Toi : ..."), rien de
    trompeur à corriger pour eux, le vert reste leur défaut normal. */
-.reveal-answer.is-incorrect { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
-.reveal-answer.is-close { background: var(--tile-yellow); color: #3a2e00; }
+.reveal-answer .reveal-answer-you,
+.reveal-popup-answer-title .reveal-answer-you { margin-top: 8px; padding: 6px 12px; border-radius: var(--radius-md); font-size: 0.8em; font-weight: 700; background: rgba(0, 0, 0, 0.22); }
+/* Le fond vert reste celui de la réponse ; seule la ligne "Toi : ..." change. */
+.reveal-answer.is-incorrect .reveal-answer-you,
+.reveal-popup-answer-title.is-incorrect .reveal-answer-you { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
+.reveal-answer.is-close .reveal-answer-you,
+.reveal-popup-answer-title.is-close .reveal-answer-you { background: var(--tile-yellow); color: #3a2e00; }
 
 /* Bandeau "Bonne réponse !/Mauvaise réponse" au reveal : nécessaire pour les
    types où la révélation ne montre que LA bonne réponse (ex. "ordre", où
@@ -6110,8 +6154,6 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    à côté de la bonne réponse) — cette copie hérite du même contenu (voir
    index.js, miroir de #revealAnswerText), doit donc aussi hériter de la
    même couleur conditionnelle. */
-.reveal-popup-answer-title.is-incorrect { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
-.reveal-popup-answer-title.is-close { background: var(--tile-yellow); color: #3a2e00; }
 
 /* Popup de révélation sur grand écran (retour utilisateur : "la popup est trop
    petite" sur l'écran du MJ — carte plafonnée à 560px, image à 420px, titre à
@@ -9448,6 +9490,18 @@ body.display-body {
   color: var(--color-text-muted);
   text-align: center;
 }
+/* QR d'accès + code de salle sur l'écran d'attente de la TV. Fond blanc autour
+   du QR (marge de silence nécessaire à la lecture). */
+.display-qr { display: flex; flex-direction: column; align-items: center; gap: 2vh; }
+.display-qr-box { padding: 1.6vh; background: #fff; border-radius: 16px; line-height: 0; }
+.display-qr-box img, .display-qr-box canvas { display: block; }
+.display-qr-code {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: clamp(22px, 3vw, 44px);
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: 0.06em;
+}
 #displayStage {
   width: 100%;
   height: 100%;
@@ -9471,7 +9525,8 @@ body.display-body {
      none), qui s'ajoutait par-dessus). 6.5vh -> 3.5vh avec l'ancrage en haut
      (voir justify-content ci-dessus) : ajouté au padding de .display-root
      (5vh), l'énoncé commence juste sous le bandeau (~7vh), pas plus bas. */
-  padding-top: 3.5vh;
+  /* 3.5vh -> 2.4vh (retour utilisateur : marge étrange entre la barre de temps et l'énoncé). */
+  padding-top: 2.4vh;
   /* Vue passive sur une TV : personne ne peut scroller, une barre de défilement
      violette visible sur le bord (constatée en test réel) n'est que du bruit —
      le débordement éventuel est déjà absorbé par fitDisplayContent (display.js). */
@@ -9624,7 +9679,10 @@ body.display-body #question {
      l'écran ; display.js le réduit encore pour qu'il ne dépasse pas 20 % de la
      hauteur dès qu'il y a une image ou des propositions (retour utilisateur). */
   font-size: clamp(26px, 4vw, 64px);
-  margin-bottom: 3vh;
+  /* Marge sous l'énoncé 3vh -> 2.4vh et interligne 1.2 -> 1.1 (retour utilisateur : "marge étrange"
+     entre question et image/propositions). */
+  margin-bottom: 2.4vh;
+  line-height: 1.1;
   /* Évite le "?" (ou un seul mot) seul sur la 2e ligne d'un énoncé long. */
   text-wrap: balance;
 }
@@ -9632,6 +9690,11 @@ body.display-body #question {
 /* Image d'illustration : plus grande que sur l'écran de jeu MJ
    (.illustration-img de base, pensée pour cohabiter avec timer/tuiles dans
    une carte compacte) — ici elle a tout l'écran pour elle. */
+/* Garde-fou contre toute déformation d'une illustration redimensionnée en
+   px par display.js (blind test / intrus : "image compressée") : jamais étirée,
+   et centrée dans son cadre. Les images cadrées (transform) en sont exclues. */
+body.display-body .illustration-img-wrap { margin-left: auto; margin-right: auto; }
+body.display-body .illustration-img:not([style*="transform"]) { object-fit: contain; }
 body.display-body .illustration-img {
   /* 38vh -> 52vh -> 58vh (retours utilisateur : images minuscules sur TV,
      puis "agrandir les images proportionnellement à l'écran") ; un éventuel
@@ -9852,6 +9915,15 @@ body.display-body .timeline-item { padding: 0.7vh 2.2vw; }
    couvrent que rangement/intrus pour le débordement), contenu jamais
    coupé/inatteignable grâce au scroll. */
 body.display-body .order-item { font-size: clamp(20px, 2.6vw, 44px); }
+/* Révélation "ordre" sur TV (retour utilisateur : "se compresse et devient
+   laide") : liste centrée, lignes à l'échelle TV au lieu du gabarit MJ 15px. */
+body.display-body .order-compare { max-width: min(1400px, 84vw); margin: 0 auto; gap: 3vw; }
+body.display-body .order-compare.mine-hidden { max-width: min(1100px, 72vw); }
+body.display-body .order-compare-col { gap: 0.8vh; }
+body.display-body .order-compare-label { font-size: clamp(14px, 1.3vw, 24px); }
+body.display-body .order-compare-row { font-size: clamp(20px, 2.4vw, 40px); padding: 0.9vh 1.6vw; gap: 1.2vw; }
+body.display-body .order-compare-rank { font-size: clamp(14px, 1.5vw, 26px); width: 2.4vw; }
+body.display-body .order-compare-icon { font-size: clamp(18px, 2vw, 32px); }
 body.display-body .timeline-item-title { font-size: clamp(20px, 2.6vw, 44px); }
 body.display-body .timeline-item-desc { font-size: clamp(16px, 1.9vw, 30px); }
 
@@ -9905,10 +9977,11 @@ body.display-body .rangement-card { padding: 1vh 1.6vw; font-size: clamp(18px, 2
    test réel : "mettre une ligne entre les propositions et leurs paires", voir
    display.js realignAssociationLinks) n'avaient qu'une mince bande pour se
    croiser, illisibles. Trait épaissi à l'échelle TV pour la même raison. */
-body.display-body .association-area { max-width: min(1700px, 92vw); gap: 9vh; }
+body.display-body .association-area { max-width: min(1700px, 92vw); gap: 5vh; }
+body.display-body #associationColB { padding-top: 2vh; }
 body.display-body .association-link { stroke-width: 5; }
 body.display-body .association-col-list { gap: 1.6vh 1.6vw; }
-body.display-body .assoc-item { padding: 2vh 1.6vw; font-size: clamp(20px, 2.4vw, 44px); }
+body.display-body .assoc-item { padding: 2vh 1.2vw; font-size: clamp(18px, 1.9vw, 36px); }
 /* Sous 900px, .association-col-list reste en colonne (voir la garde
    @media (min-width:900px) juste en dessous) : les 8 tuiles du pire cas (8
    paires) s'empilent alors TOUTES dans une seule colonne au lieu d'une
@@ -9971,6 +10044,15 @@ body.display-body #main.tv-has-options.tv-has-image .option-btn:not(.intrus-tile
   padding-top: 1.6vh;
   padding-bottom: 1.6vh;
 }
+/* Vrai/Faux AVEC image (retour utilisateur : "pas de marge entre image et
+   Vrai/Faux, laisser plus de place à l'image") : boutons moins hauts, marge
+   au-dessus des propositions, image jusqu'à 46 % de la hauteur (voir
+   display.js fitLayoutBudget). */
+body.display-body #main.tv-has-image .options-grid { margin-top: 2.5vh; }
+body.display-body #main.tv-has-image:has(.truefalse-grid) .illustration-img,
+body.display-body #main.tv-has-image:has(.truefalse-grid) .illustration-img-wrap { max-height: 46vh; }
+body.display-body #main.tv-has-image .truefalse-btn { min-height: 12vh; }
+body.display-body #main.tv-has-image .truefalse-btn::before { width: 4.5vh; height: 4.5vh; }
 /* Curseur numérique AVEC image : grand chiffre + piste + image dépassaient
    l'écran (contenu réduit à 55-69 % par le zoom de secours, mesuré à 1920x1080). */
 body.display-body #main:has(#graduationArea:not(.d-none)) .illustration-img { max-height: 34vh; }
@@ -10083,23 +10165,25 @@ body.display-body #imageArea { max-width: min(1700px, 92vw); }
    sur un écran court, même cause que le même ajustement fait plus haut pour
    recherche/halo) ; 44vh comble aussi ce cas — mesuré SANS scroll aux 3
    tailles. */
+/* 54vh -> 62vh (retour utilisateur : image « situer » trop petite sur la TV) ;
+   fitDisplayContent absorbe un éventuel léger débordement. */
 body.display-body #imageViewport {
   width: 100%;
   max-width: min(1700px, 92vw);
-  max-height: min(54vh, 700px);
+  max-height: min(62vh, 760px);
   align-items: center;
 }
 body.display-body #imageWrap {
   width: auto !important;
   height: auto !important;
   max-width: 100%;
-  max-height: min(54vh, 700px);
+  max-height: min(62vh, 760px);
 }
 body.display-body #imageImg {
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: min(54vh, 700px);
+  max-height: min(62vh, 760px);
 }
 
 /* Contrôles réservés au MJ, sans sens sur une TV passive (aucune interaction
@@ -10480,3 +10564,36 @@ body.display-body .manual-adjust-badge { font-size: clamp(18px, 1.8vw, 30px); pa
 .participants-table { width: 100%; border-collapse: collapse; text-align: left; }
 .participants-table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); padding: 6px 10px; }
 .participants-table td { padding: 10px; border-top: 1px solid var(--color-border); font-weight: 600; }
+
+/* ===== Vue TV : lot "parcours visuel" (marges / tailles / espace inutilisé) ===== */
+/* Énoncé : lignes équilibrées (plus de "!" orphelin sur la dernière ligne). */
+body.display-body .question-text { text-wrap: balance; }
+
+/* Disposition côte à côte (classe posée par display.js layoutSideBySide) : image portrait
+   à gauche, éléments de réponse (liste "ordre", 5+ propositions) à droite. */
+body.display-body #main.tv-side {
+  display: grid !important;
+  grid-template-columns: minmax(0, 32%) minmax(0, 1fr);
+  column-gap: 3vw;
+  row-gap: 1.5vh;
+  align-items: center;
+  justify-items: center;
+}
+body.display-body #main.tv-side > #question { grid-column: 1 / -1; margin-bottom: 0.6vh; }
+body.display-body #main.tv-side > #illustrationImgWrap { grid-column: 1; grid-row: 2; margin: 0; }
+body.display-body #main.tv-side > #inputArea { grid-column: 2; grid-row: 2; width: 100%; max-width: none; margin: 0; }
+body.display-body #main.tv-side .illustration-img,
+body.display-body #main.tv-side .illustration-img-wrap { max-height: none !important; max-width: none !important; margin-bottom: 0; }
+body.display-body #main.tv-side .options-grid:not(.intrus-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 0; }
+body.display-body #main.tv-side .options-grid:not(.intrus-grid) > .option-btn { grid-column: auto !important; }
+body.display-body #main.tv-side .order-area { max-width: none; width: 100%; margin: 0; }
+
+/* Chrono plus lisible à distance : barre 8 -> 12px, chiffre plus grand et gras. */
+body.display-body #timerContainer .timer-bar-wrapper { height: 12px; }
+body.display-body #timerContainer .timer-label { font-size: clamp(20px, 2vw, 34px); font-weight: 800; }
+body.display-body #questionTypeBadge { font-size: clamp(15px, 1.5vw, 24px); }
+
+/* Indices : texte de la carte centrale et des vignettes d'historique plus lisible à distance. */
+body.display-body .indice-central-card .indice-card-text { font-size: clamp(28px, 3.6vw, 64px); }
+body.display-body .indice-history-card { width: clamp(130px, 11vw, 210px); height: clamp(130px, 11vw, 210px); }
+body.display-body .indice-history-card .indice-card-text { font-size: clamp(18px, 1.9vw, 30px); }
