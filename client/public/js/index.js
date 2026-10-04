@@ -346,6 +346,25 @@ const qrScanCloseBtn = document.getElementById('qrScanCloseBtn')
 let qrScanStream = null
 let qrScanRAF = null
 let qrScanCanvas = null
+// Zoom du scanner : matériel (track.applyConstraints) si la caméra l'expose,
+// sinon numérique — la vidéo est agrandie en CSS et seul le centre de la frame
+// (1/zoom) est donné à jsQR. qrScanDigitalZoom vaut 1 en zoom matériel (la
+// frame est déjà zoomée par la caméra).
+const qrScanZoomInput = document.getElementById('qrScanZoom')
+let qrScanDigitalZoom = 1
+const applyQrScanZoom = (value) => {
+  const track = qrScanStream && qrScanStream.getVideoTracks()[0]
+  const caps = track && track.getCapabilities ? track.getCapabilities() : null
+  if (caps && caps.zoom) {
+    qrScanDigitalZoom = 1
+    // Rejet ignoré : un zoom refusé par la caméra laisse simplement l'image telle quelle.
+    track.applyConstraints({ advanced: [{ zoom: value }] }).catch(() => {})
+  } else {
+    qrScanDigitalZoom = value
+  }
+  if (qrScanVideo) qrScanVideo.style.transform = qrScanDigitalZoom > 1 ? `scale(${qrScanDigitalZoom})` : ''
+}
+if (qrScanZoomInput) qrScanZoomInput.oninput = () => applyQrScanZoom(Number(qrScanZoomInput.value))
 
 const stopQrScan = () => {
   if (qrScanRAF) cancelAnimationFrame(qrScanRAF)
@@ -357,7 +376,9 @@ const stopQrScan = () => {
     qrScanStream.getTracks().forEach(t => t.stop())
     qrScanStream = null
   }
-  if (qrScanVideo) qrScanVideo.srcObject = null
+  if (qrScanVideo) { qrScanVideo.srcObject = null; qrScanVideo.style.transform = '' }
+  qrScanDigitalZoom = 1
+  if (qrScanZoomInput) qrScanZoomInput.value = 1
   if (qrScanOverlay) qrScanOverlay.classList.add('d-none')
 }
 
@@ -372,12 +393,15 @@ const tickQrScan = () => {
     const h = qrScanVideo.videoHeight
     if (w && h) {
       if (!qrScanCanvas) qrScanCanvas = document.createElement('canvas')
-      qrScanCanvas.width = w
-      qrScanCanvas.height = h
+      // Zoom numérique : seul le centre (1/zoom) de la frame est analysé.
+      const sw = Math.round(w / qrScanDigitalZoom)
+      const sh = Math.round(h / qrScanDigitalZoom)
+      qrScanCanvas.width = sw
+      qrScanCanvas.height = sh
       const ctx = qrScanCanvas.getContext('2d')
-      ctx.drawImage(qrScanVideo, 0, 0, w, h)
-      const imageData = ctx.getImageData(0, 0, w, h)
-      const result = window.jsQR ? window.jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' }) : null
+      ctx.drawImage(qrScanVideo, Math.round((w - sw) / 2), Math.round((h - sh) / 2), sw, sh, 0, 0, sw, sh)
+      const imageData = ctx.getImageData(0, 0, sw, sh)
+      const result = window.jsQR ? window.jsQR(imageData.data, sw, sh, { inversionAttempts: 'attemptBoth' }) : null
       const code = result && extractRoomCodeFromQrText(result.data)
       if (code) {
         roomInput.value = code
@@ -410,6 +434,14 @@ const startQrScan = async () => {
   }
   qrScanVideo.srcObject = qrScanStream
   try { await qrScanVideo.play() } catch { /* autoplay refusé — rare avec muted+playsinline, ignoré */ }
+  // Plage du zoom matériel si la caméra en propose un (sinon 1-4 numérique, valeurs du HTML).
+  const zoomCaps = qrScanStream.getVideoTracks()[0]?.getCapabilities?.().zoom
+  if (qrScanZoomInput && zoomCaps) {
+    qrScanZoomInput.min = zoomCaps.min
+    qrScanZoomInput.max = Math.min(zoomCaps.max, zoomCaps.min * 8)
+    qrScanZoomInput.step = zoomCaps.step || 0.1
+  }
+  if (qrScanZoomInput) qrScanZoomInput.value = qrScanZoomInput.min
   qrScanOverlay.classList.remove('d-none')
   qrScanRAF = requestAnimationFrame(tickQrScan)
 }
@@ -3818,11 +3850,14 @@ const revealBlindTestAnswer = (correctTitle, correctArtist) => {
   // Pas d'artiste attendu pour ce morceau (voir emitQuestion, titleOnly) :
   // on n'affiche que le titre, jamais "Titre — ?" ni "Titre — " (retour
   // utilisateur : ça laissait croire à tort qu'un artiste était attendu).
-  parts.push(correctArtist ? `Bonne réponse : ${correctTitle || '?'} — ${correctArtist}` : `Bonne réponse : ${correctTitle || '?'}`)
+  // Pas de préfixe "Bonne réponse :" (retour utilisateur) : l'encart vert EST la
+  // réponse. "Toi : ..." est une ligne à part (classe reveal-answer-you) pour
+  // que sa couleur conditionnelle ne retire jamais le fond vert de la réponse.
+  parts.push({ cls: 'reveal-answer-main', text: correctArtist ? `${correctTitle || '?'} — ${correctArtist}` : `${correctTitle || '?'}` })
   if (myBlindTestSubmission && (myBlindTestSubmission.title || myBlindTestSubmission.artist)) {
-    parts.push(correctArtist ? `Toi : ${myBlindTestSubmission.title || '—'} / ${myBlindTestSubmission.artist || '—'}` : `Toi : ${myBlindTestSubmission.title || '—'}`)
+    parts.push({ cls: 'reveal-answer-you', text: correctArtist ? `Toi : ${myBlindTestSubmission.title || '—'} / ${myBlindTestSubmission.artist || '—'}` : `Toi : ${myBlindTestSubmission.title || '—'}` })
   }
-  revealAnswerText.innerHTML = parts.map(p => `<div>${p.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>`).join('')
+  revealAnswerText.innerHTML = parts.map(p => `<div class="${p.cls}">${p.text.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</div>`).join('')
   revealAnswerText.classList.remove('d-none')
 }
 
@@ -4102,7 +4137,7 @@ const positionGradTargetMarker = (target) => {
 
 const revealFreeAnswer = (text) => {
   if (!revealAnswerText) return
-  revealAnswerText.textContent = `Bonne réponse : ${text}`
+  revealAnswerText.textContent = text
   revealAnswerText.classList.remove('d-none')
 }
 const scores = new Map()
@@ -4627,7 +4662,10 @@ const pushDisplayMirror = () => {
     // seul signal fiable pour que display.js sache quand masquer l'écran
     // d'attente (ni stageHtml ni introVisible ne suffisent, voir ce
     // commentaire pour le détail).
-    gameStarted: anyQuestionShown
+    gameStarted: anyQuestionShown,
+    // QR d'accès affiché sur l'écran d'attente de la TV (voir display.js).
+    joinUrl: currentJoinUrl || '',
+    roomCode: roomInput.value.trim().toUpperCase()
   }, location.origin)
 }
 
@@ -9625,8 +9663,12 @@ socket.on('timer:end', (payload) => {
     // (barre à 0, non urgente) plutôt que de sortir illustrationZoomLayer
     // de la liste volatile (risquerait de réintroduire le clignotement que
     // cette liste corrige par ailleurs).
-    pushDisplayTick(0, '0', false, 1)
   }
+  // Dernier tick TOUJOURS envoyé (retour utilisateur : "passer le temps à 0
+  // quand la question est terminée") : l'intervalle est arrêté, sans lui la TV
+  // gardait le dernier chiffre/barre reçu. zoomScale 1 seulement si une image
+  // zoomguess est en jeu.
+  pushDisplayTick(0, '0', false, currentIllustrationZoom ? 1 : undefined)
   if (currentQuestionType === 'indice') showIndiceGallery()
   // "révélation" : timer:end est le SEUL moment où l'image réponse arrive
   // enfin du serveur (voir server/index.js, jamais transmise avant) — pour
@@ -9907,7 +9949,9 @@ socket.on('question:reveal', payload => {
       .filter(el => el.classList.contains('correct-reveal'))
       .map(el => el.textContent.trim())
       .filter(Boolean)
-    if (correctLabels.length) revealFreeAnswer(correctLabels.join(' · '))
+    // QCM : pas d'encart (retour utilisateur) — la tuile verte EST la réponse.
+    // truefalse/intrus gardent l'encart (titre de la popup de révélation).
+    if (correctLabels.length && payload.type !== 'mcq') revealFreeAnswer(correctLabels.join(' · '))
     // QCM à plusieurs bonnes réponses, réglage "doit tout cocher pour
     // gagner des points" DÉSACTIVÉ (retour utilisateur) : score proportionnel
     // côté serveur (voir answer:submit) -> bandeau "Presque !" possible ici,

@@ -759,15 +759,10 @@ const createDefaultQuestion = () => ({
   options: [],
   correct: [''],
   timerMs: 15000,
-  // Bug remonté par un utilisateur : ajouter plusieurs questions vides pour
-  // structurer un quiz (avant de les remplir une à une) rendait TOUT le quiz
-  // impossible à sauvegarder — validateQuestion boucle sur TOUTES les
-  // questions, pas seulement celle en cours d'édition, donc une question
-  // fraîchement créée (sans énoncé) bloquait la sauvegarde même si la case
-  // "Brouillon" était cochée sur une AUTRE question. Une nouvelle question
-  // est par nature un brouillon tant qu'elle n'a pas été remplie — cochée
-  // par défaut, à décocher explicitement une fois terminée.
-  draft: true
+  // Plus de brouillon par défaut (retour utilisateur) : la case "Brouillon"
+  // se coche à la main. Une question vide non cochée bloque donc la
+  // sauvegarde (validateQuestion), à remplir ou marquer brouillon.
+  draft: false
 })
 
 const moveQuestion = (fromIdx, toIdx) => {

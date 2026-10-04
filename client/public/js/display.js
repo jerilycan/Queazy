@@ -35,10 +35,30 @@ let lastLeaderHtml = ''
 // event.origin vérifié explicitement (jamais de '*' en émission côté MJ non
 // plus, voir index.js pushDisplayMirror) : les deux pages sont same-origin
 // par construction, pas de raison d'accepter un message d'ailleurs.
+// QR d'accès à la salle sur l'écran d'attente (retour utilisateur : "afficher le
+// QR code au lancement du mode présentation"). Régénéré seulement quand l'URL
+// change (le sync arrive très souvent). Pas de QR si la librairie n'a pas pu se
+// charger (réseau) : l'écran d'attente reste simplement comme avant.
+let displayQrUrl = ''
+const renderDisplayQr = (joinUrl, code) => {
+  const wrap = document.getElementById('displayQr')
+  const box = document.getElementById('displayQrBox')
+  const codeEl = document.getElementById('displayQrCode')
+  if (!wrap || !box || !joinUrl || !window.QRCode) return
+  if (joinUrl !== displayQrUrl) {
+    displayQrUrl = joinUrl
+    box.innerHTML = ''
+    const size = Math.round(Math.min(window.innerHeight * 0.32, 360))
+    new window.QRCode(box, { text: joinUrl, width: size, height: size })
+  }
+  if (codeEl) codeEl.textContent = code ? `Code salle : ${code}` : ''
+  wrap.classList.remove('d-none')
+}
 window.addEventListener('message', (event) => {
   if (event.origin !== location.origin) return
   if (event.data?.type !== 'queazy-display-sync') return
-  const { stageSig, stageHtml, popupHtml, popupVisible, introHtml, introVisible, leaderHtml, leaderVisible, gameStarted } = event.data
+  const { stageSig, stageHtml, popupHtml, popupVisible, introHtml, introVisible, leaderHtml, leaderVisible, gameStarted, joinUrl, roomCode: syncedRoomCode } = event.data
+  renderDisplayQr(joinUrl, syncedRoomCode)
 
   // Tâche 043, étape 4 : l'écran d'attente (logo + sous-texte) ne se masque
   // que dès que gameStarted est vrai (voir index.js, anyQuestionShown) — ni
@@ -268,10 +288,26 @@ const fitLayoutBudget = () => {
     // largeur, d'où l'image aplatie. Le plafond CSS (max-height, résolu en
     // px par getComputedStyle) entre donc dans le calcul du facteur.
     const cssMaxH = parseFloat(getComputedStyle(img).maxHeight)
-    const maxH = Math.min(H * (hasOptions ? 0.40 : 0.58), Number.isFinite(cssMaxH) ? cssMaxH : Infinity)
+    const isTrueFalse = !!(optionsEl && optionsEl.classList.contains('truefalse-grid'))
+    const maxH = Math.min(H * (hasOptions ? (isTrueFalse ? 0.46 : 0.40) : 0.58), Number.isFinite(cssMaxH) ? cssMaxH : Infinity)
     const k = Math.min(window.innerWidth * 0.82 / img.naturalWidth, maxH / img.naturalHeight)
     img.style.width = `${Math.round(img.naturalWidth * k)}px`
     img.style.height = `${Math.round(img.naturalHeight * k)}px`
+  })
+  // "Situer"/"halo" (retour utilisateur : image trop petite sur la TV) : le cadre
+  // a une taille fixe (84vw x 50vh) et l'image y est en object-fit:contain, donc
+  // une image 3:2 n'en occupait que la moitié. Cadre redimensionné au RATIO de
+  // l'image, le plus grand possible dans la place restante sous l'énoncé.
+  displayStage.querySelectorAll('#rechercheWrap, #haloWrap').forEach(wrap => {
+    const img = wrap.querySelector('img')
+    wrap.style.width = ''
+    wrap.style.height = ''
+    if (!img || !isVisibleBox(wrap) || !img.naturalWidth || !img.naturalHeight) return
+    const availH = displayStage.getBoundingClientRect().bottom - wrap.getBoundingClientRect().top - 32
+    const k = Math.min(window.innerWidth * 0.84 / img.naturalWidth, availH / img.naturalHeight)
+    if (!(k > 0)) return
+    wrap.style.width = `${Math.round(img.naturalWidth * k)}px`
+    wrap.style.height = `${Math.round(img.naturalHeight * k)}px`
   })
   if (title && (hasOptions || hasImage)) {
     let ts = parseFloat(getComputedStyle(title).fontSize)
