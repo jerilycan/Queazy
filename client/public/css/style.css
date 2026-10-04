@@ -9525,7 +9525,8 @@ body.display-body {
      none), qui s'ajoutait par-dessus). 6.5vh -> 3.5vh avec l'ancrage en haut
      (voir justify-content ci-dessus) : ajouté au padding de .display-root
      (5vh), l'énoncé commence juste sous le bandeau (~7vh), pas plus bas. */
-  padding-top: 3.5vh;
+  /* 3.5vh -> 2.4vh (retour utilisateur : marge étrange entre la barre de temps et l'énoncé). */
+  padding-top: 2.4vh;
   /* Vue passive sur une TV : personne ne peut scroller, une barre de défilement
      violette visible sur le bord (constatée en test réel) n'est que du bruit —
      le débordement éventuel est déjà absorbé par fitDisplayContent (display.js). */
@@ -9678,7 +9679,10 @@ body.display-body #question {
      l'écran ; display.js le réduit encore pour qu'il ne dépasse pas 20 % de la
      hauteur dès qu'il y a une image ou des propositions (retour utilisateur). */
   font-size: clamp(26px, 4vw, 64px);
-  margin-bottom: 3vh;
+  /* Marge sous l'énoncé 3vh -> 2.4vh et interligne 1.2 -> 1.1 (retour utilisateur : "marge étrange"
+     entre question et image/propositions). */
+  margin-bottom: 2.4vh;
+  line-height: 1.1;
   /* Évite le "?" (ou un seul mot) seul sur la 2e ligne d'un énoncé long. */
   text-wrap: balance;
 }
@@ -10575,7 +10579,7 @@ body.display-body #main.tv-side {
   align-items: center;
   justify-items: center;
 }
-body.display-body #main.tv-side > #question { grid-column: 1 / -1; }
+body.display-body #main.tv-side > #question { grid-column: 1 / -1; margin-bottom: 0.6vh; }
 body.display-body #main.tv-side > #illustrationImgWrap { grid-column: 1; grid-row: 2; margin: 0; }
 body.display-body #main.tv-side > #inputArea { grid-column: 2; grid-row: 2; width: 100%; max-width: none; margin: 0; }
 body.display-body #main.tv-side .illustration-img,
