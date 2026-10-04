@@ -2402,7 +2402,17 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 @media (min-width: 900px) {
   .association-area { grid-template-columns: 1fr; max-width: 960px; gap: var(--space-lg); }
   .association-col-list { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-  .assoc-item { flex: 0 1 170px; }
+  /* Largeur = part égale de la rangée selon --assoc-cols (posé par index.js,
+     renderAssociationColumns : jusqu'à 5 paires par rangée) au lieu de 170px
+     fixes : un nom plus large que la tuile ("Tryndamère") empêchait celle-ci
+     de rétrécir et rejetait la 5e tuile de B sur une ligne à part (4+1). Le
+     min-width:0 + le retour à la ligne forcé la laissent se comprimer. */
+  .assoc-item {
+    flex: 0 1 calc((100% - (var(--assoc-cols, 4) - 1) * 10px) / var(--assoc-cols, 4));
+    max-width: 240px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
   /* Ligne de séparation entre le groupe A (haut) et le groupe B (bas)
      (retour utilisateur) — les traits d'appariement la traversent. */
   #associationColB { border-top: 3px dashed rgba(255, 255, 255, 0.45); padding-top: var(--space-lg); }
