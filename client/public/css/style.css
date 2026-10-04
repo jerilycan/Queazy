@@ -2405,7 +2405,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   .assoc-item { flex: 0 1 170px; }
   /* Ligne de séparation entre le groupe A (haut) et le groupe B (bas)
      (retour utilisateur) — les traits d'appariement la traversent. */
-  #associationColB { border-top: 2px dashed rgba(255, 255, 255, 0.28); padding-top: var(--space-lg); }
+  #associationColB { border-top: 3px dashed rgba(255, 255, 255, 0.45); padding-top: var(--space-lg); }
 }
 
 /* Liste réordonnable (question "order") */
@@ -4873,6 +4873,14 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
      propre conteneur les fait grandir ET s'écarter ensemble,
      proportionnellement, sans toucher au JS. Ratio 280/176 ≈ 1.591 pour
      rester synchronisé avec le nouveau diamètre de l'orbe ci-dessous. */
+  /* Blind test AVEC illustration (retour utilisateur : "image microscopique"
+     côté MJ) : le cadre de l'image (flex:1, min-height:0) ne recevait que le
+     reste après l'orbe, mesuré à 80px de haut (image réduite à une vignette).
+     Hauteur réservée à l'image ; fitStageContent réduit l'ensemble si besoin. */
+  body.is-host.game-active .container #main:has(#blindtestArea:not(.d-none)) #illustrationImgWrap:has(.illustration-img:not(.d-none)) {
+    flex: 0 0 auto !important;
+    height: clamp(150px, 24vh, 260px);
+  }
   body.is-host.game-active .container .blindtest-orb { width: 280px; height: 280px; }
   body.is-host.game-active .container .blindtest-orb-bars { transform: scale(1.591); }
   body.is-host.game-active .container .blindtest-orb-core { width: 120px; height: 120px; }
@@ -10142,23 +10150,25 @@ body.display-body #imageArea { max-width: min(1700px, 92vw); }
    sur un écran court, même cause que le même ajustement fait plus haut pour
    recherche/halo) ; 44vh comble aussi ce cas — mesuré SANS scroll aux 3
    tailles. */
+/* 54vh -> 62vh (retour utilisateur : image « situer » trop petite sur la TV) ;
+   fitDisplayContent absorbe un éventuel léger débordement. */
 body.display-body #imageViewport {
   width: 100%;
   max-width: min(1700px, 92vw);
-  max-height: min(54vh, 700px);
+  max-height: min(62vh, 760px);
   align-items: center;
 }
 body.display-body #imageWrap {
   width: auto !important;
   height: auto !important;
   max-width: 100%;
-  max-height: min(54vh, 700px);
+  max-height: min(62vh, 760px);
 }
 body.display-body #imageImg {
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: min(54vh, 700px);
+  max-height: min(62vh, 760px);
 }
 
 /* Contrôles réservés au MJ, sans sens sur une TV passive (aucune interaction

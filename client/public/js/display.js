@@ -257,6 +257,38 @@ const LAYOUT_QUESTION_MAX = 0.20
 const LAYOUT_OPTIONS_MAX_WITH_IMAGE = 0.38
 const LAYOUT_OPTIONS_MAX = 0.50
 const isVisibleBox = (el) => !!el && el.getBoundingClientRect().height > 0
+// "Intrus" (retour utilisateur : images écrasées sur la TV) : la répartition en
+// rangées vient du MJ (ex. 8 photos = 2 colonnes x 4 rangées, pensé pour une
+// carte étroite). Sur un écran 16:9, ces tuiles 4:3 de 700px de large étaient
+// plafonnées à ~125px de haut (budget 62vh / 4 rangées) donc écrasées. La TV
+// choisit sa propre grille : le nombre de colonnes qui donne les PLUS GRANDES
+// tuiles 4:3 entières dans le budget, rangées équilibrées.
+const INTRUS_TV_HEIGHT_BUDGET = 0.62
+const layoutIntrusGrid = () => {
+  const optionsEl = displayStage.querySelector('#options.intrus-grid')
+  const tiles = Array.from(displayStage.querySelectorAll('.intrus-tile'))
+  if (!optionsEl || !tiles.length || !isVisibleBox(optionsEl)) return
+  const n = tiles.length
+  const gap = parseFloat(getComputedStyle(optionsEl).columnGap) || 20
+  const W = optionsEl.clientWidth
+  const Hbudget = window.innerHeight * INTRUS_TV_HEIGHT_BUDGET
+  let best = { cols: 1, area: -1 }
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols)
+    const maxW = (W - (cols - 1) * gap) / cols
+    const maxH = (Hbudget - (rows - 1) * gap) / rows
+    const w = Math.min(maxW, maxH * 4 / 3)
+    const area = w * w * 3 / 4
+    if (area >= best.area) best = { cols, area }
+  }
+  const rows = Math.ceil(n / best.cols)
+  // Rangées équilibrées (ex. 7 photos sur 2 rangées = 4 + 3), jamais une tuile orpheline.
+  const sizes = Array.from({ length: rows }, (_, r) => Math.floor(n / rows) + (r < n % rows ? 1 : 0))
+  optionsEl.style.setProperty('--intrus-rows', rows)
+  let i = 0
+  sizes.forEach(size => { for (let k = 0; k < size; k++) tiles[i++].style.setProperty('--intrus-row-cols', size) })
+}
+
 const fitLayoutBudget = () => {
   const mainEl = document.getElementById('main')
   if (!mainEl) return
@@ -265,6 +297,7 @@ const fitLayoutBudget = () => {
   const optionsEl = displayStage.querySelector('#options')
   const btns = Array.from(displayStage.querySelectorAll('.option-btn:not(.intrus-tile)'))
   const hasOptions = btns.length > 0 && isVisibleBox(optionsEl)
+  layoutIntrusGrid()
   const hasImage = isVisibleBox(displayStage.querySelector('.illustration-img, .illustration-img-wrap'))
   mainEl.classList.toggle('tv-has-options', hasOptions)
   mainEl.classList.toggle('tv-has-image', hasImage)
@@ -302,12 +335,17 @@ const fitLayoutBudget = () => {
     const img = wrap.querySelector('img')
     wrap.style.width = ''
     wrap.style.height = ''
+    wrap.style.maxWidth = ''
+    wrap.style.maxHeight = ''
     if (!img || !isVisibleBox(wrap) || !img.naturalWidth || !img.naturalHeight) return
     const availH = displayStage.getBoundingClientRect().bottom - wrap.getBoundingClientRect().top - 32
     const k = Math.min(window.innerWidth * 0.84 / img.naturalWidth, availH / img.naturalHeight)
     if (!(k > 0)) return
     wrap.style.width = `${Math.round(img.naturalWidth * k)}px`
     wrap.style.height = `${Math.round(img.naturalHeight * k)}px`
+    // Plafonds CSS de base (60vh...) levés : la taille calculée ci-dessus fait foi.
+    wrap.style.maxWidth = 'none'
+    wrap.style.maxHeight = 'none'
   })
   if (title && (hasOptions || hasImage)) {
     let ts = parseFloat(getComputedStyle(title).fontSize)
