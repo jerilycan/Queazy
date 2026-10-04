@@ -80,6 +80,21 @@
   --tile-green: #39ff88;
   --tile-green-deep: #0f8a45;
   --tile-green-rgb: 57,255,136;
+  /* Texte sombre pour TOUT texte posé sur un fond --tile-green plein (retour
+     utilisateur : "le blanc du vert c'est pas lisible") — --tile-green est
+     trop clair pour du blanc dessus (~1.3:1 mesuré, tous ces usages étaient
+     illisibles). Même logique déjà en place pour le jaune/cyan de cette
+     palette (ex. .option-btn:nth-child(8n+3)/(8n+6) plus bas, #3a2e00 et
+     #053b44 — ~9:1 et ~8:1 de contraste), juste jamais faite pour le vert
+     jusqu'ici. Cette teinte vise la même fourchette (~9:1 mesuré) plutôt
+     qu'un simple noir, pour rester dans l'esprit "texte teinté" du reste de
+     la palette. --tile-green-deep (au-dessus) ne convient pas tel quel :
+     seulement ~3.3:1 sur --tile-green, pensé comme partenaire de dégradé,
+     pas comme couleur de texte. */
+  /* Passé au noir pur (retour utilisateur après test réel : "les réponses
+     sur fond vert doivent être en noir sur tous les écrans") — le vert foncé
+     d'origine restait trop proche du fond une fois projeté sur TV. */
+  --tile-green-ink: #000;
   /* Mode équipe (voir .team-* plus bas) : violet réutilise --color-accent-2,
      manquait sa variante rgb pour les fonds/bordures translucides. */
   --color-accent-2-rgb: 123,47,247;
@@ -1900,6 +1915,14 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   height: 50px;
   background: rgba(255,255,255,0.92);
   margin: 0;
+  /* Bug remonté en test réel ("les triangles et les carrés sortent de leur
+     case") : le translateY(-50%) de .option-btn::before (pensé pour centrer
+     l'icône positionnée en absolu à top:50%) restait appliqué ici alors que
+     l'icône est repassée dans le flux (position:static) — elle remontait de
+     la moitié de sa hauteur, au-delà du bord haut de la tuile dès que le
+     padding est plus petit que cette moitié (vue TV avec image : 7vh
+     d'icône pour 1.6vh de padding). */
+  transform: none;
 }
 .options-grid.truefalse-grid .option-btn.truefalse-btn:nth-child(1) { background: var(--tile-blue); }
 .options-grid.truefalse-grid .option-btn.truefalse-btn:nth-child(1)::before { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
@@ -1991,7 +2014,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    .my-result-banner.is-close), repris ici pour rester cohérent. */
 .option-btn:nth-child(8n+3) { background: var(--tile-yellow); color: #3a2e00; box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-yellow-rgb),0.35); }
 .option-btn:nth-child(8n+3)::before { border-radius: 50%; }
-.option-btn:nth-child(8n+4) { background: var(--tile-green); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-green-rgb),0.35); }
+.option-btn:nth-child(8n+4) { background: var(--tile-green); color: var(--tile-green-ink); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-green-rgb),0.35); }
 .option-btn:nth-child(8n+4)::before { border-radius: 4px; }
 .option-btn:nth-child(8n+5) { background: var(--tile-purple); box-shadow: 0 5px 0 rgba(0,0,0,0.25), 0 10px 26px rgba(var(--tile-purple-rgb),0.35); }
 .option-btn:nth-child(8n+5)::before { clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%); }
@@ -2020,10 +2043,21 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
      cette règle) qui gère déjà le cas ambigu "sélection fausse à la
      révélation" en passant l'anneau au rouge, donc pas de régression sur ce
      point en revenant au blanc ici. */
-  outline: 4px solid white;
-  outline-offset: -4px;
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 rgba(0,0,0,0.25);
+  outline: 6px solid white;
+  outline-offset: -6px;
+  transform: translateY(2px) scale(1.03);
+  box-shadow: 0 0 0 4px rgba(255,255,255,0.35), 0 0 28px rgba(255,255,255,0.45);
+  z-index: 1;
+}
+/* Retour utilisateur après test réel ("vérifier que ce soit assez visible
+   quand on sélectionne sa réponse en QCM") : l'anneau seul restait discret
+   sur un téléphone en plein jeu. Dès qu'une réponse est choisie, les AUTRES
+   tuiles s'effacent (façon Kahoot) — le choix saute aux yeux. Jamais
+   pendant la révélation : correct-/incorrect-reveal gèrent alors seules
+   l'opacité (la bonne réponse non choisie doit rester bien visible). */
+.options-grid:has(> .option-btn.selected) > .option-btn:not(.selected):not(.correct-reveal):not(.incorrect-reveal) {
+  opacity: 0.4;
+  filter: saturate(0.5);
 }
 .option-btn.correct-reveal {
   outline: 4px solid white;
@@ -2167,7 +2201,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    comme n'importe quelle tuile texte, pas juste un gris neutre. */
 .option-btn.intrus-tile.intrus-tile-text:nth-child(8n+2) { background: var(--tile-blue); }
 .option-btn.intrus-tile.intrus-tile-text:nth-child(8n+3) { background: var(--tile-yellow); color: #3a2e00; }
-.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+4) { background: var(--tile-green); }
+.option-btn.intrus-tile.intrus-tile-text:nth-child(8n+4) { background: var(--tile-green); color: var(--tile-green-ink); }
 .option-btn.intrus-tile.intrus-tile-text:nth-child(8n+5) { background: var(--tile-purple); }
 .option-btn.intrus-tile.intrus-tile-text:nth-child(8n+6) { background: var(--tile-cyan); color: #053b44; }
 .option-btn.intrus-tile.intrus-tile-text:nth-child(8n+7) { background: var(--tile-orange); }
@@ -2631,7 +2665,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 .order-compare-icon { flex-shrink: 0; font-size: 16px; font-weight: 900; }
 .order-compare-row.is-correct {
   background: var(--tile-green);
-  color: white;
+  color: var(--tile-green-ink);
   box-shadow: 0 0 0 3px rgba(var(--tile-green-rgb),0.4), var(--shadow-md);
 }
 .order-compare-row.is-incorrect {
@@ -3433,7 +3467,6 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   object-fit: contain;
   border-radius: var(--radius-sm);
 }
-
 /* Question "blind test" : orbe néon qui pulse en direct avec le volume de
    l'extrait audio (voir index.js startBlindTestPulse — Web Audio API, analyse
    locale du fichier décodé). "orb-idle" est la respiration CSS générique
@@ -4027,7 +4060,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   margin: 0 auto var(--space-md);
   padding: 10px 24px;
   background: var(--tile-green);
-  color: white;
+  color: var(--tile-green-ink);
   font-family: 'Baloo 2', sans-serif;
   font-weight: 800;
   font-size: 17px;
@@ -4783,8 +4816,7 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
      #stageWrap au-dessus.
      Bug corrigé (retour utilisateur : "modération fixe avec ouverture popup
      pour modal" — la carte centrale rétrécissait à chaque nouvelle réponse
-     à juger) : #moderationZone ne contient plus QUE #moderationPanel et sa
-     barre œil ont déménagé dans #moderationModalOverlay (voir index.html/
+     à juger) : #moderationPanel a déménagé dans #moderationModalOverlay (voir index.html/
      index.js), qui n'a plus rien à voir avec la grille régie — la ligne
      "auto" ci-dessus ne dépend donc plus du nombre de réponses en attente,
      seulement du petit bouton compact qui reste ici. */
@@ -5794,7 +5826,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   margin: var(--space-md) auto 0;
   padding: 12px 20px;
   background: var(--tile-green);
-  color: white;
+  color: var(--tile-green-ink);
   font-weight: 700;
   border-radius: var(--radius-md);
   text-align: center;
@@ -5832,9 +5864,30 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
      tous une ombre nette). Ajoutée ici, commune aux 3 variantes. */
   box-shadow: var(--shadow-md);
 }
-.my-result-banner.is-correct { background: var(--tile-green); color: white; }
+/* Le moment de paie du joueur ("Bonne réponse ! +850 points") mérite un peu
+   plus de punch que le fadeIn plat partagé par is-incorrect/is-close (pas de
+   quoi fêter un échec) — courbe à rebond déjà utilisée ailleurs dans ce
+   fichier (ex. .correct-reveal), pas une nouvelle valeur inventée. Pas
+   @keyframes correct-pop tel quel (scale pur, sans opacity) : réutilisé ici
+   tel quel, le bandeau apparaîtrait d'un coup à pleine opacité puis
+   rebondirait, perdant l'entrée en fondu commune aux 3 variantes — ce
+   keyframe dédié garde la même entrée (fondu + léger glissement) que
+   fadeIn, juste avec un dépassement sur le scale plutôt qu'une courbe
+   linéaire. */
+.my-result-banner.is-correct {
+  background: var(--tile-green);
+  color: var(--tile-green-ink);
+  animation: myResultWinPop 0.32s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes myResultWinPop {
+  from { opacity: 0; transform: translateY(10px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .my-result-banner.is-incorrect { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
 .my-result-banner.is-close { background: var(--tile-yellow); color: #3a2e00; }
+@media (prefers-reduced-motion: reduce) {
+  .my-result-banner.is-correct { animation: fadeIn 0.3s ease; }
+}
 
 /* Texte explicatif optionnel, écrit par le créateur du quiz, affiché sous le
    bandeau de résultat au moment de la révélation (ex. "Faux, l'entreprise a
@@ -6032,7 +6085,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   background: var(--color-text-muted);
   box-shadow: var(--shadow-md);
 }
-.reveal-popup-overlay.is-correct .reveal-popup-badge { background: var(--tile-green); }
+.reveal-popup-overlay.is-correct .reveal-popup-badge { background: var(--tile-green); color: var(--tile-green-ink); }
 .reveal-popup-overlay.is-incorrect .reveal-popup-badge { background: var(--color-danger); }
 .reveal-popup-overlay.is-close .reveal-popup-badge { background: var(--tile-yellow); color: #3a2e00; }
 
@@ -6045,7 +6098,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   width: 100%;
   padding: 14px 24px;
   background: var(--tile-green);
-  color: white;
+  color: var(--tile-green-ink);
   font-weight: 800;
   font-size: 20px;
   border-radius: var(--radius-md);
@@ -6969,7 +7022,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 }
 .test-pill.match {
   background: var(--tile-green);
-  color: white;
+  color: var(--tile-green-ink);
   border-color: var(--tile-green);
 }
 .test-pill.no-match {
@@ -6999,7 +7052,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .truefalse-toggle-btn.active {
   border-color: var(--tile-green);
   background: var(--tile-green);
-  color: white;
+  color: var(--tile-green-ink);
 }
 
 .option-row {
@@ -7409,7 +7462,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   margin: 0 auto;
   border-radius: 50%;
   background: var(--tile-green);
-  color: white;
+  color: var(--tile-green-ink);
   font-size: 26px;
   font-weight: 800;
   display: flex;
@@ -8124,34 +8177,9 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .leader-name { flex: 1; font-weight: 700; color: var(--color-text); font-family: 'Nunito', sans-serif; }
 .leader-score { color: var(--color-accent); font-weight: 700; font-family: 'Baloo 2', sans-serif; }
 
-/* "Œil" du panneau de modération, tous types de question confondus (voir
-   index.js moderationEyeBtn, retour utilisateur — copie possible si l'écran
-   de l'hôte est projeté/partagé en IRL, notamment "petit bac") : masque le
-   TEXTE des réponses. Tâche 034 (retour utilisateur, corrige un défaut de
-   la 1re version) : l'ancien flou "spoiler" (color:transparent +
-   text-shadow) gardait la largeur NATURELLE du texte réel — la lueur
-   floutée dessinait toujours le contour des vraies lettres, donnant un
-   indice bien réel sur la longueur du mot (justement ce que ce masquage
-   doit éviter en petit bac). Remplacé par un bandeau plein de largeur FIXE
-   (indépendante du contenu réel) : plus aucune information de longueur ne
-   fuite, quel que soit le mot cité. user-select:none : inutile de pouvoir
-   sélectionner/copier un texte volontairement illisible. */
-.moderation-answers-hidden .moderation-answer-text {
-  display: inline-block;
-  width: 96px;
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  vertical-align: middle;
-  color: transparent;
-  background: rgba(255,255,255,0.18);
-  border-radius: 4px;
-  user-select: none;
-}
-/* Enveloppe barre œil + panneau (voir index.js moderationZone) : porte le
-   margin-top qui vivait avant sur #moderationPanel lui-même (repris ici pour
-   que la barre œil, au-dessus, en bénéficie aussi) et empile les deux
-   verticalement. Hors régie desktop (mobile/tablette, ou avant que
+/* Enveloppe du panneau de modération (voir index.js moderationZone) : porte
+   le margin-top qui vivait avant sur #moderationPanel lui-même et empile son
+   contenu verticalement. Hors régie desktop (mobile/tablette, ou avant que
    .container ne soit une grille), reste un simple bloc empilé dans le flux
    normal — le flex-column ne change rien à ce cas. */
 #moderationZone {
@@ -8159,14 +8187,6 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   flex-direction: column;
   gap: 8px;
   margin-top: 16px;
-}
-/* Bandeau "œil" (voir index.js moderationEyeBar) — même habillage que les
-   autres petites barres d'action au-dessus des cartes de modération (ex.
-   pbacGroupBar juste en dessous). */
-.moderation-eye-bar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
 }
 /* "+XXX" (voir index.js animateScoreGain, retour utilisateur) : apparaît à
    droite de la tuile (juste avant le score qu'il complète), avec un léger
@@ -8184,6 +8204,8 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   opacity: 0;
   transform: translateX(6px) scale(0.85);
 }
+/* Retrait de points manuel par le MJ (voir index.js animateScoreGain). */
+.leader-score-gain.is-negative { color: var(--color-danger); }
 .leader-score-gain.leader-score-gain-in {
   opacity: 1;
   transform: translateX(0) scale(1);
@@ -8827,7 +8849,7 @@ input[type="file"]::file-selector-button:active { transform: translateY(3px); bo
   box-shadow: var(--shadow-lg), 0 0 0 3px rgba(239, 68, 68, 0.35);
   font-size: 15px;
 }
-.qz-toast.is-success { background: linear-gradient(135deg, var(--tile-green) 0%, var(--tile-green-deep) 100%); color: white; border-color: transparent; }
+.qz-toast.is-success { background: linear-gradient(135deg, var(--tile-green) 0%, var(--tile-green-deep) 100%); color: var(--tile-green-ink); border-color: transparent; }
 
 /* Petite secousse à l'apparition (erreur seulement) : rien de tel pour une
    info/succès, mais une erreur doit "accrocher l'œil" même en vision
@@ -9314,17 +9336,16 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
 }
 /* #moderationPanel n'a plus besoin de son propre plafond/scroll une fois
    dans la popup (voir la règle régie desktop retirée, style.css) : c'est
-   .moderation-modal-card ci-dessus qui scrolle désormais, panneau ET barre
-   œil ensemble — évite un double niveau de scroll imbriqué. */
+   .moderation-modal-card ci-dessus qui scrolle désormais — évite un double
+   niveau de scroll imbriqué. */
 #moderationModalSlot #moderationPanel { max-height: none; overflow-y: visible; }
 /* Bouton compact de #moderationZone (voir index.js) qui ouvre la popup —
    seul élément que la zone garde en permanence : sa taille FIXE, quel que
    soit le nombre de réponses en attente, est tout le sens du correctif
    (retour utilisateur : "modération fixe avec ouverture popup pour
    modal") — avant, #moderationPanel grandissait directement dans cette
-   cellule de grille régie, rétrécissant d'autant la carte centrale. Même
-   habillage que .moderation-eye-bar/son bouton, avec un badge de compte en
-   plus. */
+   cellule de grille régie, rétrécissant d'autant la carte centrale. Badge
+   de compte en plus. */
 .moderation-open-btn {
   display: flex;
   align-items: center;
@@ -9433,12 +9454,11 @@ body.display-body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* "safe center" (pas juste "center") : même raison que #stageWrap côté MJ
-     (voir plus haut dans ce fichier) — une question au contenu plus haut que
-     l'écran (ex. longue liste "ordre"/"timeline") ne doit jamais couper son
-     début de façon inatteignable, juste basculer en alignement départ dès
-     qu'elle déborde (#displayStage scrolle, voir overflow-y ci-dessous). */
-  justify-content: safe center;
+  /* Ancré en haut (retour utilisateur après test réel : "sur la télé, le
+     titre doit se placer tout en haut de l'écran") — remplace l'ancien
+     "safe center", qui faisait flotter l'énoncé au milieu de l'écran sur
+     les questions courtes, sa position changeant d'une question à l'autre. */
+  justify-content: flex-start;
   overflow-y: auto;
   /* Réserve la place du bandeau badge+minuteur, désormais position:fixed
      (voir body.display-body #questionTypeBadge/#timerContainer plus bas) —
@@ -9448,8 +9468,10 @@ body.display-body {
      à vue plutôt que mesuré sur le bandeau réel (haut du badge à 3vh +
      hauteur ~39px ≈ 6.6vh au total) — resserré à 6.5vh, plus la marge de
      #main déjà neutralisée juste plus bas (body.display-body #main:not(.d-
-     none), qui s'ajoutait par-dessus). */
-  padding-top: 6.5vh;
+     none), qui s'ajoutait par-dessus). 6.5vh -> 3.5vh avec l'ancrage en haut
+     (voir justify-content ci-dessus) : ajouté au padding de .display-root
+     (5vh), l'énoncé commence juste sous le bandeau (~7vh), pas plus bas. */
+  padding-top: 3.5vh;
   /* Vue passive sur une TV : personne ne peut scroller, une barre de défilement
      violette visible sur le bord (constatée en test réel) n'est que du bruit —
      le débordement éventuel est déjà absorbé par fitDisplayContent (display.js). */
@@ -9611,9 +9633,10 @@ body.display-body #question {
    (.illustration-img de base, pensée pour cohabiter avec timer/tuiles dans
    une carte compacte) — ici elle a tout l'écran pour elle. */
 body.display-body .illustration-img {
-  /* 38vh -> 52vh (retour utilisateur : images minuscules sur TV) ; un éventuel
+  /* 38vh -> 52vh -> 58vh (retours utilisateur : images minuscules sur TV,
+     puis "agrandir les images proportionnellement à l'écran") ; un éventuel
      débordement est absorbé par fitDisplayContent (display.js). */
-  max-height: 52vh;
+  max-height: 58vh;
   max-width: 82vw;
   margin-bottom: 3vh;
 }
@@ -9877,7 +9900,13 @@ body.display-body .rangement-card { padding: 1vh 1.6vw; font-size: clamp(18px, 2
    à 640/960px, .assoc-item à 170px fixe dès 900px de large, voir plus haut
    dans ce fichier). .assoc-item porte directement son font-size (couvre le
    texte de la tuile). */
-body.display-body .association-area { max-width: min(1700px, 92vw); gap: 3vh; }
+/* gap 3vh -> 9vh : sur TV, les éléments A forment une rangée AU-DESSUS des
+   éléments B — les traits qui relient chaque paire (retour utilisateur après
+   test réel : "mettre une ligne entre les propositions et leurs paires", voir
+   display.js realignAssociationLinks) n'avaient qu'une mince bande pour se
+   croiser, illisibles. Trait épaissi à l'échelle TV pour la même raison. */
+body.display-body .association-area { max-width: min(1700px, 92vw); gap: 9vh; }
+body.display-body .association-link { stroke-width: 5; }
 body.display-body .association-col-list { gap: 1.6vh 1.6vw; }
 body.display-body .assoc-item { padding: 2vh 1.6vw; font-size: clamp(20px, 2.4vw, 44px); }
 /* Sous 900px, .association-col-list reste en colonne (voir la garde
@@ -9930,13 +9959,13 @@ body.display-body .blindtest-orb { width: min(32vh, 380px); height: min(32vh, 38
 /* Blind Test AVEC image d'illustration : image + orbe + bandeau de réponse
    dépassaient #displayStage, et fitDisplayContent réduisait tout à ~68 % (texte
    et orbe minuscules, mesuré à 1920x1080). On borne l'image dans ce cas. */
-body.display-body #main:has(#blindtestArea:not(.d-none)) .illustration-img { max-height: 24vh; }
+body.display-body #main:has(#blindtestArea:not(.d-none)) .illustration-img { max-height: 30vh; }
 /* Répartition de la hauteur quand image ET propositions coexistent (classes
    posées par display.js, fitLayoutBudget) : énoncé <= 20 %, image ~36 %,
    propositions <= 38 % — l'image reste bien visible ("qui est cette
    personne ?"), les tuiles se compactent au lieu de l'écraser. */
 body.display-body #main.tv-has-options.tv-has-image .illustration-img,
-body.display-body #main.tv-has-options.tv-has-image .illustration-img-wrap { max-height: 36vh; }
+body.display-body #main.tv-has-options.tv-has-image .illustration-img-wrap { max-height: 40vh; }
 body.display-body #main.tv-has-options.tv-has-image .option-btn:not(.intrus-tile) {
   min-height: 8vh;
   padding-top: 1.6vh;
@@ -9944,7 +9973,7 @@ body.display-body #main.tv-has-options.tv-has-image .option-btn:not(.intrus-tile
 }
 /* Curseur numérique AVEC image : grand chiffre + piste + image dépassaient
    l'écran (contenu réduit à 55-69 % par le zoom de secours, mesuré à 1920x1080). */
-body.display-body #main:has(#graduationArea:not(.d-none)) .illustration-img { max-height: 26vh; }
+body.display-body #main:has(#graduationArea:not(.d-none)) .illustration-img { max-height: 34vh; }
 /* Correctif (vérification tâche 042 étape A) : le ratio 2.39 (calculé à
    l'origine comme ~420/176, un rapport qui ne correspond en fait à rien de
    cohérent dimensionnellement) appliqué à .blindtest-orb-bars — DÉJÀ de la
@@ -9999,9 +10028,20 @@ body.display-body .indice-central-card .indice-card-text { font-size: clamp(22px
 body.display-body .indice-history-card { width: clamp(110px, 9vw, 170px); height: clamp(110px, 9vw, 170px); }
 body.display-body .indice-area.indice-gallery { max-width: min(1500px, 90vw); }
 body.display-body .indice-area.indice-gallery .indice-history { grid-template-columns: repeat(auto-fit, minmax(clamp(220px, 20vw, 380px), 1fr)); }
-body.display-body .indice-gallery-card { height: clamp(150px, 20vh, 260px); }
+body.display-body .indice-gallery-card { height: clamp(180px, 30vh, 380px); } /* 20vh -> 30vh : retour "agrandir les images proportionnellement à l'écran" */
 body.display-body .indice-gallery-card .indice-card-text { font-size: clamp(20px, 2.2vw, 36px); }
 body.display-body .indice-history-card .indice-card-text { font-size: clamp(14px, 1.5vw, 24px); }
+/* Le vol FLIP vers l'historique (flipIndiceCardToHistory, index.js) pose un
+   transform inline calculé dans la géométrie de l'écran MJ, puis le retire
+   deux frames plus tard : mirroré tel quel, la vignette apparaissait au
+   mauvais endroit puis "tombait" à sa place à chaque nouvel indice (retour
+   utilisateur après test réel). Côté TV, elle rejoint directement sa place. */
+body.display-body .indice-history-card { transform: none !important; transition: none; }
+/* Voir display.js resumeEntranceAnimations : entrée déjà jouée, son
+   pseudo-élément décoratif (reflet de .indice-enter) ne doit pas rejouer à
+   chaque réinjection du miroir. */
+body.display-body .tv-anim-done::before,
+body.display-body .tv-anim-done::after { animation: none !important; }
 
 /* Type "image" (clic sur l'image) : écart #4 relevé par l'agent design/
    responsive — #imageWrap reçoit une largeur/hauteur posées UNE FOIS en
@@ -10068,9 +10108,6 @@ body.display-body #imageImg {
    occupaient sous l'image/l'orbe (débordement + barre de défilement TV). */
 /* Bandeau "Bonne réponse : ..." sous la question : 16px de base (gabarit carte
    MJ), illisible à distance sur une TV alors que l'énoncé fait ~60px. */
-/* Retour utilisateur : texte blanc sur fond vert peu lisible sur la TV. */
-body.display-body .reveal-answer:not(.is-incorrect):not(.is-close),
-body.display-body #displayPopup .reveal-popup-answer-title:not(.is-incorrect):not(.is-close) { color: #0a2a18; }
 body.display-body #revealAnswerText {
   font-size: clamp(22px, 2.8vw, 48px);
   padding: 1.6vh 2vw;
@@ -10195,16 +10232,18 @@ body.display-body #displayPopup .reveal-popup-answer-title {
 body.display-body #displayPopup .reveal-explanation {
   font-size: clamp(17px, 2.4vw, 34px);
 }
-body.display-body #displayPopup .reveal-media-img {
-  max-height: min(52vh, 620px);
-}
 /* Cadre de l'image de révélation : plafonné à 420px par la règle de base
    (gabarit carte MJ), donc minuscule au milieu d'une carte TV de ~850px+
    (retour utilisateur : "les images de reveal sont pas bien rendues").
    Ratio 4/3 conservé (aspect-ratio de base) ; le transform de cadrage posé
    côté MJ est rééchelonné à cette nouvelle largeur par rescaleCroppedImages
    (display.js). 62vh borne la largeur pour que la hauteur (largeur x 0,75) tienne
-   dans la carte avec le titre. */
+   dans la carte avec le titre.
+   Jamais de max-height sur l'<img> elle-même (bug remonté en test réel,
+   "image au reveal cassée sur la télé") : elle porte sa largeur/hauteur
+   NATURELLES en inline (le cadrage passe par son transform) — un plafond
+   de hauteur l'écrasait sans toucher sa largeur, puis le transform
+   l'agrandissait déformée. Seul ce cadre borne la taille affichée. */
 body.display-body #displayPopup .reveal-media-img-wrap {
   width: min(960px, 100%, 68vh);
 }
@@ -10246,6 +10285,9 @@ body.display-body #displayLeaderboard .leader-row {
   font-size: clamp(16px, 1.8vw, 28px);
   padding: 1.4vh 2vw;
 }
+/* "+/-XXX" (ajout/retrait de points, voir index.js animateScoreGain) : 15px
+   fixes en base, illisible à distance à côté d'un score à l'échelle TV. */
+body.display-body #displayLeaderboard .leader-score-gain { font-size: clamp(16px, 1.8vw, 28px); }
 /* #leaderNextBtn ("Question suivante"/"Résultat") est un contrôle hôte,
    jamais mirroré comme actionnable côté TV (voir le périmètre de la
    tâche 042 : classement, bouton "Suivant", contrôles hôte restent
@@ -10313,7 +10355,7 @@ body.display-ui-active .display-fullscreen-btn { opacity: 0.6; }
   white-space: nowrap;
   animation: manualAdjustPop 4.5s ease both;
 }
-.manual-adjust-badge.is-plus { background: var(--tile-green); color: #0a2a18; }
+.manual-adjust-badge.is-plus { background: var(--tile-green); color: var(--tile-green-ink); }
 .manual-adjust-badge.is-minus { background: var(--color-danger); color: white; }
 .has-manual-adjust { animation: manualAdjustRow 1.6s ease-out; }
 @keyframes manualAdjustPop {

@@ -1084,6 +1084,39 @@ const revealArea = document.getElementById('revealArea')
 const revealImgWrap = document.getElementById('revealImgWrap')
 const revealEnigmeImg = document.getElementById('revealEnigmeImg')
 const revealReponseImg = document.getElementById('revealReponseImg')
+// Chargement d'image de question avec nouvelles tentatives automatiques.
+// Bug remonté en test réel ("sur une question de type recherche, l'image
+// d'un joueur ne s'est pas chargée") : le moindre échec réseau ponctuel —
+// téléphone qui capte mal, image tout juste envoyée sur le stockage par le
+// MJ — masquait l'image pour de bon (onerror -> d-none), sans recours pour
+// toute la question. On retente quelques fois (cache-buster, même principe
+// que le bouton "Recharger" du type "image") avant d'abandonner.
+// data-retry-src : garde contre une tentative qui arriverait après le
+// passage à une autre question (même <img> réutilisée d'une question à
+// l'autre).
+const IMAGE_LOAD_RETRY_DELAYS_MS = [700, 1800, 4000]
+const loadQuestionImage = (img, src, onFinalError) => {
+  img.dataset.retrySrc = src
+  // Pas d'URL du tout : rien à retenter (un src vide ferait sinon recharger
+  // la page elle-même avec ?retry=) — même échec immédiat qu'avant.
+  if (!src) { img.onerror = onFinalError; img.src = ''; return }
+  let attempt = 0
+  img.onerror = () => {
+    if (img.dataset.retrySrc !== src) return
+    if (attempt >= IMAGE_LOAD_RETRY_DELAYS_MS.length) {
+      console.error('[image] échec de chargement définitif :', src)
+      onFinalError()
+      return
+    }
+    setTimeout(() => {
+      if (img.dataset.retrySrc !== src) return
+      const sep = src.includes('?') ? '&' : '?'
+      img.src = `${src}${sep}retry=${Date.now()}`
+    }, IMAGE_LOAD_RETRY_DELAYS_MS[attempt++])
+  }
+  img.src = src
+}
+
 // Question "recherche" (tâche 009) : image + calque noir troué façon lampe
 // torche à l'endroit du curseur/doigt (voir style.css .recherche-overlay).
 const rechercheArea = document.getElementById('rechercheArea')
@@ -1484,10 +1517,21 @@ let isGameEnded = false
 const REVEAL_QUESTION_BEAT_MS = 900
 const REVEAL_STAGGER_MS = 350
 let revealToken = 0
+// Horodatage (horloge murale, partagée avec la fenêtre TV — même machine)
+// du moment où une animation d'entrée inline démarre : la vue TV
+// (display.js, resumeEntranceAnimations) s'en sert pour REPRENDRE chaque
+// animation là où elle en est quand elle réinjecte le stage, au lieu de la
+// rejouer depuis le début. Bug remonté en test réel ("sur les questions de
+// type classement, l'apparition des éléments clignote sur la télé", "à
+// chaque nouvel indice, il y a un effet de drop") : chaque reconstruction
+// du miroir en pleine question relançait toutes les entrées en cascade.
+const stampEntranceAnimation = (el) => { el.dataset.animStart = String(Date.now()) }
+
 const applyTileReveal = (el, index) => {
   el.style.animation = 'none'
   void el.offsetWidth
   el.style.animation = `tileRevealIn 0.5s cubic-bezier(.34,1.56,.64,1) ${REVEAL_QUESTION_BEAT_MS + index * REVEAL_STAGGER_MS}ms both`
+  stampEntranceAnimation(el)
   // Le "both" maintient l'état final (transform: translateY(0) scale(1)) une
   // fois l'animation terminée — ce qui, tant que l'animation reste attachée à
   // l'élément, continue de l'emporter sur tout style "transform" posé
@@ -2320,6 +2364,12 @@ const revealRangementArea = (correctItems) => {
 // CE joueur) — pas d'ajout à la liste is-locked, rien à griser ici.
 let indiceHints = [] // hints triés par delayS croissant, pour la question active
 let indiceState = { shown: [] } // index (dans indiceHints) des indices déjà affichés
+// Galerie (voir showIndiceGallery plus bas) : retour utilisateur après test
+// réel, "la galerie doit se faire lorsque tous les indices ont été révélés"
+// — plus seulement en fin de question. Une fois le DERNIER indice affiché au
+// centre, et laissé lisible quelques secondes, tous passent en grille.
+const INDICE_GALLERY_DELAY_MS = 2500
+let indiceGalleryTimeoutId = null
 
 const buildIndiceArea = (hints) => {
   if (!indiceCentral || !indiceHistory) return
@@ -2327,6 +2377,8 @@ const buildIndiceArea = (hints) => {
   indiceHistory.innerHTML = ''
   indiceHints = (hints || []).slice().sort((a, b) => (Number(a.delayS) || 0) - (Number(b.delayS) || 0))
   indiceState = { shown: [] }
+  clearTimeout(indiceGalleryTimeoutId)
+  indiceGalleryTimeoutId = null
   if (indiceArea) indiceArea.classList.remove('indice-gallery')
 }
 
@@ -2394,6 +2446,7 @@ const selectIndiceHistoryCard = (el) => {
   el.classList.remove('indice-history-card')
   el.classList.add('indice-central-card', 'indice-enter')
   indiceCentral.appendChild(el)
+  stampEntranceAnimation(el)
 }
 
 // Délégation sur le conteneur (posée une seule fois) plutôt qu'un listener
@@ -2415,6 +2468,10 @@ if (indiceHistory) {
 // indices déjà "dus" s'afficher au premier tick après le montage.
 const updateIndiceArea = (elapsedMs) => {
   if (!indiceCentral || !indiceHistory || !indiceHints.length) return
+  // Galerie déjà affichée (elle montre TOUS les indices, révélés ou non) :
+  // plus rien à faire apparaître au centre — sinon la révélation
+  // (updateIndiceArea(Infinity)) glissait les indices restants dans la grille.
+  if (indiceArea?.classList.contains('indice-gallery')) return
   indiceHints.forEach((hint, idx) => {
     if (indiceState.shown.includes(idx)) return
     if ((Number(hint.delayS) || 0) * 1000 > elapsedMs) return
@@ -2427,9 +2484,14 @@ const updateIndiceArea = (elapsedMs) => {
     if (prevCentral) flipIndiceCardToHistory(prevCentral)
     const card = document.createElement('div')
     card.className = 'indice-central-card indice-enter'
+    card.dataset.hintIdx = String(idx)
     card.appendChild(buildIndiceCardContent(hint))
     indiceCentral.appendChild(card)
+    stampEntranceAnimation(card)
   })
+  if (indiceGalleryTimeoutId === null && !indiceArea?.classList.contains('indice-gallery') && indiceState.shown.length === indiceHints.length) {
+    indiceGalleryTimeoutId = setTimeout(showIndiceGallery, INDICE_GALLERY_DELAY_MS)
+  }
 }
 
 // Fin de question "indice" (retour utilisateur : "afficher tous les indices
@@ -2440,6 +2502,10 @@ const updateIndiceArea = (elapsedMs) => {
 // mêmes éléments (#indiceArea/#indiceHistory) : le miroir TV la reprend tel
 // quel, sans canal dédié.
 const showIndiceGallery = () => {
+  // Appelée par le déclencheur différé (tous les indices révélés) OU à
+  // timer:end : la première arrivée annule l'autre.
+  clearTimeout(indiceGalleryTimeoutId)
+  indiceGalleryTimeoutId = null
   if (!indiceArea || !indiceCentral || !indiceHistory || !indiceHints.length) return
   indiceCentral.innerHTML = ''
   indiceHistory.innerHTML = ''
@@ -2449,6 +2515,7 @@ const showIndiceGallery = () => {
     card.style.animationDelay = `${i * 70}ms`
     card.appendChild(buildIndiceCardContent(hint))
     indiceHistory.appendChild(card)
+    stampEntranceAnimation(card) // ne rejoue pas son entrée à chaque réinjection TV
   })
   indiceArea.classList.add('indice-gallery')
 }
@@ -2565,10 +2632,19 @@ const renderAssociationLinks = () => {
       line.setAttribute('x2', rectB.left - areaRect.left)
       line.setAttribute('y2', rectB.top + rectB.height / 2 - areaRect.top)
     }
-    const colorClass = associationRevealed
+    // MJ présentateur (et TV) : la solution affichée à la révélation (voir
+    // revealAssociationPairs) est toujours juste — un vert uniforme rendait
+    // des traits croisés impossibles à suivre, on garde donc la couleur de
+    // chaque paire (la même que ses deux tuiles).
+    const colorClass = associationRevealed && !isPresenterHost()
       ? (key === i ? 'correct-reveal' : 'incorrect-reveal')
       : ASSOCIATION_PAIR_COLORS[i % ASSOCIATION_PAIR_COLORS.length]
     line.setAttribute('class', `association-link ${colorClass}`)
+    // Extrémités nommées : la vue TV (display.js, realignAssociationLinks)
+    // recalcule le tracé dans SA propre mise en page — les coordonnées
+    // ci-dessus, en pixels de l'écran MJ, n'y correspondent pas.
+    line.dataset.a = String(i)
+    line.dataset.b = String(key)
     associationLinksSvg.appendChild(line)
   })
 }
@@ -2618,13 +2694,19 @@ const computeCropGeometry = (natW, natH, boxW, boxH, zoom, posX, posY) => {
 // utilisé aussi bien pour "association" (.assoc-item-img) que "intrus"
 // (.option-btn.intrus-tile), les deux en tuile 4:3.
 const applyCropTransform = (wrapEl, imgEl, pos) => {
-  const boxW = wrapEl.clientWidth
-  const boxH = wrapEl.clientHeight
-  if (!boxW || !boxH || !imgEl.naturalWidth) return
   const p = pos || {}
   const posX = Number.isFinite(p.x) ? p.x : 0.5
   const posY = Number.isFinite(p.y) ? p.y : 0.5
   const zoom = Number.isFinite(p.zoom) ? p.zoom : 1
+  // Point de cadrage de l'auteur, posé AVANT la garde de taille ci-dessous :
+  // la vue TV (display.js, applyTvCropFromPos) recalcule le cadrage pour sa
+  // propre boîte à partir de lui — y compris quand cette boîte-ci est cachée
+  // ou pas encore mesurable côté MJ (bug remonté en test réel : "image au
+  // reveal cassée sur la télé").
+  imgEl.dataset.cropPos = JSON.stringify({ x: posX, y: posY, zoom })
+  const boxW = wrapEl.clientWidth
+  const boxH = wrapEl.clientHeight
+  if (!boxW || !boxH || !imgEl.naturalWidth) return
   const { scale, offsetX, offsetY } = computeCropGeometry(imgEl.naturalWidth, imgEl.naturalHeight, boxW, boxH, zoom, posX, posY)
   imgEl.style.width = `${imgEl.naturalWidth}px`
   imgEl.style.height = `${imgEl.naturalHeight}px`
@@ -2846,10 +2928,23 @@ const revealAssociationPairs = (correctPairs) => {
   if (!associationColA || !associationColB || !Array.isArray(correctPairs)) return
   setAssociationDisabled(true)
   associationRevealed = true
+  // Retour utilisateur après test réel : "mettre une ligne entre les
+  // propositions et leurs paires". Le MJ présentateur (et donc la TV, qui
+  // mirrore son écran) n'a jamais de soumission à lui : sans ça, toutes ses
+  // tuiles passaient en "fausses" avec un indice texte, sans aucun trait.
+  // Il affiche désormais LA bonne solution : chaque A relié (trait vert) à
+  // son B correct, comme si la bonne réponse avait été soumise.
+  if (isPresenterHost() && associationState) {
+    associationState.matches = associationState.matches.map((_, i) => i)
+    associationState.selected = null
+    updateAssociationClasses()
+  }
   // mine[i] est désormais la CLÉ (index d'origine) de l'élément B choisi pour
   // le A d'index i, pas son texte (voir completeAssociationPair) — la paire i
   // est toujours correcte quand mine[i] === i, par construction (a[i]<->b[i]).
-  const mine = Array.isArray(myAssociationSubmission) ? myAssociationSubmission : []
+  const mine = isPresenterHost() && associationState
+    ? associationState.matches
+    : (Array.isArray(myAssociationSubmission) ? myAssociationSubmission : [])
   Array.from(associationColA.children).forEach((el, i) => {
     el.classList.remove('is-selected')
     const correct = mine[i] === i
@@ -3842,8 +3937,8 @@ if (scoreAdjustMinus100Btn) scoreAdjustMinus100Btn.onclick = () => applyScoreAdj
 // propres à la mécanique de question (son de révélation, questionDeltas...).
 // Retour utilisateur : "un visuel sur les points ajoutés manuellement par le MJ
 // (dans le classement qui suit l'ajout)". Pastille "+200"/"-100" accrochée à la
-// ligne du joueur (classement plein ET dock de la régie) pendant quelques
-// secondes. Mémorisée par joueur : le dock est reconstruit à chaque rendu, la
+// ligne du joueur dans le dock de la régie (halo seul sur le classement plein)
+// pendant quelques secondes. Mémorisée par joueur : le dock est reconstruit à chaque rendu, la
 // pastille doit y être remise tant que le délai n'est pas écoulé. Posée sur
 // des nœuds de #leaderOverlay/#liveClassementDock : le miroir TV la reprend
 // via ses MutationObserver habituels.
@@ -3858,13 +3953,14 @@ const buildManualAdjustBadge = (delta) => {
 const flashManualAdjust = (playerId, delta) => {
   if (!delta) return
   recentManualAdjust.set(playerId, { delta, until: Date.now() + MANUAL_ADJUST_BADGE_MS })
+  // Classement plein : halo de ligne seulement — le "+/-XXX" y est joué par
+  // animateScoreGain (badge + décompte du score, voir socket.on('score:adjust')),
+  // une pastille en plus ferait doublon. La pastille reste pour le dock régie.
   const row = leaderRows.get(playerId)
   if (row) {
-    row.querySelector('.manual-adjust-badge')?.remove()
     row.classList.remove('has-manual-adjust')
     void row.offsetWidth
     row.classList.add('has-manual-adjust')
-    row.insertBefore(buildManualAdjustBadge(delta), row.querySelector('.leader-score'))
   }
   renderLiveClassementDock()
   setTimeout(() => {
@@ -3880,8 +3976,28 @@ socket.on('score:adjust', ({ playerId, delta, total }) => {
   const s = scores.get(playerId) || { name: playerId, total: 0 }
   s.total = total
   scores.set(playerId, s)
+  // Retour utilisateur après test réel : "sur un ajout manuel de points,
+  // jouer l'animation qui incrémente le score" (et pareil pour un retrait).
+  // Classement affiché à cet instant : on joue tout de suite le "+/-XXX ->
+  // décompte" sur sa ligne. Sinon (ajustement fait pendant la question ou
+  // sa révélation, classement pas encore ouvert) : le delta est cumulé avec
+  // les points de la question (questionDeltas) et rejoué à l'ouverture du
+  // classement, comme un gain normal.
+  const overlayVisible = !!leaderOverlay && !leaderOverlay.classList.contains('d-none') && leaderOverlay.style.display !== 'none'
+  const d = Number(delta)
+  if (Number.isFinite(d) && d !== 0) {
+    if (overlayVisible) {
+      leaderScoreAnimated.add(playerId) // renderBoard ci-dessous ne doit pas écraser le score de départ de l'animation
+    } else {
+      questionDeltas.set(playerId, (questionDeltas.get(playerId) || 0) + d)
+    }
+  }
   renderLeaderboard()
   flashManualAdjust(playerId, delta)
+  const adjustedRow = leaderRows.get(playerId)
+  if (overlayVisible && adjustedRow && !teamModeActive && Number.isFinite(d) && d !== 0) {
+    animateScoreGain(adjustedRow, total - d, total, d)
+  }
   if (scoreAdjustFeedback && scoreAdjustTargetId === playerId) {
     scoreAdjustFeedback.textContent = `Score mis à jour : ${total} pts`
   }
@@ -4465,6 +4581,14 @@ const stageSignature = () => {
   clone.querySelectorAll('#timerBar, #illustrationZoomLayer').forEach(el => el.removeAttribute('style'))
   clone.querySelectorAll('#timerBar').forEach(el => el.removeAttribute('class'))
   clone.querySelectorAll('#timerLabel').forEach(el => { el.textContent = '' })
+  // Animation d'entrée inline retirée à animationend (voir applyTileReveal) :
+  // pur nettoyage côté MJ, sans effet visible — ne doit pas déclencher à elle
+  // seule une reconstruction TV (une par tuile, en cascade, pendant toute
+  // l'entrée : cause du clignotement des éléments "classement" sur la TV).
+  clone.querySelectorAll('[style]').forEach(el => {
+    el.style.removeProperty('animation')
+    if (!el.getAttribute('style')) el.removeAttribute('style')
+  })
   return clone.innerHTML
 }
 const pushDisplayMirror = () => {
@@ -6195,11 +6319,6 @@ socket.on('game:mode', ({ mode }) => {
   // donnée que ci-dessus, juste un 2e affichage.
   const ambianceValueEl = document.getElementById('hostAmbianceValue')
   if (ambianceValueEl) ambianceValueEl.textContent = gameMode === 'remote' ? 'À distance' : 'Sur place'
-  // updateModerationEyeVisibility est défini plus bas dans ce fichier (const,
-  // pas hissée) — mais ce handler ne s'exécute qu'au premier game:mode reçu
-  // du serveur, largement après que tout le script ait fini de s'évaluer,
-  // donc déjà bien définie à ce moment-là.
-  updateModerationEyeVisibility?.()
 })
 
 if (gameModeRemoteToggle) {
@@ -7604,14 +7723,6 @@ socket.on('question:show', payload => {
   }
   placeMasterVolumeControl()
   clearRevealState()
-  // Reset du bouton œil de modération à CHAQUE question (retour utilisateur :
-  // "il faut que le bouton 'cacher les réponses' se reset entre deux
-  // questions") — sans ça moderationAnswersHidden gardait la valeur laissée
-  // par la question précédente (un clic sur l'œil pour la révéler restait
-  // valable pour toutes les questions suivantes). Même règle qu'à
-  // l'initialisation : caché par défaut en IRL, sans objet à distance.
-  moderationAnswersHidden = gameMode === 'irl'
-  applyModerationEyeState()
   // Snapshot AVANT que les scores de cette question ne commencent à arriver :
   // sert de référence pour annoncer le changement de position au bon moment.
   // Tâche 024 : en mode "Jouer", l'hôte fait partie du classement comme un
@@ -7634,6 +7745,7 @@ socket.on('question:show', payload => {
   qDiv.style.animation = 'none'
   void qDiv.offsetWidth
   qDiv.style.animation = 'tileRevealIn 0.5s cubic-bezier(.34,1.56,.64,1) both'
+  stampEntranceAnimation(qDiv)
   // L'hôte voit désormais les mêmes tuiles que les joueurs (verrouillées en
   // lecture seule, jamais de bouton d'envoi) : c'est son écran à partager
   // avec la salle, plus une simple console de contrôle à l'aveugle.
@@ -7700,8 +7812,7 @@ socket.on('question:show', payload => {
   if (rechercheArea) {
     rechercheArea.classList.toggle('d-none', payload.type !== 'recherche')
     if (payload.type === 'recherche' && rechercheImg) {
-      rechercheImg.onerror = () => { rechercheImg.classList.add('d-none') }
-      rechercheImg.src = payload.imageUrl || ''
+      loadQuestionImage(rechercheImg, payload.imageUrl || '', () => rechercheImg.classList.add('d-none'))
       rechercheImg.classList.remove('d-none')
       if (rechercheOverlay) {
         // Calque remis plein ET visible à chaque nouvelle question : sinon
@@ -7731,8 +7842,7 @@ socket.on('question:show', payload => {
       haloClicksState = []
       haloRadiusPct = Number(payload.haloRadius) || HALO_DEFAULT_RADIUS_PCT
       if (haloImg) {
-        haloImg.onerror = () => { haloImg.classList.add('d-none') }
-        haloImg.src = payload.imageUrl || ''
+        loadQuestionImage(haloImg, payload.imageUrl || '', () => haloImg.classList.add('d-none'))
         haloImg.classList.remove('d-none')
       }
       if (haloOverlay) haloOverlay.classList.remove('d-none')
@@ -7851,9 +7961,8 @@ socket.on('question:show', payload => {
       applyCropTransform(illustrationImgWrap, illustrationImg, payload.imagePos)
     }
     if (mediaUrl) {
-      illustrationImg.onerror = () => { illustrationImg.classList.add('d-none'); if (mainEl) mainEl.classList.remove('regie-portrait-layout'); fitStageContent() }
       illustrationImg.onload = () => { applyPortraitLayout(); applyZoomGuessCrop() }
-      illustrationImg.src = mediaUrl
+      loadQuestionImage(illustrationImg, mediaUrl, () => { illustrationImg.classList.add('d-none'); if (mainEl) mainEl.classList.remove('regie-portrait-layout'); fitStageContent() })
       if (illustrationImg.complete && illustrationImg.naturalWidth) { applyPortraitLayout(); applyZoomGuessCrop() }
       illustrationImg.classList.remove('d-none')
       // L'animation d'entrée (tileRevealIn) anime elle-même "transform" —
@@ -8543,63 +8652,29 @@ moderationDiv.id = 'moderationPanel'
 moderationDiv.className = 'card'
 moderationDiv.style.display = 'none' // Caché par défaut
 
-// Enveloppe #moderationZone (barre œil + panneau) : c'est ELLE la cellule de
-// grille en régie desktop (voir #moderationZone en CSS), pas le panneau
-// directement — sinon la barre œil, ajoutée à côté sans placement de grille
-// explicite, tomberait dans une ligne implicite (même piège que celui déjà
-// corrigé pour #moderationPanel, voir commentaire plus haut). Le panneau
-// garde SEUL le compte de ses lignes de réponse (moderationDiv.children,
-// utilisé partout pour savoir si le panneau a du contenu) : la barre œil vit
-// à côté, jamais dedans, sinon elle fausserait ce compte.
+// Enveloppe #moderationZone : c'est ELLE la cellule de grille en régie
+// desktop (voir #moderationZone en CSS), pas le panneau directement (même
+// piège que celui déjà corrigé pour #moderationPanel, voir commentaire plus
+// haut). Le panneau garde SEUL le compte de ses lignes de réponse
+// (moderationDiv.children, utilisé partout pour savoir s'il a du contenu).
 const moderationZone = document.createElement('div')
 moderationZone.id = 'moderationZone'
 document.querySelector('.container').appendChild(moderationZone)
 
-// "Œil" partagé, TOUS types de questions confondus (retour utilisateur : en
-// IRL, l'écran de l'hôte peut être projeté/partagé — sans ça, n'importe qui
-// le regardant lit les réponses des joueurs avant l'hôte lui-même, et peut
-// "copier"). Masque le TEXTE des réponses en attente (classe
-// .moderation-answer-text posée sur chaque ligne, tous types — pbac, texte
-// libre, blind test — voir plus bas et .moderation-answers-hidden en CSS),
-// sans jamais toucher aux contrôles (case à cocher, boutons Valider/Refuser
-// restent cliquables). CACHÉ PAR DÉFAUT dès qu'on est en IRL (gameMode vaut
-// déjà 'irl' par défaut avant même la confirmation serveur, voir plus haut) :
-// l'hôte doit cliquer pour révéler, jamais l'inverse — sinon la fenêtre où
-// les réponses restent lisibles avant ce premier clic laisserait justement
-// le temps de copier. Sans objet à distance (chaque joueur ne voit que son
-// propre écran, rien à cacher) : la barre disparaît avec le reste dès que
-// gameMode bascule (voir updateModerationEyeVisibility).
-let moderationAnswersHidden = gameMode === 'irl'
-const moderationEyeBar = document.createElement('div')
-moderationEyeBar.id = 'moderationEyeBar'
-moderationEyeBar.className = 'card moderation-eye-bar d-none'
-const moderationEyeBtn = document.createElement('button')
-moderationEyeBtn.className = 'btn'
-moderationEyeBtn.style.padding = '8px 12px'
-const applyModerationEyeState = () => {
-  moderationDiv.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
-  document.getElementById('moderationExpected')?.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
-  moderationEyeBtn.textContent = moderationAnswersHidden ? '🙈 Réponses masquées' : '👁️ Réponses visibles'
-  moderationEyeBtn.title = moderationAnswersHidden
-    ? 'Réponses masquées — clique pour les réafficher'
-    : 'Afficher/masquer les réponses (utile si ton écran est partagé aux joueurs)'
-}
-moderationEyeBtn.onclick = () => {
-  moderationAnswersHidden = !moderationAnswersHidden
-  applyModerationEyeState()
-}
-moderationEyeBar.appendChild(moderationEyeBtn)
+// Plus d'"œil" de masquage des réponses (retour utilisateur après test réel :
+// "enlever l'option masquer les réponses côté MJ") — il servait quand l'écran
+// du MJ était lui-même projeté ; la vue TV dédiée (display.html) ne montre
+// jamais cette modale, les réponses restent donc toujours lisibles ici.
 // Bug corrigé (retour utilisateur : "modération fixe avec ouverture popup
 // pour modal" — la carte centrale rétrécissait à chaque nouvelle réponse à
-// juger) : la barre œil ET le panneau vivent maintenant en permanence dans
+// juger) : le panneau vit maintenant en permanence dans
 // #moderationModalOverlay (voir index.html), jamais dans #moderationZone —
 // celle-ci ne garde qu'un petit bouton compact ci-dessous, de taille FIXE
 // quel que soit le nombre de réponses en attente.
 // Retour utilisateur : "dans la popup de validation, il faudrait que le MJ puisse
 // voir la réponse pour savoir quoi valider". Bandeau "Réponse attendue" en tête
 // de la popup, mis à jour à chaque question émise par l'hôte (seul à connaître
-// la bonne réponse, voir emitQuestion). Le texte porte .moderation-answer-text :
-// il est masqué avec le reste par l'œil (écran partagé aux joueurs).
+// la bonne réponse, voir emitQuestion).
 const moderationExpectedEl = document.createElement('div')
 moderationExpectedEl.id = 'moderationExpected'
 moderationExpectedEl.className = 'moderation-expected d-none'
@@ -8619,7 +8694,6 @@ const setModerationExpected = (q) => {
   const text = q ? expectedAnswerText(q) : ''
   moderationExpectedEl.textContent = ''
   moderationExpectedEl.classList.toggle('d-none', !text)
-  moderationExpectedEl.classList.toggle('moderation-answers-hidden', moderationAnswersHidden)
   if (!text) return
   const label = document.createElement('span')
   label.className = 'moderation-expected-label'
@@ -8632,10 +8706,8 @@ const setModerationExpected = (q) => {
 const moderationModalSlot = document.getElementById('moderationModalSlot')
 if (moderationModalSlot) {
   moderationModalSlot.appendChild(moderationExpectedEl)
-  moderationModalSlot.appendChild(moderationEyeBar)
   moderationModalSlot.appendChild(moderationDiv)
 }
-applyModerationEyeState()
 
 // Bouton compact resté dans #moderationZone (voir son commentaire plus
 // haut) : ouvre la popup de modération, avec un badge de compte pour que
@@ -8654,26 +8726,13 @@ moderationZone.appendChild(moderationOpenBtn)
 document.getElementById('moderationModalCloseBtn')?.addEventListener('click', closeModerationModal)
 moderationModalOverlay?.addEventListener('click', (e) => { if (e.target === moderationModalOverlay) closeModerationModal() })
 
-// N'a de sens qu'en session IRL (à distance, chaque joueur regarde son
-// propre écran, jamais celui de l'hôte — rien à cacher). Un seul
-// MutationObserver sur moderationDiv plutôt qu'un appel ajouté à chacun des
-// nombreux points d'ajout/retrait de ligne (pbac, générique, blind test) :
-// une seule source de vérité pour "le panneau a du contenu", jamais désynchro.
-// Pilote AUSSI le bouton compact/son badge de compte (ni l'un ni l'autre
-// n'a de sens gameMode confondus — moderationDiv ne reçoit de toute façon
-// jamais de contenu hors "Présenter", voir socket.on('answer:queue')).
-const updateModerationEyeVisibility = () => {
-  // Bug corrigé (retour utilisateur : "les réponses ne sont pas masquées
-  // par défaut") : ceci ne pilote QUE la visibilité de la BARRE œil
-  // elle-même (pas de bouton à montrer s'il n'y a rien à masquer/révéler
-  // dans le panneau) — ne doit JAMAIS toucher moderationAnswersHidden.
-  // L'ancienne version le forçait à `false` dès que le panneau redevenait
-  // vide (état de départ de CHAQUE question, avant la 1re réponse) et ne le
-  // remettait jamais à `true` ensuite : au moindre passage par un panneau
-  // vide — donc systématiquement —, les réponses restaient "visibles" pour
-  // toutes les questions suivantes, à l'opposé du "caché par défaut" voulu.
-  const showEye = gameMode === 'irl' && moderationDiv.children.length > 0
-  moderationEyeBar.classList.toggle('d-none', !showEye)
+// Un seul MutationObserver sur moderationDiv plutôt qu'un appel ajouté à
+// chacun des nombreux points d'ajout/retrait de ligne (pbac, générique, blind
+// test) : une seule source de vérité pour "le panneau a du contenu", jamais
+// désynchro. Pilote le bouton compact d'ouverture et son badge de compte
+// (moderationDiv ne reçoit de toute façon jamais de contenu hors
+// "Présenter", voir socket.on('answer:queue')).
+const updateModerationOpenBtn = () => {
   const count = moderationDiv.children.length
   moderationOpenBtn.classList.toggle('d-none', count === 0)
   if (moderationOpenBtnCount) moderationOpenBtnCount.textContent = count
@@ -8681,7 +8740,7 @@ const updateModerationEyeVisibility = () => {
   // seule plutôt que de la laisser ouverte sur une liste vide.
   if (count === 0) closeModerationModal()
 }
-new MutationObserver(updateModerationEyeVisibility).observe(moderationDiv, { childList: true })
+new MutationObserver(updateModerationOpenBtn).observe(moderationDiv, { childList: true })
 
 // "Petit Bac" : contrairement au reste de la modération (une réponse jugée
 // isolément), l'hôte doit ici REGROUPER lui-même les réponses qu'il juge
@@ -8721,7 +8780,7 @@ pbacGroupBar.appendChild(pbacGroupBtn)
 // RÉGRESSION corrigée (nouveau retour utilisateur, "le bouton n'est pas sur
 // la modal") : ce correctif date d'avant le passage de la modération en
 // popup modale (voir le commentaire sur moderationModalSlot un peu plus
-// haut) — moderationDiv/moderationEyeBar ont depuis déménagé dans
+// haut) — moderationDiv a depuis déménagé dans
 // #moderationModalOverlay, mais cette barre était restée dans
 // #moderationZone, qui n'affiche plus désormais que le petit bouton
 // compact d'OUVERTURE de la modale (voir moderationOpenBtn) — jamais la
@@ -8733,9 +8792,9 @@ if (moderationModalSlot) moderationModalSlot.appendChild(pbacGroupBar)
 
 // Rafraîchit le libellé/l'état du bandeau à partir des cases actuellement
 // cochées — appelée à chaque coche/décoche ainsi qu'après tout ajout/retrait
-// de ligne pbac (nouvelle réponse, famille validée, réponse refusée). L'œil
-// partagé (voir updateModerationEyeVisibility plus haut) se met déjà à jour
-// tout seul via le MutationObserver sur moderationDiv, pas besoin de
+// de ligne pbac (nouvelle réponse, famille validée, réponse refusée). Le
+// bouton d'ouverture (voir updateModerationOpenBtn plus haut) se met déjà à
+// jour tout seul via le MutationObserver sur moderationDiv, pas besoin de
 // l'appeler ici.
 const updatePbacGroupBar = () => {
   const anyPbacRow = moderationDiv.querySelector('[data-pbac="1"]')
@@ -9146,13 +9205,19 @@ const leaderScoreAnimated = new Set()
 // indépendantes, sans lien visuel entre elles.
 const LEADER_GAIN_HOLD_MS = 1300 // le badge reste lisible avant de fusionner (retour utilisateur : trop court à 550ms, pas le temps de lire le score avant qu'il ne fusionne)
 const LEADER_COUNT_DURATION_MS = 1500
+// delta négatif accepté (retrait de points manuel par le MJ, voir
+// socket.on('score:adjust') — retour utilisateur après test réel : "le
+// retrait de points doit être visible sur le classement, comme l'ajout") :
+// même mise en scène, badge "-XXX" en rouge (.is-negative) et décompte vers
+// le bas.
 const animateScoreGain = (row, oldTotal, newTotal, delta) => {
   const scoreEl = row.querySelector('.leader-score')
   const gainEl = row.querySelector('.leader-score-gain')
   if (!scoreEl) return
-  if (!gainEl || !(delta > 0)) { scoreEl.textContent = `${newTotal} pts`; return }
+  if (!gainEl || !delta) { scoreEl.textContent = `${newTotal} pts`; return }
   scoreEl.textContent = `${oldTotal} pts`
-  gainEl.textContent = `+${delta}`
+  gainEl.textContent = delta > 0 ? `+${delta}` : `${delta}`
+  gainEl.classList.toggle('is-negative', delta < 0)
   gainEl.classList.remove('d-none', 'leader-score-gain-merge')
   // Force le navigateur à appliquer l'état "juste apparu" avant d'enchaîner
   // sur la transition d'entrée (même pattern que les autres animations de
@@ -9236,7 +9301,7 @@ const renderBoard = () => {
     // sans rejouer le décompte.
     const gained = questionDeltas.get(id) || 0
     const alreadyAnimated = leaderScoreAnimated.has(id)
-    if (overlayVisible && gained > 0 && !alreadyAnimated) {
+    if (overlayVisible && gained !== 0 && !alreadyAnimated) {
       leaderScoreAnimated.add(id)
       animateScoreGain(row, s.total - gained, s.total, gained)
     } else if (!alreadyAnimated) {
@@ -9484,6 +9549,15 @@ socket.on('quiz:end', (endPayload) => {
   // affiche le top 3 de CE quiz — contrairement à `quiz` ci-dessus, tous les
   // joueurs le reçoivent, pas seulement l'hôte.
   const qidParam = endPayload?.quizId ? `&qid=${encodeURIComponent(endPayload.quizId)}` : ''
+  // Retour utilisateur après test réel ("le résultat des scores ne s'affiche
+  // pas en mode présentation à la fin du quiz") : la vue TV n'est qu'un
+  // miroir de CETTE page, qui s'en va — elle restait figée sur la dernière
+  // question. On lui demande de charger elle-même les résultats (même page
+  // que les joueurs, simple spectatrice via room:join viewer — voir
+  // results.js), sans le paramètre ?quiz= réservé au bouton "Rejouer" du MJ.
+  if (displayWin && !displayWin.closed) {
+    displayWin.postMessage({ type: 'queazy-display-results', url: `/result.html?room=${encodeURIComponent(roomCode)}${qidParam}` }, location.origin)
+  }
   window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}${qidParam}`
 })
 
@@ -9818,9 +9892,22 @@ socket.on('question:reveal', payload => {
       // la photo est dans son dataset (voir question:show) plutôt que dans
       // el.textContent comme pour mcq/truefalse.
       const value = payload.type === 'intrus' ? el.dataset.optionId : el.textContent
-      if ((payload.correct || []).includes(value)) el.classList.add('correct-reveal')
-      else el.classList.add('incorrect-reveal')
+      if ((payload.correct || []).includes(value)) {
+        el.classList.add('correct-reveal')
+        stampEntranceAnimation(el) // "pop" de la bonne réponse : ne rejoue pas à chaque réinjection TV
+      } else el.classList.add('incorrect-reveal')
     })
+    // Retour utilisateur après test réel : "dans les QCM et autres questions
+    // de sélection, la réponse doit aussi s'afficher dans un cadre vert" —
+    // même bandeau "Bonne réponse : ..." que les types à saisie libre
+    // (revealFreeAnswer), qui alimente aussi le titre de la popup de
+    // révélation. Texte lu sur les tuiles marquées justes (une photo
+    // "intrus" sans texte n'a rien à écrire : bandeau absent dans ce cas).
+    const correctLabels = Array.from(optionsDiv.children)
+      .filter(el => el.classList.contains('correct-reveal'))
+      .map(el => el.textContent.trim())
+      .filter(Boolean)
+    if (correctLabels.length) revealFreeAnswer(correctLabels.join(' · '))
     // QCM à plusieurs bonnes réponses, réglage "doit tout cocher pour
     // gagner des points" DÉSACTIVÉ (retour utilisateur) : score proportionnel
     // côté serveur (voir answer:submit) -> bandeau "Presque !" possible ici,
@@ -10050,8 +10137,9 @@ socket.on('question:reveal', payload => {
   // — copie du contenu déjà calculé sur #revealAnswerText par les branches
   // par type (revealFreeAnswer/revealBlindTestAnswer...), qui reste la
   // source de vérité. #revealAnswerText ne porte ce contenu que pour
-  // certains types (texte libre, indice, blind test, pbac — voir son
-  // commentaire dans index.html) ; pour les autres (mcq, association...),
+  // certains types (texte libre, indice, blind test, pbac, et désormais
+  // mcq/vrai-faux/intrus — voir son commentaire dans index.html) ; pour les
+  // autres (association, ordre...),
   // le plateau déjà coloré en dessous de la popup fait cet office, cette
   // copie reste alors vide/masquée, ce qui est le comportement voulu.
   if (hasRevealPopupContent && revealPopupAnswerTitle && revealAnswerText && !revealAnswerText.classList.contains('d-none')) {

@@ -68,6 +68,7 @@ window.addEventListener('message', (event) => {
   if (stageChanged) {
     lastStageSig = stageSig
     displayStage.innerHTML = stageHtml || ''
+    resumeEntranceAnimations(displayStage)
   }
   // RÉGRESSION corrigée (nouveau retour utilisateur, écran d'attente pas
   // centré) : `!stageHtml` ne devient JAMAIS vrai (même piège documenté
@@ -150,6 +151,40 @@ window.addEventListener('message', (event) => {
   if (lastOrbData && stageChanged) applyDisplayOrb(lastOrbData)
 })
 
+// Bugs remontés en test réel ("sur les questions de type classement,
+// l'apparition des éléments clignote sur la télé", "à chaque nouvel indice,
+// il y a un effet de drop") : chaque réinjection du stage recrée tous ses
+// éléments, et une animation d'entrée inline (tileRevealIn, posée par
+// applyTileReveal côté index.js avec un délai en cascade) repartait alors de
+// zéro — tuiles qui disparaissent puis réapparaissent une à une, énoncé qui
+// "retombe" à chaque nouvel indice. data-anim-start (horloge murale, même
+// machine que le MJ) dit quand l'animation a VRAIMENT démarré côté MJ : on
+// décale son délai d'autant (délai négatif = l'animation reprend en cours de
+// route, ou directement à son état final si elle est déjà terminée).
+const parseCssTimeMs = (value) => {
+  const v = (value || '').trim()
+  if (v.endsWith('ms')) return parseFloat(v) || 0
+  if (v.endsWith('s')) return (parseFloat(v) || 0) * 1000
+  return 0
+}
+// Style CALCULÉ (pas seulement inline) : couvre aussi les entrées portées
+// par une classe (.indice-enter, galerie d'indices...). Les pseudo-éléments
+// (reflet ::after de .indice-enter) ne peuvent pas être décalés en inline —
+// une fois l'entrée largement passée, .tv-anim-done (voir style.css) coupe
+// simplement leur animation pour qu'ils ne rejouent pas non plus.
+const TV_ANIM_DONE_AFTER_MS = 1500
+const resumeEntranceAnimations = (container) => {
+  const now = Date.now()
+  container.querySelectorAll('[data-anim-start]').forEach(el => {
+    const elapsed = now - Number(el.dataset.animStart)
+    if (!Number.isFinite(elapsed) || elapsed <= 0) return
+    const cs = getComputedStyle(el)
+    if (!cs.animationName || cs.animationName === 'none') return
+    el.style.animationDelay = cs.animationDelay.split(',').map(d => `${parseCssTimeMs(d) - elapsed}ms`).join(', ')
+    if (elapsed > TV_ANIM_DONE_AFTER_MS) el.classList.add('tv-anim-done')
+  })
+}
+
 // Même piège que le zoom ci-dessus : fitTileText (index.js) réduit la police
 // des tuiles de réponse EN INLINE (jusqu'à 12px) pour tenir dans les petites
 // tuiles du MJ ; mirroré tel quel, ça écrasait la taille TV (clamp 18-40px du
@@ -215,8 +250,10 @@ const fitLayoutBudget = () => {
   mainEl.classList.toggle('tv-has-image', hasImage)
   // Image d'illustration simple : le CSS ne fait que la PLAFONNER, une image de
   // petite taille naturelle restait donc minuscule (constaté : 18 % de la
-  // hauteur avec des propositions). On la dimensionne à sa part (36 % avec
-  // propositions, 52 % sinon), ratio conservé, largeur bornée à 82 %. Les
+  // hauteur avec des propositions). On la dimensionne à sa part (40 % avec
+  // propositions, 58 % sinon — relevées depuis 36/52 % sur retour utilisateur,
+  // "agrandir les images proportionnellement à l'écran"), ratio conservé,
+  // largeur bornée à 82 %. Les
   // images cadrées (transform inline) ont leur propre géométrie : exclues.
   displayStage.querySelectorAll('.illustration-img').forEach(img => {
     // Cadrées = transform inline posé (data-crop-box-w seul ne suffit pas : il
@@ -224,7 +261,15 @@ const fitLayoutBudget = () => {
     // elle, être agrandie).
     if (img.style.transform && img.style.transform !== 'none') return
     if (!isVisibleBox(img) || !img.naturalWidth || !img.naturalHeight) return
-    const k = Math.min(window.innerWidth * 0.82 / img.naturalWidth, H * (hasOptions ? 0.36 : 0.52) / img.naturalHeight)
+    // Bug remonté en test réel ("curseur numérique/blind test : image
+    // écrasée") : certains types plafonnent la hauteur de l'image en CSS
+    // (curseur, blind test — voir style.css) — poser ici une hauteur plus
+    // grande que ce plafond laissait le CSS la rogner SANS toucher à la
+    // largeur, d'où l'image aplatie. Le plafond CSS (max-height, résolu en
+    // px par getComputedStyle) entre donc dans le calcul du facteur.
+    const cssMaxH = parseFloat(getComputedStyle(img).maxHeight)
+    const maxH = Math.min(H * (hasOptions ? 0.40 : 0.58), Number.isFinite(cssMaxH) ? cssMaxH : Infinity)
+    const k = Math.min(window.innerWidth * 0.82 / img.naturalWidth, maxH / img.naturalHeight)
     img.style.width = `${Math.round(img.naturalWidth * k)}px`
     img.style.height = `${Math.round(img.naturalHeight * k)}px`
   })
@@ -247,6 +292,43 @@ const fitLayoutBudget = () => {
   }
 }
 
+// Traits "association" (voir renderAssociationLinks côté index.js) : leurs
+// coordonnées sont en pixels de la mise en page MJ, sans rapport avec celle
+// de la TV (tuiles bien plus grandes, colonnes plus espacées) — retracés ici
+// entre les MÊMES tuiles (data-a / data-b), dans la géométrie TV. Retour
+// utilisateur après test réel : "mettre une ligne entre les propositions et
+// leurs paires".
+const realignAssociationLinks = () => {
+  const svg = displayStage.querySelector('#associationLinksSvg')
+  const area = displayStage.querySelector('#associationArea')
+  const colA = displayStage.querySelector('#associationColA')
+  const colB = displayStage.querySelector('#associationColB')
+  if (!svg || !area || !colA || !colB) return
+  const lines = svg.querySelectorAll('line[data-a]')
+  const areaRect = area.getBoundingClientRect()
+  if (!lines.length || !areaRect.width || !areaRect.height) return
+  svg.setAttribute('viewBox', `0 0 ${areaRect.width} ${areaRect.height}`)
+  const isStackedRows = colB.parentElement.getBoundingClientRect().top >= colA.parentElement.getBoundingClientRect().bottom - 1
+  lines.forEach(line => {
+    const elA = colA.children[Number(line.dataset.a)]
+    const elB = colB.querySelector(`[data-assoc-key="${line.dataset.b}"]`)
+    if (!elA || !elB) return
+    const a = elA.getBoundingClientRect()
+    const b = elB.getBoundingClientRect()
+    if (isStackedRows) {
+      line.setAttribute('x1', a.left + a.width / 2 - areaRect.left)
+      line.setAttribute('y1', a.bottom - areaRect.top)
+      line.setAttribute('x2', b.left + b.width / 2 - areaRect.left)
+      line.setAttribute('y2', b.top - areaRect.top)
+    } else {
+      line.setAttribute('x1', a.right - areaRect.left)
+      line.setAttribute('y1', a.top + a.height / 2 - areaRect.top)
+      line.setAttribute('x2', b.left - areaRect.left)
+      line.setAttribute('y2', b.top + b.height / 2 - areaRect.top)
+    }
+  })
+}
+
 const refitStage = () => {
   displayStage.classList.add('display-fitting')
   resetTileFontSizes()
@@ -255,6 +337,7 @@ const refitStage = () => {
   fitDisplayContent()
   void displayStage.offsetHeight
   displayStage.classList.remove('display-fitting')
+  realignAssociationLinks()
 }
 
 const DISPLAY_FIT_MIN_ZOOM = 0.55
@@ -277,8 +360,49 @@ const fitDisplayContent = () => {
 // computeCropGeometry côté index.js pour la dérivation complète (scale et
 // offsetX/Y y sont tous deux linéaires en boxW/boxH quand le ratio largeur/
 // hauteur de la boîte reste constant).
+// Cadrage recalculé DIRECTEMENT pour la boîte TV à partir du point de cadrage
+// de l'auteur (data-crop-pos, posé par applyCropTransform côté index.js) —
+// même formule que computeCropGeometry (index.js). Bug remonté en test réel
+// ("image au reveal cassée sur la télé") : la rétro-ingénierie du transform
+// MJ ci-dessous ne marche que si le MJ a pu mesurer sa propre boîte ; quand
+// elle était cachée/de taille nulle à ce moment-là (popup de révélation
+// côté MJ pas encore visible...), applyCropTransform abandonnait sans rien
+// poser et l'image restait à sa taille naturelle, rognée dans son cadre TV.
+// Une image pas encore chargée est rattrapée à son évènement load.
+const applyTvCropFromPos = (img) => {
+  let pos
+  try {
+    pos = JSON.parse(img.dataset.cropPos)
+  } catch {
+    // Attribut absent/corrompu : on laisse le repli par rétro-ingénierie
+    // (rescaleCroppedImages) faire de son mieux.
+    return false
+  }
+  if (!img.naturalWidth || !img.naturalHeight) {
+    img.addEventListener('load', () => applyTvCropFromPos(img), { once: true })
+    return true
+  }
+  const boxW = img.parentElement?.clientWidth
+  const boxH = img.parentElement?.clientHeight
+  if (!boxW || !boxH) return true
+  const natW = img.naturalWidth
+  const natH = img.naturalHeight
+  const sc = Math.max(boxW / natW, boxH / natH) * (Number.isFinite(pos.zoom) ? pos.zoom : 1)
+  const renderedW = natW * sc
+  const renderedH = natH * sc
+  const posX = Number.isFinite(pos.x) ? pos.x : 0.5
+  const posY = Number.isFinite(pos.y) ? pos.y : 0.5
+  const tx = renderedW > boxW ? -(renderedW - boxW) * posX : (boxW - renderedW) / 2
+  const ty = renderedH > boxH ? -(renderedH - boxH) * posY : (boxH - renderedH) / 2
+  img.style.width = `${natW}px`
+  img.style.height = `${natH}px`
+  img.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${sc.toFixed(4)})`
+  return true
+}
+
 const rescaleCroppedImages = (container) => {
-  container.querySelectorAll('img[data-crop-box-w]').forEach(img => {
+  container.querySelectorAll('img[data-crop-pos]').forEach(applyTvCropFromPos)
+  container.querySelectorAll('img[data-crop-box-w]:not([data-crop-pos])').forEach(img => {
     const mjBoxW = Number(img.dataset.cropBoxW)
     const tvBoxW = img.parentElement?.clientWidth
     if (!mjBoxW || !tvBoxW) return
@@ -477,6 +601,18 @@ window.addEventListener('message', (event) => {
   if (!displayModerationFeed) return
   displayModerationFeed.innerHTML = ''
   displayModerationFeed.classList.add('d-none')
+})
+
+// Fin de partie (voir index.js, socket.on('quiz:end')) : le MJ quitte sa page
+// pour les résultats — plus aucun miroir n'arrivera. La TV charge elle-même
+// la page de résultats (URL relative same-origin uniquement, jamais une URL
+// arbitraire reçue par message).
+window.addEventListener('message', (event) => {
+  if (event.origin !== location.origin) return
+  if (event.data?.type !== 'queazy-display-results') return
+  const url = event.data.url
+  if (typeof url !== 'string' || !url.startsWith('/result.html?')) return
+  location.href = url
 })
 
 // --- Plein écran (étape 6) ---------------------------------------------
