@@ -7995,7 +7995,11 @@ socket.on('question:show', payload => {
     // absent (vieux quiz, ou type autre que zoomguess) : applyCropTransform
     // retombe sur zoom=1/centré, identique à l'ancien object-fit:cover.
     const applyZoomGuessCrop = () => {
-      if (!isZoomGuess || !illustrationImgWrap) return
+      // currentQuestionType relu à l'appel (pas seulement isZoomGuess, figé à la
+      // création de la fermeture) : un onload tardif d'une ancienne question
+      // zoomguess réappliquait son recadrage (translate/scale) sur l'image de la
+      // question SUIVANTE, qui apparaissait décalée et minuscule (TV comprise).
+      if (!isZoomGuess || !illustrationImgWrap || currentQuestionType !== 'zoomguess') return
       applyCropTransform(illustrationImgWrap, illustrationImg, payload.imagePos)
     }
     if (mediaUrl) {
@@ -8014,6 +8018,8 @@ socket.on('question:show', payload => {
       // libre pour le scale() du zoom.
       applyTileReveal(illustrationImgWrap || illustrationImg, 0)
     } else {
+      // Plus d'image : l'onload de la question précédente ne doit plus rien appliquer.
+      illustrationImg.onload = null
       illustrationImg.classList.add('d-none')
       illustrationImg.removeAttribute('src')
       if (mainEl) mainEl.classList.remove('regie-portrait-layout')
@@ -8032,6 +8038,12 @@ socket.on('question:show', payload => {
       illustrationImg.style.width = ''
       illustrationImg.style.height = ''
       illustrationImg.style.transform = ''
+      // data-crop-* aussi (posés par applyCropTransform pour zoomguess) : la TV s'en
+      // sert pour recadrer toute image qui les porte, y compris une illustration
+      // ordinaire de la question suivante (blind test décalé/écrasé sur la TV).
+      delete illustrationImg.dataset.cropPos
+      delete illustrationImg.dataset.cropBoxW
+      delete illustrationImg.dataset.cropBoxH
     }
   }
   answerInput.value = ''
