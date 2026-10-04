@@ -211,7 +211,7 @@ const resumeEntranceAnimations = (container) => {
 // CSS) — réponses QCM illisibles à distance (retour utilisateur). On retire
 // le style inline : la taille TV du CSS reprend la main.
 const resetTileFontSizes = () => {
-  displayStage.querySelectorAll('.option-btn, .question-text').forEach(el => el.style.removeProperty('font-size'))
+  displayStage.querySelectorAll('.option-btn, .question-text, .order-item').forEach(el => el.style.removeProperty('font-size'))
 }
 
 // Réponses LONGUES (ex. 70 caractères en QCM à 3 colonnes) : à la taille TV
@@ -221,13 +221,17 @@ const resetTileFontSizes = () => {
 // le contenu déborde de #displayStage — les réponses courtes gardent leur
 // grande taille, seules les longues rétrécissent.
 const fitOptionText = () => {
-  const btns = displayStage.querySelectorAll('.option-btn')
+  // .order-item en plus : les lignes de la liste "ordre" se réduisent aussi avant d'en arriver au zoom de secours.
+  const btns = displayStage.querySelectorAll('.option-btn, .order-item')
   if (!btns.length) return
   const title = displayStage.querySelector('.question-text')
   let size = parseFloat(getComputedStyle(btns[0]).fontSize)
   let titleSize = title ? parseFloat(getComputedStyle(title).fontSize) : 0
   let guard = 0
-  while (displayStage.scrollHeight > displayStage.clientHeight + 1 && guard++ < 40) {
+  // Tolérance 4 % de la hauteur : un petit débordement (orbe du blind test...) est absorbé par le
+  // zoom de secours (~2 %) plutôt qu'en rapetissant l'énoncé.
+  const overflowTolerance = window.innerHeight * 0.04
+  while (displayStage.scrollHeight > displayStage.clientHeight + overflowTolerance && guard++ < 40) {
     // D'abord les réponses (plancher 30px), puis l'énoncé (plancher 44px) —
     // un énoncé de 100+ caractères à 80px occupe à lui seul 4 lignes.
     if (size > 30) {
@@ -289,6 +293,74 @@ const layoutIntrusGrid = () => {
   sizes.forEach(size => { for (let k = 0; k < size; k++) tiles[i++].style.setProperty('--intrus-row-cols', size) })
 }
 
+// Image PORTRAIT + beaucoup d'éléments (liste "ordre", 5+ propositions) : empilée
+// verticalement, l'image mangeait la hauteur et le zoom de secours tombait à 55-65 %
+// (texte minuscule, 30-50 % de la largeur inutilisée). Disposition côte à côte :
+// image à gauche, éléments de réponse à droite (voir .tv-side dans style.css).
+const SIDE_LAYOUT_MIN_ITEMS = 5
+const layoutSideBySide = () => {
+  const mainEl = document.getElementById('main')
+  if (!mainEl) return false
+  const img = displayStage.querySelector('#illustrationImgWrap .illustration-img')
+  const orderList = displayStage.querySelector('#orderList')
+  const optionsEl = displayStage.querySelector('#options')
+  const items = isVisibleBox(orderList)
+    ? orderList.querySelectorAll('.order-item').length
+    : (isVisibleBox(optionsEl) ? optionsEl.querySelectorAll('.option-btn:not(.intrus-tile)').length : 0)
+  const portrait = !!img && isVisibleBox(img) && img.naturalWidth > 0 && img.naturalHeight > img.naturalWidth * 1.15
+  const on = portrait && items >= SIDE_LAYOUT_MIN_ITEMS
+  mainEl.classList.toggle('tv-side', on)
+  return on
+}
+
+// Espace vertical inutilisé (retour utilisateur : "espace inutilisé") : le titre reste
+// ancré en haut (voulu), mais le reste du contenu s'agrandit pour occuper la place :
+// texte seul -> énoncé centré dans la hauteur (taille inchangée, plafonnée à 64px) ; image -> agrandie ;
+// propositions -> tuiles plus hautes et police un peu plus grande. Prudent (70 % de
+// la place libre) : un dépassement serait ensuite absorbé par le zoom de secours.
+const FILL_MIN_FREE = 0.05
+const fitFillSpace = () => {
+  const mainEl = document.getElementById('main')
+  if (!mainEl || mainEl.classList.contains('d-none')) return
+  const H = window.innerHeight
+  const freeSpace = () => displayStage.getBoundingClientRect().bottom - mainEl.getBoundingClientRect().bottom - H * 0.02
+  if (freeSpace() < H * FILL_MIN_FREE) return
+  const title = displayStage.querySelector('.question-text')
+  const optionsEl = displayStage.querySelector('#options')
+  const btns = Array.from(displayStage.querySelectorAll('.option-btn:not(.intrus-tile)')).filter(isVisibleBox)
+  const hasOptions = btns.length > 0 && isVisibleBox(optionsEl)
+  const img = Array.from(displayStage.querySelectorAll('.illustration-img')).find(el => isVisibleBox(el) && (!el.style.transform || el.style.transform === 'none'))
+  // Texte seul : rien d'autre que l'énoncé dans #main.
+  if (!hasOptions && !img && title && mainEl.getBoundingClientRect().height < title.getBoundingClientRect().height + H * 0.08) {
+    // Pas d'agrandissement de l'énoncé (retour utilisateur : plafond de typo, 64px max
+    // comme la règle de base) : on se contente de le centrer dans la hauteur libre.
+    mainEl.style.marginTop = `${Math.max(0, Math.round(freeSpace() / 2 - H * 0.04))}px`
+    return
+  }
+  // Image simple agrandie en premier (jamais une image cadrée : son transform est propre).
+  if (img && img.naturalWidth && img.naturalHeight && !mainEl.classList.contains('tv-side')) {
+    const h0 = img.getBoundingClientRect().height
+    const hMax = Math.min(h0 + freeSpace() * (hasOptions ? 0.5 : 0.7), H * (hasOptions ? 0.5 : 0.66))
+    const k = Math.min(hMax / img.naturalHeight, window.innerWidth * 0.82 / img.naturalWidth)
+    if (k * img.naturalHeight > h0) {
+      img.style.width = `${Math.round(img.naturalWidth * k)}px`
+      img.style.height = `${Math.round(img.naturalHeight * k)}px`
+    }
+  }
+  // Puis les propositions : tuiles plus hautes, police un peu plus grande.
+  if (hasOptions) {
+    const free = freeSpace()
+    if (free < H * FILL_MIN_FREE) return
+    const rows = new Set(btns.map(b => Math.round(b.getBoundingClientRect().top))).size || 1
+    const h0 = btns[0].getBoundingClientRect().height
+    const hNew = Math.min(h0 + free * 0.7 / rows, H * (img ? 0.24 : 0.30))
+    if (hNew <= h0) return
+    const fs0 = parseFloat(getComputedStyle(btns[0]).fontSize)
+    const fsNew = Math.min(56, fs0 * Math.min(1.25, Math.sqrt(hNew / h0)))
+    btns.forEach(b => { b.style.minHeight = `${Math.round(hNew)}px`; b.style.fontSize = `${fsNew.toFixed(1)}px` })
+  }
+}
+
 const fitLayoutBudget = () => {
   const mainEl = document.getElementById('main')
   if (!mainEl) return
@@ -298,6 +370,7 @@ const fitLayoutBudget = () => {
   const btns = Array.from(displayStage.querySelectorAll('.option-btn:not(.intrus-tile)'))
   const hasOptions = btns.length > 0 && isVisibleBox(optionsEl)
   layoutIntrusGrid()
+  const side = layoutSideBySide()
   const hasImage = isVisibleBox(displayStage.querySelector('.illustration-img, .illustration-img-wrap'))
   mainEl.classList.toggle('tv-has-options', hasOptions)
   mainEl.classList.toggle('tv-has-image', hasImage)
@@ -322,8 +395,8 @@ const fitLayoutBudget = () => {
     // px par getComputedStyle) entre donc dans le calcul du facteur.
     const cssMaxH = parseFloat(getComputedStyle(img).maxHeight)
     const isTrueFalse = !!(optionsEl && optionsEl.classList.contains('truefalse-grid'))
-    const maxH = Math.min(H * (hasOptions ? (isTrueFalse ? 0.46 : 0.40) : 0.58), Number.isFinite(cssMaxH) ? cssMaxH : Infinity)
-    const k = Math.min(window.innerWidth * 0.82 / img.naturalWidth, maxH / img.naturalHeight)
+    const maxH = side ? H * 0.62 : Math.min(H * (hasOptions ? (isTrueFalse ? 0.46 : 0.40) : 0.58), Number.isFinite(cssMaxH) ? cssMaxH : Infinity)
+    const k = Math.min(window.innerWidth * (side ? 0.30 : 0.82) / img.naturalWidth, maxH / img.naturalHeight)
     img.style.width = `${Math.round(img.naturalWidth * k)}px`
     img.style.height = `${Math.round(img.naturalHeight * k)}px`
   })
@@ -356,7 +429,7 @@ const fitLayoutBudget = () => {
     }
   }
   if (hasOptions) {
-    const budget = H * (hasImage ? LAYOUT_OPTIONS_MAX_WITH_IMAGE : LAYOUT_OPTIONS_MAX)
+    const budget = H * (side ? 0.62 : (hasImage ? LAYOUT_OPTIONS_MAX_WITH_IMAGE : LAYOUT_OPTIONS_MAX))
     let size = parseFloat(getComputedStyle(btns[0]).fontSize)
     let guard = 0
     while (optionsEl.getBoundingClientRect().height > budget && size > 20 && guard++ < 30) {
@@ -406,8 +479,13 @@ const realignAssociationLinks = () => {
 const refitStage = () => {
   displayStage.classList.add('display-fitting')
   resetTileFontSizes()
+  const mainForFill = document.getElementById('main')
+  // Zoom de secours précédent levé AVANT de mesurer : sinon fitOptionText ne voyait aucun débordement (déjà zoomé) et ne réduisait jamais les polices.
+  if (mainForFill) { mainForFill.style.marginTop = ''; mainForFill.style.zoom = '' }
+  displayStage.querySelectorAll('.option-btn').forEach(b => b.style.removeProperty('min-height'))
   fitLayoutBudget()
   fitOptionText()
+  fitFillSpace()
   fitDisplayContent()
   void displayStage.offsetHeight
   displayStage.classList.remove('display-fitting')
