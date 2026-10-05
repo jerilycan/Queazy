@@ -6749,13 +6749,13 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    type encore choisi) ; ce modificateur ne fait que centrer le contenu. */
 .question-empty-state {
   align-items: center;
-  /* Centré seulement s'il reste de la place : un "justify-content: center" simple coupait le haut du bloc
+  /* Aligné en haut dans les deux modes (même forme en Standard et en Avancé) : un centrage vertical coupait le haut du bloc
      (inaccessible au défilement) dès que le contenu dépassait, par ex. en mode Avancé (plus de tuiles). */
-  justify-content: center;
-  justify-content: safe center;
+  justify-content: flex-start;
   text-align: center;
   gap: 18px;
   min-height: 480px;
+  padding-top: 40px;
 }
 .question-empty-icon {
   width: 84px;
