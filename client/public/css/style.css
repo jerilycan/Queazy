@@ -1551,6 +1551,9 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    contenu quand la piste grid passe à 0fr (sinon min-height:auto par
    défaut sur un item de grille l'en empêche). */
 .auto-accordion-body > * { overflow: hidden; min-height: 0; }
+/* Replié : le conteneur interne (qui porte un padding, parfois en style inline) ne doit rien laisser dépasser —
+   sans ça le padding-bas gardait une bande de contenu visible sous l'en-tête (Variantes, Banque). */
+.auto-accordion-body:not(.is-open) > * { padding-top: 0 !important; padding-bottom: 0 !important; visibility: hidden; transition: visibility 0s linear 0.2s; }
 @media (prefers-reduced-motion: reduce) {
   .auto-accordion-body { transition: none; }
 }
