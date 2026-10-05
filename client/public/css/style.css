@@ -1529,7 +1529,31 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 }
 .auto-chevron { color: var(--color-text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
 .auto-chevron.open { transform: rotate(180deg); }
-.auto-accordion-body { padding: 0 16px 14px; }
+/* Ouverture/fermeture animée (retour utilisateur implicite : le chevron
+   tournait déjà en 0.2s mais le corps, lui, claquait d'un coup). Technique
+   grid-template-rows 0fr/1fr (pas max-height) : une valeur <fr> s'anime
+   sans le "effet de seuil" du max-height (rien ne bouge visuellement tant
+   que la valeur eased dépasse la hauteur réelle du contenu, puis tout se
+   joue d'un coup à la fin) — ici chaque frame correspond à une vraie
+   fraction de la hauteur finale. Le padding vertical (0 16px 14px avant ce
+   correctif) est descendu sur l'unique enfant (.auto-chip-grid, ou un
+   wrapper équivalent côté editor.html) plutôt que laissé ici : sur un
+   conteneur grid dont la ligne fait 0fr, le padding ne fait PAS partie du
+   calcul de la piste (contrairement à une hauteur) et resterait visible
+   même fermé si on le laissait sur ce sélecteur. */
+.auto-accordion-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.auto-accordion-body.is-open { grid-template-rows: 1fr; }
+/* Seul moyen de permettre à l'unique enfant de rétrécir sous sa hauteur de
+   contenu quand la piste grid passe à 0fr (sinon min-height:auto par
+   défaut sur un item de grille l'en empêche). */
+.auto-accordion-body > * { overflow: hidden; min-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .auto-accordion-body { transition: none; }
+}
 
 /* Grille de pastilles catégories/types — remplace les cases à cocher nues
    d'avant. Les <input type="checkbox"> restent dans le DOM (voir
@@ -1545,6 +1569,14 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   max-height: 160px;
   overflow-y: auto;
   margin-top: 10px;
+  /* padding-left/bottom repris tels quels de l'ancien .auto-accordion-body
+     (voir juste au-dessus) — cette grille est l'unique enfant direct de
+     .auto-accordion-body dans les deux accordéons qui l'utilisent
+     (catégories/types, index.html). padding-right distinct (dégagement de
+     la scrollbar de ce overflow-y:auto, pas lié à l'accordéon). */
+  padding-top: 0;
+  padding-bottom: 14px;
+  padding-left: 16px;
   padding-right: 4px;
 }
 .auto-config-check {
@@ -10597,3 +10629,79 @@ body.display-body #questionTypeBadge { font-size: clamp(15px, 1.5vw, 24px); }
 body.display-body .indice-central-card .indice-card-text { font-size: clamp(28px, 3.6vw, 64px); }
 body.display-body .indice-history-card { width: clamp(130px, 11vw, 210px); height: clamp(130px, 11vw, 210px); }
 body.display-body .indice-history-card .indice-card-text { font-size: clamp(18px, 1.9vw, 30px); }
+
+/* ===== Mode d'édition Standard / Avancé (tâche 046) ===== */
+/* Commutateur : repris du canvas (.mode-switch), en tokens réels. */
+.mode-switch { display: inline-flex; position: relative; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; padding: 4px; gap: 2px; flex-shrink: 0; }
+/* Effet "goutte d'eau" : deux gouttes de même taille sous un filtre SVG qui les fusionne. La goutte de
+   tête part en premier (léger dépassement), la queue la suit avec retard ; entre les deux la matière
+   s'étire puis se résorbe. Le texte des boutons est hors du filtre (net). */
+.mode-switch .goo-layer { position: absolute; inset: 4px; filter: url(#qzGoo) drop-shadow(0 3px 8px rgba(var(--color-accent-rgb), .45)); pointer-events: none; }
+.mode-switch .blob { position: absolute; top: 0; left: 0; width: 100px; height: 100%; border-radius: 999px; background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%); }
+.mode-switch.is-ready .blob.lead { transition: transform 520ms cubic-bezier(0.3, 1.45, 0.5, 1); }
+.mode-switch.is-ready .blob.trail { transition: transform 700ms cubic-bezier(0.55, 0, 0.2, 1) 90ms; }
+.mode-switch[data-pos="1"] .blob { transform: translateX(102px); }
+.mode-switch-btn { border: none; background: transparent; color: var(--color-text-muted); font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 13px; width: 100px; padding: 9px 0; border-radius: 999px; cursor: pointer; position: relative; z-index: 1; transition: color .2s ease; }
+.mode-switch-btn.active { color: #fff; }
+.mode-switch-btn:hover:not(.active) { color: var(--color-text); }
+
+/* Pastille "Avancé" (utilisée à partir de l'étape 2). */
+.advanced-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--color-accent); background: rgba(var(--color-accent-rgb), .12); border: 1px dashed rgba(var(--color-accent-rgb), .5); border-radius: 999px; padding: 3px 9px; margin-left: 8px; vertical-align: middle; }
+
+/* Menu "⋯" de la barre du haut (Standard) : Tutoriel / Supprimer / Dupliquer. */
+.overflow-menu { position: relative; }
+.overflow-menu-list { position: absolute; top: calc(100% + 8px); right: 0; background: var(--color-card-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 220px; z-index: 50; }
+.overflow-menu-list .btn,
+.overflow-menu-list .btn.btn-primary { justify-content: flex-start; width: 100%; background: transparent; box-shadow: none; border: none; padding: 10px 12px; font-size: 13px; color: var(--color-text); text-align: left; }
+.overflow-menu-list .btn.text-danger { color: var(--color-danger); }
+.overflow-menu-list .btn:hover { background: var(--color-surface); transform: none; }
+
+/* Blocs réservés au mode Avancé (attribut posé dans editor.html à partir de l'étape 2).
+   Masquage purement visuel : les valeurs ne sont jamais effacées. */
+body.editor-standard [data-advanced] { display: none !important; }
+
+/* Sélecteur de type (tâche 046) : libellés de groupe et encart d'invitation à passer en Avancé. */
+.type-picker-group-label { grid-column: 1 / -1; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); margin-top: 6px; }
+.standard-cta { display: flex; align-items: center; justify-content: space-between; gap: 18px; background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: var(--radius-md); padding: 16px 18px; margin-top: 16px; max-width: 520px; }
+.standard-cta-text strong { display: block; font-family: 'Baloo 2', sans-serif; font-size: 14.5px; color: var(--color-text); margin-bottom: 3px; }
+.standard-cta-text span { font-size: 12.5px; color: var(--color-text-muted); line-height: 1.5; }
+@media (max-width: 640px) { .standard-cta { flex-direction: column; align-items: flex-start; } }
+/* Éléments visibles en Standard SEULEMENT (invitations à passer en Avancé). */
+body.editor-advanced [data-standard-only] { display: none !important; }
+
+/* ===== Animations de la partie création (tâche 046 bis) =====
+   Mouvements courts, transform/opacity seulement. Classes posées/retirées par editor.js (playAnimation). */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* 1. Blocs avancés qui apparaissent au passage en Avancé : cascade + liseré d'accent qui s'éteint. */
+.anim-enter { animation: animEnter 360ms var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.anim-enter.is-new { animation: animEnter 360ms var(--ease-spring) both, animGlow 1100ms ease-out both; animation-delay: calc(var(--i, 0) * 70ms), calc(var(--i, 0) * 70ms); }
+@keyframes animEnter { from { opacity: 0; transform: translateY(-14px) scale(0.97); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes animGlow { 0% { box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb), .28); } 100% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0); } }
+/* 2. Nouvelle question dans la barre latérale : glisse depuis la gauche + éclair d'accent. */
+.anim-item-in { animation: animItemIn 420ms var(--ease-spring) both, animItemFlash 1200ms ease-out backwards; }
+@keyframes animItemIn { from { opacity: 0; transform: translateX(-28px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes animItemFlash { 0% { box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb), .35); } 100% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0); } }
+/* 3. Choix du type : le formulaire monte en fondu ; la tuile cliquée s'enfonce. */
+.anim-form-in { animation: animFormIn 260ms var(--ease-out) both; }
+@keyframes animFormIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.type-picker-tile { transition: transform 120ms var(--ease-out), border-color 0.15s ease; }
+.type-picker-tile:active { transform: scale(0.94); }
+/* 7. Tuiles du sélecteur : cascade avec rebond (plafonnée aux 8 premières). */
+.anim-tile-in { animation: animTileIn 380ms var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes animTileIn { from { opacity: 0; transform: translateY(18px) scale(0.88); } to { opacity: 1; transform: none; } }
+/* 5. Menu "⋯" : s'ouvre depuis son bouton (origine en haut à droite), sortie plus courte. */
+.overflow-menu-list { transform-origin: top right; transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
+.overflow-menu-list.is-closed { opacity: 0; transform: scale(0.96); visibility: hidden; pointer-events: none; transition: opacity 100ms var(--ease-out), transform 100ms var(--ease-out), visibility 0s linear 100ms; }
+/* Mouvement réduit : fondu simple, plus de déplacement ni de rebond. */
+@keyframes animFadeOnly { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .anim-enter, .anim-enter.is-new, .anim-item-in, .anim-form-in, .anim-tile-in { animation: animFadeOnly 150ms linear both; }
+  .mode-switch.is-ready .blob.lead, .mode-switch.is-ready .blob.trail { transition: none; }
+  .overflow-menu-list, .overflow-menu-list.is-closed { transition: opacity 100ms linear; transform: none; }
+  .type-picker-tile { transition: border-color 0.15s ease; }
+  .type-picker-tile:active { transform: none; }
+}

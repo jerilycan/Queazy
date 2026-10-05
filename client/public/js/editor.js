@@ -285,6 +285,13 @@ const freeVariantsChevron = document.getElementById('freeVariantsChevron')
 const freeVariantsCount = document.getElementById('freeVariantsCount')
 const freeVariantsChipList = document.getElementById('freeVariantsChipList')
 const freeVariantAddInput = document.getElementById('freeVariantAddInput')
+// Tolérance orthographique + testeur (tâche 037, étapes 6-8) — q.answerTolerance,
+// lu côté serveur UNIQUEMENT pour "free" (voir server/index.js, fuzzy()).
+const toleranceStricteBtn = document.getElementById('toleranceStricteBtn')
+const toleranceSoupleBtn = document.getElementById('toleranceSoupleBtn')
+const toleranceTresSoupleBtn = document.getElementById('toleranceTresSoupleBtn')
+const freeAnswerTestInput = document.getElementById('freeAnswerTestInput')
+const freeAnswerTestPill = document.getElementById('freeAnswerTestPill')
 
 const graduationSection = document.getElementById('graduationSection')
 const qGradMin = document.getElementById('qGradMin')
@@ -710,6 +717,8 @@ const applyReadOnly = () => {
   if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
   const banner = document.getElementById('readOnlyBanner')
   if (banner) banner.classList.remove('d-none')
+  // Lecture seule : les boutons repliés en Standard reviennent dans la barre (voir applyEditorMode).
+  applyEditorMode()
 }
 
 // --- Utilitaires ---
@@ -922,6 +931,36 @@ const QTYPE_COLOR = {
   halo: 'var(--color-halo)'
 }
 
+// --- Animations de création (tâche 046 bis) ---
+// Mouvements courts (transform/opacity seulement), jamais sur les actions répétées des champs.
+// En "mouvement réduit" (réglage système) : voir style.css (fondu simple), confettis coupés.
+const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+const ANIM_CLEANUP_MS = 1600
+// Pose des classes d'animation sur un élément, rejouées proprement, puis les retire (le liseré
+// d'accent et le ressort ne doivent pas rester collés à l'élément). Retrait temporisé plutôt
+// qu'animationend : plusieurs animations simultanées, et aucune si le mouvement est réduit.
+const playAnimation = (el, classes, index) => {
+  if (!el) return
+  const list = classes.split(' ')
+  if (index !== undefined) el.style.setProperty('--i', index)
+  el.classList.remove(...list)
+  void el.offsetWidth
+  el.classList.add(...list)
+  setTimeout(() => {
+    el.classList.remove(...list)
+    el.style.removeProperty('--i')
+  }, ANIM_CLEANUP_MS)
+}
+// Tuiles du sélecteur de type : arrivée en cascade (plafonnée aux 8 premières).
+const animateTypePickerTiles = () => {
+  if (!typePickerGridEl) return
+  Array.from(typePickerGridEl.querySelectorAll('.type-picker-tile'))
+    .filter(t => t.getClientRects().length > 0)
+    .forEach((t, i) => playAnimation(t, 'anim-tile-in', Math.min(i, 7)))
+}
+// Index de la question tout juste ajoutée : sa ligne de la barre latérale s'anime (voir updateSidebar).
+let justAddedQuestionIndex = -1
+
 // Écran "aucune question" (nouvelle DA, tâche 003, décision validée) : un
 // nouveau quiz démarre à 0 question désormais (au lieu d'une question
 // "Texte libre" vide par défaut) — #questionEmptyState remplace
@@ -935,6 +974,7 @@ const updateEmptyState = () => {
   const isEmpty = questions.length === 0
   questionEmptyStateEl.classList.toggle('d-none', !isEmpty)
   questionDetailEl.classList.toggle('d-none', isEmpty)
+  if (isEmpty) animateTypePickerTiles()
   // Le bouton flottant "Sauvegarder" reste géré par selectQuestion/
   // applyReadOnly comme avant (voir plus bas) — on se contente ici de le
   // masquer quand il n'y a encore RIEN à éditer, cas qu'aucun des deux ne
@@ -960,6 +1000,7 @@ const openTypePicker = () => {
   if (questionSaveBar) questionSaveBar.classList.add('d-none')
   qIndexLabel.textContent = 'Choix du type'
   if (typePickerCancelBtn) typePickerCancelBtn.classList.toggle('d-none', questions.length === 0)
+  animateTypePickerTiles()
 }
 
 // Grille de choix de type (voir #typePickerGrid dans editor.html) — générée
@@ -968,8 +1009,23 @@ const openTypePicker = () => {
 // la sidebar). Choisir un type ici ajoute directement la nouvelle question
 // DANS ce type plutôt que de forcer un passage par le type "Texte libre" par
 // défaut (createDefaultQuestion) puis un changement de type manuel.
+// Types "Basique" du mode Standard (tâche 046, voir TypePicker.dc.html) : les autres ne
+// sont proposés qu'en mode Avancé. Seule la grille de CRÉATION est filtrée — une question
+// d'un type avancé déjà existante reste éditable quel que soit le mode.
+const BASIC_QUESTION_TYPES = ['free', 'mcq', 'truefalse', 'graduation', 'order', 'image']
+
+const addTypePickerGroupLabel = (text, advanced) => {
+  const label = document.createElement('div')
+  label.className = 'type-picker-group-label'
+  label.textContent = text
+  if (advanced) label.setAttribute('data-advanced', '')
+  typePickerGridEl.appendChild(label)
+}
+
 const renderTypePicker = () => {
   if (!typePickerGridEl || typePickerGridEl.childElementCount) return
+  let advancedLabelAdded = false
+  addTypePickerGroupLabel('Basique', false)
   ;[...qType.options].forEach(opt => {
     const type = opt.value
     // Tâche 026 (retour utilisateur : "n'apporte rien") : "reveal" retiré
@@ -978,8 +1034,14 @@ const renderTypePicker = () => {
     // s'afficher/s'éditer, voir syncRevealOptionAvailability plus bas),
     // seule cette grille de création l'exclut.
     if (type === 'reveal') return
+    const isAdvancedType = !BASIC_QUESTION_TYPES.includes(type)
+    if (isAdvancedType && !advancedLabelAdded) {
+      advancedLabelAdded = true
+      addTypePickerGroupLabel('Avancé', true)
+    }
     const tile = document.createElement('div')
     tile.className = 'type-picker-tile'
+    if (isAdvancedType) tile.setAttribute('data-advanced', '')
     tile.setAttribute('role', 'button')
     tile.tabIndex = 0
 
@@ -1005,7 +1067,11 @@ const renderTypePicker = () => {
 
 const addQuestionOfType = (type) => {
   questions.push({ ...createDefaultQuestion(), type })
+  justAddedQuestionIndex = questions.length - 1
   selectQuestion(questions.length - 1)
+  // Le formulaire apparaît en fondu léger (la ligne de la liste s'anime dans updateSidebar).
+  playAnimation(questionDetailEl, 'anim-form-in')
+  justAddedQuestionIndex = -1
 }
 
 const updateSidebar = () => {
@@ -1014,6 +1080,7 @@ const updateSidebar = () => {
     const item = document.createElement('div')
     item.className = `question-item type-${q.type || 'free'} ${idx === activeIndex ? 'active' : ''} ${q.draft ? 'is-draft' : ''}`.trim()
     item.dataset.index = idx
+    if (idx === justAddedQuestionIndex) playAnimation(item, 'anim-item-in')
     // Le type est déjà lisible dans #qType (l'unique source de vérité pour
     // son libellé, voir editor.html) — repris tel quel ici plutôt que
     // dupliqué dans une deuxième liste qui pourrait diverger.
@@ -2848,6 +2915,9 @@ const toggleTypeSections = () => {
   // Test qui réutilise ce même bloc partagé). Seules les réponses titre/
   // artiste restent réservées à "blindtest".
   if (bonusAudioSection) bonusAudioSection.classList.remove('d-none')
+  // Mode Standard (tâche 046) : le son facultatif est un réglage avancé, sauf pour le Blind
+  // Test où il est le cœur du type (voir style.css, [data-advanced]).
+  if (bonusAudioSection) bonusAudioSection.toggleAttribute('data-advanced', qType.value !== 'blindtest')
   if (blindtestAnswersSection) blindtestAnswersSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
@@ -3002,7 +3072,10 @@ let freeVariantsOpen = false
 
 const setFreeVariantsOpen = (open) => {
   freeVariantsOpen = open
-  if (freeVariantsBody) freeVariantsBody.classList.toggle('d-none', !open)
+  // .is-open pilote grid-template-rows (voir style.css, même mécanique que
+  // toggleAutoAccordion côté index.js) au lieu de .d-none, pour une
+  // ouverture/fermeture animée plutôt qu'un claquement instantané.
+  if (freeVariantsBody) freeVariantsBody.classList.toggle('is-open', open)
   if (freeVariantsChevron) freeVariantsChevron.classList.toggle('open', open)
 }
 
@@ -3045,6 +3118,113 @@ const populateFreeAnswer = (q) => {
   // — esprit du canvas, adapté au cas où aucune variante n'existe encore.
   setFreeVariantsOpen(q.correct.length > 1)
   renderFreeVariantChips(q)
+  // Tolérance : 'souple' par défaut si absent (créée au premier accès, comme
+  // q.correct ci-dessus) — comportement serveur historique, aucune régression.
+  if (!q.answerTolerance) q.answerTolerance = 'souple'
+  setFreeToleranceButtons(q.answerTolerance)
+  FREE_TOLERANCE_BUTTONS.forEach(btn => { if (btn) btn.disabled = readOnly })
+  // Le champ testeur repart vide à chaque (re)population du panneau (purement
+  // transitoire, comme freeVariantsOpen — pas une donnée de q).
+  if (freeAnswerTestInput) {
+    freeAnswerTestInput.value = ''
+    freeAnswerTestInput.disabled = readOnly
+  }
+  updateFreeAnswerTestPill(q)
+}
+
+// --- Tolérance orthographique + testeur (tâche 037, étapes 6-8) ---
+//
+// norm()/lev() ci-dessous sont une DUPLICATION ASSUMÉE des fonctions pures
+// de server/index.js (~ligne 876) — même principe que computeCropGeometry,
+// déjà dupliqué entre editor.js/index.js dans ce projet (pas de module
+// partagé). clientFuzzyMatch() reproduit fidèlement fuzzy() (même mapping de
+// tolérance, même levée du plancher Math.max(1, ...) pour "stricte") : à
+// garder RIGOUREUSEMENT synchronisé avec le serveur, sinon le testeur
+// mentirait sur ce qui sera réellement accepté en jeu.
+const clientNorm = s => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim()
+const clientLev = (a, b) => {
+  const m = a.length, n = b.length
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
+  for (let i = 0; i <= m; i++) dp[i][0] = i
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+    }
+  }
+  return dp[m][n]
+}
+const FREE_TOLERANCE_FACTORS = { stricte: 0, souple: 0.2, tresSouple: 0.35 }
+const clientFuzzyMatch = (input, answers, tolerance) => {
+  const x = clientNorm(input)
+  const normalizedAnswers = answers.map(a => clientNorm(a)).sort()
+  const factor = FREE_TOLERANCE_FACTORS[tolerance] ?? 0.2
+
+  if (normalizedAnswers.length > 1 && x.includes(',')) {
+    const inputs = x.split(',').map(s => s.trim()).filter(s => s !== '').sort()
+    if (inputs.length === normalizedAnswers.length) {
+      return inputs.every((val, idx) => val === normalizedAnswers[idx])
+    }
+    return false
+  }
+
+  for (const ans of answers) {
+    const y = clientNorm(ans)
+    if (x === y) return true
+    const d = clientLev(x, y)
+    const thresh = tolerance === 'stricte' ? 0 : Math.max(1, Math.floor(y.length * factor))
+    if (d <= thresh) return true
+  }
+  return false
+}
+
+const FREE_TOLERANCE_BUTTONS = [toleranceStricteBtn, toleranceSoupleBtn, toleranceTresSoupleBtn]
+
+const setFreeToleranceButtons = (level) => {
+  FREE_TOLERANCE_BUTTONS.forEach(btn => {
+    if (btn) btn.classList.toggle('active', btn.dataset.tolerance === level)
+  })
+}
+
+FREE_TOLERANCE_BUTTONS.forEach(btn => {
+  if (!btn) return
+  // .disabled selon readOnly est (re)appliqué à chaque population du panneau,
+  // voir populateFreeAnswer — pas ici (readOnly n'est pas encore connu au
+  // chargement du script pour un quiz d'un autre créateur).
+  btn.onclick = () => {
+    if (readOnly) return
+    const q = questions[activeIndex]
+    if (!q || q.type !== 'free') return
+    q.answerTolerance = btn.dataset.tolerance
+    setFreeToleranceButtons(q.answerTolerance)
+    updateFreeAnswerTestPill(q)
+  }
+})
+
+// Pastille ✓/✗/neutre : recalculée à chaque frappe dans le champ testeur ou
+// changement de niveau de tolérance — ne teste que contre les réponses non
+// vides de q.correct (réponse principale + variantes confondues).
+const updateFreeAnswerTestPill = (q) => {
+  if (!freeAnswerTestPill || !freeAnswerTestInput) return
+  const value = freeAnswerTestInput.value.trim()
+  if (!value) {
+    freeAnswerTestPill.textContent = '?'
+    freeAnswerTestPill.className = 'test-pill'
+    return
+  }
+  const answers = Array.isArray(q?.correct) ? q.correct.filter(a => a && a.trim()) : []
+  const ok = answers.length > 0 && clientFuzzyMatch(value, answers, q?.answerTolerance)
+  freeAnswerTestPill.textContent = ok ? '✓' : '✗'
+  freeAnswerTestPill.className = 'test-pill ' + (ok ? 'match' : 'no-match')
+}
+
+if (freeAnswerTestInput) {
+  freeAnswerTestInput.oninput = () => {
+    const q = questions[activeIndex]
+    if (!q || q.type !== 'free') return
+    updateFreeAnswerTestPill(q)
+  }
 }
 
 if (freeMainAnswer) {
@@ -5088,7 +5268,17 @@ const hideSaveLoading = () => {
 // effectuée" doit être vu directement là où le regard est déjà posé (la popup
 // de chargement), pas ailleurs sur l'écran. Se referme seule après un court
 // délai, pas besoin d'un bouton "OK" pour un message purement informatif.
-const showSaveSuccess = (message) => {
+// Deux salves depuis les bords + une au centre — réservé à la CRÉATION du quiz (rare, émotionnel).
+// Sans effet si la librairie n'a pas pu se charger ou en mode "mouvement réduit".
+const launchSaveConfetti = () => {
+  if (prefersReducedMotion() || typeof window.confetti !== 'function') return
+  const base = { particleCount: 70, spread: 70, startVelocity: 55, ticks: 220, zIndex: 9999 }
+  window.confetti({ ...base, angle: 60, origin: { x: 0, y: 0.7 } })
+  window.confetti({ ...base, angle: 120, origin: { x: 1, y: 0.7 } })
+  setTimeout(() => window.confetti({ particleCount: 50, spread: 100, startVelocity: 35, zIndex: 9999, origin: { x: 0.5, y: 0.45 } }), 220)
+}
+
+const showSaveSuccess = (message, celebrate = false) => {
   const overlay = ensureSaveOverlay()
   overlay.innerHTML = `
     <div class="modal-content" style="text-align:center;">
@@ -5096,6 +5286,7 @@ const showSaveSuccess = (message) => {
       <p class="font-bold mt-16" style="margin:16px 0 0;">${message}</p>
     </div>`
   overlay.classList.remove('d-none')
+  if (celebrate) launchSaveConfetti()
   setTimeout(hideSaveLoading, 1400)
 }
 
@@ -5587,7 +5778,7 @@ const persistQuiz = async (successMessage) => {
       if (error) throw error
       currentId = data.id
       if (participantsQuizBtn) participantsQuizBtn.classList.remove('d-none')
-      showSaveSuccess('Quiz créé et sauvegardé !')
+      showSaveSuccess('Quiz créé et sauvegardé !', true)
       markSaved()
     }
   } catch (err) {
@@ -5828,8 +6019,14 @@ const EDITOR_TOUR_STEPS = [
   { target: '#qExplanation', title: 'Explication (optionnelle)', text: 'Un texte affiché juste après la révélation de la bonne réponse, pour donner un peu de contexte.' },
   { target: '#saveQuiz', title: 'Sauvegarder', text: 'N\'oublie pas de sauvegarder une fois ton quiz prêt !' }
 ]
+// Étapes dont la cible est masquée (mode Standard : illustration...) ignorées : la visite
+// guidée ne doit pas pointer un élément invisible (tâche 046).
+const isTourTargetVisible = (step) => {
+  const el = document.querySelector(step.target)
+  return !!el && el.getClientRects().length > 0
+}
 const startEditorTour = (force) => {
-  if (window.QzUI) window.QzUI.tour(EDITOR_TOUR_STEPS, { storageKey: EDITOR_TOUR_STORAGE_KEY, force: !!force })
+  if (window.QzUI) window.QzUI.tour(EDITOR_TOUR_STEPS.filter(isTourTargetVisible), { storageKey: EDITOR_TOUR_STORAGE_KEY, force: !!force })
 }
 // Jamais pour un viewer en lecture seule (quiz d'un autre créateur) : le
 // tutoriel explique comment CRÉER, ça n'a pas de sens là où on ne peut rien
@@ -5837,6 +6034,119 @@ const startEditorTour = (force) => {
 // init ci-dessous), d'où l'appel différé plutôt qu'ici directement.
 const maybeStartEditorTour = () => { if (!readOnly) startEditorTour(false) }
 if (replayTutorialBtn) replayTutorialBtn.onclick = () => startEditorTour(true)
+
+// --- Mode d'édition Standard / Avancé (tâche 046) ---
+// Standard : l'essentiel pour créer vite ; Avancé : tous les réglages optionnels.
+// Le masquage est PUREMENT VISUEL (voir style.css, [data-advanced]) : une valeur
+// réglée en Avancé n'est jamais effacée en repassant en Standard. Défaut :
+// Standard pour tout le monde tant qu'aucun choix n'est mémorisé. Mémorisé par
+// navigateur (localStorage) — jamais lié au compte.
+const EDITOR_MODE_STORAGE_KEY = 'queazy_editor_mode'
+const modeStandardBtn = document.getElementById('modeStandardBtn')
+const modeAdvancedBtn = document.getElementById('modeAdvancedBtn')
+const editorOverflowEl = document.getElementById('editorOverflow')
+const editorOverflowBtn = document.getElementById('editorOverflowBtn')
+const editorOverflowMenu = document.getElementById('editorOverflowMenu')
+const editorActionsEl = document.querySelector('.editor-actions')
+const modeSwitchEl = document.getElementById('modeSwitch')
+
+const readStoredEditorMode = () => {
+  try {
+    return localStorage.getItem(EDITOR_MODE_STORAGE_KEY) === 'advanced' ? 'advanced' : 'standard'
+  } catch {
+    // localStorage indisponible (navigation privée, stockage bloqué) : mode par défaut, rien de grave.
+    return 'standard'
+  }
+}
+let editorMode = readStoredEditorMode()
+
+const closeEditorOverflow = () => {
+  if (!editorOverflowMenu) return
+  editorOverflowMenu.classList.add('is-closed')
+  if (editorOverflowBtn) editorOverflowBtn.setAttribute('aria-expanded', 'false')
+}
+
+// Boutons de la barre du haut repliés dans le menu "⋯" en Standard. Ce sont les
+// MÊMES nœuds déplacés (pas dupliqués) : leurs handlers restent câblés une fois.
+// Hors lecture seule seulement : un lecteur n'édite rien, et "Dupliquer" y est
+// l'action principale (voir applyReadOnly).
+const applyEditorMode = () => {
+  const standard = editorMode === 'standard'
+  document.body.classList.toggle('editor-standard', standard)
+  document.body.classList.toggle('editor-advanced', !standard)
+  if (modeSwitchEl) modeSwitchEl.dataset.pos = standard ? '0' : '1'
+  if (modeStandardBtn) { modeStandardBtn.classList.toggle('active', standard); modeStandardBtn.setAttribute('aria-selected', String(standard)) }
+  if (modeAdvancedBtn) { modeAdvancedBtn.classList.toggle('active', !standard); modeAdvancedBtn.setAttribute('aria-selected', String(!standard)) }
+  if (!editorActionsEl || !editorOverflowEl || !editorOverflowMenu) return
+  const folded = [replayTutorialBtn, deleteQuizBtn, duplicateQuizBtn]
+  const useOverflow = standard && !readOnly
+  if (useOverflow) {
+    folded.forEach(btn => { if (btn) editorOverflowMenu.appendChild(btn) })
+  } else {
+    // Retour à l'ordre d'origine de la barre (voir editor.html).
+    if (replayTutorialBtn) editorActionsEl.insertBefore(replayTutorialBtn, participantsQuizBtn || saveQuizBtn)
+    if (deleteQuizBtn) editorActionsEl.insertBefore(deleteQuizBtn, saveQuizBtn)
+    if (duplicateQuizBtn) editorActionsEl.insertBefore(duplicateQuizBtn, editorOverflowEl)
+    closeEditorOverflow()
+  }
+  editorOverflowEl.classList.toggle('d-none', !useOverflow)
+}
+
+// Blocs réservés à l'Avancé qui viennent d'apparaître : arrivée en cascade avec liseré d'accent
+// (seulement quand l'utilisateur bascule, jamais au chargement de la page).
+const revealAdvancedBlocks = () => {
+  Array.from(document.querySelectorAll('[data-advanced]'))
+    .filter(el => el.getClientRects().length > 0)
+    .forEach((el, i) => playAnimation(el, 'anim-enter is-new', Math.min(i, 7)))
+}
+
+const setEditorMode = (mode) => {
+  const wasStandard = editorMode === 'standard'
+  editorMode = mode === 'advanced' ? 'advanced' : 'standard'
+  try {
+    localStorage.setItem(EDITOR_MODE_STORAGE_KEY, editorMode)
+  } catch {
+    // Mémorisation impossible : le mode reste valable pour cette page seulement.
+  }
+  applyEditorMode()
+  if (wasStandard && editorMode === 'advanced') revealAdvancedBlocks()
+}
+
+if (modeStandardBtn) modeStandardBtn.onclick = () => setEditorMode('standard')
+if (modeAdvancedBtn) modeAdvancedBtn.onclick = () => setEditorMode('advanced')
+if (editorOverflowBtn && editorOverflowMenu) {
+  editorOverflowBtn.onclick = (e) => {
+    e.stopPropagation()
+    const willOpen = editorOverflowMenu.classList.contains('is-closed')
+    editorOverflowMenu.classList.toggle('is-closed', !willOpen)
+    editorOverflowBtn.setAttribute('aria-expanded', String(willOpen))
+  }
+  // Clic ailleurs ou Échap : referme (un clic sur un bouton du menu referme aussi,
+  // après que son handler a tourné).
+  document.addEventListener('click', closeEditorOverflow)
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEditorOverflow() })
+}
+applyEditorMode()
+if (modeSwitchEl) setTimeout(() => modeSwitchEl.classList.add('is-ready'), 60)
+
+const typePickerCtaBtn = document.getElementById('typePickerCtaBtn')
+if (typePickerCtaBtn) typePickerCtaBtn.onclick = () => setEditorMode('advanced')
+const panelStandardCtaBtn = document.getElementById('panelStandardCtaBtn')
+if (panelStandardCtaBtn) panelStandardCtaBtn.onclick = () => setEditorMode('advanced')
+
+// "Zone experte" du groupe Publication (banque / catégorie / difficulté) : repliée par défaut,
+// même mécanique .is-open (grid-template-rows) que les autres accordéons de l'éditeur.
+const expertToggle = document.getElementById('expertToggle')
+const expertBody = document.getElementById('expertBody')
+const expertChevron = document.getElementById('expertChevron')
+if (expertToggle && expertBody) {
+  expertToggle.onclick = () => {
+    const willOpen = !expertBody.classList.contains('is-open')
+    expertBody.classList.toggle('is-open', willOpen)
+    expertToggle.setAttribute('aria-expanded', String(willOpen))
+    if (expertChevron) expertChevron.classList.toggle('open', willOpen)
+  }
+}
 
 // --- Initialisation ---
 

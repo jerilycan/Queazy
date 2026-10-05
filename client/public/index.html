@@ -983,7 +983,7 @@
             <span class="auto-accordion-head-left">Catégories <span class="auto-accordion-count" id="autoCatCount">Toutes</span></span>
             <svg class="auto-chevron open" id="autoCatChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
-          <div class="auto-accordion-body" id="autoCatAccordionBody">
+          <div class="auto-accordion-body is-open" id="autoCatAccordionBody">
             <div id="autoCategoryList" class="auto-chip-grid">
               <p class="text-muted font-13">Chargement…</p>
             </div>
@@ -995,7 +995,10 @@
             <span class="auto-accordion-head-left">Types de question <span class="auto-accordion-count" id="autoTypeCount">Tous</span></span>
             <svg class="auto-chevron" id="autoTypeChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
           </button>
-          <div class="auto-accordion-body d-none" id="autoTypeAccordionBody">
+          <!-- Replié par défaut : plus besoin de d-none, grid-template-rows:0fr
+               (voir .auto-accordion-body, style.css) le fait déjà nativement
+               sans sauter l'étape animée au premier clic. -->
+          <div class="auto-accordion-body" id="autoTypeAccordionBody">
             <div id="autoTypeList" class="auto-chip-grid"><!-- Rempli par JS, voir renderAutoTypeList --></div>
           </div>
         </div>

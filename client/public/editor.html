@@ -27,6 +27,15 @@
     <script src="/js/zone-geometry.js" defer></script>
   </head>
   <body>
+    <!-- Filtre "goutte d'eau" du commutateur Standard/Avancé (tâche 046) : flou + seuil alpha. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="qzGoo" x="-20%" y="-60%" width="140%" height="220%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur" />
+          <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" />
+        </filter>
+      </defs>
+    </svg>
     <div class="navbar">
       <a href="/" class="brand">
         <span class="brand-logo-wrap">
@@ -200,12 +209,27 @@
             </label>
           </div>
           <div class="editor-actions">
+            <!-- Mode d'édition (tâche 046) : Standard = l'essentiel pour créer vite,
+                 Avancé = tous les réglages optionnels. Voir editor.js applyEditorMode. -->
+            <div class="mode-switch" id="modeSwitch" data-pos="0" role="tablist" aria-label="Mode d'édition">
+              <!-- Deux "gouttes" fusionnées par le filtre SVG #qzGoo (voir style.css .mode-switch) :
+                   effet liquide quand la pastille passe d'un bouton à l'autre. -->
+              <div class="goo-layer" aria-hidden="true"><span class="blob lead"></span><span class="blob trail"></span></div>
+              <button type="button" id="modeStandardBtn" class="mode-switch-btn" role="tab">Standard</button>
+              <button type="button" id="modeAdvancedBtn" class="mode-switch-btn" role="tab">Avancé</button>
+            </div>
             <button id="replayTutorialBtn" class="btn" type="button" title="Revoir le tutoriel de prise en main">❔ Tutoriel</button>
             <button id="participantsQuizBtn" class="btn d-none" type="button" title="Joueurs ayant terminé ce quiz">👥 Participants</button>
             <button id="deleteQuiz" class="btn text-danger">Supprimer ce Quiz</button>
             <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
             <button id="reportQuizBtn" class="btn text-danger d-none">🚩 Signaler</button>
             <button id="duplicateQuiz" class="btn btn-primary px-32 d-none">Dupliquer dans mes quiz</button>
+            <!-- Menu "⋯" (Standard uniquement) : Tutoriel / Supprimer / Dupliquer y sont
+                 DÉPLACÉS (mêmes nœuds, mêmes handlers) par editor.js applyEditorMode. -->
+            <div id="editorOverflow" class="overflow-menu d-none">
+              <button type="button" id="editorOverflowBtn" class="btn-icon" aria-haspopup="true" aria-expanded="false" title="Plus d'actions">⋯</button>
+              <div id="editorOverflowMenu" class="overflow-menu-list is-closed"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -241,69 +265,22 @@
         <div id="questionEmptyState" class="question-detail question-empty-state d-none">
           <div class="question-empty-icon">❓</div>
           <h3>Choisis un type de réponse</h3>
-          <p class="text-muted">13 mécaniques disponibles — QCM, Vrai/Faux, Blind Test, Timeline, Petit Bac… Le formulaire s'adapte automatiquement une fois choisi.</p>
+          <p class="text-muted">QCM, Vrai/Faux, Curseur, Ordre… Le formulaire s'adapte automatiquement une fois choisi.</p>
           <div id="typePickerGrid" class="type-picker-grid"><!-- Rempli par JS --></div>
+          <!-- Invitation à passer en Avancé (tâche 046, repris du canvas "TypePicker") :
+               visible en Standard seulement, voir [data-standard-only] dans style.css. -->
+          <div id="typePickerCta" class="standard-cta" data-standard-only>
+            <div class="standard-cta-text">
+              <strong>Envie de sortir des sentiers battus ?</strong>
+              <span>Blind Test, ZoomOut Devinette, Timeline, Halo… des mécaniques supplémentaires t'attendent en mode avancé.</span>
+            </div>
+            <button type="button" id="typePickerCtaBtn" class="btn btn-secondary">⚙️ Voir les mécaniques avancées</button>
+          </div>
           <button type="button" id="typePickerCancelBtn" class="btn btn-nav-secondary font-13 d-none">Annuler</button>
         </div>
 
         <!-- Detail: Éditeur de la question sélectionnée -->
         <div id="questionDetail" class="question-detail">
-          <div class="detail-section">
-            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
-              <input id="qDraftToggle" type="checkbox" class="qz-toggle-input" />
-              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
-              🚧 Brouillon (work in progress)
-            </label>
-            <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
-          </div>
-
-          <!-- Tâche 026 bis (retour utilisateur, capture d'écran : "c'est
-               horrible") : le positionnement en absolu (coin haut-droit de
-               la grille) chevauchait les libellés Catégorie/Difficulté dès
-               que le panneau n'était pas assez large — remplacé par une
-               ligne dédiée, alignée à droite, AU-DESSUS de la grille :
-               jamais de chevauchement possible, quelle que soit la largeur. -->
-          <div class="add-to-bank-row">
-            <!-- Tâche 025 bis (retour utilisateur : "le bouton est beaucoup trop
-                 gros") : remplace l'ancien bouton "Ajouter à la banque" (clic
-                 = publication immédiate) par une case à cocher, COCHÉE PAR
-                 DÉFAUT (même sur une question déjà existante sans ce champ,
-                 voir editor.js addToBankCheckbox.checked = q.addToBank !==
-                 false) — la publication réelle n'a lieu qu'au prochain
-                 SAUVEGARDE du quiz (voir persistQuiz), pas au clic sur cette
-                 case, même patron que la case "Brouillon" juste au-dessus
-                 (un état du modèle, appliqué à la sauvegarde). -->
-            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées (juste en dessous).">
-              <input id="addToBankCheckbox" type="checkbox" checked />
-              <span>🏦 Ajouter à la banque</span>
-            </label>
-          </div>
-          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
-               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
-               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
-               banque" juste au-dessus, qui les exige avant de publier dans
-               bank_questions (mode "Jouer") AU PROCHAIN SAUVEGARDE.
-               Catégorie choisie dans bank_categories (table gérée par un
-               super admin depuis admin-bank.html), plus de texte libre —
-               voir loadCategoryOptions côté editor.js. -->
-          <div class="d-grid grid-cols-split gap-lg">
-            <div class="detail-section">
-              <label for="qCategorySelect">Catégorie</label>
-              <select id="qCategorySelect">
-                <option value="">— Choisir —</option>
-              </select>
-            </div>
-            <div class="detail-section">
-              <label for="qDifficultySelect">Difficulté</label>
-              <select id="qDifficultySelect">
-                <option value="">— Non définie —</option>
-                <option value="facile">Facile</option>
-                <option value="moyen">Moyenne</option>
-                <option value="difficile">Difficile</option>
-              </select>
-            </div>
-          </div>
-
           <!-- Type + minuteur remontés tout en haut (juste sous Brouillon,
                retour utilisateur) : ce sont les deux réglages qui cadrent
                tout le reste du formulaire (les sections spécifiques au type
@@ -362,8 +339,8 @@
                question:show) — seuls type+minuteur sont remontés tout en haut
                ici, spécifiques à l'édition (ils cadrent le reste du formulaire,
                jamais montrés tels quels au joueur). -->
-          <div id="illustrationSection" class="detail-section">
-            <label for="illustrationUpload">Image d'illustration (optionnelle)</label>
+          <div id="illustrationSection" class="detail-section" data-advanced>
+            <label for="illustrationUpload">Image d'illustration (optionnelle) <span class="advanced-pill">Avancé</span></label>
             <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
             <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
               <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
@@ -384,8 +361,8 @@
                audioUploadInput.onchange, audioExtractBtn...) continue de
                fonctionner à l'identique, seul le conteneur/le libellé
                changent. -->
-          <div id="bonusAudioSection" class="detail-section d-none">
-            <label for="audioUpload">🔊 Son (facultatif)</label>
+          <div id="bonusAudioSection" class="detail-section d-none" data-advanced>
+            <label for="audioUpload">🔊 Son (facultatif) <span class="advanced-pill">Avancé</span></label>
             <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
             <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
               <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
@@ -486,9 +463,9 @@
                 <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986." maxlength="400"></textarea>
               </div>
 
-              <div class="reveal-media-grid">
+              <div class="reveal-media-grid" data-advanced>
                 <div class="reveal-row">
-                  <span class="reveal-sublabel">Image</span>
+                  <span class="reveal-sublabel">Image <span class="advanced-pill">Avancé</span></span>
                   <input type="file" id="revealImageUpload" accept="image/*" class="cursor-pointer" />
                   <div id="revealImagePreviewWrap" class="illustration-preview-wrap reveal-media-preview d-none mt-8">
                     <img id="revealImagePreviewImg" class="illustration-preview-img" alt="" />
@@ -498,7 +475,7 @@
                 </div>
 
                 <div class="reveal-row">
-                  <span class="reveal-sublabel">Son</span>
+                  <span class="reveal-sublabel">Son <span class="advanced-pill">Avancé</span></span>
                   <input type="file" id="revealAudioUpload" accept="audio/*" class="cursor-pointer" />
                   <div id="revealAudioPreviewWrap" class="reveal-sound-card d-none mt-8">
                     <div class="reveal-sound-badge">🎵</div>
@@ -541,15 +518,15 @@
             </div>
             <button type="button" id="zoomGuessCropBtn" class="btn btn-nav-secondary font-13 mt-8 d-none">🖼️ Cadrer l'image</button>
             <p class="text-muted font-13 mt-8">Clique sur l'image ci-dessus pour choisir le point de zoom (ex. le visage du personnage à deviner).</p>
-            <div class="detail-section mt-8">
-              <label for="zoomGuessZoomInput">Niveau de zoom initial</label>
+            <div class="detail-section mt-8" data-advanced>
+              <label for="zoomGuessZoomInput">Niveau de zoom initial <span class="advanced-pill">Avancé</span></label>
               <div class="timer-controls">
                 <button id="zoomGuessZoomMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="zoomGuessZoomInput" class="stepper-input" value="4" min="2" max="25" />
                 <button id="zoomGuessZoomPlus" class="btn-timer" type="button">+</button>
               </div>
             </div>
-            <p class="text-muted font-13 mt-8">L'image démarre zoomée à ce niveau et se dézoome progressivement jusqu'à l'image complète, au rythme du chronomètre de la question. Les joueurs devinent avant le dézoom complet.</p>
+            <p class="text-muted font-13 mt-8" data-advanced>L'image démarre zoomée à ce niveau et se dézoome progressivement jusqu'à l'image complète, au rythme du chronomètre de la question. Les joueurs devinent avant le dézoom complet.</p>
           </div>
 
           <!-- "Recherche" (tâche 009) : une seule image, entièrement cachée
@@ -587,8 +564,8 @@
               <button type="button" id="removeHaloBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
             </div>
             <p class="text-muted font-13 mt-8">Les joueurs cliquent jusqu'à 5 fois sur l'image (entièrement noire au départ) pour révéler des halos de lumière permanents — chaque clic coûte un peu plus de points.</p>
-            <div class="detail-section mt-8">
-              <label for="haloRadiusInput">Rayon du halo (% de la largeur de l'image)</label>
+            <div class="detail-section mt-8" data-advanced>
+              <label for="haloRadiusInput">Rayon du halo (% de la largeur de l'image) <span class="advanced-pill">Avancé</span></label>
               <div class="timer-controls">
                 <button id="haloRadiusMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="haloRadiusInput" class="stepper-input" value="15" min="5" max="35" />
@@ -631,12 +608,12 @@
             </div>
             <button id="addOption" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une option</button>
 
-            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label mt-16">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label mt-16" data-advanced>
               <input id="mcqRequireAllToggle" type="checkbox" checked class="qz-toggle-input" />
               <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
-              Toutes les bonnes réponses doivent être cochées pour gagner des points
+              Toutes les bonnes réponses doivent être cochées pour gagner des points <span class="advanced-pill">Avancé</span>
             </label>
-            <p class="text-muted font-13 mt-8">Ne compte que si plusieurs réponses sont cochées comme correctes. Une mauvaise coche donne toujours 0 point. Activé : il faut cocher exactement toutes les bonnes réponses pour marquer des points (selon le délai). Désactivé : chaque bonne réponse cochée rapporte sa part des points (ex. 1 bonne sur 3 = 1/3 des points), toujours selon le délai.</p>
+            <p class="text-muted font-13 mt-8" data-advanced>Ne compte que si plusieurs réponses sont cochées comme correctes. Une mauvaise coche donne toujours 0 point. Activé : il faut cocher exactement toutes les bonnes réponses pour marquer des points (selon le délai). Désactivé : chaque bonne réponse cochée rapporte sa part des points (ex. 1 bonne sur 3 = 1/3 des points), toujours selon le délai.</p>
           </div>
 
           <div id="graduationSection" class="d-flex gap-lg d-none">
@@ -664,8 +641,8 @@
                 <button id="gradTargetPlus" class="btn-timer" type="button">+</button>
               </div>
             </div>
-            <div class="detail-section flex-1">
-              <label for="qGradTolerance">Tolérance</label>
+            <div class="detail-section flex-1" data-advanced>
+              <label for="qGradTolerance">Tolérance <span class="advanced-pill">Avancé</span></label>
               <div class="timer-controls">
                 <button id="gradToleranceMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="qGradTolerance" class="stepper-input" value="0" min="0" />
@@ -824,11 +801,49 @@
                 <span class="auto-accordion-head-left">Variantes acceptées (orthographes alternatives)<span class="auto-accordion-count" id="freeVariantsCount">0</span></span>
                 <svg class="auto-chevron" id="freeVariantsChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
               </button>
-              <div class="auto-accordion-body d-none" id="freeVariantsBody">
-                <div id="freeVariantsChipList" class="chip-list">
-                  <!-- Rempli par JS -->
+              <!-- Replié par défaut (pas de .is-open) : .auto-accordion-body
+                   est maintenant un conteneur grid-template-rows:0fr (voir
+                   style.css) qui fait disparaître ce wrapper tout seul, sans
+                   d-none. Le wrapper (unique enfant direct exigé par cette
+                   technique, voir commentaire sur .auto-accordion-body)
+                   porte le padding que portait .auto-accordion-body avant
+                   ce correctif — même raison que .auto-chip-grid plus bas. -->
+              <div class="auto-accordion-body" id="freeVariantsBody">
+                <div style="padding: 0 16px 14px;">
+                  <div id="freeVariantsChipList" class="chip-list">
+                    <!-- Rempli par JS -->
+                  </div>
+                  <input id="freeVariantAddInput" type="text" class="chip-add-input mt-8" placeholder="+ variante… (Entrée)" />
                 </div>
-                <input id="freeVariantAddInput" type="text" class="chip-add-input mt-8" placeholder="+ variante… (Entrée)" />
+              </div>
+            </div>
+
+            <!-- Tolérance orthographique (tâche 037, étapes 6-8) : 3 niveaux,
+                 lus côté serveur via q.answerTolerance uniquement pour ce
+                 type ("free"). "Souple" = comportement serveur historique
+                 (valeur par défaut si absent). Voir setFreeToleranceButtons/
+                 les handlers des 3 boutons (FREE_TOLERANCE_BUTTONS) plus bas
+                 dans editor.js. -->
+            <div class="tolerance-panel" data-advanced>
+              <label>Tolérance orthographique <span class="advanced-pill">Avancé</span></label>
+              <div class="tolerance-switch">
+                <button type="button" class="tolerance-switch-btn" id="toleranceStricteBtn" data-tolerance="stricte">Stricte</button>
+                <button type="button" class="tolerance-switch-btn" id="toleranceSoupleBtn" data-tolerance="souple">Souple</button>
+                <button type="button" class="tolerance-switch-btn" id="toleranceTresSoupleBtn" data-tolerance="tresSouple">Très souple</button>
+              </div>
+              <p class="text-muted font-13 mt-8">
+                Stricte : correspondance exacte (accents/casse ignorés seulement).
+                Souple : petites fautes de frappe tolérées (réglage historique). Très souple : tolérance plus large.
+              </p>
+
+              <!-- Testeur (étape 8) : simule fuzzy() côté client (norm/lev
+                   dupliqués depuis server/index.js, voir editor.js) — même
+                   verdict que ce que le serveur validerait réellement en
+                   jeu, sinon le testeur mentirait au créateur du quiz. -->
+              <label class="mt-8">Tester une réponse</label>
+              <div class="test-answer-row">
+                <input id="freeAnswerTestInput" type="text" placeholder="ex : Canbera" />
+                <span class="test-pill" id="freeAnswerTestPill">?</span>
               </div>
             </div>
           </div>
@@ -851,6 +866,89 @@
               Les points dépendent de la taille de la famille : seul·e (famille de 1) → tous les points,
               à deux → la moitié chacun, à trois ou plus → zéro.
             </p>
+          </div>
+
+          <!-- Groupe "Publication" (tâche 046, repris du canvas) : brouillon + "Zone experte"
+               (banque / catégorie / difficulté), réservé au mode Avancé et placé EN BAS du
+               formulaire — ces réglages ne concernent pas la création d'une question.
+               Mêmes ids qu'avant (qDraftToggle, addToBankCheckbox, qCategorySelect,
+               qDifficultySelect) : tout le JS existant continue de fonctionner à l'identique. -->
+          <div id="publicationSection" class="detail-section" data-advanced>
+            <label>📤 Publication <span class="advanced-pill">Avancé</span></label>
+          <div class="detail-section">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+              <input id="qDraftToggle" type="checkbox" class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+              🚧 Brouillon (work in progress)
+            </label>
+            <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
+          </div>
+            <div class="auto-accordion">
+              <button type="button" class="auto-accordion-head" id="expertToggle" aria-expanded="false">
+                <span class="auto-accordion-head-left">🎓 Zone experte</span>
+                <svg class="auto-chevron" id="expertChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="auto-accordion-body" id="expertBody">
+                <div style="padding: 0 16px 14px;">
+          <!-- Tâche 026 bis (retour utilisateur, capture d'écran : "c'est
+               horrible") : le positionnement en absolu (coin haut-droit de
+               la grille) chevauchait les libellés Catégorie/Difficulté dès
+               que le panneau n'était pas assez large — remplacé par une
+               ligne dédiée, alignée à droite, AU-DESSUS de la grille :
+               jamais de chevauchement possible, quelle que soit la largeur. -->
+          <div class="add-to-bank-row">
+            <!-- Tâche 025 bis (retour utilisateur : "le bouton est beaucoup trop
+                 gros") : remplace l'ancien bouton "Ajouter à la banque" (clic
+                 = publication immédiate) par une case à cocher, COCHÉE PAR
+                 DÉFAUT (même sur une question déjà existante sans ce champ,
+                 voir editor.js addToBankCheckbox.checked = q.addToBank !==
+                 false) — la publication réelle n'a lieu qu'au prochain
+                 SAUVEGARDE du quiz (voir persistQuiz), pas au clic sur cette
+                 case, même patron que la case "Brouillon" juste au-dessus
+                 (un état du modèle, appliqué à la sauvegarde). -->
+            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées (juste en dessous).">
+              <input id="addToBankCheckbox" type="checkbox" checked />
+              <span>🏦 Ajouter à la banque</span>
+            </label>
+          </div>
+          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
+               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
+               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
+               banque" juste au-dessus, qui les exige avant de publier dans
+               bank_questions (mode "Jouer") AU PROCHAIN SAUVEGARDE.
+               Catégorie choisie dans bank_categories (table gérée par un
+               super admin depuis admin-bank.html), plus de texte libre —
+               voir loadCategoryOptions côté editor.js. -->
+          <div class="d-grid grid-cols-split gap-lg">
+            <div class="detail-section">
+              <label for="qCategorySelect">Catégorie</label>
+              <select id="qCategorySelect">
+                <option value="">— Choisir —</option>
+              </select>
+            </div>
+            <div class="detail-section">
+              <label for="qDifficultySelect">Difficulté</label>
+              <select id="qDifficultySelect">
+                <option value="">— Non définie —</option>
+                <option value="facile">Facile</option>
+                <option value="moyen">Moyenne</option>
+                <option value="difficile">Difficile</option>
+              </select>
+            </div>
+          </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+          <!-- Encart bas de panneau (tâche 046, repris de Main.dc.html) : Standard seulement. -->
+          <div id="panelStandardCta" class="standard-cta" data-standard-only>
+            <div class="standard-cta-text">
+              <strong>Plus d'options disponibles</strong>
+              <span>Brouillon, banque de questions, image, son et médias de révélation — tout reste réglable en un clic.</span>
+            </div>
+            <button type="button" id="panelStandardCtaBtn" class="btn btn-secondary">⚙️ Passer en mode avancé</button>
           </div>
 
         </div>
@@ -885,6 +983,8 @@
       </div>
     </div>
 
+    <!-- Confettis de la 1re sauvegarde d'un quiz (même librairie que index.html/result.html). -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js" defer></script>
     <script src="/js/ui-widgets.js" defer></script>
     <script src="/js/editor.js" defer></script>
   </body>
