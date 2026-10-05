@@ -6749,7 +6749,10 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    type encore choisi) ; ce modificateur ne fait que centrer le contenu. */
 .question-empty-state {
   align-items: center;
+  /* Centré seulement s'il reste de la place : un "justify-content: center" simple coupait le haut du bloc
+     (inaccessible au défilement) dès que le contenu dépassait, par ex. en mode Avancé (plus de tuiles). */
   justify-content: center;
+  justify-content: safe center;
   text-align: center;
   gap: 18px;
   min-height: 480px;
@@ -9547,7 +9550,8 @@ body.display-body {
      titre doit se placer tout en haut de l'écran") — remplace l'ancien
      "safe center", qui faisait flotter l'énoncé au milieu de l'écran sur
      les questions courtes, sa position changeant d'une question à l'autre. */
-  justify-content: flex-start;
+  justify-content: center;
+  justify-content: safe center;
   overflow-y: auto;
   /* Réserve la place du bandeau badge+minuteur, désormais position:fixed
      (voir body.display-body #questionTypeBadge/#timerContainer plus bas) —
@@ -10386,7 +10390,8 @@ body.display-body #displayLeaderboard {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  justify-content: safe center;
   overflow-y: auto;
   padding: 6vh 4vw 4vh;
   box-sizing: border-box;
