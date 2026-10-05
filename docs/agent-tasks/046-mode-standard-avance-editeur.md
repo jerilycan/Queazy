@@ -130,7 +130,7 @@ purement visuel (aucune valeur n'est jamais effacée)._
 
 **Étape 1 — Infrastructure du toggle + barre du haut.**
 - `editor.js` : état `editorMode` (`'standard'` | `'advanced'`), lu/écrit dans `localStorage`
-  (`queazy_editor_mode`, repli silencieux commenté si indisponible), classe `editor-standard` /
+  (`queazy_editor_mode`, repli silencieux commenté si indisponible ; **défaut `standard` pour tous**, décision utilisateur), classe `editor-standard` /
   `editor-advanced` posée sur `<body>` (`applyEditorMode()`).
 - `editor.html` : `.mode-switch` (2 boutons) dans `.editor-top-bar-row`, menu `⋯` (`#editorOverflowBtn`).
 - Barre du haut : en Standard, Tutoriel / Supprimer / Dupliquer sont **déplacés** (appendChild) dans le
@@ -180,9 +180,7 @@ purement visuel (aucune valeur n'est jamais effacée)._
 - `node --check`, accolades CSS, `/review`, puis `/close-task` (fusion/clôture du doc 037).
 
 ### Questions à trancher avant `/implement-step`
-1. **Mode par défaut** pour un créateur existant : Standard (comme le canvas) ou Avancé (comportement
-   actuel, aucun changement de surprise) ? _Je propose Standard pour les nouveaux utilisateurs seulement,
-   Avancé tant que rien n'est mémorisé pour les comptes existants — à valider._
+1. ~~**Mode par défaut**~~ — **TRANCHÉ (utilisateur) : Standard pour tout le monde**, y compris les créateurs existants, tant qu'aucun choix n'est mémorisé. Conséquence : un créateur existant verra d'abord l'éditeur allégé ; l'encart « Plus d'options disponibles » (étape 5) et le commutateur doivent donc rester bien visibles.
 2. La **tolérance orthographique + testeur** (tâche 037) absents du canvas : les classer « Avancé » ?
 3. Déplacer **Brouillon / banque / catégorie** en bas ("Publication") comme le canvas, ou les laisser en
    haut et seulement les masquer en Standard ?
