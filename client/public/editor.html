@@ -506,15 +506,15 @@
             </div>
             <button type="button" id="zoomGuessCropBtn" class="btn btn-nav-secondary font-13 mt-8 d-none">🖼️ Cadrer l'image</button>
             <p class="text-muted font-13 mt-8">Clique sur l'image ci-dessus pour choisir le point de zoom (ex. le visage du personnage à deviner).</p>
-            <div class="detail-section mt-8">
-              <label for="zoomGuessZoomInput">Niveau de zoom initial</label>
+            <div class="detail-section mt-8" data-advanced>
+              <label for="zoomGuessZoomInput">Niveau de zoom initial <span class="advanced-pill">Avancé</span></label>
               <div class="timer-controls">
                 <button id="zoomGuessZoomMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="zoomGuessZoomInput" class="stepper-input" value="4" min="2" max="25" />
                 <button id="zoomGuessZoomPlus" class="btn-timer" type="button">+</button>
               </div>
             </div>
-            <p class="text-muted font-13 mt-8">L'image démarre zoomée à ce niveau et se dézoome progressivement jusqu'à l'image complète, au rythme du chronomètre de la question. Les joueurs devinent avant le dézoom complet.</p>
+            <p class="text-muted font-13 mt-8" data-advanced>L'image démarre zoomée à ce niveau et se dézoome progressivement jusqu'à l'image complète, au rythme du chronomètre de la question. Les joueurs devinent avant le dézoom complet.</p>
           </div>
 
           <!-- "Recherche" (tâche 009) : une seule image, entièrement cachée
@@ -552,8 +552,8 @@
               <button type="button" id="removeHaloBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
             </div>
             <p class="text-muted font-13 mt-8">Les joueurs cliquent jusqu'à 5 fois sur l'image (entièrement noire au départ) pour révéler des halos de lumière permanents — chaque clic coûte un peu plus de points.</p>
-            <div class="detail-section mt-8">
-              <label for="haloRadiusInput">Rayon du halo (% de la largeur de l'image)</label>
+            <div class="detail-section mt-8" data-advanced>
+              <label for="haloRadiusInput">Rayon du halo (% de la largeur de l'image) <span class="advanced-pill">Avancé</span></label>
               <div class="timer-controls">
                 <button id="haloRadiusMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="haloRadiusInput" class="stepper-input" value="15" min="5" max="35" />
@@ -596,12 +596,12 @@
             </div>
             <button id="addOption" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter une option</button>
 
-            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label mt-16">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label mt-16" data-advanced>
               <input id="mcqRequireAllToggle" type="checkbox" checked class="qz-toggle-input" />
               <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
-              Toutes les bonnes réponses doivent être cochées pour gagner des points
+              Toutes les bonnes réponses doivent être cochées pour gagner des points <span class="advanced-pill">Avancé</span>
             </label>
-            <p class="text-muted font-13 mt-8">Ne compte que si plusieurs réponses sont cochées comme correctes. Une mauvaise coche donne toujours 0 point. Activé : il faut cocher exactement toutes les bonnes réponses pour marquer des points (selon le délai). Désactivé : chaque bonne réponse cochée rapporte sa part des points (ex. 1 bonne sur 3 = 1/3 des points), toujours selon le délai.</p>
+            <p class="text-muted font-13 mt-8" data-advanced>Ne compte que si plusieurs réponses sont cochées comme correctes. Une mauvaise coche donne toujours 0 point. Activé : il faut cocher exactement toutes les bonnes réponses pour marquer des points (selon le délai). Désactivé : chaque bonne réponse cochée rapporte sa part des points (ex. 1 bonne sur 3 = 1/3 des points), toujours selon le délai.</p>
           </div>
 
           <div id="graduationSection" class="d-flex gap-lg d-none">
@@ -629,8 +629,8 @@
                 <button id="gradTargetPlus" class="btn-timer" type="button">+</button>
               </div>
             </div>
-            <div class="detail-section flex-1">
-              <label for="qGradTolerance">Tolérance</label>
+            <div class="detail-section flex-1" data-advanced>
+              <label for="qGradTolerance">Tolérance <span class="advanced-pill">Avancé</span></label>
               <div class="timer-controls">
                 <button id="gradToleranceMinus" class="btn-timer" type="button">-</button>
                 <input type="number" id="qGradTolerance" class="stepper-input" value="0" min="0" />
@@ -812,8 +812,8 @@
                  (valeur par défaut si absent). Voir setFreeToleranceButtons/
                  les handlers des 3 boutons (FREE_TOLERANCE_BUTTONS) plus bas
                  dans editor.js. -->
-            <div class="tolerance-panel">
-              <label>Tolérance orthographique</label>
+            <div class="tolerance-panel" data-advanced>
+              <label>Tolérance orthographique <span class="advanced-pill">Avancé</span></label>
               <div class="tolerance-switch">
                 <button type="button" class="tolerance-switch-btn" id="toleranceStricteBtn" data-tolerance="stricte">Stricte</button>
                 <button type="button" class="tolerance-switch-btn" id="toleranceSoupleBtn" data-tolerance="souple">Souple</button>
