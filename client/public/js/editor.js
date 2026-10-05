@@ -977,8 +977,23 @@ const openTypePicker = () => {
 // la sidebar). Choisir un type ici ajoute directement la nouvelle question
 // DANS ce type plutôt que de forcer un passage par le type "Texte libre" par
 // défaut (createDefaultQuestion) puis un changement de type manuel.
+// Types "Basique" du mode Standard (tâche 046, voir TypePicker.dc.html) : les autres ne
+// sont proposés qu'en mode Avancé. Seule la grille de CRÉATION est filtrée — une question
+// d'un type avancé déjà existante reste éditable quel que soit le mode.
+const BASIC_QUESTION_TYPES = ['free', 'mcq', 'truefalse', 'graduation', 'order', 'image']
+
+const addTypePickerGroupLabel = (text, advanced) => {
+  const label = document.createElement('div')
+  label.className = 'type-picker-group-label'
+  label.textContent = text
+  if (advanced) label.setAttribute('data-advanced', '')
+  typePickerGridEl.appendChild(label)
+}
+
 const renderTypePicker = () => {
   if (!typePickerGridEl || typePickerGridEl.childElementCount) return
+  let advancedLabelAdded = false
+  addTypePickerGroupLabel('Basique', false)
   ;[...qType.options].forEach(opt => {
     const type = opt.value
     // Tâche 026 (retour utilisateur : "n'apporte rien") : "reveal" retiré
@@ -987,8 +1002,14 @@ const renderTypePicker = () => {
     // s'afficher/s'éditer, voir syncRevealOptionAvailability plus bas),
     // seule cette grille de création l'exclut.
     if (type === 'reveal') return
+    const isAdvancedType = !BASIC_QUESTION_TYPES.includes(type)
+    if (isAdvancedType && !advancedLabelAdded) {
+      advancedLabelAdded = true
+      addTypePickerGroupLabel('Avancé', true)
+    }
     const tile = document.createElement('div')
     tile.className = 'type-picker-tile'
+    if (isAdvancedType) tile.setAttribute('data-advanced', '')
     tile.setAttribute('role', 'button')
     tile.tabIndex = 0
 
@@ -6040,6 +6061,9 @@ if (editorOverflowBtn && editorOverflowMenu) {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEditorOverflow() })
 }
 applyEditorMode()
+
+const typePickerCtaBtn = document.getElementById('typePickerCtaBtn')
+if (typePickerCtaBtn) typePickerCtaBtn.onclick = () => setEditorMode('advanced')
 
 // "Zone experte" du groupe Publication (banque / catégorie / difficulté) : repliée par défaut,
 // même mécanique .is-open (grid-template-rows) que les autres accordéons de l'éditeur.

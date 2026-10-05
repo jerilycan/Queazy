@@ -10651,3 +10651,12 @@ body.display-body .indice-history-card .indice-card-text { font-size: clamp(18px
 /* Blocs réservés au mode Avancé (attribut posé dans editor.html à partir de l'étape 2).
    Masquage purement visuel : les valeurs ne sont jamais effacées. */
 body.editor-standard [data-advanced] { display: none !important; }
+
+/* Sélecteur de type (tâche 046) : libellés de groupe et encart d'invitation à passer en Avancé. */
+.type-picker-group-label { grid-column: 1 / -1; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); margin-top: 6px; }
+.standard-cta { display: flex; align-items: center; justify-content: space-between; gap: 18px; background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: var(--radius-md); padding: 16px 18px; margin-top: 16px; max-width: 520px; }
+.standard-cta-text strong { display: block; font-family: 'Baloo 2', sans-serif; font-size: 14.5px; color: var(--color-text); margin-bottom: 3px; }
+.standard-cta-text span { font-size: 12.5px; color: var(--color-text-muted); line-height: 1.5; }
+@media (max-width: 640px) { .standard-cta { flex-direction: column; align-items: flex-start; } }
+/* Éléments visibles en Standard SEULEMENT (invitations à passer en Avancé). */
+body.editor-advanced [data-standard-only] { display: none !important; }
