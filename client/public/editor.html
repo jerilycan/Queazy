@@ -224,12 +224,6 @@
             <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
             <button id="reportQuizBtn" class="btn text-danger d-none">🚩 Signaler</button>
             <button id="duplicateQuiz" class="btn btn-primary px-32 d-none">Dupliquer dans mes quiz</button>
-            <!-- Menu "⋯" (Standard uniquement) : Tutoriel / Supprimer / Dupliquer y sont
-                 DÉPLACÉS (mêmes nœuds, mêmes handlers) par editor.js applyEditorMode. -->
-            <div id="editorOverflow" class="overflow-menu d-none">
-              <button type="button" id="editorOverflowBtn" class="btn-icon" aria-haspopup="true" aria-expanded="false" title="Plus d'actions">⋯</button>
-              <div id="editorOverflowMenu" class="overflow-menu-list is-closed"></div>
-            </div>
           </div>
         </div>
       </div>
@@ -327,6 +321,32 @@
             </div>
           </div>
 
+          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
+               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
+               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
+               banque" dans la zone « Banque » en bas, qui les exige avant de publier dans
+               bank_questions (mode "Jouer") AU PROCHAIN SAUVEGARDE.
+               Catégorie choisie dans bank_categories (table gérée par un
+               super admin depuis admin-bank.html), plus de texte libre —
+               voir loadCategoryOptions côté editor.js. -->
+          <div class="d-grid grid-cols-split gap-lg" data-advanced>
+            <div class="detail-section">
+              <label for="qCategorySelect">Catégorie</label>
+              <select id="qCategorySelect">
+                <option value="">— Choisir —</option>
+              </select>
+            </div>
+            <div class="detail-section">
+              <label for="qDifficultySelect">Difficulté</label>
+              <select id="qDifficultySelect">
+                <option value="">— Non définie —</option>
+                <option value="facile">Facile</option>
+                <option value="moyen">Moyenne</option>
+                <option value="difficile">Difficile</option>
+              </select>
+            </div>
+          </div>
+
           <div class="detail-section">
             <label for="qPrompt">Énoncé de la question</label>
             <textarea id="qPrompt" rows="3" placeholder="Entrez votre question ici..." maxlength="400"></textarea>
@@ -339,165 +359,116 @@
                question:show) — seuls type+minuteur sont remontés tout en haut
                ici, spécifiques à l'édition (ils cadrent le reste du formulaire,
                jamais montrés tels quels au joueur). -->
-          <div id="illustrationSection" class="detail-section" data-advanced>
-            <label for="illustrationUpload">Image d'illustration (optionnelle) <span class="advanced-pill">Avancé</span></label>
-            <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
-            <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
-              <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
-              <button type="button" id="removeIllustrationBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+          <!-- Image + son facultatifs réunis dans UN bloc (retour utilisateur). Chaque moitié garde
+               son propre masquage (type, mode Avancé) ; le bloc entier se cache s'il ne reste rien
+               à montrer (voir #mediaBlock dans style.css). -->
+          <div id="mediaBlock" class="detail-section">
+            <label>Image et son <span class="text-muted font-13">(facultatifs)</span></label>
+            <div class="reveal-card media-card">
+            <div id="illustrationSection" class="detail-section" data-advanced>
+              <label for="illustrationUpload">🖼️ Image d'illustration</label>
+              <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
+              <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
+                <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
+                <button type="button" id="removeIllustrationBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+              </div>
+              <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
             </div>
-            <p class="text-muted font-13 mt-8">Affichée au-dessus de la question, juste pour illustrer (pas cliquable).</p>
-          </div>
 
-          <!-- Tâche 027/028 (retour utilisateur : positionné juste sous
-               l'image optionnelle) : bloc d'import/découpe audio détaché de
-               #blindtestSection (qui mélangeait jusqu'ici cet outil ET les
-               réponses titre/artiste propres au Blind Test) — devient un
-               son FACULTATIF disponible sur n'importe quel type de
-               question (voir toggleTypeSections côté editor.js), Blind
-               Test compris (son propre son reste ce même bloc partagé,
-               rien ne change pour lui). Ids INCHANGÉS (audioUpload,
-               audioTrimWrap...) : tout le JS existant (renderWaveform,
-               audioUploadInput.onchange, audioExtractBtn...) continue de
-               fonctionner à l'identique, seul le conteneur/le libellé
-               changent. -->
-          <div id="bonusAudioSection" class="detail-section d-none" data-advanced>
-            <label for="audioUpload">🔊 Son (facultatif) <span class="advanced-pill">Avancé</span></label>
-            <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
-            <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
-              <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
-                   pendingAudioBuffer, déjà décodé en mémoire pour l'export WAV
-                   (voir editor.js encodeWavMono) : pas de nouveau décodage,
-                   juste un rendu en plus de données déjà là. La portion Début→
-                   Début+Durée est surlignée en direct (voir
-                   editor.js renderWaveform/updateWaveformSelection). Les
-                   barres vivent dans #audioWaveformBars (recréées à chaque
-                   import) ; les deux poignées de bord sont des éléments fixes
-                   à part, positionnées en % par updateWaveformSelection, pour
-                   pouvoir "étirer" la sélection (retour utilisateur) sans les
-                   recréer avec les barres. -->
-              <div id="audioWaveform" class="audio-waveform">
-                <div id="audioWaveformBars" class="audio-waveform-bars"></div>
-                <div id="audioWaveformHandleStart" class="waveform-handle" role="slider" tabindex="0" aria-label="Début de l'extrait"></div>
-                <div id="audioWaveformHandleEnd" class="waveform-handle" role="slider" tabindex="0" aria-label="Fin de l'extrait"></div>
-              </div>
-              <audio id="audioTrimPlayer" controls></audio>
-              <div class="d-grid grid-cols-split gap-lg mt-8">
-                <div class="detail-section">
-                  <label for="audioStartInput">Début (secondes) <span id="audioTotalDuration" class="text-muted font-13"></span></label>
-                  <div class="timer-controls">
-                    <button id="audioStartMinus" class="btn-timer" type="button">-</button>
-                    <input type="number" id="audioStartInput" class="stepper-input" value="0" min="0" />
-                    <button id="audioStartPlus" class="btn-timer" type="button">+</button>
-                  </div>
+            <!-- Tâche 027/028 (retour utilisateur : positionné juste sous
+                 l'image optionnelle) : bloc d'import/découpe audio détaché de
+                 #blindtestSection (qui mélangeait jusqu'ici cet outil ET les
+                 réponses titre/artiste propres au Blind Test) — devient un
+                 son FACULTATIF disponible sur n'importe quel type de
+                 question (voir toggleTypeSections côté editor.js), Blind
+                 Test compris (son propre son reste ce même bloc partagé,
+                 rien ne change pour lui). Ids INCHANGÉS (audioUpload,
+                 audioTrimWrap...) : tout le JS existant (renderWaveform,
+                 audioUploadInput.onchange, audioExtractBtn...) continue de
+                 fonctionner à l'identique, seul le conteneur/le libellé
+                 changent. -->
+            <div id="bonusAudioSection" class="detail-section d-none" data-advanced>
+              <label for="audioUpload">🔊 Son</label>
+              <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
+              <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
+                <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
+                     pendingAudioBuffer, déjà décodé en mémoire pour l'export WAV
+                     (voir editor.js encodeWavMono) : pas de nouveau décodage,
+                     juste un rendu en plus de données déjà là. La portion Début→
+                     Début+Durée est surlignée en direct (voir
+                     editor.js renderWaveform/updateWaveformSelection). Les
+                     barres vivent dans #audioWaveformBars (recréées à chaque
+                     import) ; les deux poignées de bord sont des éléments fixes
+                     à part, positionnées en % par updateWaveformSelection, pour
+                     pouvoir "étirer" la sélection (retour utilisateur) sans les
+                     recréer avec les barres. -->
+                <div id="audioWaveform" class="audio-waveform">
+                  <div id="audioWaveformBars" class="audio-waveform-bars"></div>
+                  <div id="audioWaveformHandleStart" class="waveform-handle" role="slider" tabindex="0" aria-label="Début de l'extrait"></div>
+                  <div id="audioWaveformHandleEnd" class="waveform-handle" role="slider" tabindex="0" aria-label="Fin de l'extrait"></div>
                 </div>
-                <div class="detail-section">
-                  <label for="audioDurationInput">Durée (secondes)</label>
-                  <div class="timer-controls">
-                    <button id="audioDurationMinus" class="btn-timer" type="button">-</button>
-                    <input type="number" id="audioDurationInput" class="stepper-input" value="15" min="5" max="30" />
-                    <button id="audioDurationPlus" class="btn-timer" type="button">+</button>
-                  </div>
-                </div>
-              </div>
-              <div class="d-flex gap-sm mt-8">
-                <button type="button" id="audioPreviewBtn" class="btn btn-nav-secondary">▶ Prévisualiser l'extrait</button>
-                <button type="button" id="audioExtractBtn" class="btn btn-primary">Utiliser cet extrait</button>
-              </div>
-            </div>
-            <div id="audioClipWrap" class="audio-clip-wrap d-none mt-8">
-              <p class="text-muted font-13 m-0">Extrait actuel :</p>
-              <audio id="audioClipPlayer" controls></audio>
-              <!-- Volume PROPRE à cet extrait (retour utilisateur : "pouvoir
-                   jauger le volume pour qu'il ressorte comme attendu chez
-                   les joueurs") — réglé une fois ici par le créateur, puis
-                   MULTIPLIÉ côté jeu avec le volume personnel de chaque
-                   joueur/le fader général (jamais un remplacement, voir
-                   index.js effectiveVolume) : deux sons à des niveaux
-                   d'enregistrement différents peuvent ainsi ressortir
-                   équilibrés l'un par rapport à l'autre, quel que soit le
-                   réglage de chacun. Même curseur "maison" que côté jeu
-                   (.volume-track, voir index.js wireVolumeSlider) —
-                   dupliqué ici volontairement (editor.js/index.js restent
-                   deux scripts indépendants, même choix déjà fait pour
-                   computeCropGeometry). -->
-              <div class="detail-section mt-8">
-                <label for="audioVolumeTrack">🔊 Volume de cet extrait</label>
-                <div class="d-flex align-center gap-sm">
-                  <span aria-hidden="true">🔉</span>
-                  <div id="audioVolumeTrack" class="volume-track">
-                    <div id="audioVolumeFill" class="volume-fill"></div>
-                    <div id="audioVolumeThumb" class="volume-thumb"></div>
-                  </div>
-                  <span aria-hidden="true">🔊</span>
-                  <span id="audioVolumeLabel" class="text-muted font-13" style="min-width: 38px;">100%</span>
-                </div>
-                <p class="text-muted font-13 m0">Réglé une fois pour tous les joueurs — pour équilibrer ce son par rapport aux autres, quel que soit le volume personnel de chacun.</p>
-              </div>
-              <button type="button" id="removeAudioClipBtn" class="btn btn-nav-secondary font-13 mt-8">Retirer l'extrait</button>
-            </div>
-            <!-- Description volontairement neutre (partagée Blind Test/tout
-                 autre type) : "à faire deviner" ne s'appliquait qu'à Blind
-                 Test, remplacé par une formulation valable dans les deux
-                 contextes (le son démarre avec la question, se coupe une
-                 fois tout le monde a répondu — voir index.js). -->
-            <p class="text-muted font-13 mt-8">Importe le morceau (extrait déjà coupé ou piste complète), choisis le début et la durée de l'extrait (30s max), puis valide. Il démarre en même temps que la question et se coupe une fois que tout le monde a répondu.</p>
-          </div>
-
-          <!-- Bloc groupé "Après la révélation" (design validé via /design,
-               canvas "Éditeur — Révélation Enrichie") : texte (existant,
-               q.explanation) + image/son (nouveaux, q.revealImage/
-               q.revealAudio) côte à côte façon .split-grid. Les 3 volets
-               sont indépendamment optionnels, pour n'importe quel type de
-               question — mêmes patterns visuels que l'illustration
-               (.illustration-preview-wrap) et la carte audio Blind Test,
-               mais sans découpage/waveform (juste un court effet, 15s max
-               vérifiées côté JS à la sélection du fichier). -->
-          <div class="detail-section">
-            <label>Après la révélation</label>
-            <p class="text-muted font-13">Explication, image et son sont facultatifs — affichés aux joueurs juste après la bonne réponse.</p>
-
-            <div class="reveal-card">
-              <div class="reveal-row">
-                <span class="reveal-sublabel">Texte</span>
-                <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986." maxlength="400"></textarea>
-              </div>
-
-              <div class="reveal-media-grid" data-advanced>
-                <div class="reveal-row">
-                  <span class="reveal-sublabel">Image <span class="advanced-pill">Avancé</span></span>
-                  <input type="file" id="revealImageUpload" accept="image/*" class="cursor-pointer" />
-                  <div id="revealImagePreviewWrap" class="illustration-preview-wrap reveal-media-preview d-none mt-8">
-                    <img id="revealImagePreviewImg" class="illustration-preview-img" alt="" />
-                    <button type="button" id="removeRevealImageBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
-                  </div>
-                  <p class="text-muted font-13 mt-8">Sous l'explication, à la révélation.</p>
-                </div>
-
-                <div class="reveal-row">
-                  <span class="reveal-sublabel">Son <span class="advanced-pill">Avancé</span></span>
-                  <input type="file" id="revealAudioUpload" accept="audio/*" class="cursor-pointer" />
-                  <div id="revealAudioPreviewWrap" class="reveal-sound-card d-none mt-8">
-                    <div class="reveal-sound-badge">🎵</div>
-                    <audio id="revealAudioPreviewPlayer" controls></audio>
-                    <!-- Même volume propre au son, réglé par le créateur (voir
-                         le bloc jumeau sur #audioClipWrap plus haut pour le
-                         détail) — juste plus compact pour tenir dans cette
-                         carte centrée. -->
-                    <div class="d-flex align-center gap-sm" style="width: 100%; justify-content: center;">
-                      <span aria-hidden="true">🔉</span>
-                      <div id="revealAudioVolumeTrack" class="volume-track" style="width: 80px;">
-                        <div id="revealAudioVolumeFill" class="volume-fill"></div>
-                        <div id="revealAudioVolumeThumb" class="volume-thumb"></div>
-                      </div>
-                      <span aria-hidden="true">🔊</span>
-                      <span id="revealAudioVolumeLabel" class="text-muted font-13" style="min-width: 34px;">100%</span>
+                <audio id="audioTrimPlayer" controls></audio>
+                <div class="d-grid grid-cols-split gap-lg mt-8">
+                  <div class="detail-section">
+                    <label for="audioStartInput">Début (secondes) <span id="audioTotalDuration" class="text-muted font-13"></span></label>
+                    <div class="timer-controls">
+                      <button id="audioStartMinus" class="btn-timer" type="button">-</button>
+                      <input type="number" id="audioStartInput" class="stepper-input" value="0" min="0" />
+                      <button id="audioStartPlus" class="btn-timer" type="button">+</button>
                     </div>
-                    <button type="button" id="removeRevealAudioBtn" class="reveal-remove-link">Retirer le son</button>
                   </div>
-                  <p class="text-muted font-13 mt-8">Un court effet sonore (15 s max).</p>
+                  <div class="detail-section">
+                    <label for="audioDurationInput">Durée (secondes)</label>
+                    <div class="timer-controls">
+                      <button id="audioDurationMinus" class="btn-timer" type="button">-</button>
+                      <input type="number" id="audioDurationInput" class="stepper-input" value="15" min="5" max="30" />
+                      <button id="audioDurationPlus" class="btn-timer" type="button">+</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex gap-sm mt-8">
+                  <button type="button" id="audioPreviewBtn" class="btn btn-nav-secondary">▶ Prévisualiser l'extrait</button>
+                  <button type="button" id="audioExtractBtn" class="btn btn-primary">Utiliser cet extrait</button>
                 </div>
               </div>
+              <div id="audioClipWrap" class="audio-clip-wrap d-none mt-8">
+                <p class="text-muted font-13 m-0">Extrait actuel :</p>
+                <audio id="audioClipPlayer" controls></audio>
+                <!-- Volume PROPRE à cet extrait (retour utilisateur : "pouvoir
+                     jauger le volume pour qu'il ressorte comme attendu chez
+                     les joueurs") — réglé une fois ici par le créateur, puis
+                     MULTIPLIÉ côté jeu avec le volume personnel de chaque
+                     joueur/le fader général (jamais un remplacement, voir
+                     index.js effectiveVolume) : deux sons à des niveaux
+                     d'enregistrement différents peuvent ainsi ressortir
+                     équilibrés l'un par rapport à l'autre, quel que soit le
+                     réglage de chacun. Même curseur "maison" que côté jeu
+                     (.volume-track, voir index.js wireVolumeSlider) —
+                     dupliqué ici volontairement (editor.js/index.js restent
+                     deux scripts indépendants, même choix déjà fait pour
+                     computeCropGeometry). -->
+                <div class="detail-section mt-8">
+                  <label for="audioVolumeTrack">🔊 Volume de cet extrait</label>
+                  <div class="d-flex align-center gap-sm">
+                    <span aria-hidden="true">🔉</span>
+                    <div id="audioVolumeTrack" class="volume-track">
+                      <div id="audioVolumeFill" class="volume-fill"></div>
+                      <div id="audioVolumeThumb" class="volume-thumb"></div>
+                    </div>
+                    <span aria-hidden="true">🔊</span>
+                    <span id="audioVolumeLabel" class="text-muted font-13" style="min-width: 38px;">100%</span>
+                  </div>
+                  <p class="text-muted font-13 m0">Réglé une fois pour tous les joueurs — pour équilibrer ce son par rapport aux autres, quel que soit le volume personnel de chacun.</p>
+                </div>
+                <button type="button" id="removeAudioClipBtn" class="btn btn-nav-secondary font-13 mt-8">Retirer l'extrait</button>
+              </div>
+              <!-- Description volontairement neutre (partagée Blind Test/tout
+                   autre type) : "à faire deviner" ne s'appliquait qu'à Blind
+                   Test, remplacé par une formulation valable dans les deux
+                   contextes (le son démarre avec la question, se coupe une
+                   fois tout le monde a répondu — voir index.js). -->
+              <p class="text-muted font-13 mt-8">Importe le morceau (extrait déjà coupé ou piste complète), choisis le début et la durée de l'extrait (30s max), puis valide. Il démarre en même temps que la question et se coupe une fois que tout le monde a répondu.</p>
+            </div>
             </div>
           </div>
 
@@ -868,6 +839,63 @@
             </p>
           </div>
 
+          <!-- Bloc groupé "Après la révélation" (design validé via /design,
+               canvas "Éditeur — Révélation Enrichie") : texte (existant,
+               q.explanation) + image/son (nouveaux, q.revealImage/
+               q.revealAudio) côte à côte façon .split-grid. Les 3 volets
+               sont indépendamment optionnels, pour n'importe quel type de
+               question — mêmes patterns visuels que l'illustration
+               (.illustration-preview-wrap) et la carte audio Blind Test,
+               mais sans découpage/waveform (juste un court effet, 15s max
+               vérifiées côté JS à la sélection du fichier). -->
+          <div class="detail-section">
+            <label>Après la révélation</label>
+            <p class="text-muted font-13">Explication, image et son sont facultatifs — affichés aux joueurs juste après la bonne réponse.</p>
+
+            <div class="reveal-card">
+              <div class="reveal-row">
+                <span class="reveal-sublabel">Texte</span>
+                <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986." maxlength="400"></textarea>
+              </div>
+
+              <div class="reveal-media-grid" data-advanced>
+                <div class="reveal-row">
+                  <span class="reveal-sublabel">Image <span class="advanced-pill">Avancé</span></span>
+                  <input type="file" id="revealImageUpload" accept="image/*" class="cursor-pointer" />
+                  <div id="revealImagePreviewWrap" class="illustration-preview-wrap reveal-media-preview d-none mt-8">
+                    <img id="revealImagePreviewImg" class="illustration-preview-img" alt="" />
+                    <button type="button" id="removeRevealImageBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+                  </div>
+                  <p class="text-muted font-13 mt-8">Sous l'explication, à la révélation.</p>
+                </div>
+
+                <div class="reveal-row">
+                  <span class="reveal-sublabel">Son <span class="advanced-pill">Avancé</span></span>
+                  <input type="file" id="revealAudioUpload" accept="audio/*" class="cursor-pointer" />
+                  <div id="revealAudioPreviewWrap" class="reveal-sound-card d-none mt-8">
+                    <div class="reveal-sound-badge">🎵</div>
+                    <audio id="revealAudioPreviewPlayer" controls></audio>
+                    <!-- Même volume propre au son, réglé par le créateur (voir
+                         le bloc jumeau sur #audioClipWrap plus haut pour le
+                         détail) — juste plus compact pour tenir dans cette
+                         carte centrée. -->
+                    <div class="d-flex align-center gap-sm" style="width: 100%; justify-content: center;">
+                      <span aria-hidden="true">🔉</span>
+                      <div id="revealAudioVolumeTrack" class="volume-track" style="width: 80px;">
+                        <div id="revealAudioVolumeFill" class="volume-fill"></div>
+                        <div id="revealAudioVolumeThumb" class="volume-thumb"></div>
+                      </div>
+                      <span aria-hidden="true">🔊</span>
+                      <span id="revealAudioVolumeLabel" class="text-muted font-13" style="min-width: 34px;">100%</span>
+                    </div>
+                    <button type="button" id="removeRevealAudioBtn" class="reveal-remove-link">Retirer le son</button>
+                  </div>
+                  <p class="text-muted font-13 mt-8">Un court effet sonore (15 s max).</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Groupe "Publication" (tâche 046, repris du canvas) : brouillon + "Zone experte"
                (banque / catégorie / difficulté), réservé au mode Avancé et placé EN BAS du
                formulaire — ces réglages ne concernent pas la création d'une question.
@@ -885,7 +913,7 @@
           </div>
             <div class="auto-accordion">
               <button type="button" class="auto-accordion-head" id="expertToggle" aria-expanded="false">
-                <span class="auto-accordion-head-left">🎓 Zone experte</span>
+                <span class="auto-accordion-head-left">🏦 Banque de questions</span>
                 <svg class="auto-chevron" id="expertChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="auto-accordion-body" id="expertBody">
@@ -906,35 +934,10 @@
                  SAUVEGARDE du quiz (voir persistQuiz), pas au clic sur cette
                  case, même patron que la case "Brouillon" juste au-dessus
                  (un état du modèle, appliqué à la sauvegarde). -->
-            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées (juste en dessous).">
+            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées (en haut du formulaire).">
               <input id="addToBankCheckbox" type="checkbox" checked />
               <span>🏦 Ajouter à la banque</span>
             </label>
-          </div>
-          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
-               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
-               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
-               banque" juste au-dessus, qui les exige avant de publier dans
-               bank_questions (mode "Jouer") AU PROCHAIN SAUVEGARDE.
-               Catégorie choisie dans bank_categories (table gérée par un
-               super admin depuis admin-bank.html), plus de texte libre —
-               voir loadCategoryOptions côté editor.js. -->
-          <div class="d-grid grid-cols-split gap-lg">
-            <div class="detail-section">
-              <label for="qCategorySelect">Catégorie</label>
-              <select id="qCategorySelect">
-                <option value="">— Choisir —</option>
-              </select>
-            </div>
-            <div class="detail-section">
-              <label for="qDifficultySelect">Difficulté</label>
-              <select id="qDifficultySelect">
-                <option value="">— Non définie —</option>
-                <option value="facile">Facile</option>
-                <option value="moyen">Moyenne</option>
-                <option value="difficile">Difficile</option>
-              </select>
-            </div>
           </div>
                 </div>
               </div>

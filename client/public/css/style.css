@@ -10649,12 +10649,6 @@ body.display-body .indice-history-card .indice-card-text { font-size: clamp(18px
 .advanced-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--color-accent); background: rgba(var(--color-accent-rgb), .12); border: 1px dashed rgba(var(--color-accent-rgb), .5); border-radius: 999px; padding: 3px 9px; margin-left: 8px; vertical-align: middle; }
 
 /* Menu "⋯" de la barre du haut (Standard) : Tutoriel / Supprimer / Dupliquer. */
-.overflow-menu { position: relative; }
-.overflow-menu-list { position: absolute; top: calc(100% + 8px); right: 0; background: var(--color-card-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 220px; z-index: 50; }
-.overflow-menu-list .btn,
-.overflow-menu-list .btn.btn-primary { justify-content: flex-start; width: 100%; background: transparent; box-shadow: none; border: none; padding: 10px 12px; font-size: 13px; color: var(--color-text); text-align: left; }
-.overflow-menu-list .btn.text-danger { color: var(--color-danger); }
-.overflow-menu-list .btn:hover { background: var(--color-surface); transform: none; }
 
 /* Blocs réservés au mode Avancé (attribut posé dans editor.html à partir de l'étape 2).
    Masquage purement visuel : les valeurs ne sont jamais effacées. */
@@ -10693,15 +10687,11 @@ body.editor-advanced [data-standard-only] { display: none !important; }
 /* 7. Tuiles du sélecteur : cascade avec rebond (plafonnée aux 8 premières). */
 .anim-tile-in { animation: animTileIn 380ms var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 70ms); }
 @keyframes animTileIn { from { opacity: 0; transform: translateY(18px) scale(0.88); } to { opacity: 1; transform: none; } }
-/* 5. Menu "⋯" : s'ouvre depuis son bouton (origine en haut à droite), sortie plus courte. */
-.overflow-menu-list { transform-origin: top right; transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
-.overflow-menu-list.is-closed { opacity: 0; transform: scale(0.96); visibility: hidden; pointer-events: none; transition: opacity 100ms var(--ease-out), transform 100ms var(--ease-out), visibility 0s linear 100ms; }
 /* Mouvement réduit : fondu simple, plus de déplacement ni de rebond. */
 @keyframes animFadeOnly { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .anim-enter, .anim-enter.is-new, .anim-item-in, .anim-form-in, .anim-tile-in { animation: animFadeOnly 150ms linear both; }
   .mode-switch.is-ready .blob.lead, .mode-switch.is-ready .blob.trail { transition: none; }
-  .overflow-menu-list, .overflow-menu-list.is-closed { transition: opacity 100ms linear; transform: none; }
   .type-picker-tile { transition: border-color 0.15s ease; }
   .type-picker-tile:active { transform: none; }
 }
@@ -10719,3 +10709,9 @@ body.results-tv .card { max-width: 1180px; width: 100%; }
 body.results-tv #podiumTab { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start; }
 body.results-tv #resultsPodium { max-width: none !important; margin: 0 !important; }
 body.results-tv #fullTable { margin-top: 0; }
+
+/* Bloc "Image et son" (editor.html #mediaBlock) : se cache quand ses deux moitiés le sont
+   (type sans illustration + son réservé à l'Avancé en mode Standard, ou aucun des deux). */
+#mediaBlock .media-card > .detail-section + .detail-section { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--color-border); }
+#mediaBlock:not(:has(.media-card > .detail-section:not(.d-none))) { display: none; }
+body.editor-standard #mediaBlock:not(:has(.media-card > .detail-section:not(.d-none):not([data-advanced]))) { display: none; }
