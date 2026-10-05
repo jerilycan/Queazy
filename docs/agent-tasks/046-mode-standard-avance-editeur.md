@@ -187,9 +187,15 @@ purement visuel (aucune valeur n'est jamais effacée)._
 4. Le mode est-il mémorisé **par navigateur** (localStorage, proposé) ou aussi lié au compte ?
 
 ## Étapes réalisées
-- [ ]
+- [x] Étape 1 — infrastructure du toggle + barre du haut (commutateur `.mode-switch`, état `editorMode` mémorisé en localStorage, défaut Standard, menu « ⋯ » Tutoriel/Supprimer/Dupliquer déplacés, retour à l'ordre d'origine en Avancé et en lecture seule, règle CSS `[data-advanced]`).
+- [ ] Étape 2 — blocs communs masqués en Standard
+- [ ] Étape 3 — sélecteur de type
+- [ ] Étape 4 — réglages spécifiques par type
+- [ ] Étape 5 — CTA bas, tutoriel, cas limites
+- [ ] Étape 6 — vérification complète et clôture
 
 ## Checks effectués
+- Étape 1 : `node --check client/public/js/editor.js` OK ; accolades CSS équilibrées ; Browser pane (compte connecté) : défaut Standard sans valeur mémorisée, menu « ⋯ » contient replayTutorialBtn/deleteQuiz/duplicateQuiz, ouverture/fermeture (bouton, clic extérieur, Échap), bascule Avancé remet les boutons dans l'ordre d'origine, mode mémorisé après rechargement, lecture seule (applyReadOnly) restaure les boutons même en Standard.
 - [ ] `node --check client/public/js/editor.js`
 - [ ] Vérification visuelle Browser pane (éditeur, bascule Standard/Avancé
       sur plusieurs types)

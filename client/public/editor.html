@@ -200,12 +200,24 @@
             </label>
           </div>
           <div class="editor-actions">
+            <!-- Mode d'édition (tâche 046) : Standard = l'essentiel pour créer vite,
+                 Avancé = tous les réglages optionnels. Voir editor.js applyEditorMode. -->
+            <div class="mode-switch" role="tablist" aria-label="Mode d'édition">
+              <button type="button" id="modeStandardBtn" class="mode-switch-btn" role="tab">Standard</button>
+              <button type="button" id="modeAdvancedBtn" class="mode-switch-btn" role="tab">Avancé</button>
+            </div>
             <button id="replayTutorialBtn" class="btn" type="button" title="Revoir le tutoriel de prise en main">❔ Tutoriel</button>
             <button id="participantsQuizBtn" class="btn d-none" type="button" title="Joueurs ayant terminé ce quiz">👥 Participants</button>
             <button id="deleteQuiz" class="btn text-danger">Supprimer ce Quiz</button>
             <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
             <button id="reportQuizBtn" class="btn text-danger d-none">🚩 Signaler</button>
             <button id="duplicateQuiz" class="btn btn-primary px-32 d-none">Dupliquer dans mes quiz</button>
+            <!-- Menu "⋯" (Standard uniquement) : Tutoriel / Supprimer / Dupliquer y sont
+                 DÉPLACÉS (mêmes nœuds, mêmes handlers) par editor.js applyEditorMode. -->
+            <div id="editorOverflow" class="overflow-menu d-none">
+              <button type="button" id="editorOverflowBtn" class="btn-icon" aria-haspopup="true" aria-expanded="false" title="Plus d'actions">⋯</button>
+              <div id="editorOverflowMenu" class="overflow-menu-list d-none"></div>
+            </div>
           </div>
         </div>
       </div>

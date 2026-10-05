@@ -717,6 +717,8 @@ const applyReadOnly = () => {
   if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
   const banner = document.getElementById('readOnlyBanner')
   if (banner) banner.classList.remove('d-none')
+  // Lecture seule : les boutons repliés en Standard reviennent dans la barre (voir applyEditorMode).
+  applyEditorMode()
 }
 
 // --- Utilitaires ---
@@ -5954,6 +5956,87 @@ const startEditorTour = (force) => {
 // init ci-dessous), d'où l'appel différé plutôt qu'ici directement.
 const maybeStartEditorTour = () => { if (!readOnly) startEditorTour(false) }
 if (replayTutorialBtn) replayTutorialBtn.onclick = () => startEditorTour(true)
+
+// --- Mode d'édition Standard / Avancé (tâche 046) ---
+// Standard : l'essentiel pour créer vite ; Avancé : tous les réglages optionnels.
+// Le masquage est PUREMENT VISUEL (voir style.css, [data-advanced]) : une valeur
+// réglée en Avancé n'est jamais effacée en repassant en Standard. Défaut :
+// Standard pour tout le monde tant qu'aucun choix n'est mémorisé. Mémorisé par
+// navigateur (localStorage) — jamais lié au compte.
+const EDITOR_MODE_STORAGE_KEY = 'queazy_editor_mode'
+const modeStandardBtn = document.getElementById('modeStandardBtn')
+const modeAdvancedBtn = document.getElementById('modeAdvancedBtn')
+const editorOverflowEl = document.getElementById('editorOverflow')
+const editorOverflowBtn = document.getElementById('editorOverflowBtn')
+const editorOverflowMenu = document.getElementById('editorOverflowMenu')
+const editorActionsEl = document.querySelector('.editor-actions')
+
+const readStoredEditorMode = () => {
+  try {
+    return localStorage.getItem(EDITOR_MODE_STORAGE_KEY) === 'advanced' ? 'advanced' : 'standard'
+  } catch {
+    // localStorage indisponible (navigation privée, stockage bloqué) : mode par défaut, rien de grave.
+    return 'standard'
+  }
+}
+let editorMode = readStoredEditorMode()
+
+const closeEditorOverflow = () => {
+  if (!editorOverflowMenu) return
+  editorOverflowMenu.classList.add('d-none')
+  if (editorOverflowBtn) editorOverflowBtn.setAttribute('aria-expanded', 'false')
+}
+
+// Boutons de la barre du haut repliés dans le menu "⋯" en Standard. Ce sont les
+// MÊMES nœuds déplacés (pas dupliqués) : leurs handlers restent câblés une fois.
+// Hors lecture seule seulement : un lecteur n'édite rien, et "Dupliquer" y est
+// l'action principale (voir applyReadOnly).
+const applyEditorMode = () => {
+  const standard = editorMode === 'standard'
+  document.body.classList.toggle('editor-standard', standard)
+  document.body.classList.toggle('editor-advanced', !standard)
+  if (modeStandardBtn) { modeStandardBtn.classList.toggle('active', standard); modeStandardBtn.setAttribute('aria-selected', String(standard)) }
+  if (modeAdvancedBtn) { modeAdvancedBtn.classList.toggle('active', !standard); modeAdvancedBtn.setAttribute('aria-selected', String(!standard)) }
+  if (!editorActionsEl || !editorOverflowEl || !editorOverflowMenu) return
+  const folded = [replayTutorialBtn, deleteQuizBtn, duplicateQuizBtn]
+  const useOverflow = standard && !readOnly
+  if (useOverflow) {
+    folded.forEach(btn => { if (btn) editorOverflowMenu.appendChild(btn) })
+  } else {
+    // Retour à l'ordre d'origine de la barre (voir editor.html).
+    if (replayTutorialBtn) editorActionsEl.insertBefore(replayTutorialBtn, participantsQuizBtn || saveQuizBtn)
+    if (deleteQuizBtn) editorActionsEl.insertBefore(deleteQuizBtn, saveQuizBtn)
+    if (duplicateQuizBtn) editorActionsEl.insertBefore(duplicateQuizBtn, editorOverflowEl)
+    closeEditorOverflow()
+  }
+  editorOverflowEl.classList.toggle('d-none', !useOverflow)
+}
+
+const setEditorMode = (mode) => {
+  editorMode = mode === 'advanced' ? 'advanced' : 'standard'
+  try {
+    localStorage.setItem(EDITOR_MODE_STORAGE_KEY, editorMode)
+  } catch {
+    // Mémorisation impossible : le mode reste valable pour cette page seulement.
+  }
+  applyEditorMode()
+}
+
+if (modeStandardBtn) modeStandardBtn.onclick = () => setEditorMode('standard')
+if (modeAdvancedBtn) modeAdvancedBtn.onclick = () => setEditorMode('advanced')
+if (editorOverflowBtn && editorOverflowMenu) {
+  editorOverflowBtn.onclick = (e) => {
+    e.stopPropagation()
+    const willOpen = editorOverflowMenu.classList.contains('d-none')
+    editorOverflowMenu.classList.toggle('d-none', !willOpen)
+    editorOverflowBtn.setAttribute('aria-expanded', String(willOpen))
+  }
+  // Clic ailleurs ou Échap : referme (un clic sur un bouton du menu referme aussi,
+  // après que son handler a tourné).
+  document.addEventListener('click', closeEditorOverflow)
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEditorOverflow() })
+}
+applyEditorMode()
 
 // --- Initialisation ---
 

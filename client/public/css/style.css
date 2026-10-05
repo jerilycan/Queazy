@@ -10629,3 +10629,25 @@ body.display-body #questionTypeBadge { font-size: clamp(15px, 1.5vw, 24px); }
 body.display-body .indice-central-card .indice-card-text { font-size: clamp(28px, 3.6vw, 64px); }
 body.display-body .indice-history-card { width: clamp(130px, 11vw, 210px); height: clamp(130px, 11vw, 210px); }
 body.display-body .indice-history-card .indice-card-text { font-size: clamp(18px, 1.9vw, 30px); }
+
+/* ===== Mode d'édition Standard / Avancé (tâche 046) ===== */
+/* Commutateur : repris du canvas (.mode-switch), en tokens réels. */
+.mode-switch { display: inline-flex; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; padding: 4px; gap: 2px; flex-shrink: 0; }
+.mode-switch-btn { border: none; background: transparent; color: var(--color-text-muted); font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 13px; padding: 9px 20px; border-radius: 999px; cursor: pointer; transition: all .15s ease; }
+.mode-switch-btn.active { background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%); color: #fff; box-shadow: 0 3px 10px rgba(var(--color-accent-rgb), .4); }
+.mode-switch-btn:hover:not(.active) { color: var(--color-text); }
+
+/* Pastille "Avancé" (utilisée à partir de l'étape 2). */
+.advanced-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--color-accent); background: rgba(var(--color-accent-rgb), .12); border: 1px dashed rgba(var(--color-accent-rgb), .5); border-radius: 999px; padding: 3px 9px; margin-left: 8px; vertical-align: middle; }
+
+/* Menu "⋯" de la barre du haut (Standard) : Tutoriel / Supprimer / Dupliquer. */
+.overflow-menu { position: relative; }
+.overflow-menu-list { position: absolute; top: calc(100% + 8px); right: 0; background: var(--color-card-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 220px; z-index: 50; }
+.overflow-menu-list .btn,
+.overflow-menu-list .btn.btn-primary { justify-content: flex-start; width: 100%; background: transparent; box-shadow: none; border: none; padding: 10px 12px; font-size: 13px; color: var(--color-text); text-align: left; }
+.overflow-menu-list .btn.text-danger { color: var(--color-danger); }
+.overflow-menu-list .btn:hover { background: var(--color-surface); transform: none; }
+
+/* Blocs réservés au mode Avancé (attribut posé dans editor.html à partir de l'étape 2).
+   Masquage purement visuel : les valeurs ne sont jamais effacées. */
+body.editor-standard [data-advanced] { display: none !important; }
