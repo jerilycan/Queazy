@@ -27,6 +27,15 @@
     <script src="/js/zone-geometry.js" defer></script>
   </head>
   <body>
+    <!-- Filtre "goutte d'eau" du commutateur Standard/Avancé (tâche 046) : flou + seuil alpha. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <defs>
+        <filter id="qzGoo" x="-20%" y="-60%" width="140%" height="220%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur" />
+          <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -9" />
+        </filter>
+      </defs>
+    </svg>
     <div class="navbar">
       <a href="/" class="brand">
         <span class="brand-logo-wrap">
@@ -202,7 +211,10 @@
           <div class="editor-actions">
             <!-- Mode d'édition (tâche 046) : Standard = l'essentiel pour créer vite,
                  Avancé = tous les réglages optionnels. Voir editor.js applyEditorMode. -->
-            <div class="mode-switch" role="tablist" aria-label="Mode d'édition">
+            <div class="mode-switch" id="modeSwitch" data-pos="0" role="tablist" aria-label="Mode d'édition">
+              <!-- Deux "gouttes" fusionnées par le filtre SVG #qzGoo (voir style.css .mode-switch) :
+                   effet liquide quand la pastille passe d'un bouton à l'autre. -->
+              <div class="goo-layer" aria-hidden="true"><span class="blob lead"></span><span class="blob trail"></span></div>
               <button type="button" id="modeStandardBtn" class="mode-switch-btn" role="tab">Standard</button>
               <button type="button" id="modeAdvancedBtn" class="mode-switch-btn" role="tab">Avancé</button>
             </div>
@@ -216,7 +228,7 @@
                  DÉPLACÉS (mêmes nœuds, mêmes handlers) par editor.js applyEditorMode. -->
             <div id="editorOverflow" class="overflow-menu d-none">
               <button type="button" id="editorOverflowBtn" class="btn-icon" aria-haspopup="true" aria-expanded="false" title="Plus d'actions">⋯</button>
-              <div id="editorOverflowMenu" class="overflow-menu-list d-none"></div>
+              <div id="editorOverflowMenu" class="overflow-menu-list is-closed"></div>
             </div>
           </div>
         </div>
@@ -971,6 +983,8 @@
       </div>
     </div>
 
+    <!-- Confettis de la 1re sauvegarde d'un quiz (même librairie que index.html/result.html). -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js" defer></script>
     <script src="/js/ui-widgets.js" defer></script>
     <script src="/js/editor.js" defer></script>
   </body>

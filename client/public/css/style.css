@@ -10632,9 +10632,17 @@ body.display-body .indice-history-card .indice-card-text { font-size: clamp(18px
 
 /* ===== Mode d'édition Standard / Avancé (tâche 046) ===== */
 /* Commutateur : repris du canvas (.mode-switch), en tokens réels. */
-.mode-switch { display: inline-flex; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; padding: 4px; gap: 2px; flex-shrink: 0; }
-.mode-switch-btn { border: none; background: transparent; color: var(--color-text-muted); font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 13px; padding: 9px 20px; border-radius: 999px; cursor: pointer; transition: all .15s ease; }
-.mode-switch-btn.active { background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%); color: #fff; box-shadow: 0 3px 10px rgba(var(--color-accent-rgb), .4); }
+.mode-switch { display: inline-flex; position: relative; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; padding: 4px; gap: 2px; flex-shrink: 0; }
+/* Effet "goutte d'eau" : deux gouttes de même taille sous un filtre SVG qui les fusionne. La goutte de
+   tête part en premier (léger dépassement), la queue la suit avec retard ; entre les deux la matière
+   s'étire puis se résorbe. Le texte des boutons est hors du filtre (net). */
+.mode-switch .goo-layer { position: absolute; inset: 4px; filter: url(#qzGoo) drop-shadow(0 3px 8px rgba(var(--color-accent-rgb), .45)); pointer-events: none; }
+.mode-switch .blob { position: absolute; top: 0; left: 0; width: 100px; height: 100%; border-radius: 999px; background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%); }
+.mode-switch.is-ready .blob.lead { transition: transform 520ms cubic-bezier(0.3, 1.45, 0.5, 1); }
+.mode-switch.is-ready .blob.trail { transition: transform 700ms cubic-bezier(0.55, 0, 0.2, 1) 90ms; }
+.mode-switch[data-pos="1"] .blob { transform: translateX(102px); }
+.mode-switch-btn { border: none; background: transparent; color: var(--color-text-muted); font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 13px; width: 100px; padding: 9px 0; border-radius: 999px; cursor: pointer; position: relative; z-index: 1; transition: color .2s ease; }
+.mode-switch-btn.active { color: #fff; }
 .mode-switch-btn:hover:not(.active) { color: var(--color-text); }
 
 /* Pastille "Avancé" (utilisée à partir de l'étape 2). */
@@ -10660,3 +10668,40 @@ body.editor-standard [data-advanced] { display: none !important; }
 @media (max-width: 640px) { .standard-cta { flex-direction: column; align-items: flex-start; } }
 /* Éléments visibles en Standard SEULEMENT (invitations à passer en Avancé). */
 body.editor-advanced [data-standard-only] { display: none !important; }
+
+/* ===== Animations de la partie création (tâche 046 bis) =====
+   Mouvements courts, transform/opacity seulement. Classes posées/retirées par editor.js (playAnimation). */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* 1. Blocs avancés qui apparaissent au passage en Avancé : cascade + liseré d'accent qui s'éteint. */
+.anim-enter { animation: animEnter 360ms var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.anim-enter.is-new { animation: animEnter 360ms var(--ease-spring) both, animGlow 1100ms ease-out both; animation-delay: calc(var(--i, 0) * 70ms), calc(var(--i, 0) * 70ms); }
+@keyframes animEnter { from { opacity: 0; transform: translateY(-14px) scale(0.97); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes animGlow { 0% { box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb), .28); } 100% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0); } }
+/* 2. Nouvelle question dans la barre latérale : glisse depuis la gauche + éclair d'accent. */
+.anim-item-in { animation: animItemIn 420ms var(--ease-spring) both, animItemFlash 1200ms ease-out backwards; }
+@keyframes animItemIn { from { opacity: 0; transform: translateX(-28px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes animItemFlash { 0% { box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb), .35); } 100% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0); } }
+/* 3. Choix du type : le formulaire monte en fondu ; la tuile cliquée s'enfonce. */
+.anim-form-in { animation: animFormIn 260ms var(--ease-out) both; }
+@keyframes animFormIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.type-picker-tile { transition: transform 120ms var(--ease-out), border-color 0.15s ease; }
+.type-picker-tile:active { transform: scale(0.94); }
+/* 7. Tuiles du sélecteur : cascade avec rebond (plafonnée aux 8 premières). */
+.anim-tile-in { animation: animTileIn 380ms var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes animTileIn { from { opacity: 0; transform: translateY(18px) scale(0.88); } to { opacity: 1; transform: none; } }
+/* 5. Menu "⋯" : s'ouvre depuis son bouton (origine en haut à droite), sortie plus courte. */
+.overflow-menu-list { transform-origin: top right; transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
+.overflow-menu-list.is-closed { opacity: 0; transform: scale(0.96); visibility: hidden; pointer-events: none; transition: opacity 100ms var(--ease-out), transform 100ms var(--ease-out), visibility 0s linear 100ms; }
+/* Mouvement réduit : fondu simple, plus de déplacement ni de rebond. */
+@keyframes animFadeOnly { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .anim-enter, .anim-enter.is-new, .anim-item-in, .anim-form-in, .anim-tile-in { animation: animFadeOnly 150ms linear both; }
+  .mode-switch.is-ready .blob.lead, .mode-switch.is-ready .blob.trail { transition: none; }
+  .overflow-menu-list, .overflow-menu-list.is-closed { transition: opacity 100ms linear; transform: none; }
+  .type-picker-tile { transition: border-color 0.15s ease; }
+  .type-picker-tile:active { transform: none; }
+}

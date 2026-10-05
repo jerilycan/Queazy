@@ -931,6 +931,36 @@ const QTYPE_COLOR = {
   halo: 'var(--color-halo)'
 }
 
+// --- Animations de création (tâche 046 bis) ---
+// Mouvements courts (transform/opacity seulement), jamais sur les actions répétées des champs.
+// En "mouvement réduit" (réglage système) : voir style.css (fondu simple), confettis coupés.
+const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+const ANIM_CLEANUP_MS = 1600
+// Pose des classes d'animation sur un élément, rejouées proprement, puis les retire (le liseré
+// d'accent et le ressort ne doivent pas rester collés à l'élément). Retrait temporisé plutôt
+// qu'animationend : plusieurs animations simultanées, et aucune si le mouvement est réduit.
+const playAnimation = (el, classes, index) => {
+  if (!el) return
+  const list = classes.split(' ')
+  if (index !== undefined) el.style.setProperty('--i', index)
+  el.classList.remove(...list)
+  void el.offsetWidth
+  el.classList.add(...list)
+  setTimeout(() => {
+    el.classList.remove(...list)
+    el.style.removeProperty('--i')
+  }, ANIM_CLEANUP_MS)
+}
+// Tuiles du sélecteur de type : arrivée en cascade (plafonnée aux 8 premières).
+const animateTypePickerTiles = () => {
+  if (!typePickerGridEl) return
+  Array.from(typePickerGridEl.querySelectorAll('.type-picker-tile'))
+    .filter(t => t.getClientRects().length > 0)
+    .forEach((t, i) => playAnimation(t, 'anim-tile-in', Math.min(i, 7)))
+}
+// Index de la question tout juste ajoutée : sa ligne de la barre latérale s'anime (voir updateSidebar).
+let justAddedQuestionIndex = -1
+
 // Écran "aucune question" (nouvelle DA, tâche 003, décision validée) : un
 // nouveau quiz démarre à 0 question désormais (au lieu d'une question
 // "Texte libre" vide par défaut) — #questionEmptyState remplace
@@ -944,6 +974,7 @@ const updateEmptyState = () => {
   const isEmpty = questions.length === 0
   questionEmptyStateEl.classList.toggle('d-none', !isEmpty)
   questionDetailEl.classList.toggle('d-none', isEmpty)
+  if (isEmpty) animateTypePickerTiles()
   // Le bouton flottant "Sauvegarder" reste géré par selectQuestion/
   // applyReadOnly comme avant (voir plus bas) — on se contente ici de le
   // masquer quand il n'y a encore RIEN à éditer, cas qu'aucun des deux ne
@@ -969,6 +1000,7 @@ const openTypePicker = () => {
   if (questionSaveBar) questionSaveBar.classList.add('d-none')
   qIndexLabel.textContent = 'Choix du type'
   if (typePickerCancelBtn) typePickerCancelBtn.classList.toggle('d-none', questions.length === 0)
+  animateTypePickerTiles()
 }
 
 // Grille de choix de type (voir #typePickerGrid dans editor.html) — générée
@@ -1035,7 +1067,11 @@ const renderTypePicker = () => {
 
 const addQuestionOfType = (type) => {
   questions.push({ ...createDefaultQuestion(), type })
+  justAddedQuestionIndex = questions.length - 1
   selectQuestion(questions.length - 1)
+  // Le formulaire apparaît en fondu léger (la ligne de la liste s'anime dans updateSidebar).
+  playAnimation(questionDetailEl, 'anim-form-in')
+  justAddedQuestionIndex = -1
 }
 
 const updateSidebar = () => {
@@ -1044,6 +1080,7 @@ const updateSidebar = () => {
     const item = document.createElement('div')
     item.className = `question-item type-${q.type || 'free'} ${idx === activeIndex ? 'active' : ''} ${q.draft ? 'is-draft' : ''}`.trim()
     item.dataset.index = idx
+    if (idx === justAddedQuestionIndex) playAnimation(item, 'anim-item-in')
     // Le type est déjà lisible dans #qType (l'unique source de vérité pour
     // son libellé, voir editor.html) — repris tel quel ici plutôt que
     // dupliqué dans une deuxième liste qui pourrait diverger.
@@ -5231,7 +5268,17 @@ const hideSaveLoading = () => {
 // effectuée" doit être vu directement là où le regard est déjà posé (la popup
 // de chargement), pas ailleurs sur l'écran. Se referme seule après un court
 // délai, pas besoin d'un bouton "OK" pour un message purement informatif.
-const showSaveSuccess = (message) => {
+// Deux salves depuis les bords + une au centre — réservé à la CRÉATION du quiz (rare, émotionnel).
+// Sans effet si la librairie n'a pas pu se charger ou en mode "mouvement réduit".
+const launchSaveConfetti = () => {
+  if (prefersReducedMotion() || typeof window.confetti !== 'function') return
+  const base = { particleCount: 70, spread: 70, startVelocity: 55, ticks: 220, zIndex: 9999 }
+  window.confetti({ ...base, angle: 60, origin: { x: 0, y: 0.7 } })
+  window.confetti({ ...base, angle: 120, origin: { x: 1, y: 0.7 } })
+  setTimeout(() => window.confetti({ particleCount: 50, spread: 100, startVelocity: 35, zIndex: 9999, origin: { x: 0.5, y: 0.45 } }), 220)
+}
+
+const showSaveSuccess = (message, celebrate = false) => {
   const overlay = ensureSaveOverlay()
   overlay.innerHTML = `
     <div class="modal-content" style="text-align:center;">
@@ -5239,6 +5286,7 @@ const showSaveSuccess = (message) => {
       <p class="font-bold mt-16" style="margin:16px 0 0;">${message}</p>
     </div>`
   overlay.classList.remove('d-none')
+  if (celebrate) launchSaveConfetti()
   setTimeout(hideSaveLoading, 1400)
 }
 
@@ -5730,7 +5778,7 @@ const persistQuiz = async (successMessage) => {
       if (error) throw error
       currentId = data.id
       if (participantsQuizBtn) participantsQuizBtn.classList.remove('d-none')
-      showSaveSuccess('Quiz créé et sauvegardé !')
+      showSaveSuccess('Quiz créé et sauvegardé !', true)
       markSaved()
     }
   } catch (err) {
@@ -6000,6 +6048,7 @@ const editorOverflowEl = document.getElementById('editorOverflow')
 const editorOverflowBtn = document.getElementById('editorOverflowBtn')
 const editorOverflowMenu = document.getElementById('editorOverflowMenu')
 const editorActionsEl = document.querySelector('.editor-actions')
+const modeSwitchEl = document.getElementById('modeSwitch')
 
 const readStoredEditorMode = () => {
   try {
@@ -6013,7 +6062,7 @@ let editorMode = readStoredEditorMode()
 
 const closeEditorOverflow = () => {
   if (!editorOverflowMenu) return
-  editorOverflowMenu.classList.add('d-none')
+  editorOverflowMenu.classList.add('is-closed')
   if (editorOverflowBtn) editorOverflowBtn.setAttribute('aria-expanded', 'false')
 }
 
@@ -6025,6 +6074,7 @@ const applyEditorMode = () => {
   const standard = editorMode === 'standard'
   document.body.classList.toggle('editor-standard', standard)
   document.body.classList.toggle('editor-advanced', !standard)
+  if (modeSwitchEl) modeSwitchEl.dataset.pos = standard ? '0' : '1'
   if (modeStandardBtn) { modeStandardBtn.classList.toggle('active', standard); modeStandardBtn.setAttribute('aria-selected', String(standard)) }
   if (modeAdvancedBtn) { modeAdvancedBtn.classList.toggle('active', !standard); modeAdvancedBtn.setAttribute('aria-selected', String(!standard)) }
   if (!editorActionsEl || !editorOverflowEl || !editorOverflowMenu) return
@@ -6042,7 +6092,16 @@ const applyEditorMode = () => {
   editorOverflowEl.classList.toggle('d-none', !useOverflow)
 }
 
+// Blocs réservés à l'Avancé qui viennent d'apparaître : arrivée en cascade avec liseré d'accent
+// (seulement quand l'utilisateur bascule, jamais au chargement de la page).
+const revealAdvancedBlocks = () => {
+  Array.from(document.querySelectorAll('[data-advanced]'))
+    .filter(el => el.getClientRects().length > 0)
+    .forEach((el, i) => playAnimation(el, 'anim-enter is-new', Math.min(i, 7)))
+}
+
 const setEditorMode = (mode) => {
+  const wasStandard = editorMode === 'standard'
   editorMode = mode === 'advanced' ? 'advanced' : 'standard'
   try {
     localStorage.setItem(EDITOR_MODE_STORAGE_KEY, editorMode)
@@ -6050,6 +6109,7 @@ const setEditorMode = (mode) => {
     // Mémorisation impossible : le mode reste valable pour cette page seulement.
   }
   applyEditorMode()
+  if (wasStandard && editorMode === 'advanced') revealAdvancedBlocks()
 }
 
 if (modeStandardBtn) modeStandardBtn.onclick = () => setEditorMode('standard')
@@ -6057,8 +6117,8 @@ if (modeAdvancedBtn) modeAdvancedBtn.onclick = () => setEditorMode('advanced')
 if (editorOverflowBtn && editorOverflowMenu) {
   editorOverflowBtn.onclick = (e) => {
     e.stopPropagation()
-    const willOpen = editorOverflowMenu.classList.contains('d-none')
-    editorOverflowMenu.classList.toggle('d-none', !willOpen)
+    const willOpen = editorOverflowMenu.classList.contains('is-closed')
+    editorOverflowMenu.classList.toggle('is-closed', !willOpen)
     editorOverflowBtn.setAttribute('aria-expanded', String(willOpen))
   }
   // Clic ailleurs ou Échap : referme (un clic sur un bouton du menu referme aussi,
@@ -6067,6 +6127,7 @@ if (editorOverflowBtn && editorOverflowMenu) {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEditorOverflow() })
 }
 applyEditorMode()
+if (modeSwitchEl) setTimeout(() => modeSwitchEl.classList.add('is-ready'), 60)
 
 const typePickerCtaBtn = document.getElementById('typePickerCtaBtn')
 if (typePickerCtaBtn) typePickerCtaBtn.onclick = () => setEditorMode('advanced')
