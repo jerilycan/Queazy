@@ -933,7 +933,7 @@ const QTYPE_COLOR = {
 // Mouvements courts (transform/opacity seulement), jamais sur les actions répétées des champs.
 // En "mouvement réduit" (réglage système) : voir style.css (fondu simple), confettis coupés.
 const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-const ANIM_CLEANUP_MS = 1600
+const ANIM_CLEANUP_MS = 2400
 // Pose des classes d'animation sur un élément, rejouées proprement, puis les retire (le liseré
 // d'accent et le ressort ne doivent pas rester collés à l'élément). Retrait temporisé plutôt
 // qu'animationend : plusieurs animations simultanées, et aucune si le mouvement est réduit.
@@ -6072,7 +6072,7 @@ const applyEditorMode = () => {
 const revealAdvancedBlocks = () => {
   Array.from(document.querySelectorAll('[data-advanced]'))
     .filter(el => el.getClientRects().length > 0)
-    .forEach((el, i) => playAnimation(el, 'anim-enter is-new', Math.min(i, 7)))
+    .forEach((el, i) => playAnimation(el, 'anim-advanced', Math.min(i, 6)))
 }
 
 const setEditorMode = (mode) => {
