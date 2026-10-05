@@ -824,11 +824,49 @@
                 <span class="auto-accordion-head-left">Variantes acceptées (orthographes alternatives)<span class="auto-accordion-count" id="freeVariantsCount">0</span></span>
                 <svg class="auto-chevron" id="freeVariantsChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
               </button>
-              <div class="auto-accordion-body d-none" id="freeVariantsBody">
-                <div id="freeVariantsChipList" class="chip-list">
-                  <!-- Rempli par JS -->
+              <!-- Replié par défaut (pas de .is-open) : .auto-accordion-body
+                   est maintenant un conteneur grid-template-rows:0fr (voir
+                   style.css) qui fait disparaître ce wrapper tout seul, sans
+                   d-none. Le wrapper (unique enfant direct exigé par cette
+                   technique, voir commentaire sur .auto-accordion-body)
+                   porte le padding que portait .auto-accordion-body avant
+                   ce correctif — même raison que .auto-chip-grid plus bas. -->
+              <div class="auto-accordion-body" id="freeVariantsBody">
+                <div style="padding: 0 16px 14px;">
+                  <div id="freeVariantsChipList" class="chip-list">
+                    <!-- Rempli par JS -->
+                  </div>
+                  <input id="freeVariantAddInput" type="text" class="chip-add-input mt-8" placeholder="+ variante… (Entrée)" />
                 </div>
-                <input id="freeVariantAddInput" type="text" class="chip-add-input mt-8" placeholder="+ variante… (Entrée)" />
+              </div>
+            </div>
+
+            <!-- Tolérance orthographique (tâche 037, étapes 6-8) : 3 niveaux,
+                 lus côté serveur via q.answerTolerance uniquement pour ce
+                 type ("free"). "Souple" = comportement serveur historique
+                 (valeur par défaut si absent). Voir setFreeToleranceButtons/
+                 les handlers des 3 boutons (FREE_TOLERANCE_BUTTONS) plus bas
+                 dans editor.js. -->
+            <div class="tolerance-panel">
+              <label>Tolérance orthographique</label>
+              <div class="tolerance-switch">
+                <button type="button" class="tolerance-switch-btn" id="toleranceStricteBtn" data-tolerance="stricte">Stricte</button>
+                <button type="button" class="tolerance-switch-btn" id="toleranceSoupleBtn" data-tolerance="souple">Souple</button>
+                <button type="button" class="tolerance-switch-btn" id="toleranceTresSoupleBtn" data-tolerance="tresSouple">Très souple</button>
+              </div>
+              <p class="text-muted font-13 mt-8">
+                Stricte : correspondance exacte (accents/casse ignorés seulement).
+                Souple : petites fautes de frappe tolérées (réglage historique). Très souple : tolérance plus large.
+              </p>
+
+              <!-- Testeur (étape 8) : simule fuzzy() côté client (norm/lev
+                   dupliqués depuis server/index.js, voir editor.js) — même
+                   verdict que ce que le serveur validerait réellement en
+                   jeu, sinon le testeur mentirait au créateur du quiz. -->
+              <label class="mt-8">Tester une réponse</label>
+              <div class="test-answer-row">
+                <input id="freeAnswerTestInput" type="text" placeholder="ex : Canbera" />
+                <span class="test-pill" id="freeAnswerTestPill">?</span>
               </div>
             </div>
           </div>

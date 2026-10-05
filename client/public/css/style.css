@@ -1529,7 +1529,31 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 }
 .auto-chevron { color: var(--color-text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
 .auto-chevron.open { transform: rotate(180deg); }
-.auto-accordion-body { padding: 0 16px 14px; }
+/* Ouverture/fermeture animée (retour utilisateur implicite : le chevron
+   tournait déjà en 0.2s mais le corps, lui, claquait d'un coup). Technique
+   grid-template-rows 0fr/1fr (pas max-height) : une valeur <fr> s'anime
+   sans le "effet de seuil" du max-height (rien ne bouge visuellement tant
+   que la valeur eased dépasse la hauteur réelle du contenu, puis tout se
+   joue d'un coup à la fin) — ici chaque frame correspond à une vraie
+   fraction de la hauteur finale. Le padding vertical (0 16px 14px avant ce
+   correctif) est descendu sur l'unique enfant (.auto-chip-grid, ou un
+   wrapper équivalent côté editor.html) plutôt que laissé ici : sur un
+   conteneur grid dont la ligne fait 0fr, le padding ne fait PAS partie du
+   calcul de la piste (contrairement à une hauteur) et resterait visible
+   même fermé si on le laissait sur ce sélecteur. */
+.auto-accordion-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.auto-accordion-body.is-open { grid-template-rows: 1fr; }
+/* Seul moyen de permettre à l'unique enfant de rétrécir sous sa hauteur de
+   contenu quand la piste grid passe à 0fr (sinon min-height:auto par
+   défaut sur un item de grille l'en empêche). */
+.auto-accordion-body > * { overflow: hidden; min-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .auto-accordion-body { transition: none; }
+}
 
 /* Grille de pastilles catégories/types — remplace les cases à cocher nues
    d'avant. Les <input type="checkbox"> restent dans le DOM (voir
@@ -1545,6 +1569,14 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   max-height: 160px;
   overflow-y: auto;
   margin-top: 10px;
+  /* padding-left/bottom repris tels quels de l'ancien .auto-accordion-body
+     (voir juste au-dessus) — cette grille est l'unique enfant direct de
+     .auto-accordion-body dans les deux accordéons qui l'utilisent
+     (catégories/types, index.html). padding-right distinct (dégagement de
+     la scrollbar de ce overflow-y:auto, pas lié à l'accordéon). */
+  padding-top: 0;
+  padding-bottom: 14px;
+  padding-left: 16px;
   padding-right: 4px;
 }
 .auto-config-check {

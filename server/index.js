@@ -900,10 +900,20 @@ const start = async () => {
     }
     return dp[m][n]
   }
-  const fuzzy = (input, answers) => {
+  // Tolérance orthographique à 3 niveaux (tâche 037, type "free" uniquement
+  // — voir q.answerTolerance) : `tolerance` optionnel, absent/valeur inconnue
+  // retombe sur 'souple' (0.2, comportement historique, AUCUNE régression
+  // pour les 5 autres types qui n'envoient jamais ce paramètre). 'stricte'
+  // (facteur 0) doit donner un seuil VRAIMENT nul — le plancher
+  // `Math.max(1, ...)` ci-dessous est donc levé spécifiquement pour ce
+  // niveau, sinon une faute d'1 caractère resterait acceptée malgré la
+  // tolérance "stricte" demandée par le créateur du quiz.
+  const FUZZY_TOLERANCE_FACTORS = { stricte: 0, souple: 0.2, tresSouple: 0.35 }
+  const fuzzy = (input, answers, tolerance) => {
     const x = norm(input)
     const normalizedAnswers = answers.map(a => norm(a)).sort()
-    
+    const factor = FUZZY_TOLERANCE_FACTORS[tolerance] ?? 0.2
+
     // Check for multiple answers (comma separated)
     // ONLY if there are multiple correct answers defined
     if (normalizedAnswers.length > 1 && x.includes(',')) {
@@ -947,7 +957,7 @@ const start = async () => {
     for (const ans of answers) {
       const y = norm(ans)
       const d = lev(x, y)
-      const thresh = Math.max(1, Math.floor(y.length * 0.2))
+      const thresh = tolerance === 'stricte' ? 0 : Math.max(1, Math.floor(y.length * factor))
       if (d <= thresh) return { ok: true, exact: false }
     }
     return { ok: false }
@@ -2498,7 +2508,11 @@ const start = async () => {
         return
       }
 
-      const res = fuzzy(payload?.content || '', q.correct)
+      // q.answerTolerance (tâche 037) : uniquement défini/lu pour "free"
+      // aujourd'hui (undefined pour zoomguess/reveal/recherche/indice/halo,
+      // qui partagent cette branche générique) — fuzzy() retombe alors sur
+      // 'souple' (0.2), comportement identique à avant cette tâche.
+      const res = fuzzy(payload?.content || '', q.correct, q.answerTolerance)
 
       // "halo" (tâche 020) : nombre de clics REÇU DU CLIENT à cet instant
       // (jamais fait confiance pour le delta final, seulement pour le

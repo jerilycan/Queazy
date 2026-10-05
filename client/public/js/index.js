@@ -5411,8 +5411,11 @@ const updateAutoAccordionSummaries = () => {
 // nombreuses) — voir index.html pour l'état initial des classes d-none/open.
 const toggleAutoAccordion = (body, chevron) => {
   if (!body) return
-  const willOpen = body.classList.contains('d-none')
-  body.classList.toggle('d-none', !willOpen)
+  // .is-open pilote grid-template-rows (voir style.css) au lieu de .d-none :
+  // une bascule display:none/block ne peut pas s'animer, contrairement à
+  // une valeur <fr>.
+  const willOpen = !body.classList.contains('is-open')
+  body.classList.toggle('is-open', willOpen)
   if (chevron) chevron.classList.toggle('open', willOpen)
 }
 if (autoCatAccordionToggle) autoCatAccordionToggle.onclick = () => toggleAutoAccordion(autoCatAccordionBody, autoCatChevron)

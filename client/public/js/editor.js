@@ -285,6 +285,13 @@ const freeVariantsChevron = document.getElementById('freeVariantsChevron')
 const freeVariantsCount = document.getElementById('freeVariantsCount')
 const freeVariantsChipList = document.getElementById('freeVariantsChipList')
 const freeVariantAddInput = document.getElementById('freeVariantAddInput')
+// Tolérance orthographique + testeur (tâche 037, étapes 6-8) — q.answerTolerance,
+// lu côté serveur UNIQUEMENT pour "free" (voir server/index.js, fuzzy()).
+const toleranceStricteBtn = document.getElementById('toleranceStricteBtn')
+const toleranceSoupleBtn = document.getElementById('toleranceSoupleBtn')
+const toleranceTresSoupleBtn = document.getElementById('toleranceTresSoupleBtn')
+const freeAnswerTestInput = document.getElementById('freeAnswerTestInput')
+const freeAnswerTestPill = document.getElementById('freeAnswerTestPill')
 
 const graduationSection = document.getElementById('graduationSection')
 const qGradMin = document.getElementById('qGradMin')
@@ -3002,7 +3009,10 @@ let freeVariantsOpen = false
 
 const setFreeVariantsOpen = (open) => {
   freeVariantsOpen = open
-  if (freeVariantsBody) freeVariantsBody.classList.toggle('d-none', !open)
+  // .is-open pilote grid-template-rows (voir style.css, même mécanique que
+  // toggleAutoAccordion côté index.js) au lieu de .d-none, pour une
+  // ouverture/fermeture animée plutôt qu'un claquement instantané.
+  if (freeVariantsBody) freeVariantsBody.classList.toggle('is-open', open)
   if (freeVariantsChevron) freeVariantsChevron.classList.toggle('open', open)
 }
 
@@ -3045,6 +3055,113 @@ const populateFreeAnswer = (q) => {
   // — esprit du canvas, adapté au cas où aucune variante n'existe encore.
   setFreeVariantsOpen(q.correct.length > 1)
   renderFreeVariantChips(q)
+  // Tolérance : 'souple' par défaut si absent (créée au premier accès, comme
+  // q.correct ci-dessus) — comportement serveur historique, aucune régression.
+  if (!q.answerTolerance) q.answerTolerance = 'souple'
+  setFreeToleranceButtons(q.answerTolerance)
+  FREE_TOLERANCE_BUTTONS.forEach(btn => { if (btn) btn.disabled = readOnly })
+  // Le champ testeur repart vide à chaque (re)population du panneau (purement
+  // transitoire, comme freeVariantsOpen — pas une donnée de q).
+  if (freeAnswerTestInput) {
+    freeAnswerTestInput.value = ''
+    freeAnswerTestInput.disabled = readOnly
+  }
+  updateFreeAnswerTestPill(q)
+}
+
+// --- Tolérance orthographique + testeur (tâche 037, étapes 6-8) ---
+//
+// norm()/lev() ci-dessous sont une DUPLICATION ASSUMÉE des fonctions pures
+// de server/index.js (~ligne 876) — même principe que computeCropGeometry,
+// déjà dupliqué entre editor.js/index.js dans ce projet (pas de module
+// partagé). clientFuzzyMatch() reproduit fidèlement fuzzy() (même mapping de
+// tolérance, même levée du plancher Math.max(1, ...) pour "stricte") : à
+// garder RIGOUREUSEMENT synchronisé avec le serveur, sinon le testeur
+// mentirait sur ce qui sera réellement accepté en jeu.
+const clientNorm = s => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim()
+const clientLev = (a, b) => {
+  const m = a.length, n = b.length
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
+  for (let i = 0; i <= m; i++) dp[i][0] = i
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+    }
+  }
+  return dp[m][n]
+}
+const FREE_TOLERANCE_FACTORS = { stricte: 0, souple: 0.2, tresSouple: 0.35 }
+const clientFuzzyMatch = (input, answers, tolerance) => {
+  const x = clientNorm(input)
+  const normalizedAnswers = answers.map(a => clientNorm(a)).sort()
+  const factor = FREE_TOLERANCE_FACTORS[tolerance] ?? 0.2
+
+  if (normalizedAnswers.length > 1 && x.includes(',')) {
+    const inputs = x.split(',').map(s => s.trim()).filter(s => s !== '').sort()
+    if (inputs.length === normalizedAnswers.length) {
+      return inputs.every((val, idx) => val === normalizedAnswers[idx])
+    }
+    return false
+  }
+
+  for (const ans of answers) {
+    const y = clientNorm(ans)
+    if (x === y) return true
+    const d = clientLev(x, y)
+    const thresh = tolerance === 'stricte' ? 0 : Math.max(1, Math.floor(y.length * factor))
+    if (d <= thresh) return true
+  }
+  return false
+}
+
+const FREE_TOLERANCE_BUTTONS = [toleranceStricteBtn, toleranceSoupleBtn, toleranceTresSoupleBtn]
+
+const setFreeToleranceButtons = (level) => {
+  FREE_TOLERANCE_BUTTONS.forEach(btn => {
+    if (btn) btn.classList.toggle('active', btn.dataset.tolerance === level)
+  })
+}
+
+FREE_TOLERANCE_BUTTONS.forEach(btn => {
+  if (!btn) return
+  // .disabled selon readOnly est (re)appliqué à chaque population du panneau,
+  // voir populateFreeAnswer — pas ici (readOnly n'est pas encore connu au
+  // chargement du script pour un quiz d'un autre créateur).
+  btn.onclick = () => {
+    if (readOnly) return
+    const q = questions[activeIndex]
+    if (!q || q.type !== 'free') return
+    q.answerTolerance = btn.dataset.tolerance
+    setFreeToleranceButtons(q.answerTolerance)
+    updateFreeAnswerTestPill(q)
+  }
+})
+
+// Pastille ✓/✗/neutre : recalculée à chaque frappe dans le champ testeur ou
+// changement de niveau de tolérance — ne teste que contre les réponses non
+// vides de q.correct (réponse principale + variantes confondues).
+const updateFreeAnswerTestPill = (q) => {
+  if (!freeAnswerTestPill || !freeAnswerTestInput) return
+  const value = freeAnswerTestInput.value.trim()
+  if (!value) {
+    freeAnswerTestPill.textContent = '?'
+    freeAnswerTestPill.className = 'test-pill'
+    return
+  }
+  const answers = Array.isArray(q?.correct) ? q.correct.filter(a => a && a.trim()) : []
+  const ok = answers.length > 0 && clientFuzzyMatch(value, answers, q?.answerTolerance)
+  freeAnswerTestPill.textContent = ok ? '✓' : '✗'
+  freeAnswerTestPill.className = 'test-pill ' + (ok ? 'match' : 'no-match')
+}
+
+if (freeAnswerTestInput) {
+  freeAnswerTestInput.oninput = () => {
+    const q = questions[activeIndex]
+    if (!q || q.type !== 'free') return
+    updateFreeAnswerTestPill(q)
+  }
 }
 
 if (freeMainAnswer) {

@@ -22,12 +22,21 @@ reconfirmer en `/plan-feature`, notamment côté rendu banque/admin, avant de
 le considérer clos).
 
 ## Objectif
-1. L'éditeur réel de "Texte libre" affiche la même disposition que le
-   canvas retenu : un champ "Réponse correcte" mis en avant + un accordéon
-   de chips "Variantes acceptées", avec ajout (Entrée) et suppression (×)
-   par variante — comportement équivalent à l'actuel (les réponses
-   acceptées restent une simple liste de chaînes côté modèle/serveur, rien
-   ne change pour le jeu/la comparaison de réponse).
+1. ~~L'éditeur réel de "Texte libre" affiche la même disposition que le
+   canvas retenu (chips)~~ — FAIT (voir Étapes réalisées), mais l'utilisateur
+   est revenu dessus après coup : la disposition finalement retenue est
+   l'option 3 du canvas ("Liste + réglages de tolérance"), pas l'option 2
+   ("Réponse + chips") déjà livrée. **La liste de chips reste** (elle
+   couvre "réponse correcte + orthographes alternatives"), mais on y
+   ajoute :
+   - un réglage de **tolérance orthographique** à 3 niveaux — Stricte
+     (correspondance exacte, accents/casse ignorés seulement), Souple
+     (identique au comportement actuel du serveur, 20% de la longueur de
+     la réponse en distance de Levenshtein — AUCUNE régression si le
+     champ est absent, c'est la valeur par défaut), Très souple (35%) ;
+   - un **testeur** ("Tester une réponse") qui simule en direct, dans
+     l'éditeur, si une saisie correspondrait à une réponse acceptée compte
+     tenu du niveau de tolérance choisi (pastille ✓/✗).
 2. Confirmer explicitement (sans forcément coder quoi que ce soit) que
    "Ajouter à la banque"/Catégorie/Difficulté sont bien cohérents entre le
    canvas et l'application réelle pour tous les types.
@@ -57,6 +66,16 @@ le considérer clos).
   "réponse correcte" mise en avant est `q.correct[0]`, les "variantes" sont
   `q.correct.slice(1)` (ou toute autre convention équivalente à documenter
   dans le plan) : pas de nouveau champ côté quiz/serveur a priori.
+- **Nouveau (revirement utilisateur, option 3 du canvas retenue au lieu de
+  l'option 2)** : ajouter, dans `#correctFreeSection` (à côté de la liste de
+  chips déjà livrée), un réglage de tolérance orthographique à 3 niveaux
+  (Stricte/Souple/Très souple — Souple = comportement serveur actuel par
+  défaut) et un champ "Tester une réponse" avec pastille ✓/✗ qui simule
+  cette comparaison en direct dans l'éditeur. Nouveau champ
+  `q.answerTolerance` (chaîne, ex. `'stricte'|'souple'|'tresSouple'`,
+  absent/`'souple'` = comportement actuel) lu côté serveur UNIQUEMENT pour
+  moduler `fuzzy()` sur la branche `free`/partagée — voir Fichiers
+  concernés et Plan.
 - Vérifier/confirmer (sans forcément modifier) la cohérence "Ajouter à la
   banque"/Catégorie/Difficulté entre canvas et app réelle pour tous les
   types.
@@ -71,33 +90,42 @@ le considérer clos).
 - Les 5 autres types qui partagent `#correctSection`/`#correctList`
   (`zoomguess`, `reveal`, `recherche`, `indice`, `halo`) : le canvas n'a
   tranché QUE pour "Texte libre" — pas de bascule vers la disposition
-  chips pour eux dans cette tâche (peut faire l'objet d'une tâche
-  ultérieure si décidé).
+  chips/tolérance pour eux dans cette tâche. Important : la tolérance
+  reste, elle aussi, PROPRE à `free` (nouveau champ lu uniquement pour ce
+  type — les 5 autres gardent le comportement serveur actuel, inchangé,
+  tant qu'ils n'envoient pas ce champ).
 - Toute modification du canvas de design lui-même (déjà à jour, publié).
-- Toute nouvelle option de tolérance orthographique / testeur de réponse
-  (dispositions explorées puis écartées lors du choix sur le canvas — non
-  retenues).
-- Modification de `render.yaml`/`supabase/schema.sql`.
-- `server/index.js` : a priori non concerné (le format `q.correct` ne
-  change pas) — à confirmer en `/plan-feature`, pas à supposer réglé ici.
+- Le toggle Standard/Avancé du canvas (n'existe pas côté app réelle, voir
+  constat dans le Plan) — cette tâche ne le construit pas.
+- Modification de `render.yaml`/`supabase/schema.sql` (le nouveau champ de
+  tolérance vit dans le JSON de la question, comme `q.correct`/`q.hints` —
+  pas de colonne dédiée, donc pas de migration).
 
 ## Fichiers concernés
-- `client/public/editor.html` — structure de `#correctSection` : à
-  restructurer pour distinguer un bloc "Texte libre" (réponse + chips) du
-  bloc partagé existant (les 5 autres types).
-- `client/public/js/editor.js` — `renderCorrects()` (~ligne 2927),
-  `toggleTypeSections()` (~ligne 2846, condition qui affiche
-  `correctSection`), et les constantes DOM `correctSection`/`correctList`/
-  `correctLabel` (~ligne 268-275) : nouvelle logique d'affichage/état pour
-  le bloc "Texte libre" (réponse principale + chips, accordéon
-  ouvert/fermé, ajout/suppression de variante).
-- `client/public/css/style.css` — nouvelles classes pour la disposition
-  chips (inspirées de `.main-answer-input`/`.chip-list`/`.chip`/
-  `.chip-remove`/`.chip-add-input` du canvas), à harmoniser avec les
-  tokens déjà en place dans ce fichier (pas ceux du canvas, qui a sa
-  propre palette de maquette).
-- `server/index.js` — a priori pas touché (format `q.correct` inchangé) ;
-  à confirmer en `/plan-feature`.
+- `client/public/editor.html` — structure de `#correctSection` (fait) +
+  nouveau contrôle de tolérance (segmented control 3 valeurs) et champ
+  "Tester une réponse" avec pastille ✓/✗ dans `#correctFreeSection`.
+- `client/public/js/editor.js` — `renderCorrects()` (~ligne 2927, inchangé
+  pour les 5 autres types), `toggleTypeSections()` (~ligne 2846, fait),
+  `populateFreeAnswer`/`renderFreeVariantChips` (fait) + nouvelle logique
+  de tolérance/testeur (dupliquer `norm`/`lev`/le calcul de seuil du
+  serveur — même principe que `computeCropGeometry`, déjà dupliqué entre
+  `editor.js`/`index.js` dans ce projet, pas de module partagé).
+- `client/public/css/style.css` — classes chips (fait) + nouvelles classes
+  segmented control tolérance + pastille testeur (inspirées de
+  `.tolerance-switch`/`.tolerance-switch-btn`/`.test-pill` du canvas,
+  `FreeDispoTolerance.dc.html` — supprimé du canvas depuis, à relire via
+  l'historique de versions de l'artifact si besoin, ou reconstruire à
+  l'identique du même esprit que `.mode-switch` déjà présent).
+- `server/index.js` — **touché cette fois** : `fuzzy()` (ligne ~890) gagne
+  un 3e paramètre optionnel `tolerance` qui remplace le facteur fixe 0.2
+  par 0 (stricte) / 0.2 (souple, défaut si absent — AUCUNE régression) /
+  0.35 (très souple) ; le seul call site à qui passer `q.answerTolerance`
+  est celui de la branche générique free/zoomguess/reveal/recherche/indice
+  (ligne ~2337, `fuzzy(payload?.content || '', q.correct)` →
+  `fuzzy(payload?.content || '', q.correct, q.answerTolerance)`) — l'autre
+  call site (blindtest titre/artiste, ligne ~2019, via `evalField`) n'est
+  PAS concerné, ne pas y toucher.
 
 ## Plan
 
@@ -195,25 +223,94 @@ variantes" (donc 7 variantes max).
    testable indépendamment ; à valider en un seul passage vu les
    dépendances croisées entre l'input principal et la liste de variantes.*
 
-5. **Vérification indépendante (sous-agent dédié, lecture seule)** —
-   une fois les étapes 1-4 posées : lancer un sous-agent qui (a) relit
-   `Free.dc.html`/`FreeAvance.dc.html` sur l'artifact
-   https://claude.ai/code/artifact/44801ee6-88f3-4c2d-a8c0-e346d7fb85d4
-   (action "read"), (b) relit le diff réel (`editor.html`/`editor.js`/
-   `style.css`), et (c) rapporte tout écart de fond entre les deux
-   (classes/structure manquantes, comportement différent de l'accordéon,
-   plafond de variantes non respecté, régression sur les 5 autres types
-   partageant `#correctSection`) — sans corriger lui-même, juste un
-   rapport à traiter avant de clôturer la tâche. Même esprit que les
-   vérifications "confirmé par sous-agent indépendant" déjà utilisées dans
-   ce dossier (voir tâche 036).
+**Reprise après livraison (revirement utilisateur)** : les étapes 1-4
+ci-dessus sont FAITES et poussées (voir Étapes réalisées). L'utilisateur est
+ensuite revenu sur le choix de disposition — option 3 du canvas ("Liste +
+réglages de tolérance") au lieu de l'option 2 déjà livrée. La liste de
+chips reste ; les étapes 6-9 ci-dessous AJOUTENT la tolérance + le
+testeur par-dessus, sans revenir sur 1-4.
+
+6. **Serveur (`server/index.js`)** — `fuzzy(input, answers, tolerance)` :
+   remplacer `const thresh = Math.max(1, Math.floor(y.length * 0.2))`
+   (ligne ~910) par un facteur dépendant de `tolerance` :
+   `{ stricte: 0, souple: 0.2, tresSouple: 0.35 }[tolerance] ?? 0.2` (le
+   `?? 0.2` couvre `undefined`/valeur inconnue = comportement actuel,
+   aucune régression pour les quiz existants ou les 5 autres types qui
+   n'envoient jamais ce champ). `stricte` (facteur 0) donne `thresh =
+   Math.max(1, 0) = 1` avec la formule `Math.max(1, ...)` actuelle — *à
+   corriger* : lever le plancher `Math.max(1, ...)` à `tolerance ===
+   'stricte' ? 0 : Math.max(1, ...)` pour qu'une correspondance stricte
+   soit vraiment exacte (distance 0), pas "1 caractère toléré". Un seul
+   call site à adapter (ligne ~2337, branche générique
+   free/zoomguess/reveal/recherche/indice) : `fuzzy(payload?.content ||
+   '', q.correct, q.answerTolerance)`. Le call site blindtest (ligne
+   ~2019, `evalField`) n'est PAS touché.
+   *Seule étape qui touche `server/index.js` (fichier CLAUDE.md signale
+   comme monolithe à rayon d'impact large) — diff minimal et localisé
+   (une ligne de formule + un paramètre optionnel en plus), mais à relire
+   avec attention avant de pousser ; touche la logique de notation réelle
+   du jeu, pas seulement l'éditeur.*
+
+7. **CSS (`style.css`)** — classes du segmented control de tolérance
+   (repris du canvas : `.tolerance-panel`, `.tolerance-switch`,
+   `.tolerance-switch-btn`(+`.active`)) et de la pastille testeur
+   (`.test-answer-row`, `.test-pill`(+`.match`/`.no-match`)) — mêmes
+   tokens réels que l'étape 1 (pas ceux du canvas). Le canvas source
+   exact (`FreeDispoTolerance.dc.html`) a été retiré de l'artifact après
+   le choix de l'option 2 — reconstruire dans le même esprit que
+   `.mode-switch`/`.mode-switch-btn` déjà présents (segmented control),
+   pas besoin de le récupérer depuis un historique de version.
+   *Étape isolée, diff CSS pur.*
+
+8. **HTML + JS — contrôle de tolérance et testeur** (`editor.html` +
+   `editor.js`) :
+   - HTML : dans `#correctFreeSection`, sous la liste de chips, un petit
+     panneau "Règles de correspondance" avec le segmented control (3
+     boutons Stricte/Souple/Très souple) + une ligne "Tester une réponse"
+     (`<input>` + pastille).
+   - JS : `q.answerTolerance` par défaut `'souple'` si absent (créé au
+     premier accès, comme `q.correct`) ; handlers des 3 boutons du
+     segmented control (mettent à jour `q.answerTolerance` + la classe
+     `.active`) ; dupliquer côté client les fonctions pures `norm`/`lev`
+     du serveur (copier-coller assumé, même principe que
+     `computeCropGeometry` déjà dupliqué entre `editor.js`/`index.js` —
+     pas de module partagé dans ce projet) pour calculer, à chaque frappe
+     dans le champ testeur, si la saisie matche `q.correct` avec le seuil
+     du niveau actuel — pastille ✓ (verte) / ✗ (rouge) / neutre (champ
+     vide), même logique de seuil que l'étape 6 (à garder EXACTEMENT
+     synchronisée avec le serveur, sinon le testeur mentirait sur ce qui
+     sera réellement accepté en jeu).
+   *Étape dense (nouvelle logique de correspondance dupliquée
+   client-side) mais autonome — ne touche à rien de ce qui existe déjà
+   (chips, branchements des étapes 1-4).*
+
+9. **Vérification indépendante (sous-agent dédié, lecture seule)** —
+   une fois les étapes 6-8 posées : lancer un sous-agent qui (a) relit le
+   diff réel (`server/index.js`/`editor.html`/`editor.js`/`style.css`),
+   et (b) rapporte tout écart de fond — en particulier : le seuil
+   "stricte" est-il bien 0 (pas 1, voir le piège `Math.max(1, ...)` noté
+   à l'étape 6) ? le testeur côté éditeur donne-t-il EXACTEMENT le même
+   verdict que le serveur pour les 3 niveaux (mêmes fonctions `norm`/
+   `lev`, même formule de seuil) ? les 5 autres types partageant la
+   branche serveur générique (zoomguess/reveal/recherche/indice/halo)
+   sont-ils bien inchangés en comportement (n'envoient jamais
+   `answerTolerance`, donc retombent sur `souple`) ? — sans corriger
+   lui-même, juste un rapport à traiter avant de clôturer la tâche. Même
+   esprit que les vérifications "confirmé par sous-agent indépendant"
+   déjà utilisées dans ce dossier (voir tâche 036).
 
 ## Étapes réalisées
 - [x] Étape 1 — CSS chips
 - [x] Étape 2 — HTML `#correctFreeSection`
 - [x] Étape 3 — DOM refs + `toggleTypeSections()`
 - [x] Étape 4 — logique du composant (populate/render/handlers + branchements)
-- [x] Étape 5 — vérification sous-agent indépendant (canvas ⇄ rendu réel)
+- [x] Étape 5 (devenue étape 9) — vérification sous-agent indépendant,
+      1er passage (chips seules) : cohérent, rien à corriger.
+- [x] Étape 6 — serveur : `fuzzy()` + tolérance à 3 niveaux
+- [x] Étape 7 — CSS tolérance/testeur
+- [ ] Étape 8 — HTML + JS contrôle de tolérance et testeur
+- [ ] Étape 9 — vérification sous-agent indépendant, 2e passage (tolérance
+      + testeur)
 
 ## Checks effectués
 - [x] `node --check client/public/js/editor.js` (OK après chaque étape 1-4)
@@ -224,11 +321,22 @@ variantes" (donc 7 variantes max).
       d'accès Browser pane dans ce contexte d'exécution) — à faire par
       l'utilisateur avant de pousser.
 - [x] Relecture manuelle du diff (`git diff` sur les 3 fichiers touchés)
-- [x] Vérification sous-agent dédié : cohérence canvas ⇄ rendu réel —
-      conclusion "cohérent, rien à corriger" (aucun écart de fond ; seule
-      divergence de nommage assumée : `.count-badge` du canvas →
-      `.auto-accordion-count` réel déjà existant, réutilisation en fait
-      voulue par le canvas lui-même — voir son commentaire interne).
+- [x] Vérification sous-agent dédié (1er passage, chips) : cohérent, rien
+      à corriger (aucun écart de fond ; seule divergence de nommage
+      assumée : `.count-badge` du canvas → `.auto-accordion-count` réel
+      déjà existant, réutilisation en fait voulue par le canvas lui-même).
+- [x] `node --check server/index.js` après l'étape 6 — OK.
+- [x] Démarrage serveur vérifié (`node index.js` dans `server/`, port
+      alternatif car 3000 déjà occupé par un autre process local) —
+      `"Server listening at http://0.0.0.0:3999"` sans exception, process
+      arrêté après vérification (obligatoire par CLAUDE.md pour toute modif
+      serveur).
+- [ ] Vérification manuelle que le testeur (client) et `fuzzy()` (serveur)
+      donnent le même verdict sur au moins un cas par niveau de tolérance
+      (ex. une faute de frappe à 1 caractère : refusée en "stricte",
+      acceptée en "souple"/"très souple").
+- [ ] Vérification sous-agent dédié, 2e passage (tolérance + testeur,
+      étape 9).
 
 ## Tests manuels recommandés
 - Créer une question "Texte libre" neuve : la réponse principale se
@@ -248,11 +356,22 @@ variantes" (donc 7 variantes max).
 - Vérifier les 5 autres types (zoomguess/reveal/recherche/indice/halo) :
   liste `#correctSection` inchangée, ajout/suppression de ligne toujours
   fonctionnels.
+- Créer une réponse "Canberra" en tolérance Stricte, tester "canberra"
+  (accent/casse différents seulement) → ✓ ; tester "Canbera" (1 lettre en
+  moins) → ✗. Repasser en Souple, retester "Canbera" → ✓. Repasser en Très
+  souple, tester une faute plus grosse ("Canbeurra") → ✓.
+- Jouer réellement une question "Texte libre" avec tolérance "Stricte" et
+  taper une réponse avec une petite faute de frappe : doit être refusée
+  (le serveur, pas seulement l'éditeur) — confirme que `q.answerTolerance`
+  est bien transmis et lu jusqu'au bout (emitQuestion → payload → fuzzy()).
 
 ## Risques restants
 - Pas de nouvelle dépendance, pas de changement de schéma Supabase, pas de
   `render.yaml` touché — aucune des interdictions du CLAUDE.md n'est
-  concernée par ce plan.
+  concernée par ce plan. `server/index.js` EST touché (étape 6) — pas une
+  interdiction, mais le fichier que CLAUDE.md signale comme monolithe à
+  rayon d'impact large : diff minimal, à relire avec attention avant de
+  pousser, et `npm start` à vérifier obligatoirement.
 - Le toggle Standard/Avancé du canvas n'existe pas côté app réelle et
   n'est PAS construit par cette tâche (voir constat en tête du Plan) — à
   garder en tête pour ne pas être surpris que le reste du panneau "Texte
@@ -261,6 +380,11 @@ variantes" (donc 7 variantes max).
   pas persistée) : redevient replié par défaut après un rechargement de
   page, comme le reste de l'état d'édition non sauvegardé de cet éditeur —
   cohérent avec l'existant, à confirmer que ça ne surprend pas à l'usage.
+- Risque principal à surveiller : la logique de seuil DUPLIQUÉE
+  client(testeur)/serveur(jeu réel) doit rester rigoureusement
+  synchronisée (mêmes fonctions `norm`/`lev`, même mapping de tolérance,
+  même correctif du plancher `Math.max(1, ...)` pour "stricte") — sinon le
+  testeur donnerait un faux sentiment de sécurité au créateur du quiz.
 
 ## Statut
-`en review`
+`en cours`
