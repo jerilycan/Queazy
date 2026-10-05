@@ -190,11 +190,12 @@ purement visuel (aucune valeur n'est jamais effacée)._
 - [x] Étape 1 — infrastructure du toggle + barre du haut (commutateur `.mode-switch`, état `editorMode` mémorisé en localStorage, défaut Standard, menu « ⋯ » Tutoriel/Supprimer/Dupliquer déplacés, retour à l'ordre d'origine en Avancé et en lecture seule, règle CSS `[data-advanced]`).
 - [x] Étape 2 — blocs communs masqués en Standard (illustration, son facultatif sauf Blind Test, médias de révélation, groupe « Publication » déplacé en bas avec « Zone experte » repliable ; pastilles « Avancé »).
 - [x] Étape 3 — sélecteur de type (6 types « Basique » visibles en Standard, 10 « Avancé » masqués, libellés de groupe, encart « Envie de sortir des sentiers battus ? » qui bascule en Avancé ; texte d'intro dont le compte « 13 mécaniques » était périmé corrigé). Le masquage d'`<option>` dans `#qType` prévu au plan est sans objet : ce select n'est pas affiché dans l'éditeur actuel.
-- [ ] Étape 4 — réglages spécifiques par type
-- [ ] Étape 5 — CTA bas, tutoriel, cas limites
-- [ ] Étape 6 — vérification complète et clôture
+- [x] Étape 4 — réglages spécifiques par type (QCM « toutes cochées », Curseur « Tolérance », ZoomOut « Niveau de zoom initial », Halo « Rayon », Texte libre « Tolérance orthographique + testeur » de la 037). 4c : les 11 autres types n'ont que les blocs communs, conformément à leurs artboards — rien d'autre à masquer.
+- [x] Étape 5 — encart « Plus d'options disponibles » en bas du panneau (Standard), visite guidée qui ignore les cibles masquées, lecture seule, écran étroit.
+- [x] Étape 6 — vérification complète des 17 types × 2 modes (clôture `/review` puis `/close-task` à lancer).
 
 ## Checks effectués
+- Étapes 4-6 : `node --check editor.js` OK, accolades CSS OK ; Browser pane : QCM/Curseur/ZoomOut/Halo/Texte libre (réglages propres masqués en Standard) ; encart du bas visible en Standard seulement et bascule en Avancé ; visite guidée : 7 étapes en Standard (sans `#illustrationUpload`), 8 en Avancé, démarre sans erreur ; balayage des 17 types (dont `reveal`) : 0 bloc avancé visible en Standard, 3 à 6 en Avancé, aucune erreur JS ; 390 px de large : pas de débordement horizontal ; lecture seule : boutons restaurés dans la barre.
 - Étape 3 : `node --check editor.js` OK, accolades CSS OK ; Browser pane : Standard = 6 tuiles + encart, clic sur l'encart passe en Avancé (16 tuiles, libellés Basique/Avancé, encart masqué, mode mémorisé).
 - Étape 2 : `node --check editor.js` OK ; Browser pane : en Standard, illustration/son/Publication/brouillon/banque/catégorie/médias de révélation masqués, explication visible ; Blind Test garde son son en Standard ; en Avancé tout visible, groupe Publication en bas ; brouillon et difficulté conservés après bascule Standard/Avancé.
 - Étape 1 : `node --check client/public/js/editor.js` OK ; accolades CSS équilibrées ; Browser pane (compte connecté) : défaut Standard sans valeur mémorisée, menu « ⋯ » contient replayTutorialBtn/deleteQuiz/duplicateQuiz, ouverture/fermeture (bouton, clic extérieur, Échap), bascule Avancé remet les boutons dans l'ordre d'origine, mode mémorisé après rechargement, lecture seule (applyReadOnly) restaure les boutons même en Standard.
@@ -224,4 +225,4 @@ purement visuel (aucune valeur n'est jamais effacée)._
   session précédente.
 
 ## Statut
-`plan à valider`
+`en review`

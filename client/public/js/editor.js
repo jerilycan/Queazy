@@ -5971,8 +5971,14 @@ const EDITOR_TOUR_STEPS = [
   { target: '#qExplanation', title: 'Explication (optionnelle)', text: 'Un texte affiché juste après la révélation de la bonne réponse, pour donner un peu de contexte.' },
   { target: '#saveQuiz', title: 'Sauvegarder', text: 'N\'oublie pas de sauvegarder une fois ton quiz prêt !' }
 ]
+// Étapes dont la cible est masquée (mode Standard : illustration...) ignorées : la visite
+// guidée ne doit pas pointer un élément invisible (tâche 046).
+const isTourTargetVisible = (step) => {
+  const el = document.querySelector(step.target)
+  return !!el && el.getClientRects().length > 0
+}
 const startEditorTour = (force) => {
-  if (window.QzUI) window.QzUI.tour(EDITOR_TOUR_STEPS, { storageKey: EDITOR_TOUR_STORAGE_KEY, force: !!force })
+  if (window.QzUI) window.QzUI.tour(EDITOR_TOUR_STEPS.filter(isTourTargetVisible), { storageKey: EDITOR_TOUR_STORAGE_KEY, force: !!force })
 }
 // Jamais pour un viewer en lecture seule (quiz d'un autre créateur) : le
 // tutoriel explique comment CRÉER, ça n'a pas de sens là où on ne peut rien
@@ -6064,6 +6070,8 @@ applyEditorMode()
 
 const typePickerCtaBtn = document.getElementById('typePickerCtaBtn')
 if (typePickerCtaBtn) typePickerCtaBtn.onclick = () => setEditorMode('advanced')
+const panelStandardCtaBtn = document.getElementById('panelStandardCtaBtn')
+if (panelStandardCtaBtn) panelStandardCtaBtn.onclick = () => setEditorMode('advanced')
 
 // "Zone experte" du groupe Publication (banque / catégorie / difficulté) : repliée par défaut,
 // même mécanique .is-open (grid-template-rows) que les autres accordéons de l'éditeur.
