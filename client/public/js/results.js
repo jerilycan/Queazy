@@ -31,6 +31,20 @@ socket.on('connect', () => clearConnBanner())
 
 const fanfareSound = new Audio('/audio/fanfare.wav')
 
+// Mode TV (voir index.js quiz:end : la fenêtre de présentation ouvre cette page avec &tv=1) :
+// vue passive plein écran, sans navigation ni boutons, podium + classement côte à côte,
+// agrandie à l'échelle de l'écran (la page est dessinée pour ~700px de large).
+if (params.get('tv') === '1') {
+  document.body.classList.add('results-tv')
+  const tvCard = document.querySelector('.card')
+  const applyTvScale = () => {
+    if (!tvCard) return
+    tvCard.style.zoom = Math.max(1, Math.min(window.innerWidth / 1180, window.innerHeight / 760)).toFixed(3)
+  }
+  applyTvScale()
+  window.addEventListener('resize', applyTvScale)
+}
+
 // Bug remonté en test réel ("j'arrive sur le menu, et je suis directement
 // redirigé dans le salon que je viens de quitter") : index.js persiste la
 // dernière salle rejointe en sessionStorage (QUEAZY_LAST_JOIN_KEY =

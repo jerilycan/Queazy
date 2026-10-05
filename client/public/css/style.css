@@ -10705,3 +10705,17 @@ body.editor-advanced [data-standard-only] { display: none !important; }
   .type-picker-tile { transition: border-color 0.15s ease; }
   .type-picker-tile:active { transform: none; }
 }
+
+/* Page de résultats en mode TV (results.js, &tv=1) : passive, plein écran, sans navigation ni boutons ;
+   podium à gauche, classement à droite. L'échelle est posée en JS (zoom de la carte). */
+body.results-tv .navbar,
+body.results-tv #resultsTabs,
+body.results-tv #detailTab,
+body.results-tv #replayQuiz,
+body.results-tv #backHome,
+body.results-tv div:has(> #backHome) { display: none !important; }
+body.results-tv .container { margin-top: 0; max-width: none; padding: 1.5vh 2vw; }
+body.results-tv .card { max-width: 1180px; width: 100%; }
+body.results-tv #podiumTab { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start; }
+body.results-tv #resultsPodium { max-width: none !important; margin: 0 !important; }
+body.results-tv #fullTable { margin-top: 0; }

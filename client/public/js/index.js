@@ -9609,7 +9609,7 @@ socket.on('quiz:end', (endPayload) => {
   // que les joueurs, simple spectatrice via room:join viewer — voir
   // results.js), sans le paramètre ?quiz= réservé au bouton "Rejouer" du MJ.
   if (displayWin && !displayWin.closed) {
-    displayWin.postMessage({ type: 'queazy-display-results', url: `/result.html?room=${encodeURIComponent(roomCode)}${qidParam}` }, location.origin)
+    displayWin.postMessage({ type: 'queazy-display-results', url: `/result.html?room=${encodeURIComponent(roomCode)}${qidParam}&tv=1` }, location.origin)
   }
   window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}${qidParam}`
 })
