@@ -206,25 +206,26 @@ purement visuel (aucune valeur n'est jamais effacée)._
       sur plusieurs types)
 
 ## Tests manuels recommandés
-- Basculer Standard ⇄ Avancé sur plusieurs types de question, vérifier
-  qu'aucune valeur déjà réglée (image, son, brouillon, catégorie...) n'est
-  perdue en repassant en Standard puis en Avancé.
-- Créer un quiz entièrement en mode Standard, le sauvegarder, le rouvrir en
-  Avancé : tous les champs par défaut doivent être cohérents (rien de
-  cassé/vide qui ne devrait pas l'être).
+À faire à la main avant/après mise en prod (aucun outil de test automatisé dans ce projet) :
+1. **Éditeur, Standard (défaut)** : ouvrir un quiz existant → seuls l'essentiel + l'explication sont visibles ; Tutoriel / Supprimer / Dupliquer dans le menu « ⋯ » ; sélecteur de type à 6 tuiles + encart.
+2. **Basculer en Avancé** (commutateur, encart du bas, encart du sélecteur) : blocs en cascade, groupe « Publication » en bas avec « Zone experte » ; le choix survit à un rechargement.
+3. **Valeurs conservées** : régler une illustration, un son, un brouillon, une difficulté en Avancé → repasser en Standard → sauvegarder → rouvrir : rien n'est perdu.
+4. **Texte libre (037)** : réponse + variantes en chips, tolérance orthographique et testeur (Avancé) ; en jeu, une réponse à 1 faute passe en « Souple », échoue en « Stricte ».
+5. **Page d'accueil / salon** : accordéons « Catégories » et « Types de question » du mode automatique (CSS d'accordéon partagé avec la 037) ; page Résultats inchangée.
+6. **Première sauvegarde d'un NOUVEAU quiz** : fenêtre de succès + confettis (une seule fois) ; une 2e sauvegarde : pas de confettis.
+7. **Animations** à l'œil : commutateur « goutte d'eau », menu « ⋯ », ajout de question, choix du type. Puis réglage « réduire les animations » du système : fondus simples, pas de confettis.
+8. **Quiz d'un autre créateur** (lecture seule) : « Dupliquer » reste dans la barre, pas de menu « ⋯ ».
+9. **Écran étroit (~390 px)** : barre du haut sans débordement horizontal.
 
 ## Risques restants
-- Ampleur réelle (17 types) : risque de dérive de temps/qualité si
-  implémenté d'un coup plutôt que type par type avec vérification visuelle
-  à chaque étape.
-- Palette de couleurs du canvas ≠ palette réelle de l'app (le canvas est un
-  outil de design générique avec ses propres tokens `--color-*`) — chaque
-  étape doit traduire en tokens réels, jamais copier les valeurs brutes du
-  canvas.
-- Recoupement avec la tâche 037 (WIP non committé, mélangé avec 044/045
-  dans le même diff) : à isoler proprement avant de commencer à coder
-  dessus, même technique de stash déjà utilisée avec succès dans une
-  session précédente.
+- **Fluidité des animations non jugée** : le navigateur de test n'avance pas les transitions ; seuls les états posés/retirés et les valeurs de fin ont été contrôlés.
+- **`playAnimation` (editor.js) : retrait temporisé (1,6 s) sans annulation** — si une même animation est rejouée avant la fin de la précédente (ex. ré-ouvrir très vite le sélecteur de type), l'ancien minuteur peut retirer les classes de la nouvelle animation plus tôt. Mineur, purement visuel. Fix possible : mémoriser le minuteur par élément et l'annuler.
+- **Brouillon invisible en Standard** : une question en brouillon n'affiche son interrupteur qu'en Avancé (le 🚧 de la barre latérale reste visible). À signaler aux créateurs.
+- **Périmètre élargi vs. le doc d'origine** : la branche embarque aussi le travail de la tâche 037 (variantes/tolérance, accordéon animé, `server/index.js` : tolérance orthographique `answerTolerance`, uniquement pour le type « free », comportement inchangé sans le champ) — décidé en cours de route car la 046 s'appuie dessus.
+- **Dépendance cliente ajoutée** : `canvas-confetti` (CDN jsdelivr) dans `editor.html`, déjà présent ailleurs dans l'appli et autorisé par la CSP ; pas de paquet npm. Si le CDN est injoignable, les confettis ne se lancent pas (aucun blocage de la sauvegarde).
+- **Chargement externe** : les confettis ne sont pas testables hors réseau.
+- **Aucune validation ne cible un champ masqué** (vérifié sur `validateQuestion`) : une erreur de sauvegarde ne peut pas pointer un bloc caché en Standard.
+- Jamais testé sur Firefox/Safari (filtre SVG « gooey », `visibility`/`transform` du menu).
 
 ## Statut
-`en review`
+`relue — prête à livrer`
