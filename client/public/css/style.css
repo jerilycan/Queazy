@@ -6546,7 +6546,9 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    (association, blind test...). [data-qtype] posé par editor.js à chaque
    sélection de question ou changement de type (selectQuestion, qType.onchange)
    plutôt qu'une classe, pour ne pas avoir à retirer l'ancienne à chaque fois. */
-.question-detail { --qt-color: transparent; }
+.question-detail { --qt-color: transparent; scrollbar-gutter: stable; }
+/* Réserve la place de la barre de défilement en permanence : elle apparaît en passant de Standard à Avancé
+   (formulaire plus long) et poussait sinon tous les champs de quelques pixels. */
 .question-detail[data-qtype="mcq"] { --qt-color: var(--tile-blue); }
 .question-detail[data-qtype="free"] { --qt-color: var(--tile-green); }
 .question-detail[data-qtype="graduation"] { --qt-color: var(--tile-yellow); }
