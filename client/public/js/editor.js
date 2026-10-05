@@ -2857,6 +2857,9 @@ const toggleTypeSections = () => {
   // Test qui réutilise ce même bloc partagé). Seules les réponses titre/
   // artiste restent réservées à "blindtest".
   if (bonusAudioSection) bonusAudioSection.classList.remove('d-none')
+  // Mode Standard (tâche 046) : le son facultatif est un réglage avancé, sauf pour le Blind
+  // Test où il est le cœur du type (voir style.css, [data-advanced]).
+  if (bonusAudioSection) bonusAudioSection.toggleAttribute('data-advanced', qType.value !== 'blindtest')
   if (blindtestAnswersSection) blindtestAnswersSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
@@ -6037,6 +6040,20 @@ if (editorOverflowBtn && editorOverflowMenu) {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEditorOverflow() })
 }
 applyEditorMode()
+
+// "Zone experte" du groupe Publication (banque / catégorie / difficulté) : repliée par défaut,
+// même mécanique .is-open (grid-template-rows) que les autres accordéons de l'éditeur.
+const expertToggle = document.getElementById('expertToggle')
+const expertBody = document.getElementById('expertBody')
+const expertChevron = document.getElementById('expertChevron')
+if (expertToggle && expertBody) {
+  expertToggle.onclick = () => {
+    const willOpen = !expertBody.classList.contains('is-open')
+    expertBody.classList.toggle('is-open', willOpen)
+    expertToggle.setAttribute('aria-expanded', String(willOpen))
+    if (expertChevron) expertChevron.classList.toggle('open', willOpen)
+  }
+}
 
 // --- Initialisation ---
 

@@ -260,62 +260,6 @@
 
         <!-- Detail: Éditeur de la question sélectionnée -->
         <div id="questionDetail" class="question-detail">
-          <div class="detail-section">
-            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
-              <input id="qDraftToggle" type="checkbox" class="qz-toggle-input" />
-              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
-              🚧 Brouillon (work in progress)
-            </label>
-            <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
-          </div>
-
-          <!-- Tâche 026 bis (retour utilisateur, capture d'écran : "c'est
-               horrible") : le positionnement en absolu (coin haut-droit de
-               la grille) chevauchait les libellés Catégorie/Difficulté dès
-               que le panneau n'était pas assez large — remplacé par une
-               ligne dédiée, alignée à droite, AU-DESSUS de la grille :
-               jamais de chevauchement possible, quelle que soit la largeur. -->
-          <div class="add-to-bank-row">
-            <!-- Tâche 025 bis (retour utilisateur : "le bouton est beaucoup trop
-                 gros") : remplace l'ancien bouton "Ajouter à la banque" (clic
-                 = publication immédiate) par une case à cocher, COCHÉE PAR
-                 DÉFAUT (même sur une question déjà existante sans ce champ,
-                 voir editor.js addToBankCheckbox.checked = q.addToBank !==
-                 false) — la publication réelle n'a lieu qu'au prochain
-                 SAUVEGARDE du quiz (voir persistQuiz), pas au clic sur cette
-                 case, même patron que la case "Brouillon" juste au-dessus
-                 (un état du modèle, appliqué à la sauvegarde). -->
-            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées (juste en dessous).">
-              <input id="addToBankCheckbox" type="checkbox" checked />
-              <span>🏦 Ajouter à la banque</span>
-            </label>
-          </div>
-          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
-               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
-               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
-               banque" juste au-dessus, qui les exige avant de publier dans
-               bank_questions (mode "Jouer") AU PROCHAIN SAUVEGARDE.
-               Catégorie choisie dans bank_categories (table gérée par un
-               super admin depuis admin-bank.html), plus de texte libre —
-               voir loadCategoryOptions côté editor.js. -->
-          <div class="d-grid grid-cols-split gap-lg">
-            <div class="detail-section">
-              <label for="qCategorySelect">Catégorie</label>
-              <select id="qCategorySelect">
-                <option value="">— Choisir —</option>
-              </select>
-            </div>
-            <div class="detail-section">
-              <label for="qDifficultySelect">Difficulté</label>
-              <select id="qDifficultySelect">
-                <option value="">— Non définie —</option>
-                <option value="facile">Facile</option>
-                <option value="moyen">Moyenne</option>
-                <option value="difficile">Difficile</option>
-              </select>
-            </div>
-          </div>
-
           <!-- Type + minuteur remontés tout en haut (juste sous Brouillon,
                retour utilisateur) : ce sont les deux réglages qui cadrent
                tout le reste du formulaire (les sections spécifiques au type
@@ -374,8 +318,8 @@
                question:show) — seuls type+minuteur sont remontés tout en haut
                ici, spécifiques à l'édition (ils cadrent le reste du formulaire,
                jamais montrés tels quels au joueur). -->
-          <div id="illustrationSection" class="detail-section">
-            <label for="illustrationUpload">Image d'illustration (optionnelle)</label>
+          <div id="illustrationSection" class="detail-section" data-advanced>
+            <label for="illustrationUpload">Image d'illustration (optionnelle) <span class="advanced-pill">Avancé</span></label>
             <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
             <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
               <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
@@ -396,8 +340,8 @@
                audioUploadInput.onchange, audioExtractBtn...) continue de
                fonctionner à l'identique, seul le conteneur/le libellé
                changent. -->
-          <div id="bonusAudioSection" class="detail-section d-none">
-            <label for="audioUpload">🔊 Son (facultatif)</label>
+          <div id="bonusAudioSection" class="detail-section d-none" data-advanced>
+            <label for="audioUpload">🔊 Son (facultatif) <span class="advanced-pill">Avancé</span></label>
             <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
             <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
               <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
@@ -498,9 +442,9 @@
                 <textarea id="qExplanation" rows="2" placeholder="Ex : Faux, l'entreprise a été créée en 1986." maxlength="400"></textarea>
               </div>
 
-              <div class="reveal-media-grid">
+              <div class="reveal-media-grid" data-advanced>
                 <div class="reveal-row">
-                  <span class="reveal-sublabel">Image</span>
+                  <span class="reveal-sublabel">Image <span class="advanced-pill">Avancé</span></span>
                   <input type="file" id="revealImageUpload" accept="image/*" class="cursor-pointer" />
                   <div id="revealImagePreviewWrap" class="illustration-preview-wrap reveal-media-preview d-none mt-8">
                     <img id="revealImagePreviewImg" class="illustration-preview-img" alt="" />
@@ -510,7 +454,7 @@
                 </div>
 
                 <div class="reveal-row">
-                  <span class="reveal-sublabel">Son</span>
+                  <span class="reveal-sublabel">Son <span class="advanced-pill">Avancé</span></span>
                   <input type="file" id="revealAudioUpload" accept="audio/*" class="cursor-pointer" />
                   <div id="revealAudioPreviewWrap" class="reveal-sound-card d-none mt-8">
                     <div class="reveal-sound-badge">🎵</div>
@@ -902,6 +846,80 @@
               à deux → la moitié chacun, à trois ou plus → zéro.
             </p>
           </div>
+
+          <!-- Groupe "Publication" (tâche 046, repris du canvas) : brouillon + "Zone experte"
+               (banque / catégorie / difficulté), réservé au mode Avancé et placé EN BAS du
+               formulaire — ces réglages ne concernent pas la création d'une question.
+               Mêmes ids qu'avant (qDraftToggle, addToBankCheckbox, qCategorySelect,
+               qDifficultySelect) : tout le JS existant continue de fonctionner à l'identique. -->
+          <div id="publicationSection" class="detail-section" data-advanced>
+            <label>📤 Publication <span class="advanced-pill">Avancé</span></label>
+          <div class="detail-section">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+              <input id="qDraftToggle" type="checkbox" class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+              🚧 Brouillon (work in progress)
+            </label>
+            <p class="text-muted font-13 mt-8">Sauvegarde cette question telle quelle, même incomplète — elle ne sera jamais proposée quand tu lances une partie avec ce quiz, tant que ce réglage reste coché.</p>
+          </div>
+            <div class="auto-accordion">
+              <button type="button" class="auto-accordion-head" id="expertToggle" aria-expanded="false">
+                <span class="auto-accordion-head-left">🎓 Zone experte</span>
+                <svg class="auto-chevron" id="expertChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="auto-accordion-body" id="expertBody">
+                <div style="padding: 0 16px 14px;">
+          <!-- Tâche 026 bis (retour utilisateur, capture d'écran : "c'est
+               horrible") : le positionnement en absolu (coin haut-droit de
+               la grille) chevauchait les libellés Catégorie/Difficulté dès
+               que le panneau n'était pas assez large — remplacé par une
+               ligne dédiée, alignée à droite, AU-DESSUS de la grille :
+               jamais de chevauchement possible, quelle que soit la largeur. -->
+          <div class="add-to-bank-row">
+            <!-- Tâche 025 bis (retour utilisateur : "le bouton est beaucoup trop
+                 gros") : remplace l'ancien bouton "Ajouter à la banque" (clic
+                 = publication immédiate) par une case à cocher, COCHÉE PAR
+                 DÉFAUT (même sur une question déjà existante sans ce champ,
+                 voir editor.js addToBankCheckbox.checked = q.addToBank !==
+                 false) — la publication réelle n'a lieu qu'au prochain
+                 SAUVEGARDE du quiz (voir persistQuiz), pas au clic sur cette
+                 case, même patron que la case "Brouillon" juste au-dessus
+                 (un état du modèle, appliqué à la sauvegarde). -->
+            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées (juste en dessous).">
+              <input id="addToBankCheckbox" type="checkbox" checked />
+              <span>🏦 Ajouter à la banque</span>
+            </label>
+          </div>
+          <!-- Catégorie + difficulté (tâche 021, catégorie passée en liste
+               fixe tâche 024) : jamais obligatoires pour sauvegarder le quiz
+               normalement — utilisés UNIQUEMENT par la case "Ajouter à la
+               banque" juste au-dessus, qui les exige avant de publier dans
+               bank_questions (mode "Jouer") AU PROCHAIN SAUVEGARDE.
+               Catégorie choisie dans bank_categories (table gérée par un
+               super admin depuis admin-bank.html), plus de texte libre —
+               voir loadCategoryOptions côté editor.js. -->
+          <div class="d-grid grid-cols-split gap-lg">
+            <div class="detail-section">
+              <label for="qCategorySelect">Catégorie</label>
+              <select id="qCategorySelect">
+                <option value="">— Choisir —</option>
+              </select>
+            </div>
+            <div class="detail-section">
+              <label for="qDifficultySelect">Difficulté</label>
+              <select id="qDifficultySelect">
+                <option value="">— Non définie —</option>
+                <option value="facile">Facile</option>
+                <option value="moyen">Moyenne</option>
+                <option value="difficile">Difficile</option>
+              </select>
+            </div>
+          </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
 
         </div>
       </div>
