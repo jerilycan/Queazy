@@ -5531,7 +5531,10 @@ const validateQuestion = (q, i) => {
     const hasEmptyTitle = events.some(e => !e.title || !e.title.trim())
     if (hasEmptyTitle) {
       selectQuestion(i)
-      showToast(`La question ${i + 1} : chaque événement doit avoir un titre`, 'error')
+      showToast(`La question ${i + 1} : chaque événement de la frise doit avoir un titre (champ « Titre de l'événement »)`, 'error')
+      // Amène le créateur sur le premier champ vide plutôt que de le laisser chercher.
+      const emptyTitleInput = Array.from(timelineEditList.querySelectorAll('.timeline-edit-fields input[type="text"]:first-child')).find(inp => !inp.value.trim())
+      if (emptyTitleInput) { emptyTitleInput.scrollIntoView({ block: 'center' }); emptyTitleInput.focus() }
       return false
     }
     const hasInvalidDate = events.some(e => !Number.isFinite(Number(e.date)))
