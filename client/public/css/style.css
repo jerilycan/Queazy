@@ -7213,6 +7213,10 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   color: var(--color-text);
 }
 .timeline-date-input { text-align: center; }
+/* Sélecteur « Repère visible / À placer » d'une ligne (tâche 052) : pleine largeur sous les 3 champs. */
+.timeline-role-switch { grid-column: 1 / -1; }
+.timeline-summary { font-size: 13px; font-weight: 700; color: var(--color-text-muted); }
+.timeline-summary.is-invalid { color: var(--color-danger); }
 @media (max-width: 700px) {
   .timeline-edit-fields { grid-template-columns: 1fr; }
 }
