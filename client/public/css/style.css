@@ -1372,6 +1372,9 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
      disponible au clic (aria-label, voir index.js) une fois le bouton
      transformé en accès "revoir la démo". */
   .question-type-badge-label { display: none; }
+  /* Joueur sur téléphone : la pastille (icône seule, toujours compacte) n'apporte rien — retirée (retour utilisateur). */
+  body.irl-player-mode .question-type-badge,
+  body.remote-player-mode .question-type-badge { display: none; }
 }
 
 /* Badge catégorie (tâche 021, mode "Jouer") — dans le flux normal, juste
