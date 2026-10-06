@@ -208,6 +208,8 @@
             <span class="quiz-cover-edit" aria-hidden="true">✎</span>
           </button>
           <input id="title" placeholder="Titre du quiz" maxlength="100" />
+          <!-- Mode + Sauvegarder restent groupés : en écran réduit ils passent ensemble à la ligne. -->
+          <div class="editor-title-actions">
           <!-- Mode d'édition (tâche 046) : Standard = l'essentiel pour créer vite,
                Avancé = tous les réglages optionnels. Voir editor.js applyEditorMode. -->
           <div class="mode-switch" id="modeSwitch" data-pos="0" role="tablist" aria-label="Mode d'édition">
@@ -218,6 +220,7 @@
             <button type="button" id="modeAdvancedBtn" class="mode-switch-btn" role="tab">Avancé</button>
           </div>
           <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
+          </div>
         </div>
         <div class="editor-top-bar-row">
           <div class="align-center d-flex gap-sm">
