@@ -6818,7 +6818,12 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   right: 28px;
   bottom: 28px;
   z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
+/* « Tester » (tâche 050) : même forme ronde que « Sauvegarder », en secondaire. */
+.question-save-fab #testQuestion { border-radius: 999px; padding: 14px 22px; box-shadow: var(--shadow-lg); }
 .question-save-fab #saveQuestion {
   border-radius: 999px;
   padding: 14px 26px;
@@ -10614,3 +10619,9 @@ body.results-tv .fin-skip { display: none; }
 .fin-pod-block.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-bronze-rgb), .35); }
 @media (max-width: 640px) { .fin-pod { gap: 8px; } .fin-pod-av { width: 52px; height: 52px; font-size: 20px; } .fin-pod-name { font-size: 14px; } }
 .fin-status:empty { display: none; }
+
+/* Aperçu jouable d'une question depuis l'éditeur (editor.js openQuestionPreview) */
+.preview-box { width: min(440px, 94vw); height: min(86vh, 820px); display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; background: var(--color-card); border: 1px solid var(--color-border); box-shadow: var(--shadow-lg); }
+.preview-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
+.preview-bar strong { flex: 1; font-size: 14px; }
+.preview-frame { flex: 1; width: 100%; border: 0; background: var(--color-bg-deep); }

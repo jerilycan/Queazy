@@ -592,7 +592,24 @@ window.addEventListener('DOMContentLoaded', () => {
 // séparé de create/join/play ci-dessus, guardé par sa propre présence dans
 // l'URL : aucun effet sur le chargement normal de la page.
 const previewBankQuestionId = params.get('previewBankQuestion')
-if (previewBankQuestionId) {
+// Aperçu depuis l'éditeur (tâche 050) : même mécanique, mais la question (celle en cours d'édition,
+// peut-être jamais sauvegardée) arrive de la fenêtre parente par postMessage — pas par Supabase ni
+// localStorage : les images/sons en data URI dépassent vite leur quota. Le client tourne alors dans
+// l'iframe de la modale « Tester cette question ».
+const previewEditorQuestion = params.get('previewEditorQuestion') === '1'
+const previewQuestionMode = !!(previewBankQuestionId || previewEditorQuestion)
+const receiveEditorPreviewQuestion = () => new Promise(resolve => {
+  const timer = setTimeout(() => { window.removeEventListener('message', onMessage); resolve(null) }, 10000)
+  const onMessage = (e) => {
+    if (e.origin !== location.origin || e.source !== window.parent || e.data?.type !== 'queazy-preview-question') return
+    clearTimeout(timer)
+    window.removeEventListener('message', onMessage)
+    resolve(e.data.question || null)
+  }
+  window.addEventListener('message', onMessage)
+  window.parent.postMessage({ type: 'queazy-preview-ready' }, location.origin)
+})
+if (previewQuestionMode) {
   ;(async () => {
     // Même garde que createBtn.onclick/navCreate.onclick plus bas : créer
     // une salle nécessite un compte, quel que soit le mode.
@@ -604,15 +621,25 @@ if (previewBankQuestionId) {
     // La RLS (tâche 022) filtre déjà les questions pending d'un autre
     // auteur pour un non-admin — un résultat vide/une erreur ici couvre
     // aussi bien ce cas qu'un id invalide, rien de plus à vérifier ici.
-    const { data, error } = await window.supabaseClient
-      .from('bank_questions')
-      .select('question')
-      .eq('id', previewBankQuestionId)
-      .single()
-    if (error || !data) {
-      console.error('[preview] question de banque introuvable :', error)
-      showAnnounce('Impossible de charger cette question.', 'error')
-      return
+    let previewQuestion = null
+    if (previewBankQuestionId) {
+      const { data, error } = await window.supabaseClient
+        .from('bank_questions')
+        .select('question')
+        .eq('id', previewBankQuestionId)
+        .single()
+      if (error || !data) {
+        console.error('[preview] question de banque introuvable :', error)
+        showAnnounce('Impossible de charger cette question.', 'error')
+        return
+      }
+      previewQuestion = data.question
+    } else {
+      previewQuestion = await receiveEditorPreviewQuestion()
+      if (!previewQuestion) {
+        showAnnounce("Aperçu indisponible : l'éditeur n'a pas envoyé la question.", 'error')
+        return
+      }
     }
     resetUI() // remet loadedQuiz à null avant de le reconstruire ci-dessous
     // Même pattern que generateAutoQuiz (mode "Jouer") plus bas : le blob
@@ -622,9 +649,9 @@ if (previewBankQuestionId) {
     // normalisation complète de loadQuizById (faite pour un quiz entier
     // venant de la table `quizzes`, un autre format de stockage).
     loadedQuiz = {
-      id: 'bank-preview-' + previewBankQuestionId,
-      title: 'Aperçu — banque de questions',
-      questions: [{ ...data.question, id: data.question.id || 'q1' }]
+      id: previewBankQuestionId ? 'bank-preview-' + previewBankQuestionId : 'editor-preview',
+      title: previewBankQuestionId ? 'Aperçu — banque de questions' : 'Aperçu — éditeur',
+      questions: [{ ...previewQuestion, id: previewQuestion.id || 'q1' }]
     }
     quizIndex = 0
     // Tâche 028 (retour utilisateur : "je veux le rendu joueur, avec
@@ -7587,7 +7614,7 @@ const launchQuiz = async () => {
   // plus haut) mais a déjà posé LUI-MÊME loadedQuiz sur la question exacte
   // à prévisualiser — générer un quiz auto ici l'écraserait par une
   // sélection aléatoire de la banque.
-  if (roomMode === 'auto' && !previewBankQuestionId) {
+  if (roomMode === 'auto' && !previewQuestionMode) {
     startQuizBtn.classList.add('is-loading')
     const ok = await generateAutoQuiz()
     startQuizBtn.classList.remove('is-loading')
@@ -9590,6 +9617,11 @@ socket.on('quiz:end', (endPayload) => {
   inActiveGame = false // voir beforeunload : navigation volontaire vers les résultats
   const roomCode = roomInput.value.trim()
   if (!roomCode) return
+  // Aperçu de l'éditeur (tâche 050) : pas de page de résultats dans l'iframe, on prévient la fenêtre parente.
+  if (previewEditorQuestion) {
+    window.parent.postMessage({ type: 'queazy-preview-end' }, location.origin)
+    return
+  }
   // loadedQuiz n'existe que côté hôte (seul à appeler loadQuizById) : ce
   // paramètre part donc naturellement vide pour les joueurs, qui n'ont pas
   // accès à relancer une partie — pas besoin de détection de rôle dédiée.

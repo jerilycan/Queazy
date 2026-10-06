@@ -5830,6 +5830,62 @@ saveQuizBtn.onclick = async () => {
   }
 }
 
+// Aperçu jouable de la question en cours (tâche 050) : modale avec le vrai client de jeu dans une iframe
+// (index.js en mode ?previewEditorQuestion=1, salle solo éphémère côté serveur — rien n'est sauvegardé).
+// L'iframe dit « prêt » par postMessage, l'éditeur répond avec la question ; messages limités à notre
+// origine et à cette iframe. « Recommencer » recharge l'iframe, la poignée de main se rejoue.
+const testQuestionBtn = document.getElementById('testQuestion')
+const openQuestionPreview = () => {
+  if (readOnly || !questions[activeIndex]) return
+  saveCurrentQuestionState()
+  const current = questions[activeIndex]
+  // Même contrôle qu'à la sauvegarde ; un brouillon est testé comme s'il n'en était pas un (il est ignoré en vraie partie).
+  if (!validateQuestion({ ...current, draft: false }, activeIndex)) return
+  const payload = JSON.parse(JSON.stringify({ ...current, draft: false }))
+
+  const overlay = document.createElement('div')
+  overlay.className = 'modal-overlay preview-overlay'
+  const box = document.createElement('div')
+  box.className = 'preview-box'
+  const bar = document.createElement('div')
+  bar.className = 'preview-bar'
+  const title = document.createElement('strong')
+  title.textContent = 'Aperçu — rendu joueur'
+  const restartBtn = document.createElement('button')
+  restartBtn.type = 'button'; restartBtn.className = 'btn font-13'; restartBtn.textContent = '↻ Recommencer'
+  const closeBtn = document.createElement('button')
+  closeBtn.type = 'button'; closeBtn.className = 'btn-icon'; closeBtn.textContent = '✕'; closeBtn.title = 'Fermer'
+  bar.append(title, restartBtn, closeBtn)
+  const frame = document.createElement('iframe')
+  frame.className = 'preview-frame'
+  frame.src = '/?previewEditorQuestion=1'
+  frame.allow = 'autoplay'
+  box.append(bar, frame)
+  overlay.appendChild(box)
+  document.body.appendChild(overlay)
+
+  const onMessage = (e) => {
+    if (e.origin !== location.origin || e.source !== frame.contentWindow) return
+    if (e.data?.type === 'queazy-preview-ready') {
+      frame.contentWindow.postMessage({ type: 'queazy-preview-question', question: payload }, location.origin)
+    } else if (e.data?.type === 'queazy-preview-end') {
+      title.textContent = 'Aperçu terminé'
+    }
+  }
+  const onKey = (e) => { if (e.key === 'Escape') close() }
+  const close = () => {
+    window.removeEventListener('message', onMessage)
+    document.removeEventListener('keydown', onKey)
+    overlay.remove()
+  }
+  window.addEventListener('message', onMessage)
+  document.addEventListener('keydown', onKey)
+  closeBtn.onclick = close
+  restartBtn.onclick = () => { title.textContent = 'Aperçu — rendu joueur'; frame.src = '/?previewEditorQuestion=1' }
+  overlay.onclick = (e) => { if (e.target === overlay) close() }
+}
+if (testQuestionBtn) testQuestionBtn.onclick = openQuestionPreview
+
 // Bouton "Sauvegarder" de la barre fixe en bas — simple doublon du bouton
 // "Sauvegarder" du bandeau du haut (retour utilisateur), même comportement
 // exact (valide TOUT le quiz, écrit toute la ligne Supabase), juste accessible
