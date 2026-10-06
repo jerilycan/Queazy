@@ -132,7 +132,7 @@ const describeAnswer = (q) => {
         : '—'
     case 'timeline':
       return Array.isArray(q.correct) && q.correct.length
-        ? q.correct.map(e => e?.title || '?').join(' → ')
+        ? q.correct.map(e => `${e?.title || '?'}${e?.anchor === false ? ' (à placer)' : ''}`).join(' · ')
         : '—'
     case 'rangement':
       return Array.isArray(q.correct) && q.correct.length
