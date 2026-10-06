@@ -2595,7 +2595,8 @@ if (audioUploadInput) {
     }).then(audioBuffer => {
       pendingAudioBuffer = audioBuffer
       audioStartInput.value = 0
-      audioDurationInput.value = Math.min(15, Math.floor(audioBuffer.duration))
+      // Extrait de 30 s par défaut (le plafond), ramené à la durée du morceau s'il est plus court.
+      audioDurationInput.value = Math.min(AUDIO_CLIP_MAX_DURATION, Math.floor(audioBuffer.duration))
       renderWaveform(audioBuffer)
       clampAudioTrimInputs()
       if (audioTotalDurationEl) audioTotalDurationEl.textContent = `(morceau : ${formatAudioDuration(audioBuffer.duration)})`
@@ -2915,6 +2916,9 @@ const toggleTypeSections = () => {
   // Mode Standard (tâche 046) : le son facultatif est un réglage avancé, sauf pour le Blind
   // Test où il est le cœur du type (voir style.css, [data-advanced]).
   if (bonusAudioSection) bonusAudioSection.toggleAttribute('data-advanced', qType.value !== 'blindtest')
+  // Le son n'est « facultatif » que pour les autres types : il est obligatoire pour le Blind Test.
+  const audioOptionalTag = document.getElementById('audioOptionalTag')
+  if (audioOptionalTag) audioOptionalTag.classList.toggle('d-none', qType.value === 'blindtest')
   if (blindtestAnswersSection) blindtestAnswersSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')

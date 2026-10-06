@@ -363,10 +363,10 @@
                son propre masquage (type, mode Avancé) ; le bloc entier se cache s'il ne reste rien
                à montrer (voir #mediaBlock dans style.css). -->
           <div id="mediaBlock" class="detail-section">
-            <label>Image et son <span class="text-muted font-13">(facultatifs)</span></label>
+            <label>Image et son</label>
             <div class="reveal-card media-card">
             <div id="illustrationSection" class="detail-section" data-advanced>
-              <label for="illustrationUpload">🖼️ Image d'illustration</label>
+              <label for="illustrationUpload">🖼️ Image d'illustration <span class="text-muted font-13">(facultative)</span></label>
               <input type="file" id="illustrationUpload" accept="image/*" class="cursor-pointer" />
               <div id="illustrationPreviewWrap" class="illustration-preview-wrap d-none mt-8">
                 <img id="illustrationPreviewImg" class="illustration-preview-img" alt="" />
@@ -388,7 +388,7 @@
                  fonctionner à l'identique, seul le conteneur/le libellé
                  changent. -->
             <div id="bonusAudioSection" class="detail-section d-none" data-advanced>
-              <label for="audioUpload">🔊 Son</label>
+              <label for="audioUpload">🔊 Son <span id="audioOptionalTag" class="text-muted font-13">(facultatif)</span></label>
               <input type="file" id="audioUpload" accept="audio/*" class="cursor-pointer" />
               <div id="audioTrimWrap" class="audio-trim-wrap d-none mt-8">
                 <!-- Vraie forme d'onde (nouvelle DA, tâche 003) — calculée depuis
@@ -421,7 +421,7 @@
                     <label for="audioDurationInput">Durée (secondes)</label>
                     <div class="timer-controls">
                       <button id="audioDurationMinus" class="btn-timer" type="button">-</button>
-                      <input type="number" id="audioDurationInput" class="stepper-input" value="15" min="5" max="30" />
+                      <input type="number" id="audioDurationInput" class="stepper-input" value="30" min="5" max="30" />
                       <button id="audioDurationPlus" class="btn-timer" type="button">+</button>
                     </div>
                   </div>
