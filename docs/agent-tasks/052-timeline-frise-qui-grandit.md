@@ -84,4 +84,4 @@ Chaque étape = un diff relu et validé avant la suivante (`/implement-step`).
 (à remplir au /review)
 
 ## Statut
-`en cours`
+`en review`
