@@ -11,3 +11,21 @@ window.quizCoverSrc = (id) => {
   const found = id ? window.QUIZ_COVERS.find(c => c.id === id) : null
   return found ? found.src : null
 }
+
+// Image automatique d'un quiz sans image choisie : initiales du titre sur un dégradé dont la couleur dépend
+// de l'identité du quiz (id, ou titre tant qu'il n'est pas enregistré) — la même dans l'éditeur et sur sa carte.
+const QUIZ_AUTO_ACCENTS = [
+  ['var(--tile-blue)', 'var(--tile-blue-deep)'],
+  ['var(--color-accent)', 'var(--color-accent-2)'],
+  ['var(--tile-green)', 'var(--tile-green-deep)'],
+  ['var(--color-teal)', '#0a7d63'],
+  ['var(--tile-bronze)', 'var(--tile-bronze-deep)'],
+  ['var(--color-violet)', '#7a2fa8']
+]
+window.quizAutoTile = (seed, title) => {
+  let hash = 0
+  for (const c of String(seed || title || '')) hash = (hash * 31 + c.charCodeAt(0)) >>> 0
+  const [a, a2] = QUIZ_AUTO_ACCENTS[hash % QUIZ_AUTO_ACCENTS.length]
+  const initials = (title || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?'
+  return { background: `linear-gradient(135deg, ${a} 0%, ${a2} 100%)`, initials }
+}

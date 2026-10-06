@@ -199,15 +199,18 @@
            ci-dessous, taille + soulignement accent permanent) pour bien
            signaler que c'est cliquable, pas juste une étiquette. -->
       <div class="editor-top-bar">
-        <input id="title" placeholder="Titre du quiz" maxlength="100" />
+        <div class="editor-title-row">
+          <!-- Image du quiz (tâche 051) : la même pastille que sur sa carte dans « Mes quiz » (initiales sur
+               dégradé tant qu'aucune image n'est choisie dans la bibliothèque js/quiz-covers.js) ; le crayon
+               ouvre le choix. -->
+          <button id="quizCoverBtn" class="quiz-cover-tile-btn" type="button" title="Changer l'image du quiz">
+            <span id="quizCoverThumb" class="quiz-cover-thumb"></span>
+            <span class="quiz-cover-edit" aria-hidden="true">✎</span>
+          </button>
+          <input id="title" placeholder="Titre du quiz" maxlength="100" />
+        </div>
         <div class="editor-top-bar-row">
           <div class="align-center d-flex gap-sm">
-            <!-- Image de couverture du quiz (tâche 051) : choisie dans la bibliothèque (js/quiz-covers.js),
-                 affichée sur la carte du quiz dans « Mes quiz ». -->
-            <button id="quizCoverBtn" class="quiz-cover-btn" type="button" title="Choisir l'image du quiz">
-              <span id="quizCoverThumb" class="quiz-cover-thumb">🖼️</span>
-              <span>Image</span>
-            </button>
             <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
               <input id="isPublic" type="checkbox" class="qz-toggle-input" />
               <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>

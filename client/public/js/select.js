@@ -120,21 +120,6 @@ const formatUpdatedAt = (iso) => {
   } catch { return '' }
 }
 
-// Couleurs cycliques de l'avatar-initiales (nouvelle DA, voir maquette
-// "Mes Quiz — Refonte") : pas de couleur liée aux données du quiz (aucune
-// n'existe côté serveur), juste de quoi rendre la liste plus vivante qu'un
-// gris uniforme.
-const CARD_ACCENTS = [
-  ['var(--tile-blue)', 'var(--tile-blue-deep)'],
-  ['var(--color-accent)', 'var(--color-accent-2)'],
-  ['var(--tile-green)', 'var(--tile-green-deep)'],
-  ['var(--color-teal)', '#0a7d63'],
-  ['var(--tile-bronze)', 'var(--tile-bronze-deep)'],
-  ['var(--color-violet)', '#7a2fa8'],
-]
-const initialsOf = (title) =>
-  (title || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?'
-
 // Bug corrigé (audit UX) : loadMine/loadPublic ignoraient le champ `error`
 // de la réponse Supabase — une vraie panne (RLS cassée, coupure réseau,
 // timeout) tombait dans `render(data || [], ...)` avec data=null, donc
@@ -179,8 +164,6 @@ const render = (arr, isMineTab = true) => {
     return
   }
   arr.forEach((q, i) => {
-    const [a, a2] = CARD_ACCENTS[i % CARD_ACCENTS.length]
-
     const card = document.createElement('div')
     card.className = 'card quiz-card'
     card.style.cursor = 'pointer'
@@ -206,8 +189,9 @@ const render = (arr, isMineTab = true) => {
       avatar.classList.add('has-cover')
       avatar.style.backgroundImage = `url(${coverSrc})`
     } else {
-      avatar.style.background = `linear-gradient(135deg, ${a} 0%, ${a2} 100%)`
-      avatar.textContent = initialsOf(q.title)
+      const auto = window.quizAutoTile(q.id, q.title)
+      avatar.style.background = auto.background
+      avatar.textContent = auto.initials
     }
 
     const textWrap = document.createElement('div')

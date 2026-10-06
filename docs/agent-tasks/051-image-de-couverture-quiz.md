@@ -14,6 +14,7 @@ quiz dans « Mes quiz » et dans l'onglet des quiz publics. Sans image : comport
 ## Périmètre
 - Bibliothèque : dossier `client/public/img/quiz-covers/` + liste JS `client/public/js/quiz-covers.js`
   (`{ id, label, src }`, comme `AVATAR_CHOICES` du profil) ; ajouter une image = déposer le fichier + une ligne.
+- Image automatique (initiales sur dégradé) commune éditeur + cartes : couleur tirée de l’id du quiz (`quizAutoTile`), donc stable ; les couleurs des cartes ne suivent plus leur position dans la liste.
 - Colonne `quizzes.cover` (texte, id de l'image, nullable) — **modification du schéma, à valider**.
 - Éditeur : sélecteur (modale grille), lecture/écriture à l'ouverture/sauvegarde, copie à la duplication.
 - `select.js` : requêtes avec `cover`, rendu de l'image sur la carte, repli sur les initiales si id inconnu.
@@ -43,7 +44,7 @@ quiz dans « Mes quiz » et dans l'onglet des quiz publics. Sans image : comport
 ## Étapes réalisées
 - [x] 1 — `supabase/schema.sql` : colonne `cover` + migration `add column if not exists` (validé par l'utilisateur ; SQL À EXÉCUTER côté Supabase avant le déploiement)
 - [x] 2 — `js/quiz-covers.js` (liste vide en attendant les images de l'utilisateur)
-- [x] 3 — éditeur : bouton « Image » près du titre, popup de choix, `cover` chargé / sauvegardé / dupliqué / suivi par « modifications non sauvegardées », désactivé en lecture seule
+- [x] 3 — éditeur : pastille (image automatique ou image choisie) à gauche du titre avec un crayon, popup de choix, `cover` chargé / sauvegardé / dupliqué / suivi par « modifications non sauvegardées », désactivé en lecture seule
 - [x] 4 — `select.js` : `cover` dans les requêtes et la duplication, image sur la pastille (repli initiales) ; `select.html` charge la liste
 - [~] 5 — vérifié : popup et choix dans l'éditeur (images de test injectées en console). NON vérifié : lecture/écriture en base et cartes de « Mes quiz » (colonne pas encore créée)
 

@@ -110,14 +110,24 @@ const quizCoverPopup = document.getElementById('quizCoverPopup')
 const quizCoverGrid = document.getElementById('quizCoverGrid')
 const renderQuizCoverThumb = () => {
   const src = window.quizCoverSrc ? window.quizCoverSrc(quizCover) : null
-  quizCoverThumb.style.backgroundImage = src ? `url(${src})` : ''
-  quizCoverThumb.textContent = src ? '' : '🖼️'
+  if (src) {
+    quizCoverThumb.style.background = ''
+    quizCoverThumb.style.backgroundImage = `url(${src})`
+    quizCoverThumb.textContent = ''
+    return
+  }
+  // Pas d'image choisie : image automatique, identique à celle de la carte du quiz.
+  const auto = window.quizAutoTile(currentId, titleEl.value)
+  quizCoverThumb.style.backgroundImage = ''
+  quizCoverThumb.style.background = auto.background
+  quizCoverThumb.textContent = auto.initials
 }
 const setQuizCover = (id) => {
   quizCover = id || null
   renderQuizCoverThumb()
   if (quizCoverPopup) quizCoverPopup.classList.add('d-none')
 }
+titleEl.addEventListener('input', renderQuizCoverThumb) // (premier rendu : resetToNew / chargement du quiz)
 if (quizCoverBtn) {
   quizCoverBtn.onclick = () => {
     const covers = window.QUIZ_COVERS || []
@@ -5824,6 +5834,7 @@ const persistQuiz = async (successMessage) => {
         .single()
       if (error) throw error
       currentId = data.id
+      renderQuizCoverThumb() // la couleur de l'image automatique dépend désormais de l'id
       if (participantsQuizBtn) participantsQuizBtn.classList.remove('d-none')
       showSaveSuccess('Quiz créé et sauvegardé !', true)
       markSaved()
