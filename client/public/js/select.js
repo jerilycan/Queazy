@@ -120,21 +120,6 @@ const formatUpdatedAt = (iso) => {
   } catch { return '' }
 }
 
-// Couleurs cycliques de l'avatar-initiales (nouvelle DA, voir maquette
-// "Mes Quiz — Refonte") : pas de couleur liée aux données du quiz (aucune
-// n'existe côté serveur), juste de quoi rendre la liste plus vivante qu'un
-// gris uniforme.
-const CARD_ACCENTS = [
-  ['var(--tile-blue)', 'var(--tile-blue-deep)'],
-  ['var(--color-accent)', 'var(--color-accent-2)'],
-  ['var(--tile-green)', 'var(--tile-green-deep)'],
-  ['var(--color-teal)', '#0a7d63'],
-  ['var(--tile-bronze)', 'var(--tile-bronze-deep)'],
-  ['var(--color-violet)', '#7a2fa8'],
-]
-const initialsOf = (title) =>
-  (title || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?'
-
 // Bug corrigé (audit UX) : loadMine/loadPublic ignoraient le champ `error`
 // de la réponse Supabase — une vraie panne (RLS cassée, coupure réseau,
 // timeout) tombait dans `render(data || [], ...)` avec data=null, donc
@@ -179,8 +164,6 @@ const render = (arr, isMineTab = true) => {
     return
   }
   arr.forEach((q, i) => {
-    const [a, a2] = CARD_ACCENTS[i % CARD_ACCENTS.length]
-
     const card = document.createElement('div')
     card.className = 'card quiz-card'
     card.style.cursor = 'pointer'
@@ -199,8 +182,17 @@ const render = (arr, isMineTab = true) => {
 
     const avatar = document.createElement('div')
     avatar.className = 'quiz-card-avatar'
-    avatar.style.background = `linear-gradient(135deg, ${a} 0%, ${a2} 100%)`
-    avatar.textContent = initialsOf(q.title)
+    // Image de couverture choisie dans l'éditeur (tâche 051, bibliothèque js/quiz-covers.js) ; sans image, ou si
+    // elle a été retirée de la bibliothèque : initiales sur dégradé comme avant.
+    const coverSrc = window.quizCoverSrc ? window.quizCoverSrc(q.cover) : null
+    if (coverSrc) {
+      avatar.classList.add('has-cover')
+      avatar.style.backgroundImage = `url(${coverSrc})`
+    } else {
+      const auto = window.quizAutoTile(q.id, q.title)
+      avatar.style.background = auto.background
+      avatar.textContent = auto.initials
+    }
 
     const textWrap = document.createElement('div')
     textWrap.style.minWidth = '0'
@@ -294,7 +286,7 @@ const duplicateQuiz = async (id, srcTitle, btn) => {
   if (btn) btn.disabled = true
   try {
     const { data: src, error: fetchErr } = await sb.from('quizzes')
-      .select('title,questions,single_attempt')
+      .select('title,questions,single_attempt,cover')
       .eq('id', id)
       .single()
     if (fetchErr) throw fetchErr
@@ -305,6 +297,7 @@ const duplicateQuiz = async (id, srcTitle, btn) => {
         title: 'Copie de ' + (src.title || srcTitle || 'Quiz'),
         questions: src.questions,
         single_attempt: src.single_attempt,
+        cover: src.cover || null,
         is_public: false, // une copie est privée par défaut
         owner_id: session.user.id
       }])
@@ -360,7 +353,7 @@ const loadMine = async () => {
     // l'utilisateur). Le nombre de questions n'est donc plus affiché ici
     // (repère "Modifié le ..." à la place, déjà disponible) ; il reste
     // consultable en ouvrant le quiz.
-    .select('id,title,updated_at')
+    .select('id,title,updated_at,cover')
     .eq('owner_id', session.user.id)
     .order('updated_at', { ascending: false })
   if (error) { console.error('[select] loadMine error:', error); renderLoadError(loadMine); return }
@@ -380,7 +373,7 @@ const loadPublic = async () => {
     // (repère "Modifié le ..." à la place, déjà disponible) ; il reste
     // consultable en ouvrant le quiz. "owner_id" demandé en plus pour aller
     // chercher le pseudo de l'auteur juste en dessous (design décidé).
-    .select('id,title,updated_at,owner_id')
+    .select('id,title,updated_at,owner_id,cover')
     .eq('is_public', true)
     .order('updated_at', { ascending: false })
   if (error) { console.error('[select] loadPublic error:', error); renderLoadError(loadPublic); return }

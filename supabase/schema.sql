@@ -139,9 +139,13 @@ create table if not exists public.quizzes (
   questions jsonb not null default '[]'::jsonb,
   single_attempt boolean not null default true,
   is_public boolean not null default false,
+  cover text, -- id d'une image de la bibliothèque (client/public/js/quiz-covers.js), null = initiales
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Migration (tâche 051) : image de couverture d'un quiz, pour les bases déjà créées.
+alter table public.quizzes add column if not exists cover text;
 
 alter table public.quizzes enable row level security;
 

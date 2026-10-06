@@ -102,6 +102,56 @@ if (savedAvatarPreview && profileAvatarPreviewEl) {
 }
 
 const isPublicEl = document.getElementById('isPublic')
+// Image de couverture (tâche 051) : id de la bibliothèque (quiz-covers.js) ou null. Enregistrée avec le quiz (quizzes.cover).
+let quizCover = null
+const quizCoverBtn = document.getElementById('quizCoverBtn')
+const quizCoverThumb = document.getElementById('quizCoverThumb')
+const quizCoverPopup = document.getElementById('quizCoverPopup')
+const quizCoverGrid = document.getElementById('quizCoverGrid')
+const renderQuizCoverThumb = () => {
+  const src = window.quizCoverSrc ? window.quizCoverSrc(quizCover) : null
+  if (src) {
+    quizCoverThumb.style.background = ''
+    quizCoverThumb.style.backgroundImage = `url(${src})`
+    quizCoverThumb.textContent = ''
+    return
+  }
+  // Pas d'image choisie : image automatique, identique à celle de la carte du quiz.
+  const auto = window.quizAutoTile(currentId, titleEl.value)
+  quizCoverThumb.style.backgroundImage = ''
+  quizCoverThumb.style.background = auto.background
+  quizCoverThumb.textContent = auto.initials
+}
+const setQuizCover = (id) => {
+  quizCover = id || null
+  renderQuizCoverThumb()
+  if (quizCoverPopup) quizCoverPopup.classList.add('d-none')
+}
+titleEl.addEventListener('input', renderQuizCoverThumb) // (premier rendu : resetToNew / chargement du quiz)
+if (quizCoverBtn) {
+  quizCoverBtn.onclick = () => {
+    const covers = window.QUIZ_COVERS || []
+    quizCoverGrid.replaceChildren()
+    if (!covers.length) {
+      const empty = document.createElement('p')
+      empty.className = 'text-muted'
+      empty.textContent = 'Aucune image disponible pour le moment.'
+      quizCoverGrid.appendChild(empty)
+    }
+    covers.forEach(c => {
+      const tile = document.createElement('div')
+      tile.className = 'icon-opt quiz-cover-tile' + (c.id === quizCover ? ' selected' : '')
+      tile.style.backgroundImage = `url(${c.src})`
+      tile.title = c.label || ''
+      tile.onclick = () => setQuizCover(c.id)
+      quizCoverGrid.appendChild(tile)
+    })
+    quizCoverPopup.classList.remove('d-none')
+  }
+  document.getElementById('quizCoverNone').onclick = () => setQuizCover(null)
+  document.getElementById('quizCoverCancel').onclick = () => quizCoverPopup.classList.add('d-none')
+  quizCoverPopup.onclick = (e) => { if (e.target === quizCoverPopup) quizCoverPopup.classList.add('d-none') }
+}
 const saveQuizBtn = document.getElementById('saveQuiz')
 const deleteQuizBtn = document.getElementById('deleteQuiz')
 const replayTutorialBtn = document.getElementById('replayTutorialBtn')
@@ -686,7 +736,7 @@ let readOnly = false // true si on ouvre le quiz d'un autre créateur (lecture s
 const applyReadOnly = () => {
   readOnly = true
   const controls = [
-    titleEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, addToBankCheckbox, qType, qTimer, timerMinus, timerPlus,
+    titleEl, isPublicEl, quizCoverBtn, qPrompt, qExplanation, qDraftToggle, addToBankCheckbox, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
     addAssociationPairBtn, addTimelineEventBtn, addRangementZoneBtn, addRangementItemBtn, intrusPhotosUploadInput, addIntrusTextBtn, addIndiceBtn, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
@@ -713,7 +763,8 @@ const applyReadOnly = () => {
   // sens en bas de l'écran.
   if (questionSaveBar) questionSaveBar.classList.add('d-none')
   if (deleteQuizBtn) deleteQuizBtn.style.display = 'none'
-  if (duplicateQuizBtn) duplicateQuizBtn.classList.remove('d-none')
+  // Lecture seule : « Dupliquer dans mes quiz » devient l'action principale (plus de Sauvegarder).
+  if (duplicateQuizBtn) { duplicateQuizBtn.classList.remove('d-none'); duplicateQuizBtn.classList.add('btn-primary'); duplicateQuizBtn.lastChild.textContent = 'Dupliquer dans mes quiz' }
   if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
   const banner = document.getElementById('readOnlyBanner')
   if (banner) banner.classList.remove('d-none')
@@ -5185,7 +5236,8 @@ const snapshotQuizState = () => {
   return JSON.stringify({
     title: titleEl.value.trim(),
     questions,
-    isPublic: isPublicEl.checked
+    isPublic: isPublicEl.checked,
+    cover: quizCover
   })
 }
 let savedSnapshot = null
@@ -5761,7 +5813,8 @@ const persistQuiz = async (successMessage) => {
     const body = {
       title,
       questions,
-      isPublic: isPublicEl.checked
+      isPublic: isPublicEl.checked,
+      cover: quizCover
     }
     if (currentId) {
       // single_attempt forcé à true (retour utilisateur : toggle retiré de
@@ -5770,18 +5823,19 @@ const persistQuiz = async (successMessage) => {
       // remettre d'aplomb un quiz existant sauvegardé avant ce retrait avec
       // la case décochée.
       const { error } = await sb.from('quizzes')
-        .update({ title, questions, single_attempt: true, is_public: body.isPublic })
+        .update({ title, questions, single_attempt: true, is_public: body.isPublic, cover: body.cover })
         .eq('id', currentId)
       if (error) throw error
       showSaveSuccess(successMessage)
       markSaved()
     } else {
       const { data, error } = await sb.from('quizzes')
-        .insert([{ title, questions, single_attempt: true, is_public: body.isPublic, owner_id: session.user.id }])
+        .insert([{ title, questions, single_attempt: true, is_public: body.isPublic, cover: body.cover, owner_id: session.user.id }])
         .select('id')
         .single()
       if (error) throw error
       currentId = data.id
+      renderQuizCoverThumb() // la couleur de l'image automatique dépend désormais de l'id
       if (participantsQuizBtn) participantsQuizBtn.classList.remove('d-none')
       showSaveSuccess('Quiz créé et sauvegardé !', true)
       markSaved()
@@ -5971,6 +6025,7 @@ if (duplicateQuizBtn) {
           questions,
           single_attempt: true, // toggle retiré de l'éditeur, voir plus haut
           is_public: false, // une copie est privée par défaut
+          cover: quizCover,
           owner_id: session.user.id
         }])
         .select('id')
@@ -6228,13 +6283,15 @@ const init = () => {
   if (id) {
     currentId = id
     window.supabaseClient.from('quizzes')
-      .select('id,title,questions,is_public,owner_id')
+      .select('id,title,questions,is_public,owner_id,cover')
       .eq('id', id)
       .single()
       .then(async ({ data, error }) => {
         if (error) throw error
         titleEl.value = data.title || ''
         isPublicEl.checked = !!data.is_public
+        quizCover = data.cover || null
+        renderQuizCoverThumb()
         questions = data.questions || [createDefaultQuestion()]
         activeIndex = 0
         selectQuestion(0)
@@ -6288,6 +6345,8 @@ const resetToNew = () => {
   activeIndex = 0
   titleEl.value = ''
   isPublicEl.checked = false
+  quizCover = null
+  renderQuizCoverThumb()
   renderTypePicker()
   updateEmptyState()
   updateSidebar()
