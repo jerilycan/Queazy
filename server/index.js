@@ -1,4 +1,5 @@
 const path = require('path')
+const zlib = require('zlib')
 const Fastify = require('fastify')
 const fastifyStatic = require('@fastify/static')
 const fastifyCompress = require('@fastify/compress')
@@ -15,7 +16,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.36.1'
+const APP_VERSION = '2.36.2'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -187,7 +188,16 @@ app.addHook('onSend', (req, reply, payload, done) => {
 // navigateur qui demande explicitement gzip/br (Accept-Encoding) — un gain
 // concret surtout sur mobile/réseau lent. global: true applique la
 // compression à TOUTES les routes (statique ET API), pas seulement /static.
-app.register(fastifyCompress, { global: true })
+// Qualité de compression volontairement modérée : le défaut de zlib pour Brotli (qualité 11) coûte ~1 s de
+// CPU par fois sur index.js (568 Ko) sur un poste normal — et le fichier est recompressé à CHAQUE requête.
+// Sur l'offre gratuite de Render (CPU partagé très limité), chaque téléphone qui chargeait la page attendait
+// ~7 s, et plusieurs joueurs en même temps faisaient tout s'empiler (page « qui tourne en boucle » au
+// lancement d'une soirée). Qualité 5 : ~20 ms, pour un fichier à peine 10 % plus gros.
+app.register(fastifyCompress, {
+  global: true,
+  brotliOptions: { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } },
+  zlibOptions: { level: 6 }
+})
 
 const publicDir = path.join(__dirname, '..', 'client', 'public')
 // maxAge modéré (2 min) plutôt qu'agressif : ce projet est redéployé très
@@ -197,7 +207,16 @@ const publicDir = path.join(__dirname, '..', 'client', 'public')
 // revalidation (Cache-Control: max-age=0 par défaut, voir plus haut) pour
 // le cas le plus fréquent : naviguer entre plusieurs pages de l'appli en
 // quelques secondes dans la même session.
-app.register(fastifyStatic, { root: publicDir, maxAge: '2m' })
+// Images, sons et polices (avatars, icônes, GIF du tuto...) changent très rarement : cache d'un jour pour qu'un
+// joueur qui revient — ou qui ouvre la grille d'avatars une 2e fois — ne les retélécharge pas (3,5 Mo d'avatars).
+const STATIC_BINARY_RE = /.(png|jpe?g|gif|webp|svg|ico|wav|mp3|ogg|woff2?)$/i
+app.register(fastifyStatic, {
+  root: publicDir,
+  maxAge: '2m',
+  setHeaders: (res, filePath) => {
+    if (STATIC_BINARY_RE.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=86400')
+  }
+})
 
 app.get('/health', async () => ({ ok: true }))
 
