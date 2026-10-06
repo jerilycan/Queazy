@@ -455,6 +455,11 @@ const launchPodium = (entities, hist) => {
     tab.classList.remove('finale-active')
     // Scores et ordre frais : un lobby:list a pu arriver pendant l'animation.
     const fresh = teamModeActive ? computeTeamEntities() : computeOrder((latestPlayers || []).slice())
+    const raceStage = document.getElementById('raceStage')
+    if (raceStage) {
+      raceStage.classList.add('fin-in')
+      raceStage.addEventListener('animationend', () => raceStage.classList.remove('fin-in'), { once: true }) // ne pas masquer l'animation .shake de l'arrivée
+    }
     runRace(fresh.slice(0, 3), [])
   }
   try {

@@ -8298,12 +8298,12 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .race-status-pill {
   position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
   font-size: 12px; font-weight: 800; letter-spacing: 0.03em;
-  padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,0.07);
-  border: 1px solid var(--color-border); color: var(--color-text-muted);
+  padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(127,230,255,0.3); color: var(--color-text-muted);
   z-index: 6; transition: color .2s, border-color .2s, background .2s;
   font-variant-numeric: tabular-nums;
 }
-.race-status-pill.live { color: var(--tile-green); border-color: rgba(var(--tile-green-rgb),0.35); background: rgba(var(--tile-green-rgb),0.1); }
+.race-status-pill.live { color: #aef2ff; border-color: rgba(127,230,255,0.5); background: rgba(127,230,255,0.1); }
 .race-status-pill.done { color: var(--tile-yellow); border-color: rgba(255,210,63,0.4); background: rgba(255,210,63,0.12); text-transform: uppercase; letter-spacing: 0.06em; }
 .race-status-pill .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; animation: raceBlink 1s ease-in-out infinite; }
 .race-status-pill.done .dot { display: none; }
@@ -8311,22 +8311,24 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 
 .race-qstrip { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
 .race-qdot {
-  width: 18px; height: 18px; border-radius: 5px; background: rgba(255,255,255,0.06); border: 1px solid var(--color-border);
+  width: 18px; height: 18px; border-radius: 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(127,230,255,0.22);
   display: flex; align-items: center; justify-content: center; font-size: 9.5px; color: var(--color-text-muted);
   transition: background .2s, border-color .2s, color .2s; font-variant-numeric: tabular-nums;
 }
-.race-qdot.active { border-color: var(--color-accent); color: var(--color-text); background: var(--color-accent-soft); }
+.race-qdot.active { border-color: #7fe6ff; color: var(--color-text); background: rgba(127,230,255,0.14); }
 .race-qdot.done { color: var(--color-text-muted); }
 
 .race-stage {
   position: relative;
   height: 400px;
-  border-radius: var(--radius-md);
+  border-radius: 16px;
+  /* Même fond et même grille néon cyan que l'animation de fin de partie (.fin-stage, tâche 049). */
   background:
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 38px),
-    radial-gradient(600px 300px at 50% 100%, var(--color-accent-soft), transparent 70%),
-    var(--color-bg-deep);
+    repeating-linear-gradient(0deg, rgba(127,230,255,0.05) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(90deg, rgba(127,230,255,0.05) 0 1px, transparent 1px 36px),
+    radial-gradient(120% 90% at 50% 0%, #2a1650 0%, #120a28 62%, #0a0618 100%);
   overflow: hidden;
+  isolation: isolate;
   border: 1px solid var(--color-border);
 }
 .race-stage.shake { animation: raceShake .4s ease; }
@@ -8357,14 +8359,15 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .race-lane { position: relative; width: 100px; height: 100%; }
 .race-lane-track {
   position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
-  width: 78px; height: 280px; border-radius: 10px;
-  background: rgba(255,255,255,0.03); border: 1px solid var(--color-border);
+  width: 78px; height: 280px; border-radius: 12px;
+  background: linear-gradient(160deg, rgba(36,26,82,0.7), rgba(21,15,51,0.7)); border: 1px solid rgba(127,230,255,0.28);
+  box-shadow: 0 0 18px rgba(127,230,255,0.12);
 }
 .race-lane-bar {
   position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
   width: 78px; height: 0px; border-radius: 8px 8px 4px 4px;
   background: linear-gradient(180deg, var(--color-accent-2) 0%, var(--color-accent-deep) 100%);
-  box-shadow: 0 0 16px rgba(123,47,247,0.4);
+  box-shadow: 0 0 16px rgba(123,47,247,0.4), inset 0 0 0 1px rgba(255,255,255,0.18);
   transition: height .38s cubic-bezier(0.34, 1.56, 0.64, 1), background .5s ease, box-shadow .5s ease;
 }
 /* Bug corrigé (retour utilisateur : "les trois couleurs du podium devraient
@@ -8382,7 +8385,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   /* 112% : voir le commentaire détaillé sur .avatar-main (marge cuite dans
      avatar22.png/avatar23.png). */
   background-size: 112%; background-position: center;
-  border: 2px solid rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255,255,255,0.85); display: flex; align-items: center; justify-content: center;
   font-size: 18px; z-index: 2; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
   transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1), border-color .3s;
 }
@@ -8408,7 +8411,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 
 .race-lane-score {
   position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, calc(-100% - 28px));
-  font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; z-index: 2; color: var(--color-text);
+  font-size: 14px; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; z-index: 2; color: var(--color-accent);
   transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .race-lane-badge {
@@ -8426,7 +8429,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 
 .race-lane-name {
   position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
-  font-size: 12.5px; font-weight: 700; color: var(--color-text-muted); white-space: nowrap;
+  font-size: 13px; font-weight: 800; color: var(--color-text); white-space: nowrap;
   transition: color .3s;
 }
 .race-lane-name.glitch { color: var(--tile-yellow); animation: raceGlitch .4s steps(2,end) 3; }
@@ -10751,3 +10754,6 @@ body.results-tv #fullTable { margin-top: 0; }
 body.results-tv #podiumTab.finale-active { grid-template-columns: 1fr; }
 body.results-tv .fin-stage { height: 560px; }
 body.results-tv .fin-skip { display: none; }
+/* Arrivée du podium juste après l'animation de fin (results.js launchPodium). */
+.race-stage.fin-in { animation: finPodiumIn 520ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both; }
+@keyframes finPodiumIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }

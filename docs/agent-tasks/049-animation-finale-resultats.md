@@ -68,6 +68,7 @@ Même animation et même ordre d'élimination sur tous les écrans d'une même s
 - Même effet/ordre sur tous les écrans, mais pas synchronisés à la milliseconde (chaque écran lance l'animation à son arrivée sur la page).
 - Très gros effectifs (>40) : cartes très petites, texte peu lisible.
 - La liste complète et le podium sont masqués pendant l'animation ; l'onglet « Détail » reste accessible.
+- Podium restylé (fond/grille néon, pistes en verre, avatars cerclés, pastille cyan) pour garder la même DA que l’animation, y compris en repli (≤ 3 joueurs).
 - Bug existant non traité : le bandeau « Arrivée ! » chevauche le score du 1er sur le podium.
 
 ## Statut
