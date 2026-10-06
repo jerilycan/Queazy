@@ -6476,7 +6476,9 @@ let gameMode = 'irl'
 // garanti.
 const updateIrlPlayerUI = () => {
   const gameActive = document.body.classList.contains('game-active')
-  const isPlayerInGame = !isHost && gameActive
+  // Aperçu « Tester cette question » (vues joueur) : la salle est créée par l'éditeur, donc isHost est vrai ici — mais
+  // l'écran doit être celui d'un VRAI joueur (logo réduit, barre de temps fine, roue crantée), pas celui d'un hôte qui joue.
+  const isPlayerInGame = (!isHost || (previewQuestionMode && !previewAsHost)) && gameActive
   document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && isPlayerInGame)
   document.body.classList.toggle('remote-player-mode', gameMode === 'remote' && isPlayerInGame)
   // Ligne d'info du menu roue crantée (voir #irlMenuModeInfo, index.html) —
