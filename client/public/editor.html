@@ -470,6 +470,13 @@
             </div>
           </div>
 
+          <!-- Blind Test : le son est le cœur du type, donc un bloc OBLIGATOIRE à part (editor.js
+               toggleTypeSections y déplace #bonusAudioSection) ; #mediaBlock ne garde alors que l'image facultative. -->
+          <div id="requiredAudioBlock" class="detail-section d-none">
+            <label>Son</label>
+            <div id="requiredAudioCard" class="reveal-card media-card"></div>
+          </div>
+
           <!-- Image + son facultatifs réunis dans UN bloc (retour utilisateur). Chaque moitié garde
                son propre masquage (type, mode Avancé) ; le bloc entier se cache s'il ne reste rien
                à montrer (voir #mediaBlock dans style.css). -->

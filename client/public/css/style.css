@@ -10566,7 +10566,7 @@ body.results-tv #fullTable { margin-top: 0; }
 
 /* Bloc "Image et son" (editor.html #mediaBlock) : se cache quand ses deux moitiés le sont
    (type sans illustration + son réservé à l'Avancé en mode Standard, ou aucun des deux). */
-#mediaBlock .media-card > .detail-section + .detail-section { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--color-border); }
+#mediaBlock #illustrationSection:not(.d-none) + #bonusAudioSection { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--color-border); }
 #mediaBlock:not(:has(.media-card > .detail-section:not(.d-none))) { display: none; }
 body.editor-standard #mediaBlock:not(:has(.media-card > .detail-section:not(.d-none):not([data-advanced]))) { display: none; }
 
