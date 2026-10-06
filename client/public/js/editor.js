@@ -102,6 +102,56 @@ if (savedAvatarPreview && profileAvatarPreviewEl) {
 }
 
 const isPublicEl = document.getElementById('isPublic')
+// Image de couverture (tâche 051) : id de la bibliothèque (quiz-covers.js) ou null. Enregistrée avec le quiz (quizzes.cover).
+let quizCover = null
+const quizCoverBtn = document.getElementById('quizCoverBtn')
+const quizCoverThumb = document.getElementById('quizCoverThumb')
+const quizCoverPopup = document.getElementById('quizCoverPopup')
+const quizCoverGrid = document.getElementById('quizCoverGrid')
+const renderQuizCoverThumb = () => {
+  const src = window.quizCoverSrc ? window.quizCoverSrc(quizCover) : null
+  if (src) {
+    quizCoverThumb.style.background = ''
+    quizCoverThumb.style.backgroundImage = `url(${src})`
+    quizCoverThumb.textContent = ''
+    return
+  }
+  // Pas d'image choisie : image automatique, identique à celle de la carte du quiz.
+  const auto = window.quizAutoTile(currentId, titleEl.value)
+  quizCoverThumb.style.backgroundImage = ''
+  quizCoverThumb.style.background = auto.background
+  quizCoverThumb.textContent = auto.initials
+}
+const setQuizCover = (id) => {
+  quizCover = id || null
+  renderQuizCoverThumb()
+  if (quizCoverPopup) quizCoverPopup.classList.add('d-none')
+}
+titleEl.addEventListener('input', renderQuizCoverThumb) // (premier rendu : resetToNew / chargement du quiz)
+if (quizCoverBtn) {
+  quizCoverBtn.onclick = () => {
+    const covers = window.QUIZ_COVERS || []
+    quizCoverGrid.replaceChildren()
+    if (!covers.length) {
+      const empty = document.createElement('p')
+      empty.className = 'text-muted'
+      empty.textContent = 'Aucune image disponible pour le moment.'
+      quizCoverGrid.appendChild(empty)
+    }
+    covers.forEach(c => {
+      const tile = document.createElement('div')
+      tile.className = 'icon-opt quiz-cover-tile' + (c.id === quizCover ? ' selected' : '')
+      tile.style.backgroundImage = `url(${c.src})`
+      tile.title = c.label || ''
+      tile.onclick = () => setQuizCover(c.id)
+      quizCoverGrid.appendChild(tile)
+    })
+    quizCoverPopup.classList.remove('d-none')
+  }
+  document.getElementById('quizCoverNone').onclick = () => setQuizCover(null)
+  document.getElementById('quizCoverCancel').onclick = () => quizCoverPopup.classList.add('d-none')
+  quizCoverPopup.onclick = (e) => { if (e.target === quizCoverPopup) quizCoverPopup.classList.add('d-none') }
+}
 const saveQuizBtn = document.getElementById('saveQuiz')
 const deleteQuizBtn = document.getElementById('deleteQuiz')
 const replayTutorialBtn = document.getElementById('replayTutorialBtn')
@@ -686,7 +736,7 @@ let readOnly = false // true si on ouvre le quiz d'un autre créateur (lecture s
 const applyReadOnly = () => {
   readOnly = true
   const controls = [
-    titleEl, isPublicEl, qPrompt, qExplanation, qDraftToggle, addToBankCheckbox, qType, qTimer, timerMinus, timerPlus,
+    titleEl, isPublicEl, quizCoverBtn, qPrompt, qExplanation, qDraftToggle, addToBankCheckbox, qType, qTimer, timerMinus, timerPlus,
     addQuestionBtn, deleteQuestionBtn, addOptionBtn, addCorrectBtn,
     addAssociationPairBtn, addTimelineEventBtn, addRangementZoneBtn, addRangementItemBtn, intrusPhotosUploadInput, addIntrusTextBtn, addIndiceBtn, replayTutorialBtn,
     qGradMin, qGradMax, qGradTarget, qGradTolerance, tfTrueBtn, tfFalseBtn, addOrderItemBtn, imageUploadInput,
@@ -713,7 +763,8 @@ const applyReadOnly = () => {
   // sens en bas de l'écran.
   if (questionSaveBar) questionSaveBar.classList.add('d-none')
   if (deleteQuizBtn) deleteQuizBtn.style.display = 'none'
-  if (duplicateQuizBtn) duplicateQuizBtn.classList.remove('d-none')
+  // Lecture seule : « Dupliquer dans mes quiz » devient l'action principale (plus de Sauvegarder).
+  if (duplicateQuizBtn) { duplicateQuizBtn.classList.remove('d-none'); duplicateQuizBtn.classList.add('btn-primary'); duplicateQuizBtn.lastChild.textContent = 'Dupliquer dans mes quiz' }
   if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
   const banner = document.getElementById('readOnlyBanner')
   if (banner) banner.classList.remove('d-none')
@@ -5185,7 +5236,8 @@ const snapshotQuizState = () => {
   return JSON.stringify({
     title: titleEl.value.trim(),
     questions,
-    isPublic: isPublicEl.checked
+    isPublic: isPublicEl.checked,
+    cover: quizCover
   })
 }
 let savedSnapshot = null
@@ -5761,7 +5813,8 @@ const persistQuiz = async (successMessage) => {
     const body = {
       title,
       questions,
-      isPublic: isPublicEl.checked
+      isPublic: isPublicEl.checked,
+      cover: quizCover
     }
     if (currentId) {
       // single_attempt forcé à true (retour utilisateur : toggle retiré de
@@ -5770,18 +5823,19 @@ const persistQuiz = async (successMessage) => {
       // remettre d'aplomb un quiz existant sauvegardé avant ce retrait avec
       // la case décochée.
       const { error } = await sb.from('quizzes')
-        .update({ title, questions, single_attempt: true, is_public: body.isPublic })
+        .update({ title, questions, single_attempt: true, is_public: body.isPublic, cover: body.cover })
         .eq('id', currentId)
       if (error) throw error
       showSaveSuccess(successMessage)
       markSaved()
     } else {
       const { data, error } = await sb.from('quizzes')
-        .insert([{ title, questions, single_attempt: true, is_public: body.isPublic, owner_id: session.user.id }])
+        .insert([{ title, questions, single_attempt: true, is_public: body.isPublic, cover: body.cover, owner_id: session.user.id }])
         .select('id')
         .single()
       if (error) throw error
       currentId = data.id
+      renderQuizCoverThumb() // la couleur de l'image automatique dépend désormais de l'id
       if (participantsQuizBtn) participantsQuizBtn.classList.remove('d-none')
       showSaveSuccess('Quiz créé et sauvegardé !', true)
       markSaved()
@@ -5830,6 +5884,110 @@ saveQuizBtn.onclick = async () => {
   }
 }
 
+// Aperçu jouable de la question en cours (tâche 050) : modale avec le vrai client de jeu dans une iframe
+// (index.js en mode ?previewEditorQuestion=1, salle éphémère côté serveur — rien n'est sauvegardé).
+// 4 vues : joueur mobile, joueur PC (même page, fenêtre plus large → mise en page grand écran), MJ
+// (?view=mj : salle « Présenter », écran du MJ), TV (page MJ cachée qui pilote une iframe display.html,
+// exactement comme la vraie fenêtre de présentation). Chaque iframe de jeu dit « prêt » par postMessage,
+// l'éditeur répond avec la question ; messages limités à notre origine et à nos iframes. Changer de vue
+// ou « Recommencer » recharge les iframes, la poignée de main se rejoue.
+const testQuestionBtn = document.getElementById('testQuestion')
+const PREVIEW_VIEWS = {
+  mobile: { label: '📱 Joueur', cls: '', url: '/?previewEditorQuestion=1' },
+  pc: { label: '🖥️ Joueur PC', cls: 'is-wide', url: '/?previewEditorQuestion=1' },
+  mj: { label: '🎛️ MJ', cls: 'is-wide', url: '/?previewEditorQuestion=1&view=mj' },
+  tv: { label: '📺 TV', cls: 'is-wide is-tv', url: '/?previewEditorQuestion=1&view=mj', tv: true }
+}
+const PREVIEW_VIEW_KEY = 'queazy_preview_view'
+const readPreviewView = () => {
+  try {
+    const v = localStorage.getItem(PREVIEW_VIEW_KEY)
+    return PREVIEW_VIEWS[v] ? v : 'mobile'
+  } catch {
+    return 'mobile' // stockage bloqué : joueur mobile par défaut
+  }
+}
+const openQuestionPreview = () => {
+  if (readOnly || !questions[activeIndex]) return
+  saveCurrentQuestionState()
+  const current = questions[activeIndex]
+  // Même contrôle qu'à la sauvegarde ; un brouillon est testé comme s'il n'en était pas un (il est ignoré en vraie partie).
+  if (!validateQuestion({ ...current, draft: false }, activeIndex)) return
+  const payload = JSON.parse(JSON.stringify({ ...current, draft: false }))
+
+  const overlay = document.createElement('div')
+  overlay.className = 'modal-overlay preview-overlay'
+  const box = document.createElement('div')
+  box.className = 'preview-box'
+  const bar = document.createElement('div')
+  bar.className = 'preview-bar'
+  const title = document.createElement('strong')
+  title.textContent = 'Aperçu'
+  const viewSwitch = document.createElement('div')
+  viewSwitch.className = 'preview-view-switch'
+  const viewBtns = {}
+  const restartBtn = document.createElement('button')
+  restartBtn.type = 'button'; restartBtn.className = 'btn font-13'; restartBtn.textContent = '↻ Recommencer'
+  const closeBtn = document.createElement('button')
+  closeBtn.type = 'button'; closeBtn.className = 'btn-icon'; closeBtn.textContent = '✕'; closeBtn.title = 'Fermer'
+  const stageEl = document.createElement('div')
+  stageEl.className = 'preview-stage'
+  Object.entries(PREVIEW_VIEWS).forEach(([key, v]) => {
+    const b = document.createElement('button')
+    b.type = 'button'; b.textContent = v.label; b.onclick = () => loadView(key)
+    viewBtns[key] = b; viewSwitch.appendChild(b)
+  })
+  bar.append(title, viewSwitch, restartBtn, closeBtn)
+  box.append(bar, stageEl)
+  overlay.appendChild(box)
+  document.body.appendChild(overlay)
+
+  let currentView = readPreviewView()
+  let gameFrame = null // iframe qui joue la question (joueur ou MJ)
+  const loadView = (key) => {
+    currentView = key
+    const v = PREVIEW_VIEWS[key]
+    try { localStorage.setItem(PREVIEW_VIEW_KEY, key) } catch { /* mémorisation impossible : sans importance */ }
+    Object.entries(viewBtns).forEach(([k, b]) => b.classList.toggle('active', k === key))
+    box.className = 'preview-box ' + v.cls
+    title.textContent = 'Aperçu'
+    stageEl.replaceChildren()
+    // Vue TV : l'iframe d'affichage est créée AVANT la page MJ qui la pilote (voir index.js, attachPreviewTv).
+    if (v.tv) {
+      const tvFrame = document.createElement('iframe')
+      tvFrame.id = 'previewTvFrame'; tvFrame.className = 'preview-frame preview-tv-frame'; tvFrame.src = '/display.html?room=apercu'
+      stageEl.appendChild(tvFrame)
+    }
+    gameFrame = document.createElement('iframe')
+    gameFrame.className = 'preview-frame' + (v.tv ? ' preview-driver' : '')
+    gameFrame.src = v.url
+    gameFrame.allow = 'autoplay'
+    stageEl.appendChild(gameFrame)
+  }
+
+  const onMessage = (e) => {
+    if (e.origin !== location.origin || !gameFrame || e.source !== gameFrame.contentWindow) return
+    if (e.data?.type === 'queazy-preview-ready') {
+      gameFrame.contentWindow.postMessage({ type: 'queazy-preview-question', question: payload }, location.origin)
+    } else if (e.data?.type === 'queazy-preview-end') {
+      title.textContent = 'Aperçu terminé'
+    }
+  }
+  const onKey = (e) => { if (e.key === 'Escape') close() }
+  const close = () => {
+    window.removeEventListener('message', onMessage)
+    document.removeEventListener('keydown', onKey)
+    overlay.remove()
+  }
+  window.addEventListener('message', onMessage)
+  document.addEventListener('keydown', onKey)
+  closeBtn.onclick = close
+  restartBtn.onclick = () => loadView(currentView)
+  overlay.onclick = (e) => { if (e.target === overlay) close() }
+  loadView(currentView)
+}
+if (testQuestionBtn) testQuestionBtn.onclick = openQuestionPreview
+
 // Bouton "Sauvegarder" de la barre fixe en bas — simple doublon du bouton
 // "Sauvegarder" du bandeau du haut (retour utilisateur), même comportement
 // exact (valide TOUT le quiz, écrit toute la ligne Supabase), juste accessible
@@ -5867,6 +6025,7 @@ if (duplicateQuizBtn) {
           questions,
           single_attempt: true, // toggle retiré de l'éditeur, voir plus haut
           is_public: false, // une copie est privée par défaut
+          cover: quizCover,
           owner_id: session.user.id
         }])
         .select('id')
@@ -6124,13 +6283,15 @@ const init = () => {
   if (id) {
     currentId = id
     window.supabaseClient.from('quizzes')
-      .select('id,title,questions,is_public,owner_id')
+      .select('id,title,questions,is_public,owner_id,cover')
       .eq('id', id)
       .single()
       .then(async ({ data, error }) => {
         if (error) throw error
         titleEl.value = data.title || ''
         isPublicEl.checked = !!data.is_public
+        quizCover = data.cover || null
+        renderQuizCoverThumb()
         questions = data.questions || [createDefaultQuestion()]
         activeIndex = 0
         selectQuestion(0)
@@ -6184,6 +6345,8 @@ const resetToNew = () => {
   activeIndex = 0
   titleEl.value = ''
   isPublicEl.checked = false
+  quizCover = null
+  renderQuizCoverThumb()
   renderTypePicker()
   updateEmptyState()
   updateSidebar()

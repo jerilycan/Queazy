@@ -6818,7 +6818,12 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   right: 28px;
   bottom: 28px;
   z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
+/* « Tester » (tâche 050) : même forme ronde que « Sauvegarder », en secondaire. */
+.question-save-fab #testQuestion { border-radius: 999px; padding: 14px 22px; box-shadow: var(--shadow-lg); }
 .question-save-fab #saveQuestion {
   border-radius: 999px;
   padding: 14px 26px;
@@ -7589,6 +7594,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   flex-shrink: 0;
   box-shadow: 0 4px 10px rgba(0,0,0,0.25);
 }
+.quiz-card-avatar.has-cover { background-size: cover; background-position: center; background-repeat: no-repeat; }
 .quiz-card-title {
   font-family: 'Baloo 2', sans-serif;
   font-weight: 800;
@@ -10614,3 +10620,45 @@ body.results-tv .fin-skip { display: none; }
 .fin-pod-block.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-bronze-rgb), .35); }
 @media (max-width: 640px) { .fin-pod { gap: 8px; } .fin-pod-av { width: 52px; height: 52px; font-size: 20px; } .fin-pod-name { font-size: 14px; } }
 .fin-status:empty { display: none; }
+
+/* Aperçu jouable d'une question depuis l'éditeur (editor.js openQuestionPreview) */
+.preview-box { width: min(440px, 94vw); height: min(86vh, 820px); display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; background: var(--color-card); border: 1px solid var(--color-border); box-shadow: var(--shadow-lg); }
+.preview-box.is-wide { width: min(1280px, 96vw); }
+.preview-stage { position: relative; flex: 1; min-height: 0; display: flex; background: var(--color-bg-deep); }
+.preview-view-switch { display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, .06); border: 1px solid var(--color-border); }
+.preview-view-switch button { border: 0; background: transparent; color: var(--color-text-muted); font: 800 12px 'Nunito', sans-serif; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.preview-view-switch button.active { background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2)); color: #fff; }
+/* Vue TV : l'iframe d'affichage est au format 16:9 ; la page MJ qui la pilote reste cachée mais active. */
+.preview-box.is-tv { height: auto; }
+.preview-tv-frame { aspect-ratio: 16 / 9; flex: none; }
+.preview-driver { position: absolute; left: -99999px; top: 0; width: 1100px; height: 700px; opacity: 0; pointer-events: none; flex: none; }
+.preview-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
+.preview-bar strong { flex: 1; font-size: 14px; }
+.preview-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--color-bg-deep); }
+
+/* Image du quiz (editor.html #quizCoverBtn, tâche 051) : pastille à gauche du titre, comme sur la carte du quiz. */
+.editor-title-row { display: flex; align-items: center; gap: 16px; }
+.editor-title-row input#title { flex: 1; min-width: 0; width: auto; }
+.quiz-cover-tile-btn { position: relative; flex-shrink: 0; width: 64px; height: 64px; padding: 0; border: 0; background: none; border-radius: 18px; cursor: pointer; }
+.quiz-cover-thumb { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 18px; font: 800 22px 'Baloo 2', sans-serif; color: #fff; background-size: cover; background-position: center; background-repeat: no-repeat; box-shadow: 0 6px 16px rgba(0, 0, 0, .35); transition: transform .2s var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)); }
+.quiz-cover-edit { position: absolute; right: -6px; bottom: -6px; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2)); border: 2px solid var(--color-card, #1b1740); box-shadow: 0 3px 8px rgba(0, 0, 0, .4); transition: transform .2s var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)); }
+@media (hover: hover) and (pointer: fine) {
+  .quiz-cover-tile-btn:hover:not(:disabled) .quiz-cover-thumb { transform: scale(1.06); }
+  .quiz-cover-tile-btn:hover:not(:disabled) .quiz-cover-edit { transform: scale(1.18) rotate(-12deg); }
+}
+.quiz-cover-tile-btn:disabled { cursor: default; }
+.quiz-cover-tile-btn:disabled .quiz-cover-edit { display: none; }
+@media (max-width: 640px) { .quiz-cover-tile-btn { width: 52px; height: 52px; } .quiz-cover-thumb { font-size: 18px; } .editor-title-row { gap: 12px; } }
+.icon-opt.quiz-cover-tile { background-size: cover; background-position: center; background-repeat: no-repeat; border-radius: 14px; }
+
+/* Barre de configuration du quiz — maquette « A » : ligne 1 = pastille, titre, mode, Sauvegarder ; ligne 2 =
+   partage à gauche, actions secondaires (boutons discrets) à droite. */
+.editor-title-actions { display: flex; align-items: center; gap: 14px; margin-left: auto; flex-shrink: 0; }
+.editor-title-actions #saveQuiz { min-height: 46px; }
+.editor-top-bar-row { padding-top: var(--space-md); border-top: 1px solid rgba(255, 255, 255, .08); }
+/* Boutons secondaires : style .btn standard de l'appli (pas de variante dédiée), juste l'icône alignée. */
+.editor-actions .btn { display: inline-flex; align-items: center; gap: 8px; }
+.editor-actions .qa-ico { flex-shrink: 0; opacity: .85; }
+/* Écran réduit : le titre garde au moins 240 px ; mode + Sauvegarder passent à la ligne dessous, alignés à droite. */
+.editor-title-row { flex-wrap: wrap; row-gap: 14px; }
+.editor-title-row input#title { flex: 1 1 240px; }
