@@ -600,6 +600,9 @@ const previewEditorQuestion = params.get('previewEditorQuestion') === '1'
 const previewQuestionMode = !!(previewBankQuestionId || previewEditorQuestion)
 // ?view=mj : l'aperçu de l'éditeur joue la question en salle « Présenter » (écran du MJ) au lieu du mode « Jouer » (écran joueur).
 const previewAsHost = previewEditorQuestion && params.get('view') === 'mj'
+// Vues joueur de l'aperçu : la salle est créée par l'éditeur (isHost vrai), mais l'écran doit être celui d'un vrai joueur
+// (pas de Récap ni de code de salle, réservés à l'hôte).
+const previewAsPlayer = previewQuestionMode && !previewAsHost
 // Vue TV de l'aperçu : une iframe display.html (id previewTvFrame) est posée à côté par l'éditeur ; on s'en sert comme
 // fenêtre de présentation (displayWin), comme le ferait window.open() — display.js n'exige que l'origine.
 const attachPreviewTv = () => {
@@ -5857,8 +5860,10 @@ socket.on('room:created', ({ roomCode, serverUrl, hostToken, mode, autoConfig })
     // regagner. L'hôte ne voyait donc jamais ce badge du tout (pas "vide",
     // carrément invisible) alors que le texte, lui, était bien posé juste
     // en dessous.
-    persistentCode.classList.remove('d-none')
-    persistentCode.style.display = 'block'
+    if (!previewAsPlayer) {
+      persistentCode.classList.remove('d-none')
+      persistentCode.style.display = 'block'
+    }
   }
   setDisplayRoomCode(roomCode);
   const base = serverUrl || baseUrl
@@ -6186,7 +6191,7 @@ socket.on('player:token', ({ token }) => {
   // ce stade, posé par `room:created` avant que l'hôte ne reçoive son
   // propre `player:token`).
   const persistentCode = document.getElementById('persistentRoomCode')
-  if (persistentCode && isHost) {
+  if (persistentCode && isHost && !previewAsPlayer) {
     persistentCode.classList.remove('d-none')
     persistentCode.style.display = 'block'
   }
@@ -6478,7 +6483,7 @@ const updateIrlPlayerUI = () => {
   const gameActive = document.body.classList.contains('game-active')
   // Aperçu « Tester cette question » (vues joueur) : la salle est créée par l'éditeur, donc isHost est vrai ici — mais
   // l'écran doit être celui d'un VRAI joueur (logo réduit, barre de temps fine, roue crantée), pas celui d'un hôte qui joue.
-  const isPlayerInGame = (!isHost || (previewQuestionMode && !previewAsHost)) && gameActive
+  const isPlayerInGame = (!isHost || previewAsPlayer) && gameActive
   document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && isPlayerInGame)
   document.body.classList.toggle('remote-player-mode', gameMode === 'remote' && isPlayerInGame)
   // Ligne d'info du menu roue crantée (voir #irlMenuModeInfo, index.html) —
@@ -7778,8 +7783,10 @@ const launchQuiz = async () => {
   // Panneau récap (hôte) : le bouton pour l'afficher/cacher n'a de sens
   // qu'une fois la partie lancée (rien à récapituler avant) — état
   // ouvert/fermé restauré depuis la dernière fois (voir RECAP_SIDEBAR_PREF_KEY).
-  showRecapSidebarUi()
-  setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
+  if (!previewAsPlayer) {
+    showRecapSidebarUi()
+    setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
+  }
   // On émet directement la première question (au lieu de simuler un clic sur
   // nextQuestionBtn) : le bouton reste grisé/onclick=null tant que la question
   // n'est pas révélée (voir updateHostControls), donc un .click() ici ne
@@ -7891,7 +7898,7 @@ socket.on('question:show', payload => {
   // serveur continue de diffuser question:recap à toute la salle (voir
   // revealQuestion côté server/index.js) — rien à changer côté serveur, le
   // joueur n'a simplement plus le bouton qui donnerait accès au panneau.
-  if (isHost) {
+  if (isHost && !previewAsPlayer) {
     showRecapSidebarUi()
     setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
   }
