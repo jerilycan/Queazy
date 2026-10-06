@@ -5375,6 +5375,10 @@ const validateQuestion = (q, i) => {
   }
 
   if (q.type === 'mcq') {
+    // Espaces de début/fin retirés à la sauvegarde (options ET bonnes réponses restent identiques entre elles) :
+    // une option « Paris » enregistrée avec un espace de trop ne correspondait pas à la réponse d'un joueur.
+    if (Array.isArray(q.options)) q.options = q.options.map(o => (typeof o === 'string' ? o.trim() : o))
+    if (Array.isArray(q.correct)) q.correct = q.correct.map(c => (typeof c === 'string' ? c.trim() : c))
     // Au moins une option non vide
     const validOptions = (q.options || []).filter(o => o && o.trim() !== '')
     if (validOptions.length === 0) {
