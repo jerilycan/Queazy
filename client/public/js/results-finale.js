@@ -92,7 +92,7 @@
       const block = h(`fin-pod-block ${TONE[pos]}`); block.textContent = MEDAL[pos]; block.style.height = `${HEIGHT[pos]}px`
       col.append(wrap, name, score, block)
       pod.appendChild(col)
-      cols[pos] = { col, av, name, score, block, crown: wrap.querySelector('.fin-pod-crown'), e }
+      cols[pos] = { col, wrap, av, name, score, block, crown: wrap.querySelector('.fin-pod-crown'), e }
     })
     stage.appendChild(pod)
     const confetti = () => {
@@ -116,8 +116,8 @@
       c.av.style.opacity = '1'
       A(c.av, [{ transform: 'translateY(-320px) scale(.7)', opacity: 0 }, { transform: 'translateY(0) scale(1)', opacity: 1 }], { duration: 620, easing: SPRING })
       await sleep(420)
-      // coordonnées relatives à la scène (offset*, pas getBoundingClientRect : la TV applique un zoom)
-      const cx = pod.offsetLeft + c.col.offsetLeft + c.col.offsetWidth / 2, cy = Hh - 26 - HEIGHT[pos] - 40
+      // centre réel de l'avatar, en coordonnées de la scène (offset*, pas getBoundingClientRect : la TV applique un zoom)
+      const cx = pod.offsetLeft + c.col.offsetLeft + c.col.offsetWidth / 2, cy = pod.offsetTop + c.wrap.offsetTop + c.wrap.offsetHeight / 2
       shockwave(cx, cy, pos === 1 ? 'rgba(255,210,74,.95)' : 'rgba(174,242,255,.9)', pos === 1 ? 700 : 380, 700)
       for (const sel of ['name', 'score']) A(c[sel], [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 260 })
       countUp(c.score, 0, c.e.score || 0, 700)
