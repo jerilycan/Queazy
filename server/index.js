@@ -207,7 +207,7 @@ const quizzStore = new Map()
 // tuiles à placer. Le joueur soumet la séquence de clés (index dans q.correct) de sa frise finale.
 // Une tuile est juste si (a) le nombre de repères placés avant elle est compatible avec sa date
 // (dates égales tolérées) et (b) elle n'est inversée, par rapport aux dates, avec aucune autre tuile
-// posée dans le même emplacement. Chaque tuile est jugée indépendamment des erreurs des autres
+// bien placée dans le même emplacement. Chaque tuile est jugée indépendamment des erreurs des autres
 // (comparer l'index final à l'index réel ferait tomber des tuiles justes dès qu'une seule est mal
 // posée). Une tuile absente de la soumission est fausse. Renvoie null si la question est inutilisable
 // (aucun repère ou aucune tuile).
@@ -230,15 +230,18 @@ const scoreTimelinePlacement = (events, submitted) => {
     else gapOf.set(k, anchorsPassed)
   })
 
-  const correct = new Set()
-  tileKeys.forEach((k) => {
-    if (!gapOf.has(k)) return
+  // (a) emplacement compatible avec la date ; (b) parmi les tuiles qui passent (a), aucune inversion
+  // dans le même emplacement — une tuile fausse ne pénalise donc jamais une tuile bien placée.
+  const gapOk = tileKeys.filter((k) => {
+    if (!gapOf.has(k)) return false
     const lo = anchorKeys.filter(a => dateOf(a) < dateOf(k)).length
     const hi = anchorKeys.filter(a => dateOf(a) <= dateOf(k)).length
-    const gap = gapOf.get(k)
-    if (gap < lo || gap > hi) return
+    return gapOf.get(k) >= lo && gapOf.get(k) <= hi
+  })
+  const correct = new Set()
+  gapOk.forEach((k) => {
     const mine = seq.indexOf(k)
-    const inverted = tileKeys.some(u => u !== k && gapOf.get(u) === gap &&
+    const inverted = gapOk.some(u => u !== k && gapOf.get(u) === gapOf.get(k) &&
       ((seq.indexOf(u) < mine && dateOf(u) > dateOf(k)) || (seq.indexOf(u) > mine && dateOf(u) < dateOf(k))))
     if (!inverted) correct.add(k)
   })
@@ -612,7 +615,7 @@ const start = async () => {
     // champ "anchor" de chaque événement (repère visible ou tuile à placer)
     // pour que le client sache lesquels le joueur devait placer.
     const revealCorrect = question.type === 'timeline' && Array.isArray(question.correct)
-      ? [...question.correct].sort((a, b) => Number(a?.date) - Number(b?.date))
+      ? question.correct.map((e, key) => ({ ...e, key })).sort((a, b) => Number(a?.date) - Number(b?.date))
       : question.correct
     // "image" : jusqu'ici seul le point du joueur COURANT s'affichait à la
     // révélation (voir index.js imageMarker) — retour utilisateur : montrer

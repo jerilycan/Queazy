@@ -65,16 +65,17 @@ Chaque étape = un diff relu et validé avant la suivante (`/implement-step`).
 
 ## Étapes réalisées
 - [x] 1. Éditeur : modèle (`anchor`) et saisie — interrupteur Repère visible / À placer, 2 à 8 événements, migration des anciennes questions, validation à la sauvegarde, libellé banque admin
-- [ ] 2. Serveur : score, révélation, historique
-- [ ] 3. Client : payload et rendu statique de la frise
-- [ ] 4. Client : glisser-déposer
-- [ ] 5. Révélation, bandeau, récap, TV/MJ
-- [ ] 6. Nettoyage et review
+- [x] 2. Serveur : score par tuile (`scoreTimelinePlacement`, testée avec un script jetable : tout juste, inversions, voisin, non placée, dates égales, tuile fausse qui ne pénalise pas une juste), révélation (clé d'origine ajoutée), historique ✓/✗ par tuile
+- [x] 3. Client : payload (`timelineAnchors` / `timelineItems`), migration `ensureTimelineAnchors`, rendu de la frise et de la réserve (maquette n°3)
+- [x] 4. Client : glisser-déposer (réserve ↔ frise, déplacement d'une tuile posée, emplacements libellés, « Déposer ici », retour en réserve)
+- [x] 5. Révélation (ordre réel + dates, tuiles justes/fausses), bandeau « Presque ! x/y », récap ✓/✗, styles TV
+- [x] 6a. Nettoyage de l'ancien code (wireTimelineDrag, styles .timeline-item…)
+- [ ] 6b. /review puis /close-task
 
 ## Checks effectués
 - [x] `node --check <fichier>` sur chaque fichier JS modifié (étape 1 : editor.js, admin-bank.js)
-- [ ] Démarrage serveur vérifié (si `server/index.js` touché)
-- [ ] Vérification visuelle Browser pane (si client touché) — étape 1 faite : création d'une question Timeline, bascule des rôles, résumé « n repères · m à placer », migration d'une ancienne question (médiane → repère) ; la sauvegarde réelle (toast d'erreur 0 repère) reste à tester à la main
+- [x] Démarrage serveur vérifié (si `server/index.js` touché) — port 3112 puis redémarrage du 3111
+- [x] Vérification visuelle Browser pane (si client touché) — étape 3-5 : aperçu « Tester » en vue joueur, PC et TV, glisser simulé en événements pointeur (emplacements, « Déposer ici », dépôt, déplacement d'une tuile posée), révélation avec bandeau « Presque ! 1/2 bien placés (+341 points) » ; — étape 1 faite : création d'une question Timeline, bascule des rôles, résumé « n repères · m à placer », migration d'une ancienne question (médiane → repère) ; la sauvegarde réelle (toast d'erreur 0 repère) reste à tester à la main
 
 ## Tests manuels recommandés
 (à remplir au /review)
