@@ -8505,6 +8505,9 @@ socket.on('question:show', payload => {
   // (voir style.css, sélecteur qui les exclut explicitement), pas besoin
   // de la reposer plusieurs fois pour la même hygiène.
   optionsDiv.style.removeProperty('--mcq-cols')
+  // QCM à plusieurs bonnes réponses : le joueur en coche plusieurs, les tuiles non cochées ne doivent donc pas
+  // s'effacer comme si elles étaient désactivées (voir .options-grid.mcq-multi dans style.css).
+  optionsDiv.classList.toggle('mcq-multi', payload.type === 'mcq' && Array.isArray(payload.correct) && payload.correct.length > 1)
   if (payload.type === 'mcq' && Array.isArray(payload.options)) {
     const mcqCols = payload.options.length <= 4 ? 2 : payload.options.length <= 6 ? 3 : 4
     optionsDiv.style.setProperty('--mcq-cols', mcqCols)

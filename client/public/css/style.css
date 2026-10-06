@@ -2090,7 +2090,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    tuiles s'effacent (façon Kahoot) — le choix saute aux yeux. Jamais
    pendant la révélation : correct-/incorrect-reveal gèrent alors seules
    l'opacité (la bonne réponse non choisie doit rester bien visible). */
-.options-grid:has(> .option-btn.selected) > .option-btn:not(.selected):not(.correct-reveal):not(.incorrect-reveal) {
+.options-grid:not(.mcq-multi):has(> .option-btn.selected) > .option-btn:not(.selected):not(.correct-reveal):not(.incorrect-reveal) {
   opacity: 0.4;
   filter: saturate(0.5);
 }
