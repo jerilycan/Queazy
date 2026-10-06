@@ -7197,21 +7197,24 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 /* Ligne d'édition "timeline" (titre + description + date) — même ligne
    glissable que .order-edit-row, mais 3 champs groupés dans un sous-bloc
    plutôt qu'un seul <input> texte direct (voir editor.js renderTimelineEvents). */
-.timeline-edit-row { align-items: flex-start; padding: 8px; }
+.timeline-edit-row { align-items: flex-start; padding: 8px; cursor: default; touch-action: auto; }
 .timeline-edit-fields {
   flex: 1;
   display: grid;
   grid-template-columns: 1.4fr 1.4fr 110px;
   gap: 8px;
 }
-.timeline-edit-fields input {
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 8px 10px;
+/* Sélecteur plus précis que .option-row input[type="text"] (bordure nulle, fond transparent) : sans lui les champs étaient invisibles. */
+.timeline-edit-row .timeline-edit-fields input {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  padding: 9px 12px;
   font-size: 14px;
-  background: var(--color-bg-alt);
+  background: rgba(0, 0, 0, 0.28);
   color: var(--color-text);
+  cursor: text;
 }
+.timeline-edit-row .timeline-edit-fields input:focus { border-color: var(--color-accent); }
 .timeline-date-input { text-align: center; }
 /* Sélecteur « Repère visible / À placer » d'une ligne (tâche 052) : pleine largeur sous les 3 champs. */
 .timeline-role-switch { grid-column: 1 / -1; }
