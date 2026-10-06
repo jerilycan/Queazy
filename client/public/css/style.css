@@ -10734,8 +10734,6 @@ body.results-tv #fullTable { margin-top: 0; }
 .fin-name { font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: end; min-width: 0; }
 .fin-score { font-weight: 900; font-size: 12px; color: var(--color-accent); font-variant-numeric: tabular-nums; align-self: start; white-space: nowrap; }
 .fin-rank { position: absolute; top: -8px; left: -8px; min-width: 22px; height: 22px; padding: 0 4px; box-sizing: border-box; border-radius: 11px; background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2)); color: #fff; font: 800 12px 'Baloo 2', sans-serif; display: flex; align-items: center; justify-content: center; z-index: 2; }
-.fin-bar { position: absolute; left: 8px; right: 8px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .1); overflow: hidden; }
-.fin-bar i { display: block; height: 100%; transform-origin: left; background: linear-gradient(90deg, var(--color-accent), var(--color-accent-2)); }
 .fin-dust { position: absolute; pointer-events: none; z-index: 8; will-change: transform, opacity; }
 .fin-flash { position: absolute; inset: 0; opacity: 0; z-index: 20; pointer-events: none; }
 .fin-wave { position: absolute; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid #fff; opacity: 0; z-index: 15; pointer-events: none; }
@@ -10763,3 +10761,5 @@ body.results-tv .fin-skip { display: none; }
 .fin-card.fin-gold { border-color: #ffd24a; box-shadow: 0 0 34px rgba(255, 210, 74, .65); }
 .fin-card.fin-silver { border-color: #cfd8e3; box-shadow: 0 0 22px rgba(207, 216, 227, .45); }
 .fin-card.fin-bronze { border-color: #d98a4e; box-shadow: 0 0 22px rgba(217, 138, 78, .5); }
+/* Podium : version épurée — ni pastilles de questions, ni « +points », ni séries 🔥, ni médailles ni bandeau « Arrivée » (retour utilisateur : trop d'informations). */
+.race-qstrip, .race-float-pop, .race-lane-streak, .race-lane-badge, .race-status-pill.done { display: none !important; }
