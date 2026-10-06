@@ -1,7 +1,7 @@
 // Animation de fin de partie (tâche 049) : tous les joueurs (ou équipes) apparaissent en cartes,
 // se réordonnent question après question, puis tous sauf les trois premiers sont éliminés en
 // rafale — ordre aléatoire, effets qui se chevauchent — avec l'un des 6 effets ci-dessous.
-// Le podium actuel (results.js runRace) prend ensuite le relais.
+// Il se termine par le podium 2 - 1 - 3 (buildPodium) : avatars qui tombent sur leur socle, couronne, confettis.
 //
 // L'effet et l'ordre d'élimination dépendent d'une graine fournie par l'appelant (code de salle) :
 // TV, joueurs et MJ voient donc la même animation. Tout est animé en WAAPI (transform / opacity /
@@ -24,31 +24,18 @@
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296
     }
   }
+  const hueOf = (i, n) => (i * 360) / n
+  const colorOf = (i, n) => `linear-gradient(135deg, hsl(${hueOf(i, n)} 85% 58%), hsl(${(hueOf(i, n) + 40) % 360} 80% 46%))`
+  // Avatar rond : image si URL, sinon emoji/initiales sur dégradé (textContent : jamais d'HTML venant des joueurs).
+  const fillAvatar = (el, e, i, n) => {
+    if (isAvatarUrl(e.avatar)) { el.style.backgroundImage = `url(${e.avatar})` } else { el.style.background = colorOf(i, n); el.textContent = e.avatar || (e.name || '?').slice(0, 2).toUpperCase() }
+  }
   const h = (cls, html = '') => { const e = document.createElement('div'); e.className = cls; if (html) e.innerHTML = html; return e }
 
-  // ---------------------------------------------------------------- moteur
-  const run = ({ stage, entities, raceHistory, seed, canSkip, onDone }) => {
-    const tok = { dead: false }
-    const rnd = mulberry32(seed)
-    const N = entities.length
-    const Q = raceHistory.length
-    const W = stage.clientWidth, Hh = stage.clientHeight
+  // Outils d'animation liés à une scène : WAAPI, attente annulable (tok.dead), compteur de points, flash / onde / étincelles.
+  const makeKit = (stage, tok) => {
     const sleep = (ms) => new Promise((res, rej) => setTimeout(() => (tok.dead ? rej(CANCEL) : res()), ms))
     const A = (el, kf, o = {}) => el.animate(kf, { fill: 'forwards', easing: EO, ...o }).finished.catch(() => {})
-    const hue = (i) => (i * 360) / N
-    const color = (i) => `linear-gradient(135deg, hsl(${hue(i)} 85% 58%), hsl(${(hue(i) + 40) % 360} 80% 46%))`
-    const solid = (i) => `hsl(${hue(i)} 82% 62%)`
-
-    // Points cumulés par question (deltas de l'historique) ; le score réel (ajustements du MJ compris)
-    // est recalé une fois la course terminée.
-    const cum = []
-    raceHistory.forEach((hq, q) => cum.push(entities.map((e, i) => (Number(hq.deltas?.[e.id]) || 0) + (q ? cum[q - 1][i] : 0))))
-
-    const status = h('fin-status')
-    stage.appendChild(status)
-    const setStatus = (txt) => { status.textContent = txt }
-    stage.insertBefore(h('fin-grid'), stage.firstChild)
-
     const countUp = (el, from, to, ms) => {
       const t0 = performance.now()
       const step = (now) => {
@@ -59,6 +46,109 @@
       }
       requestAnimationFrame(step)
     }
+    const flash = (col = '#fff', peak = 0.9, ms = 700) => {
+      const f = h('fin-flash'); f.style.background = col
+      stage.appendChild(f)
+      return A(f, [{ opacity: 0 }, { opacity: peak, offset: 0.25 }, { opacity: 0 }], { duration: ms }).then(() => f.remove())
+    }
+    const shockwave = (cx, cy, col = 'rgba(255,255,255,.85)', size = 900, ms = 900) => {
+      const w = h('fin-wave'); w.style.cssText = `left:${cx}px;top:${cy}px;border-color:${col};box-shadow:0 0 30px ${col}`
+      stage.appendChild(w)
+      return A(w, [{ opacity: 0.9, transform: 'scale(.3)' }, { opacity: 0, transform: `scale(${size / 60})` }], { duration: ms }).then(() => w.remove())
+    }
+    const embers = (x, y, n = 12, col = '#7fe6ff') => {
+      for (let k = 0; k < n; k++) {
+        const e = h('fin-dust'); const s = 4 + (k % 3) * 2
+        e.style.cssText = `left:${x}px;top:${y}px;width:${s}px;height:${s}px;background:${col};border-radius:2px;box-shadow:0 0 8px ${col}`
+        stage.appendChild(e)
+        const ang = (k / n) * Math.PI * 2 + k; const d = 40 + ((k * 17) % 60)
+        A(e, [{ opacity: 1, transform: 'translate(0,0)' }, { opacity: 0, transform: `translate(${Math.cos(ang) * d}px, ${Math.sin(ang) * d - 30}px)` }], { duration: 700 }).then(() => e.remove())
+      }
+    }
+    return { sleep, A, countUp, flash, shockwave, embers }
+  }
+
+  // Podium final (socles 2 - 1 - 3 : chaque avatar tombe sur son socle, couronne et confettis pour le 1er).
+  // animate=false : état final immédiat (« Passer », mouvement réduit). Rend une promesse résolue à la fin.
+  const buildPodium = async ({ stage, tok, top, animate, onWinner }) => {
+    const { sleep, A, countUp, flash, shockwave, embers } = makeKit(stage, tok)
+    const W = stage.clientWidth, Hh = stage.clientHeight
+    if (!stage.querySelector('.fin-grid')) stage.insertBefore(h('fin-grid'), stage.firstChild)
+    const k = Math.max(0.5, Math.min(1.5, (Hh - 215) / 168))
+    const HEIGHT = { 1: 168 * k, 2: 118 * k, 3: 84 * k }
+    const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' }, TONE = { 1: 'gold', 2: 'silver', 3: 'bronze' }
+    const order = [2, 1, 3].filter(pos => top[pos - 1])
+    const pod = h('fin-pod'); pod.style.setProperty('--pod-w', `${Math.max(70, Math.min(150, (W - 60) / 3 - 14))}px`)
+    const cols = {}
+    order.forEach(pos => {
+      const e = top[pos - 1]
+      const col = h('fin-pod-col'); col.dataset.playerId = e.id // survol : récap par question (results.js)
+      const wrap = h('fin-pod-avwrap')
+      const av = h('fin-pod-av'); fillAvatar(av, e, pos - 1, Math.max(3, top.length))
+      wrap.appendChild(av)
+      if (pos === 1) { const crown = h('fin-pod-crown'); crown.textContent = '👑'; wrap.appendChild(crown) }
+      const name = h('fin-pod-name'); name.textContent = e.name || ''
+      const score = h('fin-pod-score'); score.textContent = animate ? '0 pts' : `${(e.score || 0).toLocaleString('fr-FR')} pts`
+      const block = h(`fin-pod-block ${TONE[pos]}`); block.textContent = MEDAL[pos]; block.style.height = `${HEIGHT[pos]}px`
+      col.append(wrap, name, score, block)
+      pod.appendChild(col)
+      cols[pos] = { col, av, name, score, block, crown: wrap.querySelector('.fin-pod-crown'), e }
+    })
+    stage.appendChild(pod)
+    const confetti = () => {
+      if (!animate || typeof window.confetti !== 'function') return
+      const base = { particleCount: 90, spread: 75, startVelocity: 58, ticks: 240, zIndex: 9999 }
+      window.confetti({ ...base, angle: 60, origin: { x: 0, y: 0.75 } })
+      window.confetti({ ...base, angle: 120, origin: { x: 1, y: 0.75 } })
+      setTimeout(() => window.confetti({ particleCount: 70, spread: 110, startVelocity: 38, zIndex: 9999, origin: { x: 0.5, y: 0.5 } }), 260)
+    }
+    if (!animate) {
+      order.forEach(pos => { if (cols[pos].crown) cols[pos].crown.style.opacity = '1' })
+      if (onWinner) onWinner()
+      return
+    }
+    order.forEach(pos => { cols[pos].av.style.opacity = '0'; cols[pos].name.style.opacity = '0'; cols[pos].score.style.opacity = '0'; cols[pos].block.style.transform = 'scaleY(0)' })
+    await sleep(500)
+    for (const pos of [3, 2, 1].filter(p => cols[p])) {
+      const c = cols[pos]
+      A(c.block, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: 520, easing: SPRING })
+      await sleep(240)
+      c.av.style.opacity = '1'
+      A(c.av, [{ transform: 'translateY(-320px) scale(.7)', opacity: 0 }, { transform: 'translateY(0) scale(1)', opacity: 1 }], { duration: 620, easing: SPRING })
+      await sleep(420)
+      // coordonnées relatives à la scène (offset*, pas getBoundingClientRect : la TV applique un zoom)
+      const cx = pod.offsetLeft + c.col.offsetLeft + c.col.offsetWidth / 2, cy = Hh - 26 - HEIGHT[pos] - 40
+      shockwave(cx, cy, pos === 1 ? 'rgba(255,210,74,.95)' : 'rgba(174,242,255,.9)', pos === 1 ? 700 : 380, 700)
+      for (const sel of ['name', 'score']) A(c[sel], [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 260 })
+      countUp(c.score, 0, c.e.score || 0, 700)
+      if (pos === 1) {
+        A(c.crown, [{ opacity: 0, transform: 'translateY(-60px) rotate(-25deg) scale(.6)' }, { opacity: 1, transform: 'translateY(0) rotate(0) scale(1)' }], { duration: 600, easing: SPRING })
+        flash('#fff', 0.5, 700); embers(cx, cy, 24, '#ffd24a'); confetti()
+        if (onWinner) onWinner()
+      }
+      await sleep(pos === 1 ? 900 : 520)
+    }
+  }
+
+  // ---------------------------------------------------------------- moteur
+  const run = ({ stage, entities, raceHistory, seed, canSkip, getTop, onWinner, onDone }) => {
+    const tok = { dead: false }
+    const rnd = mulberry32(seed)
+    const N = entities.length
+    const Q = raceHistory.length
+    const W = stage.clientWidth, Hh = stage.clientHeight
+    const { sleep, A, countUp, flash, shockwave, embers } = makeKit(stage, tok)
+    const solid = (i) => `hsl(${hueOf(i, N)} 82% 62%)`
+
+    // Points cumulés par question (deltas de l'historique) ; le score réel (ajustements du MJ compris)
+    // est recalé une fois la course terminée.
+    const cum = []
+    raceHistory.forEach((hq, q) => cum.push(entities.map((e, i) => (Number(hq.deltas?.[e.id]) || 0) + (q ? cum[q - 1][i] : 0))))
+
+    const status = h('fin-status')
+    stage.appendChild(status)
+    const setStatus = (txt) => { status.textContent = txt }
+    stage.insertBefore(h('fin-grid'), stage.firstChild)
 
     // m cartes → centre + échelle de chacune ; on retient le nombre de colonnes qui donne les cartes les plus grandes.
     const layout = (m) => {
@@ -82,8 +172,7 @@
     const C = entities.map((e, i) => {
       const el = h('fin-card')
       const rank = h('fin-rank'); rank.textContent = String(i + 1)
-      const av = h('fin-av')
-      if (isAvatarUrl(e.avatar)) { av.style.backgroundImage = `url(${e.avatar})` } else { av.style.background = color(i); av.textContent = e.avatar || (e.name || '?').slice(0, 2).toUpperCase() }
+      const av = h('fin-av'); fillAvatar(av, e, i, N)
       const name = h('fin-name'); name.textContent = e.name || ''; name.style.color = solid(i)
       const score = h('fin-score'); score.textContent = '0 pts'
       el.append(rank, av, name, score)
@@ -93,27 +182,6 @@
     const place = (p, L, ms) => { A(p.el, [{ transform: pose(p.x, p.y, p.s) }, { transform: pose(L.x, L.y, L.s) }], { duration: ms, easing: IO }); p.x = L.x; p.y = L.y; p.s = L.s }
     const rankOrderAt = (q) => [...Array(N).keys()].sort((a, b) => cum[q][b] - cum[q][a] || a - b)
     const clone = (p) => { const c = p.el.cloneNode(true); c.style.transform = pose(p.x, p.y, p.s); c.style.zIndex = 8; stage.appendChild(c); return c }
-
-    // ---- effets communs
-    const flash = (col = '#fff', peak = 0.9, ms = 700) => {
-      const f = h('fin-flash'); f.style.background = col
-      stage.appendChild(f)
-      return A(f, [{ opacity: 0 }, { opacity: peak, offset: 0.25 }, { opacity: 0 }], { duration: ms }).then(() => f.remove())
-    }
-    const shockwave = (cx, cy, col = 'rgba(255,255,255,.85)', size = 900, ms = 900) => {
-      const w = h('fin-wave'); w.style.cssText = `left:${cx}px;top:${cy}px;border-color:${col};box-shadow:0 0 30px ${col}`
-      stage.appendChild(w)
-      return A(w, [{ opacity: 0.9, transform: 'scale(.3)' }, { opacity: 0, transform: `scale(${size / 60})` }], { duration: ms }).then(() => w.remove())
-    }
-    const embers = (x, y, n = 12, col = '#7fe6ff') => {
-      for (let k = 0; k < n; k++) {
-        const e = h('fin-dust'); const s = 4 + (k % 3) * 2
-        e.style.cssText = `left:${x}px;top:${y}px;width:${s}px;height:${s}px;background:${col};border-radius:2px;box-shadow:0 0 8px ${col}`
-        stage.appendChild(e)
-        const ang = (k / n) * Math.PI * 2 + k; const d = 40 + ((k * 17) % 60)
-        A(e, [{ opacity: 1, transform: 'translate(0,0)' }, { opacity: 0, transform: `translate(${Math.cos(ang) * d}px, ${Math.sin(ang) * d - 30}px)` }], { duration: 700 }).then(() => e.remove())
-      }
-    }
 
     // ---- les 6 effets d'élimination : chacun rend une promesse résolue quand la carte a disparu
     const EFFECTS = [
@@ -288,42 +356,17 @@
     ]
     const FX = EFFECTS[Math.abs(seed) % EFFECTS.length]
 
-    // ---- 3 joueurs ou moins : pas d'élimination, mais une cérémonie de révélation du podium —
-    // cartes assombries, compte à rebours, puis un faisceau révèle la 3ᵉ, la 2ᵉ et enfin la 1ʳᵉ place.
-    const ceremony = async () => {
-      setStatus('')
-      C.forEach(p => A(p.el, [{ filter: 'none' }, { filter: 'blur(2.5px) brightness(0.45)' }], { duration: 500 }))
-      await sleep(700)
-      for (const n of [3, 2, 1]) {
-        const t = h('fin-count'); t.textContent = String(n)
-        stage.appendChild(t)
-        A(t, [{ opacity: 0, transform: 'scale(2.2)' }, { opacity: 1, transform: 'scale(1)', offset: 0.35 }, { opacity: 0, transform: 'scale(0.8)' }], { duration: 800 }).then(() => t.remove())
-        await sleep(800)
-      }
-      const MEDAL = ['🥇', '🥈', '🥉']; const TONE = ['fin-gold', 'fin-silver', 'fin-bronze']
-      for (let r = N - 1; r >= 0; r--) {
-        const p = C[r]; const w = CW * p.s, hh = CH * p.s, x0 = p.x - w / 2, y0 = p.y - hh / 2
-        const beam = h('fin-beam'); beam.style.cssText = `left:${x0 - 10}px;width:${w + 20}px;top:0;height:${y0 + hh / 2}px${r === 0 ? ';background:linear-gradient(180deg,transparent,rgba(255,210,74,.18) 30%,rgba(255,236,170,.6))' : ''}`
-        stage.appendChild(beam)
-        await A(beam, [{ opacity: 0, transform: 'scaleX(.1)' }, { opacity: 1, transform: 'scaleX(1)' }], { duration: 380, fill: 'both' })
-        await A(p.el, [{ filter: 'blur(2.5px) brightness(0.45)', transform: pose(p.x, p.y, p.s) }, { filter: 'blur(0) brightness(3)', transform: pose(p.x, p.y, p.s * 1.18), offset: 0.4 }, { filter: 'none', transform: pose(p.x, p.y, p.s * 1.1) }], { duration: 650 })
-        p.el.classList.add(TONE[r])
-        p.rank.style.display = 'none' // la médaille remplace le badge de rang
-        const medal = h('fin-medal'); medal.textContent = MEDAL[r]; medal.style.cssText = `left:${p.x}px;top:${y0 - 4}px`
-        stage.appendChild(medal)
-        A(medal, [{ opacity: 0, transform: 'scale(0) rotate(-40deg)' }, { opacity: 1, transform: 'scale(1) rotate(0deg)' }], { duration: 500, easing: SPRING })
-        shockwave(p.x, p.y, r === 0 ? 'rgba(255,210,74,.95)' : 'rgba(174,242,255,.9)', r === 0 ? 700 : 420, 700)
-        if (r === 0) embers(p.x, p.y, 24, '#ffd24a')
-        if (r === 0) flash('#fff', 0.55, 700)
-        A(beam, [{ opacity: 1 }, { opacity: 0 }], { duration: 500 }).then(() => beam.remove())
-        await sleep(r === 0 ? 1500 : 1000)
-      }
-      await sleep(300)
-    }
-
     let skipBtn = null
+    const topNow = () => (getTop ? getTop() : entities).slice(0, 3)
     const finish = () => { if (skipBtn) skipBtn.remove(); onDone() }
-    const skip = () => { if (tok.dead) return; tok.dead = true; stage.querySelectorAll('*').forEach(el => el.getAnimations?.().forEach(a => a.cancel())); finish() }
+    // « Passer » : on coupe tout et on affiche directement le podium final.
+    const skip = () => {
+      if (tok.dead) return
+      tok.dead = true
+      stage.getAnimations?.({ subtree: true }).forEach(a => a.cancel())
+      Array.from(stage.children).forEach(el => { if (el !== skipBtn) el.remove() })
+      buildPodium({ stage, tok: { dead: false }, top: topNow(), animate: false, onWinner }).then(finish)
+    }
     if (canSkip) {
       skipBtn = document.createElement('button')
       skipBtn.type = 'button'; skipBtn.className = 'fin-skip'; skipBtn.textContent = 'Passer ▶'
@@ -332,6 +375,13 @@
     }
 
     const go = async () => {
+      // 3 joueurs ou moins : pas de plateau ni d'élimination, le podium se révèle directement.
+      if (N <= 3) {
+        C.forEach(p => p.el.remove())
+        status.remove()
+        await buildPodium({ stage, tok, top: topNow(), animate: true, onWinner })
+        return
+      }
       // --- arrivée des cartes
       const L0 = layout(N)
       rankOrderAt(0).forEach((i, k) => {
@@ -355,7 +405,6 @@
       entities.forEach((e, i) => countUp(C[i].score, Q ? cum[Q - 1][i] : 0, e.score || 0, 400))
       C.forEach((p, k) => { place(p, L0[k], 500); p.rank.textContent = String(k + 1) }) // `entities` est déjà trié par score final
       await sleep(900)
-      if (N <= 3) { await ceremony(); return }
       setStatus(FX.intro)
       await sleep(800)
       // --- rafale : ordre aléatoire (graine partagée) hors podium, intervalle qui raccourcit, effets qui se chevauchent
@@ -376,10 +425,16 @@
       await sleep(350)
       C.slice(0, 3).forEach(p => A(p.el, [{ opacity: 1 }, { opacity: 0 }], { duration: 300 }))
       await sleep(400)
+      C.forEach(p => p.el.remove())
+      status.remove()
+      await buildPodium({ stage, tok, top: topNow(), animate: true, onWinner })
     }
     go().then(() => { if (!tok.dead) { tok.dead = true; finish() } }).catch(e => { if (e !== CANCEL) { console.error(e); tok.dead = true; finish() } })
     return { skip }
   }
 
-  window.QzFinale = { run }
+  // Podium seul (1 joueur, aucune question jouée, « réduire les animations »).
+  const podium = ({ stage, top, animate, onWinner }) => buildPodium({ stage, tok: { dead: false }, top, animate, onWinner })
+
+  window.QzFinale = { run, podium }
 })()

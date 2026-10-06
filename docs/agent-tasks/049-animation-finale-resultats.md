@@ -22,8 +22,9 @@ Même animation et même ordre d'élimination sur tous les écrans d'une même s
 - Nouveau script `results-finale.js` (moteur + 6 effets), CSS associé.
 - Branchement dans `tryStartRace` (`results.js`) ; modes joueur et équipe.
 - Mode TV : lancement automatique, pas de bouton « Passer ».
-- Cérémonie de révélation du podium (cartes assombries, compte à rebours, faisceau révélant la 3ᵉ, la 2ᵉ puis la 1ʳᵉ place) quand il y a 2 ou 3 joueurs/équipes.
-- Repli : 1 joueur, historique vide ou « mouvement réduit » → podium seul (restylé dans la même DA).
+- Podium 2 - 1 - 3 des animations (socles or/argent/bronze, avatars qui tombent, couronne, confettis, fanfare) qui REMPLACE l'ancien podium « course » (barres qui montent, `runRace`, supprimé avec son HTML/CSS).
+- 3 joueurs/équipes ou moins : révélation directe du podium (pas de plateau ni d'élimination).
+- Sans historique, 1 joueur ou « mouvement réduit » : podium seul (statique en mouvement réduit).
 
 ## Hors périmètre
 - Aucun changement serveur / schéma / dépendance.
@@ -70,7 +71,7 @@ Même animation et même ordre d'élimination sur tous les écrans d'une même s
 - Très gros effectifs (>40) : cartes très petites, texte peu lisible.
 - La liste complète et le podium sont masqués pendant l'animation ; l'onglet « Détail » reste accessible.
 - Podium restylé (fond/grille néon, pistes en verre, avatars cerclés, pastille cyan) pour garder la même DA que l’animation, y compris en repli (≤ 3 joueurs).
-- Bug existant non traité : le bandeau « Arrivée ! » chevauche le score du 1er sur le podium.
+- Ancien podium « course » supprimé : plus de pastilles de questions, de « +points » ni de séries 🔥 ; le survol d'une colonne du podium (récap par question) est conservé via `data-player-id`.
 
 ## Statut
 `en review`
