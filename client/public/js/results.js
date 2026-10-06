@@ -426,20 +426,67 @@ const computeTeamHistory = () => {
   })
 }
 
+// Hash stable du code de salle : TV, joueurs et MJ tirent ainsi le même effet et le même ordre
+// d'élimination dans l'animation de fin (results-finale.js).
+const finaleSeed = (key) => {
+  let s = 2166136261
+  for (const c of String(key)) { s ^= c.charCodeAt(0); s = Math.imul(s, 16777619) }
+  return s >>> 0
+}
+
+// Animation de fin (tâche 049) quand il y a plus de 3 joueurs/équipes et un historique : tous
+// les joueurs en cartes, éliminés en rafale jusqu'au podium, puis la course du podium reprend
+// directement à son état final (historique vide → pas de montée rejouée). Repli sur l'ancien
+// comportement si le script est absent, en « mouvement réduit », ou si l'animation plante.
+const launchPodium = (entities, hist) => {
+  const tab = document.getElementById('podiumTab')
+  const host = document.getElementById('resultsPodium')
+  const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (!window.QzFinale || !tab || !host || reducedMotion || entities.length <= 3 || hist.length === 0) {
+    runRace(entities.slice(0, 3), hist)
+    return
+  }
+  const stage = document.createElement('div')
+  stage.className = 'fin-stage'
+  host.prepend(stage)
+  tab.classList.add('finale-active')
+  const done = () => {
+    stage.remove()
+    tab.classList.remove('finale-active')
+    // Scores et ordre frais : un lobby:list a pu arriver pendant l'animation.
+    const fresh = teamModeActive ? computeTeamEntities() : computeOrder((latestPlayers || []).slice())
+    runRace(fresh.slice(0, 3), [])
+  }
+  try {
+    window.QzFinale.run({
+      stage,
+      entities: entities.map(e => ({ id: e.id, name: e.name, avatar: e.avatar, score: e.score })),
+      raceHistory: hist,
+      seed: finaleSeed(roomCode),
+      canSkip: params.get('tv') !== '1',
+      onDone: done
+    })
+  } catch (err) {
+    console.error('Animation de fin indisponible, podium direct :', err)
+    stage.remove()
+    tab.classList.remove('finale-active')
+    runRace(entities.slice(0, 3), hist)
+  }
+}
+
 const tryStartRace = () => {
   if (raceStarted || !historyReceived || !latestPlayers) return
   if (teamModeActive) {
-    const topTeams = computeTeamEntities().slice(0, 3)
-    if (topTeams.length === 0) return
+    const teams = computeTeamEntities()
+    if (teams.length === 0) return
     raceStarted = true
-    runRace(topTeams, computeTeamHistory())
+    launchPodium(teams, computeTeamHistory())
     return
   }
   const ordered = computeOrder(latestPlayers.slice())
-  const top = ordered.slice(0, 3)
-  if (top.length === 0) return
+  if (ordered.length === 0) return
   raceStarted = true
-  runRace(top, history)
+  launchPodium(ordered, history)
 }
 
 // Une fois la course lancée (raceStarted), les pistes du podium gardent
