@@ -7210,14 +7210,14 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   border-radius: 8px;
   padding: 9px 12px;
   font-size: 14px;
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--color-surface);
   color: var(--color-text);
   cursor: text;
 }
 .timeline-edit-row .timeline-edit-fields input:focus { border-color: var(--color-accent); }
 .timeline-date-input { text-align: center; }
 /* Sélecteur « Repère visible / À placer » d'une ligne (tâche 052) : pleine largeur sous les 3 champs. */
-.timeline-role-switch { grid-column: 1 / -1; width: fit-content; margin-top: 0; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.09); border: 1px solid rgba(255, 255, 255, 0.22); }
+.timeline-role-switch { grid-column: 1 / -1; width: fit-content; margin-top: 0; gap: 2px; padding: 3px; border-radius: 999px; background: var(--color-surface); border: 1px solid rgba(255, 255, 255, 0.22); }
 .timeline-role-switch .tolerance-switch-btn { flex: none; padding: 4px 12px; border: none; border-radius: 999px; background: transparent; font-size: 12px; }
 .timeline-role-switch .tolerance-switch-btn.active { background: rgba(var(--color-accent-rgb), 0.28); color: var(--color-text); box-shadow: inset 0 0 0 1px var(--color-accent); }
 .timeline-summary { font-size: 13px; font-weight: 700; color: var(--color-text-muted); }
