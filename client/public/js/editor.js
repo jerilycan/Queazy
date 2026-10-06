@@ -2956,6 +2956,11 @@ const toggleTypeSections = () => {
   if (zoomGuessSection) zoomGuessSection.classList.toggle('d-none', qType.value !== 'zoomguess')
   if (rechercheSection) rechercheSection.classList.toggle('d-none', qType.value !== 'recherche')
   if (haloSection) haloSection.classList.toggle('d-none', qType.value !== 'halo')
+  // Réglages Avancé de ces deux types : affichés sous la réponse (voir editor.html).
+  const zoomGuessSettings = document.getElementById('zoomGuessSettings')
+  if (zoomGuessSettings) zoomGuessSettings.classList.toggle('d-none', qType.value !== 'zoomguess')
+  const haloSettings = document.getElementById('haloSettings')
+  if (haloSettings) haloSettings.classList.toggle('d-none', qType.value !== 'halo')
   if (revealSection) revealSection.classList.toggle('d-none', qType.value !== 'reveal')
   // Tâche 027 : le son facultatif (bonusAudioSection) est désormais
   // disponible pour N'IMPORTE QUEL type — contrairement à l'illustration
@@ -2971,6 +2976,18 @@ const toggleTypeSections = () => {
   const audioOptionalTag = document.getElementById('audioOptionalTag')
   if (audioOptionalTag) audioOptionalTag.classList.toggle('d-none', qType.value === 'blindtest')
   if (blindtestAnswersSection) blindtestAnswersSection.classList.toggle('d-none', qType.value !== 'blindtest')
+  // Blind Test : le son (obligatoire) quitte le bloc facultatif pour son propre bloc, au-dessus.
+  const requiredAudioBlock = document.getElementById('requiredAudioBlock')
+  const requiredAudioCard = document.getElementById('requiredAudioCard')
+  if (requiredAudioBlock && requiredAudioCard && bonusAudioSection) {
+    const isBlind = qType.value === 'blindtest'
+    requiredAudioBlock.classList.toggle('d-none', !isBlind)
+    const target = isBlind ? requiredAudioCard : document.querySelector('#mediaBlock .media-card')
+    if (bonusAudioSection.parentElement !== target) target.appendChild(bonusAudioSection)
+  }
+  // Bloc média : « Son » seul quand l'illustration est masquée (le type a déjà sa propre image, juste au-dessus).
+  const mediaBlockLabel = document.getElementById('mediaBlockLabel')
+  if (mediaBlockLabel) mediaBlockLabel.textContent = qType.value === 'blindtest' ? 'Image' : qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice' || qType.value === 'halo' ? 'Son' : 'Image et son'
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
   if (rangementSection) rangementSection.classList.toggle('d-none', qType.value !== 'rangement')
