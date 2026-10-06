@@ -23,9 +23,11 @@ const QUIZ_AUTO_ACCENTS = [
   ['var(--color-violet)', '#7a2fa8']
 ]
 window.quizAutoTile = (seed, title) => {
-  let hash = 0
-  for (const c of String(seed || title || '')) hash = (hash * 31 + c.charCodeAt(0)) >>> 0
-  const [a, a2] = QUIZ_AUTO_ACCENTS[hash % QUIZ_AUTO_ACCENTS.length]
+  // FNV-1a + mélange final : des ids voisins (uuid) donnent des couleurs bien réparties.
+  let hash = 2166136261
+  for (const c of String(seed || title || '')) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619)
+  hash ^= hash >>> 15; hash = Math.imul(hash, 2246822519); hash ^= hash >>> 13
+  const [a, a2] = QUIZ_AUTO_ACCENTS[(hash >>> 0) % QUIZ_AUTO_ACCENTS.length]
   const initials = (title || '').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?'
   return { background: `linear-gradient(135deg, ${a} 0%, ${a2} 100%)`, initials }
 }
