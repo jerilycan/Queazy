@@ -5831,10 +5831,28 @@ saveQuizBtn.onclick = async () => {
 }
 
 // Aperçu jouable de la question en cours (tâche 050) : modale avec le vrai client de jeu dans une iframe
-// (index.js en mode ?previewEditorQuestion=1, salle solo éphémère côté serveur — rien n'est sauvegardé).
-// L'iframe dit « prêt » par postMessage, l'éditeur répond avec la question ; messages limités à notre
-// origine et à cette iframe. « Recommencer » recharge l'iframe, la poignée de main se rejoue.
+// (index.js en mode ?previewEditorQuestion=1, salle éphémère côté serveur — rien n'est sauvegardé).
+// 4 vues : joueur mobile, joueur PC (même page, fenêtre plus large → mise en page grand écran), MJ
+// (?view=mj : salle « Présenter », écran du MJ), TV (page MJ cachée qui pilote une iframe display.html,
+// exactement comme la vraie fenêtre de présentation). Chaque iframe de jeu dit « prêt » par postMessage,
+// l'éditeur répond avec la question ; messages limités à notre origine et à nos iframes. Changer de vue
+// ou « Recommencer » recharge les iframes, la poignée de main se rejoue.
 const testQuestionBtn = document.getElementById('testQuestion')
+const PREVIEW_VIEWS = {
+  mobile: { label: '📱 Joueur', cls: '', url: '/?previewEditorQuestion=1' },
+  pc: { label: '🖥️ Joueur PC', cls: 'is-wide', url: '/?previewEditorQuestion=1' },
+  mj: { label: '🎛️ MJ', cls: 'is-wide', url: '/?previewEditorQuestion=1&view=mj' },
+  tv: { label: '📺 TV', cls: 'is-wide is-tv', url: '/?previewEditorQuestion=1&view=mj', tv: true }
+}
+const PREVIEW_VIEW_KEY = 'queazy_preview_view'
+const readPreviewView = () => {
+  try {
+    const v = localStorage.getItem(PREVIEW_VIEW_KEY)
+    return PREVIEW_VIEWS[v] ? v : 'mobile'
+  } catch {
+    return 'mobile' // stockage bloqué : joueur mobile par défaut
+  }
+}
 const openQuestionPreview = () => {
   if (readOnly || !questions[activeIndex]) return
   saveCurrentQuestionState()
@@ -5850,24 +5868,53 @@ const openQuestionPreview = () => {
   const bar = document.createElement('div')
   bar.className = 'preview-bar'
   const title = document.createElement('strong')
-  title.textContent = 'Aperçu — rendu joueur'
+  title.textContent = 'Aperçu'
+  const viewSwitch = document.createElement('div')
+  viewSwitch.className = 'preview-view-switch'
+  const viewBtns = {}
   const restartBtn = document.createElement('button')
   restartBtn.type = 'button'; restartBtn.className = 'btn font-13'; restartBtn.textContent = '↻ Recommencer'
   const closeBtn = document.createElement('button')
   closeBtn.type = 'button'; closeBtn.className = 'btn-icon'; closeBtn.textContent = '✕'; closeBtn.title = 'Fermer'
-  bar.append(title, restartBtn, closeBtn)
-  const frame = document.createElement('iframe')
-  frame.className = 'preview-frame'
-  frame.src = '/?previewEditorQuestion=1'
-  frame.allow = 'autoplay'
-  box.append(bar, frame)
+  const stageEl = document.createElement('div')
+  stageEl.className = 'preview-stage'
+  Object.entries(PREVIEW_VIEWS).forEach(([key, v]) => {
+    const b = document.createElement('button')
+    b.type = 'button'; b.textContent = v.label; b.onclick = () => loadView(key)
+    viewBtns[key] = b; viewSwitch.appendChild(b)
+  })
+  bar.append(title, viewSwitch, restartBtn, closeBtn)
+  box.append(bar, stageEl)
   overlay.appendChild(box)
   document.body.appendChild(overlay)
 
+  let currentView = readPreviewView()
+  let gameFrame = null // iframe qui joue la question (joueur ou MJ)
+  const loadView = (key) => {
+    currentView = key
+    const v = PREVIEW_VIEWS[key]
+    try { localStorage.setItem(PREVIEW_VIEW_KEY, key) } catch { /* mémorisation impossible : sans importance */ }
+    Object.entries(viewBtns).forEach(([k, b]) => b.classList.toggle('active', k === key))
+    box.className = 'preview-box ' + v.cls
+    title.textContent = 'Aperçu'
+    stageEl.replaceChildren()
+    // Vue TV : l'iframe d'affichage est créée AVANT la page MJ qui la pilote (voir index.js, attachPreviewTv).
+    if (v.tv) {
+      const tvFrame = document.createElement('iframe')
+      tvFrame.id = 'previewTvFrame'; tvFrame.className = 'preview-frame preview-tv-frame'; tvFrame.src = '/display.html?room=apercu'
+      stageEl.appendChild(tvFrame)
+    }
+    gameFrame = document.createElement('iframe')
+    gameFrame.className = 'preview-frame' + (v.tv ? ' preview-driver' : '')
+    gameFrame.src = v.url
+    gameFrame.allow = 'autoplay'
+    stageEl.appendChild(gameFrame)
+  }
+
   const onMessage = (e) => {
-    if (e.origin !== location.origin || e.source !== frame.contentWindow) return
+    if (e.origin !== location.origin || !gameFrame || e.source !== gameFrame.contentWindow) return
     if (e.data?.type === 'queazy-preview-ready') {
-      frame.contentWindow.postMessage({ type: 'queazy-preview-question', question: payload }, location.origin)
+      gameFrame.contentWindow.postMessage({ type: 'queazy-preview-question', question: payload }, location.origin)
     } else if (e.data?.type === 'queazy-preview-end') {
       title.textContent = 'Aperçu terminé'
     }
@@ -5881,8 +5928,9 @@ const openQuestionPreview = () => {
   window.addEventListener('message', onMessage)
   document.addEventListener('keydown', onKey)
   closeBtn.onclick = close
-  restartBtn.onclick = () => { title.textContent = 'Aperçu — rendu joueur'; frame.src = '/?previewEditorQuestion=1' }
+  restartBtn.onclick = () => loadView(currentView)
   overlay.onclick = (e) => { if (e.target === overlay) close() }
+  loadView(currentView)
 }
 if (testQuestionBtn) testQuestionBtn.onclick = openQuestionPreview
 

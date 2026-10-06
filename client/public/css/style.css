@@ -10622,6 +10622,15 @@ body.results-tv .fin-skip { display: none; }
 
 /* Aperçu jouable d'une question depuis l'éditeur (editor.js openQuestionPreview) */
 .preview-box { width: min(440px, 94vw); height: min(86vh, 820px); display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; background: var(--color-card); border: 1px solid var(--color-border); box-shadow: var(--shadow-lg); }
-.preview-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
+.preview-box.is-wide { width: min(1280px, 96vw); }
+.preview-stage { position: relative; flex: 1; min-height: 0; display: flex; background: var(--color-bg-deep); }
+.preview-view-switch { display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, .06); border: 1px solid var(--color-border); }
+.preview-view-switch button { border: 0; background: transparent; color: var(--color-text-muted); font: 800 12px 'Nunito', sans-serif; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.preview-view-switch button.active { background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2)); color: #fff; }
+/* Vue TV : l'iframe d'affichage est au format 16:9 ; la page MJ qui la pilote reste cachée mais active. */
+.preview-box.is-tv { height: auto; }
+.preview-tv-frame { aspect-ratio: 16 / 9; flex: none; }
+.preview-driver { position: absolute; left: -99999px; top: 0; width: 1100px; height: 700px; opacity: 0; pointer-events: none; flex: none; }
+.preview-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
 .preview-bar strong { flex: 1; font-size: 14px; }
-.preview-frame { flex: 1; width: 100%; border: 0; background: var(--color-bg-deep); }
+.preview-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--color-bg-deep); }

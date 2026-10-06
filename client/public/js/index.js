@@ -598,6 +598,17 @@ const previewBankQuestionId = params.get('previewBankQuestion')
 // l'iframe de la modale « Tester cette question ».
 const previewEditorQuestion = params.get('previewEditorQuestion') === '1'
 const previewQuestionMode = !!(previewBankQuestionId || previewEditorQuestion)
+// ?view=mj : l'aperçu de l'éditeur joue la question en salle « Présenter » (écran du MJ) au lieu du mode « Jouer » (écran joueur).
+const previewAsHost = previewEditorQuestion && params.get('view') === 'mj'
+// Vue TV de l'aperçu : une iframe display.html (id previewTvFrame) est posée à côté par l'éditeur ; on s'en sert comme
+// fenêtre de présentation (displayWin), comme le ferait window.open() — display.js n'exige que l'origine.
+const attachPreviewTv = () => {
+  let tvFrame = null
+  try { tvFrame = window.parent.document.getElementById('previewTvFrame') } catch { return /* parent d'une autre origine : pas de vue TV */ }
+  if (!tvFrame) return
+  displayWin = tvFrame.contentWindow
+  tvFrame.addEventListener('load', () => { displayWin = tvFrame.contentWindow; pushDisplayMirror() })
+}
 const receiveEditorPreviewQuestion = () => new Promise(resolve => {
   const timer = setTimeout(() => { window.removeEventListener('message', onMessage); resolve(null) }, 10000)
   const onMessage = (e) => {
@@ -665,7 +676,8 @@ if (previewQuestionMode) {
     // génération auto du quiz dans launchQuiz() (voir plus bas,
     // previewBankQuestionId) — sans quoi ce mode remplacerait la question
     // choisie ici par une sélection aléatoire de la banque.
-    createRoom('auto')
+    if (previewAsHost) attachPreviewTv()
+    createRoom(previewAsHost ? 'present' : 'auto')
     // Mécanisme "prêt" (voir Plan de la tâche 023, server/index.js
     // computeAllReady) : l'hôte est exclu du calcul de "prêt" côté serveur,
     // donc une salle solo (aucun joueur hors l'hôte) est déjà "prête" côté

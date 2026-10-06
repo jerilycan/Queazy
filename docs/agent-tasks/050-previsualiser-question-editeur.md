@@ -12,9 +12,10 @@ voit la révélation). Le serveur ne stocke aucun quiz : c'est le client hôte q
 contenu de chaque question — aucune modification serveur nécessaire.
 
 ## Objectif
-Un bouton « ▶ Tester cette question » dans l'éditeur ouvre, dans une fenêtre superposée
-(sans quitter l'éditeur), la question en cours d'édition telle qu'un joueur la vit : énoncé,
-minuteur, réponse, validation, révélation. Fonctionne sur les 17 types, y compris pour une
+Un bouton « ▶ Tester » dans l'éditeur ouvre, dans une fenêtre superposée
+(sans quitter l'éditeur), la question en cours d'édition en 4 vues : joueur mobile, joueur PC
+(fenêtre large), MJ (salle « Présenter ») et TV (iframe display.html pilotée par une page MJ cachée,
+comme la vraie fenêtre de présentation) : énoncé, minuteur, réponse, validation, révélation. Fonctionne sur les 17 types, y compris pour une
 question jamais sauvegardée.
 
 ## Périmètre
@@ -47,18 +48,22 @@ question jamais sauvegardée.
 - [x] 1 — `index.js` : mode `?previewEditorQuestion=1` (poignée de main postMessage, fin d'aperçu sans page de résultats)
 - [x] 2 — `editor.js` : modale iframe, validation, envoi de la question, « Recommencer », Échap
 - [x] 3 — bouton « ▶ Tester » dans la barre flottante + styles
-- [ ] 4 — vérification visuelle (bloquée : session de connexion du Browser pane à refaire)
+- [x] 4 — vues MJ / TV / joueur PC (demande de l'utilisateur après la 1re version) : sélecteur dans la barre de la modale, `?view=mj` dans `index.js` (`attachPreviewTv`)
+- [x] 5 — vérification visuelle (texte libre, 4 vues)
 
 ## Checks effectués
-- [ ] `node --check` sur chaque fichier JS modifié
-- [ ] Vérification visuelle Browser pane
+- [x] `node --check` sur `editor.js` et `index.js`
+- [x] Vérification visuelle Browser pane : vue MJ (interface hôte), vue TV (miroir + révélation « Paris » en vert), joueur PC ; joueur mobile validé par l'utilisateur. Un seul type testé (texte libre).
 
 ## Tests manuels recommandés
 À compléter à la relecture.
 
 ## Risques restants
 - L'aperçu dépend du mode « Jouer » : son comportement (scores, classement final) doit rester sans effet de bord (pas d'écriture en base, vérifier `quiz_results`).
+- Vue TV : la page MJ cachée tourne dans l'iframe (1100×700 hors écran) ; la TV réelle est plein écran (le zoom/mise à l'échelle réel peut différer).
+- Vue MJ : le bouton « Mode présentation » ouvre une vraie fenêtre ; la fin de question demande « Suivant » comme en vraie partie.
+- Seul le type texte libre a été essayé : à passer sur les autres types (images, blind test, ordre…).
 - Audio : l'autoplay peut être bloqué dans l'iframe avant une interaction.
 
 ## Statut
-`en cours`
+`en review`
