@@ -187,209 +187,12 @@ const TEAM_EMOJI = { red: '🔴', blue: '🔵', yellow: '🟡', green: '🟢', c
 let roomMode = 'present'
 
 // ---------------------------------------------------------------------
-// Podium final "course arcade néon" : chaque barre grimpe question par
-// question au rythme des points RÉELLEMENT gagnés à chaque tour (voir
-// historyEntry.deltas côté serveur), au lieu d'une simple apparition
-// statique — une bonne réponse fait bondir la barre, une mauvaise la
-// laisse plate, un enchaînement de bonnes réponses affiche un badge 🔥.
-// Prototype comparé et validé avant implémentation (voir historique de
-// conversation) : montée classique / révélation cinématique / arcade néon,
-// puis affinage "course" sur cette dernière piste à la demande de l'utilisateur.
+// Podium final : voir results-finale.js (animation de fin + podium 2 - 1 - 3), lancé par launchPodium
+// plus bas. Ancien podium « course » (barres qui montent) remplacé par la tâche 049.
 // ---------------------------------------------------------------------
-const RACE_LANE_BOTTOM = 40 // doit rester synchro avec `bottom: 40px` dans .race-lane-* (style.css)
-const RACE_TOTAL_MS = 3000 // durée cible totale, quel que soit le nombre de questions
-const RACE_MIN_STEP_MS = 220 // plancher pour rester lisible si beaucoup de questions
-const RACE_STREAK_THRESHOLD = 3
-
-const applyLaneAvatar = (el, p) => {
-  if (!el) return
-  const isImg = isAvatarUrl(p?.avatar)
-  el.style.backgroundImage = isImg ? `url(${p.avatar})` : ''
-  el.textContent = isImg ? '' : (p?.avatar || (p ? p.name.slice(0, 2).toUpperCase() : ''))
-}
-
-const runRace = (top, raceHistory) => {
-  const stage = document.getElementById('raceStage')
-  const lanesEl = document.getElementById('raceLanes')
-  const qStrip = document.getElementById('raceQstrip')
-  const statusPill = document.getElementById('raceStatusPill')
-  const finishFlash = document.getElementById('raceFinishFlash')
-  const bigFlash = document.getElementById('raceBigflash')
-  if (!stage || !lanesEl || top.length === 0) return
-
-  // Ordre classique d'un podium (2e - 1er - 3e), la position ne change plus
-  // ensuite : seule la hauteur de chaque barre évolue pendant la course.
-  const lanesOrder = top.length === 3 ? [top[1], top[0], top[2]] : top
-
-  lanesEl.innerHTML = lanesOrder.map(p => `
-    <div class="race-lane" data-key="${p.id}" data-player-id="${p.id}">
-      <div class="race-lane-track"></div>
-      <div class="race-lane-bar" data-bar></div>
-      <div class="race-lane-crown" data-crown>👑</div>
-      <div class="race-lane-badge" data-badge></div>
-      <div class="race-lane-streak" data-streak></div>
-      <div class="race-lane-score" data-score>0 pts</div>
-      <div class="race-lane-avatar" data-avatar></div>
-      <div class="race-lane-name" data-name>${p.name}</div>
-    </div>
-  `).join('')
-
-  const refs = {}
-  lanesOrder.forEach(p => {
-    const lane = lanesEl.querySelector(`.race-lane[data-key="${p.id}"]`)
-    refs[p.id] = {
-      lane,
-      track: lane.querySelector('.race-lane-track'),
-      bar: lane.querySelector('[data-bar]'),
-      score: lane.querySelector('[data-score]'),
-      crown: lane.querySelector('[data-crown]'),
-      badge: lane.querySelector('[data-badge]'),
-      streak: lane.querySelector('[data-streak]'),
-      avatar: lane.querySelector('[data-avatar]'),
-      name: lane.querySelector('[data-name]'),
-    }
-    applyLaneAvatar(refs[p.id].avatar, p)
-  })
-
-  const trackHeight = refs[lanesOrder[0].id].track.getBoundingClientRect().height || 280
-  const maxScale = Math.max(1, ...top.map(p => p.score)) * 1.08
-
-  const setLanePosition = (id, heightPx) => {
-    const r = refs[id]
-    r.bar.style.height = heightPx + 'px'
-    const bottom = (RACE_LANE_BOTTOM + heightPx) + 'px'
-    r.avatar.style.bottom = bottom
-    r.score.style.bottom = bottom
-    r.crown.style.bottom = bottom
-    r.badge.style.bottom = bottom
-    r.streak.style.bottom = bottom
-  }
-
-  const spawnFloatPop = (id, text, heightPx) => {
-    const r = refs[id]
-    const el = document.createElement('div')
-    el.className = 'race-float-pop'
-    el.textContent = text
-    el.style.bottom = (RACE_LANE_BOTTOM + heightPx + 40) + 'px'
-    r.lane.appendChild(el)
-    setTimeout(() => el.remove(), 850)
-  }
-
-  const finishRace = () => {
-    // Bug corrigé (retour utilisateur : "les 200 points ajoutés
-    // manuellement ne sont pas comptés dans le classement final") : la
-    // montée de la course n'additionne que les deltas PAR QUESTION (voir
-    // applyQuestion, raceHistory[i].deltas) — un ajustement manuel du MJ
-    // (score:adjust, tâche 025) n'est rattaché à aucune question, donc
-    // jamais compté dans cette somme. Le CLASSEMENT (l'ordre des joueurs
-    // dans `top`, déjà trié sur le vrai score) était donc correct, mais le
-    // score AFFICHÉ à l'arrivée s'arrêtait plus bas que la réalité pour qui
-    // avait reçu un tel ajustement. On recale ici sur le vrai score une
-    // fois la montée terminée (pas avant : ça casserait l'effet "montée
-    // progressive" en cours de course).
-    top.forEach(p => {
-      const h = Math.min(trackHeight, (p.score / maxScale) * trackHeight)
-      setLanePosition(p.id, h)
-      refs[p.id].score.textContent = `${p.score} pts`
-    })
-    statusPill.className = 'race-status-pill done'
-    statusPill.textContent = '🏁 Arrivée !'
-    finishFlash.classList.add('go')
-    qStrip.querySelectorAll('.race-qdot').forEach(d => { d.classList.remove('active'); d.classList.add('done') })
-
-    const ranked = [...top] // déjà trié par score décroissant
-    const rankClass = ['rank-1', 'rank-2', 'rank-3']
-    const rankColor = ['gold', 'silver', 'bronze']
-    const rankBadge = ['🥇', '🥈', '🥉']
-
-    setTimeout(() => {
-      ranked.forEach((p, i) => {
-        const r = refs[p.id]
-        r.lane.classList.add(rankClass[i])
-        r.bar.classList.add(rankColor[i])
-        r.badge.textContent = rankBadge[i]
-        r.badge.classList.add('show')
-      })
-      const winner = refs[ranked[0].id]
-      winner.crown.classList.add('show')
-      winner.name.classList.add('glitch')
-      bigFlash.classList.add('go')
-      stage.classList.add('shake')
-      if (window.confetti) window.confetti({ particleCount: 150, spread: 80, origin: { y: 0.55 } })
-      try { fanfareSound.currentTime = 0; fanfareSound.play().catch(() => {}) } catch {}
-      setTimeout(() => stage.classList.remove('shake'), 450)
-    }, 300)
-  }
-
-  // Historique vide (aucune question jouée) : pas de course à rejouer, on
-  // saute directement les barres à leur hauteur finale puis l'arrivée.
-  if (raceHistory.length === 0) {
-    qStrip.innerHTML = ''
-    statusPill.className = 'race-status-pill live'
-    statusPill.innerHTML = '<span class="dot"></span>Podium'
-    top.forEach(p => {
-      const h = Math.min(trackHeight, (p.score / maxScale) * trackHeight)
-      setLanePosition(p.id, h)
-      refs[p.id].score.textContent = `${p.score} pts`
-    })
-    setTimeout(finishRace, 400)
-    return
-  }
-
-  qStrip.innerHTML = raceHistory.map((_, i) => `<div class="race-qdot" data-q="${i}">${i + 1}</div>`).join('')
-  statusPill.className = 'race-status-pill live'
-
-  const running = {}; top.forEach(p => { running[p.id] = 0 })
-  const streaks = {}; top.forEach(p => { streaks[p.id] = 0 })
-  const stepMs = Math.max(RACE_MIN_STEP_MS, RACE_TOTAL_MS / raceHistory.length)
-
-  const applyQuestion = (i) => {
-    const h = raceHistory[i]
-    statusPill.innerHTML = `<span class="dot"></span>Question ${i + 1} / ${raceHistory.length}`
-    qStrip.querySelectorAll('.race-qdot').forEach((d, di) => {
-      d.classList.toggle('active', di === i)
-      d.classList.toggle('done', di < i)
-    })
-    top.forEach(p => {
-      const delta = Number(h.deltas?.[p.id]) || 0
-      const r = refs[p.id]
-      if (delta > 0) {
-        streaks[p.id] += 1
-        running[p.id] += delta
-        const heightPx = Math.min(trackHeight, (running[p.id] / maxScale) * trackHeight)
-        setLanePosition(p.id, heightPx)
-        r.score.textContent = Math.round(running[p.id]).toLocaleString('fr-FR') + ' pts'
-        r.avatar.classList.remove('hop'); void r.avatar.offsetWidth; r.avatar.classList.add('hop')
-        spawnFloatPop(p.id, '+' + delta, heightPx)
-        if (streaks[p.id] >= RACE_STREAK_THRESHOLD) {
-          r.streak.textContent = '🔥×' + streaks[p.id]
-          r.streak.classList.add('show')
-        } else {
-          r.streak.classList.remove('show')
-        }
-      } else {
-        streaks[p.id] = 0
-        r.streak.classList.remove('show')
-        r.avatar.classList.remove('miss'); void r.avatar.offsetWidth; r.avatar.classList.add('miss')
-      }
-    })
-  }
-
-  let qIndex = 0
-  applyQuestion(0)
-  const raceTimer = setInterval(() => {
-    qIndex += 1
-    if (qIndex >= raceHistory.length) {
-      clearInterval(raceTimer)
-      setTimeout(finishRace, 300)
-      return
-    }
-    applyQuestion(qIndex)
-  }, stepMs)
-}
 
 // Une "entité" équipe pour la course : mêmes champs qu'un joueur
-// (id/name/avatar/score) pour que runRace() n'ait besoin d'aucune branche
+// (id/name/avatar/score) pour que l'animation de fin n'ait besoin d'aucune branche
 // spécifique — seul un id d'équipe à la place d'un id de joueur, et un
 // historique reconstruit en conséquence (voir computeTeamHistory).
 const computeTeamEntities = () => {
@@ -426,47 +229,78 @@ const computeTeamHistory = () => {
   })
 }
 
+// Hash stable du code de salle : TV, joueurs et MJ tirent ainsi le même effet et le même ordre
+// d'élimination dans l'animation de fin (results-finale.js).
+const finaleSeed = (key) => {
+  let s = 2166136261
+  for (const c of String(key)) { s ^= c.charCodeAt(0); s = Math.imul(s, 16777619) }
+  return s >>> 0
+}
+
+// Animation de fin (tâche 049) dès 2 joueurs/équipes et un historique : tous les joueurs en cartes,
+// éliminés en rafale jusqu'au podium (ou, à 3 ou moins, révélation directe du podium), puis podium
+// 2 - 1 - 3 avec couronne, confettis et fanfare. Sans historique, avec un seul joueur ou en
+// « mouvement réduit » : podium seul.
+const launchPodium = (entities, hist) => {
+  const tab = document.getElementById('podiumTab')
+  const host = document.getElementById('resultsPodium')
+  if (!window.QzFinale || !tab || !host) { console.error('Animation de fin indisponible (results-finale.js absent)'); return }
+  const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const stage = document.createElement('div')
+  stage.className = 'fin-stage'
+  host.prepend(stage)
+  tab.classList.add('finale-active') // masque la liste complète tant que le classement n'est pas révélé
+  const done = () => tab.classList.remove('finale-active')
+  // Classement frais au moment du podium : un lobby:list a pu arriver pendant l'animation.
+  const getTop = () => (teamModeActive ? computeTeamEntities() : computeOrder((latestPlayers || []).slice())).slice(0, 3)
+  const onWinner = () => { try { fanfareSound.currentTime = 0; fanfareSound.play().catch(() => {}) } catch {} /* lecture bloquée par le navigateur : sans importance */ }
+  const podiumOnly = (animate) => window.QzFinale.podium({ stage, top: getTop(), animate, onWinner }).then(done)
+  if (reducedMotion || entities.length < 2 || hist.length === 0) { podiumOnly(!reducedMotion); return }
+  try {
+    window.QzFinale.run({
+      stage,
+      entities: entities.map(e => ({ id: e.id, name: e.name, avatar: e.avatar, score: e.score })),
+      raceHistory: hist,
+      seed: finaleSeed(roomCode),
+      canSkip: params.get('tv') !== '1',
+      getTop,
+      onWinner,
+      onDone: done
+    })
+  } catch (err) {
+    console.error('Animation de fin indisponible, podium direct :', err)
+    stage.replaceChildren()
+    podiumOnly(false)
+  }
+}
+
 const tryStartRace = () => {
   if (raceStarted || !historyReceived || !latestPlayers) return
   if (teamModeActive) {
-    const topTeams = computeTeamEntities().slice(0, 3)
-    if (topTeams.length === 0) return
+    const teams = computeTeamEntities()
+    if (teams.length === 0) return
     raceStarted = true
-    runRace(topTeams, computeTeamHistory())
+    launchPodium(teams, computeTeamHistory())
     return
   }
   const ordered = computeOrder(latestPlayers.slice())
-  const top = ordered.slice(0, 3)
-  if (top.length === 0) return
+  if (ordered.length === 0) return
   raceStarted = true
-  runRace(top, history)
+  launchPodium(ordered, history)
 }
 
-// Une fois la course lancée (raceStarted), les pistes du podium gardent
-// l'id de joueur figé au moment du lancement (voir runRace, data-player-id
-// posé une seule fois). Si CE joueur se reconnecte ensuite (nouveau
-// socket.id — page rechargée, réseau coupé...), la piste continue de
-// porter l'ancien id, qui ne correspond plus à rien dans l'historique
-// (history:sync republie tout sous les ids COURANTS à chaque reconnexion,
-// voir server/index.js buildHistorySync) : le survol de sa piste
-// n'affichait donc plus jamais le bon récap par question — contrairement à
-// la liste complète en dessous, reconstruite avec les ids courants à
-// CHAQUE lobby:list (voir renderFullTable), donc toujours correcte. On
-// retrouve la piste concernée par NOM (seul repère qui survit à une
-// reconnexion côté client : le serveur ne diffuse jamais les tokens) et on
-// rafraîchit son id.
-const resyncRaceLaneIds = (players) => {
+// Le podium garde l'id de joueur figé à sa construction (data-player-id, voir results-finale.js). Si CE
+// joueur se reconnecte ensuite (nouveau socket.id — page rechargée, réseau coupé...), le survol de sa
+// colonne n'afficherait plus le bon récap par question : on retrouve la colonne par NOM (seul repère
+// qui survit à une reconnexion côté client : le serveur ne diffuse jamais les tokens) et on rafraîchit
+// son id. La liste complète, reconstruite à CHAQUE lobby:list, reste toujours correcte.
+const resyncPodiumIds = (players) => {
   if (!raceStarted) return
-  const lanesEl = document.getElementById('raceLanes')
-  if (!lanesEl) return
   const currentIdByName = new Map()
   players.forEach(p => { if (p.name) currentIdByName.set(p.name, p.id) })
-  lanesEl.querySelectorAll('.race-lane').forEach(lane => {
-    const nameEl = lane.querySelector('[data-name]')
-    const freshId = nameEl ? currentIdByName.get(nameEl.textContent) : null
-    if (freshId && freshId !== lane.dataset.playerId) {
-      lane.dataset.playerId = freshId
-    }
+  document.querySelectorAll('#resultsPodium .fin-pod-col').forEach(col => {
+    const freshId = currentIdByName.get(col.querySelector('.fin-pod-name')?.textContent)
+    if (freshId && freshId !== col.dataset.playerId) col.dataset.playerId = freshId
   })
 }
 
@@ -477,7 +311,7 @@ const render = (players) => {
   const ordered = computeOrder(players.slice())
   latestPlayers = players
   tryStartRace()
-  resyncRaceLaneIds(players)
+  resyncPodiumIds(players)
   renderFullTable(ordered)
   renderDetailTab(ordered)
   renderDetailTable(ordered)
@@ -687,7 +521,7 @@ historyTooltip.className = 'history-tooltip d-none'
 document.body.appendChild(historyTooltip)
 
 // En mode équipe, les pistes du podium portent un id d'ÉQUIPE
-// (data-player-id, voir runRace) — jamais présent dans history[].results,
+// (data-player-id, voir results-finale.js) — jamais présent dans history[].results,
 // indexé lui par id de JOUEUR (buildHistorySync côté serveur). Sans cette
 // distinction, le survol d'une piste du podium ne trouvait jamais rien et
 // affichait "–" sur toutes les questions, alors que la liste complète en
