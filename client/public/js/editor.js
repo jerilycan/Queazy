@@ -717,8 +717,6 @@ const applyReadOnly = () => {
   if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
   const banner = document.getElementById('readOnlyBanner')
   if (banner) banner.classList.remove('d-none')
-  // Lecture seule : les boutons repliés en Standard reviennent dans la barre (voir applyEditorMode).
-  applyEditorMode()
 }
 
 // --- Utilitaires ---
@@ -935,7 +933,7 @@ const QTYPE_COLOR = {
 // Mouvements courts (transform/opacity seulement), jamais sur les actions répétées des champs.
 // En "mouvement réduit" (réglage système) : voir style.css (fondu simple), confettis coupés.
 const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-const ANIM_CLEANUP_MS = 1600
+const ANIM_CLEANUP_MS = 2400
 // Pose des classes d'animation sur un élément, rejouées proprement, puis les retire (le liseré
 // d'accent et le ressort ne doivent pas rester collés à l'élément). Retrait temporisé plutôt
 // qu'animationend : plusieurs animations simultanées, et aucune si le mouvement est réduit.
@@ -965,10 +963,9 @@ let justAddedQuestionIndex = -1
 // nouveau quiz démarre à 0 question désormais (au lieu d'une question
 // "Texte libre" vide par défaut) — #questionEmptyState remplace
 // #questionDetail tant que `questions` est vide. Une fois la 1ère question
-// ajoutée, deleteQuestionAt() empêche déjà de revenir à 0 (règle existante
-// "un quiz doit avoir au moins une question", inchangée), donc cette
-// fonction seule ne rouvre plus jamais l'écran après coup — voir
-// openTypePicker() ci-dessous pour le cas "+" avec des questions existantes.
+// ajoutée, supprimer la dernière question ramène aussi à cet écran (voir
+// deleteQuestionAt) ; openTypePicker() ci-dessous couvre le cas "+" avec des
+// questions existantes.
 const updateEmptyState = () => {
   if (!questionEmptyStateEl || !questionDetailEl) return
   const isEmpty = questions.length === 0
@@ -2598,7 +2595,8 @@ if (audioUploadInput) {
     }).then(audioBuffer => {
       pendingAudioBuffer = audioBuffer
       audioStartInput.value = 0
-      audioDurationInput.value = Math.min(15, Math.floor(audioBuffer.duration))
+      // Extrait de 30 s par défaut (le plafond), ramené à la durée du morceau s'il est plus court.
+      audioDurationInput.value = Math.min(AUDIO_CLIP_MAX_DURATION, Math.floor(audioBuffer.duration))
       renderWaveform(audioBuffer)
       clampAudioTrimInputs()
       if (audioTotalDurationEl) audioTotalDurationEl.textContent = `(morceau : ${formatAudioDuration(audioBuffer.duration)})`
@@ -2918,6 +2916,9 @@ const toggleTypeSections = () => {
   // Mode Standard (tâche 046) : le son facultatif est un réglage avancé, sauf pour le Blind
   // Test où il est le cœur du type (voir style.css, [data-advanced]).
   if (bonusAudioSection) bonusAudioSection.toggleAttribute('data-advanced', qType.value !== 'blindtest')
+  // Le son n'est « facultatif » que pour les autres types : il est obligatoire pour le Blind Test.
+  const audioOptionalTag = document.getElementById('audioOptionalTag')
+  if (audioOptionalTag) audioOptionalTag.classList.toggle('d-none', qType.value === 'blindtest')
   if (blindtestAnswersSection) blindtestAnswersSection.classList.toggle('d-none', qType.value !== 'blindtest')
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
@@ -5053,10 +5054,6 @@ if (typePickerCancelBtn) {
 // d'édition, il faut donc décaler activeIndex correctement dans les deux
 // cas plutôt que de toujours retomber sur "activeIndex - 1".
 const deleteQuestionAt = (index) => {
-  if (questions.length <= 1) {
-    showToast('Un quiz doit avoir au moins une question', 'error')
-    return
-  }
   if (index < 0 || index >= questions.length) return
 
   const deletingActive = index === activeIndex
@@ -5067,6 +5064,18 @@ const deleteQuestionAt = (index) => {
   if (!deletingActive && hasSelectedOnce) saveCurrentQuestionState()
 
   questions.splice(index, 1)
+
+  // Dernière question supprimée : retour à l'écran de choix du type, comme un quiz neuf.
+  // hasSelectedOnce retombe à false pour que la prochaine sélection ne réécrive pas
+  // l'ancien formulaire dans la question qu'on ajoutera ensuite. Un quiz vide reste
+  // bloqué à la sauvegarde (voir saveQuizBtn.onclick).
+  if (questions.length === 0) {
+    activeIndex = 0
+    hasSelectedOnce = false
+    updateSidebar()
+    updateEmptyState()
+    return
+  }
 
   if (deletingActive) {
     activeIndex = Math.min(index, questions.length - 1)
@@ -5134,10 +5143,6 @@ if (deleteQuestionBtn) deleteQuestionBtn.onclick = () => deleteQuestionAt(active
 // au milieu d'une zone de glisser-déposer — plus exposée au clic accidentel,
 // d'où ce garde-fou supplémentaire ici uniquement.
 const confirmDeleteQuestionAt = (index) => {
-  if (questions.length <= 1) {
-    showToast('Un quiz doit avoir au moins une question', 'error')
-    return
-  }
   const q = questions[index]
   const label = q?.prompt?.trim() ? `« ${q.prompt.trim()} »` : `la question ${index + 1}`
   QzUI.confirm({
@@ -6044,10 +6049,6 @@ if (replayTutorialBtn) replayTutorialBtn.onclick = () => startEditorTour(true)
 const EDITOR_MODE_STORAGE_KEY = 'queazy_editor_mode'
 const modeStandardBtn = document.getElementById('modeStandardBtn')
 const modeAdvancedBtn = document.getElementById('modeAdvancedBtn')
-const editorOverflowEl = document.getElementById('editorOverflow')
-const editorOverflowBtn = document.getElementById('editorOverflowBtn')
-const editorOverflowMenu = document.getElementById('editorOverflowMenu')
-const editorActionsEl = document.querySelector('.editor-actions')
 const modeSwitchEl = document.getElementById('modeSwitch')
 
 const readStoredEditorMode = () => {
@@ -6060,16 +6061,7 @@ const readStoredEditorMode = () => {
 }
 let editorMode = readStoredEditorMode()
 
-const closeEditorOverflow = () => {
-  if (!editorOverflowMenu) return
-  editorOverflowMenu.classList.add('is-closed')
-  if (editorOverflowBtn) editorOverflowBtn.setAttribute('aria-expanded', 'false')
-}
-
-// Boutons de la barre du haut repliés dans le menu "⋯" en Standard. Ce sont les
-// MÊMES nœuds déplacés (pas dupliqués) : leurs handlers restent câblés une fois.
-// Hors lecture seule seulement : un lecteur n'édite rien, et "Dupliquer" y est
-// l'action principale (voir applyReadOnly).
+// La barre d'actions reste identique dans les deux modes (aucun bouton ne bouge quand on bascule).
 const applyEditorMode = () => {
   const standard = editorMode === 'standard'
   document.body.classList.toggle('editor-standard', standard)
@@ -6077,19 +6069,6 @@ const applyEditorMode = () => {
   if (modeSwitchEl) modeSwitchEl.dataset.pos = standard ? '0' : '1'
   if (modeStandardBtn) { modeStandardBtn.classList.toggle('active', standard); modeStandardBtn.setAttribute('aria-selected', String(standard)) }
   if (modeAdvancedBtn) { modeAdvancedBtn.classList.toggle('active', !standard); modeAdvancedBtn.setAttribute('aria-selected', String(!standard)) }
-  if (!editorActionsEl || !editorOverflowEl || !editorOverflowMenu) return
-  const folded = [replayTutorialBtn, deleteQuizBtn, duplicateQuizBtn]
-  const useOverflow = standard && !readOnly
-  if (useOverflow) {
-    folded.forEach(btn => { if (btn) editorOverflowMenu.appendChild(btn) })
-  } else {
-    // Retour à l'ordre d'origine de la barre (voir editor.html).
-    if (replayTutorialBtn) editorActionsEl.insertBefore(replayTutorialBtn, participantsQuizBtn || saveQuizBtn)
-    if (deleteQuizBtn) editorActionsEl.insertBefore(deleteQuizBtn, saveQuizBtn)
-    if (duplicateQuizBtn) editorActionsEl.insertBefore(duplicateQuizBtn, editorOverflowEl)
-    closeEditorOverflow()
-  }
-  editorOverflowEl.classList.toggle('d-none', !useOverflow)
 }
 
 // Blocs réservés à l'Avancé qui viennent d'apparaître : arrivée en cascade avec liseré d'accent
@@ -6097,7 +6076,7 @@ const applyEditorMode = () => {
 const revealAdvancedBlocks = () => {
   Array.from(document.querySelectorAll('[data-advanced]'))
     .filter(el => el.getClientRects().length > 0)
-    .forEach((el, i) => playAnimation(el, 'anim-enter is-new', Math.min(i, 7)))
+    .forEach((el, i) => playAnimation(el, 'anim-advanced', Math.min(i, 6)))
 }
 
 const setEditorMode = (mode) => {
@@ -6114,18 +6093,6 @@ const setEditorMode = (mode) => {
 
 if (modeStandardBtn) modeStandardBtn.onclick = () => setEditorMode('standard')
 if (modeAdvancedBtn) modeAdvancedBtn.onclick = () => setEditorMode('advanced')
-if (editorOverflowBtn && editorOverflowMenu) {
-  editorOverflowBtn.onclick = (e) => {
-    e.stopPropagation()
-    const willOpen = editorOverflowMenu.classList.contains('is-closed')
-    editorOverflowMenu.classList.toggle('is-closed', !willOpen)
-    editorOverflowBtn.setAttribute('aria-expanded', String(willOpen))
-  }
-  // Clic ailleurs ou Échap : referme (un clic sur un bouton du menu referme aussi,
-  // après que son handler a tourné).
-  document.addEventListener('click', closeEditorOverflow)
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeEditorOverflow() })
-}
 applyEditorMode()
 if (modeSwitchEl) setTimeout(() => modeSwitchEl.classList.add('is-ready'), 60)
 

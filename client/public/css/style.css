@@ -98,7 +98,7 @@
   /* Mode équipe (voir .team-* plus bas) : violet réutilise --color-accent-2,
      manquait sa variante rgb pour les fonds/bordures translucides. */
   --color-accent-2-rgb: 123,47,247;
-  /* Podium final (voir .race-* plus bas). Bug corrigé (retour utilisateur :
+  /* Podium final (voir .fin-pod* plus bas). Bug corrigé (retour utilisateur :
      "les trois couleurs du podium devraient être or argent bronze") : l'or
      réutilisait --tile-yellow (même jaune vif que la 3e tuile QCM, voir
      plus bas) — --color-gold, déjà présent dans la palette pour l'accent
@@ -918,7 +918,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
      disparaître la marge sur ces deux-là, sans recadrage perceptible sur les
      avatars qui allaient déjà bord à bord. Même valeur partout où ces PNG
      sont affichés en rond (.icon-opt.avatar-tile, .avatar-profile-link,
-     .host-player-avatar, .race-lane-avatar) : défaut des assets, pas du
+     .host-player-avatar, .fin-pod-av) : défaut des assets, pas du
      conteneur, donc pas la peine d'y toucher au cas par cas. */
   background-size: 112%;
   background-position: center;
@@ -1551,6 +1551,9 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    contenu quand la piste grid passe à 0fr (sinon min-height:auto par
    défaut sur un item de grille l'en empêche). */
 .auto-accordion-body > * { overflow: hidden; min-height: 0; }
+/* Replié : le conteneur interne (qui porte un padding, parfois en style inline) ne doit rien laisser dépasser —
+   sans ça le padding-bas gardait une bande de contenu visible sous l'en-tête (Variantes, Banque). */
+.auto-accordion-body:not(.is-open) > * { padding-top: 0 !important; padding-bottom: 0 !important; visibility: hidden; transition: visibility 0s linear 0.2s; }
 @media (prefers-reduced-motion: reduce) {
   .auto-accordion-body { transition: none; }
 }
@@ -6543,7 +6546,9 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    (association, blind test...). [data-qtype] posé par editor.js à chaque
    sélection de question ou changement de type (selectQuestion, qType.onchange)
    plutôt qu'une classe, pour ne pas avoir à retirer l'ancienne à chaque fois. */
-.question-detail { --qt-color: transparent; }
+.question-detail { --qt-color: transparent; scrollbar-gutter: stable; }
+/* Réserve la place de la barre de défilement en permanence : elle apparaît en passant de Standard à Avancé
+   (formulaire plus long) et poussait sinon tous les champs de quelques pixels. */
 .question-detail[data-qtype="mcq"] { --qt-color: var(--tile-blue); }
 .question-detail[data-qtype="free"] { --qt-color: var(--tile-green); }
 .question-detail[data-qtype="graduation"] { --qt-color: var(--tile-yellow); }
@@ -6746,10 +6751,13 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    type encore choisi) ; ce modificateur ne fait que centrer le contenu. */
 .question-empty-state {
   align-items: center;
-  justify-content: center;
+  /* Aligné en haut dans les deux modes (même forme en Standard et en Avancé) : un centrage vertical coupait le haut du bloc
+     (inaccessible au défilement) dès que le contenu dépassait, par ex. en mode Avancé (plus de tuiles). */
+  justify-content: flex-start;
   text-align: center;
   gap: 18px;
   min-height: 480px;
+  padding-top: 40px;
 }
 .question-empty-icon {
   width: 84px;
@@ -8291,168 +8299,6 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   transition: opacity 0.7s ease-in, transform 0.7s cubic-bezier(0.55, 0, 1, 0.45);
 }
 
-/* Podium final — "course arcade néon" : chaque barre grimpe question par
-   question au rythme des vrais points gagnés (voir js/results.js), au lieu
-   d'une simple apparition statique. Prototype validé avant implémentation :
-   voir historique de conversation (comparatif de 3 pistes puis affinage). */
-.race-status-pill {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-  font-size: 12px; font-weight: 800; letter-spacing: 0.03em;
-  padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,0.07);
-  border: 1px solid var(--color-border); color: var(--color-text-muted);
-  z-index: 6; transition: color .2s, border-color .2s, background .2s;
-  font-variant-numeric: tabular-nums;
-}
-.race-status-pill.live { color: var(--tile-green); border-color: rgba(var(--tile-green-rgb),0.35); background: rgba(var(--tile-green-rgb),0.1); }
-.race-status-pill.done { color: var(--tile-yellow); border-color: rgba(255,210,63,0.4); background: rgba(255,210,63,0.12); text-transform: uppercase; letter-spacing: 0.06em; }
-.race-status-pill .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; animation: raceBlink 1s ease-in-out infinite; }
-.race-status-pill.done .dot { display: none; }
-@keyframes raceBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-.race-qstrip { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
-.race-qdot {
-  width: 18px; height: 18px; border-radius: 5px; background: rgba(255,255,255,0.06); border: 1px solid var(--color-border);
-  display: flex; align-items: center; justify-content: center; font-size: 9.5px; color: var(--color-text-muted);
-  transition: background .2s, border-color .2s, color .2s; font-variant-numeric: tabular-nums;
-}
-.race-qdot.active { border-color: var(--color-accent); color: var(--color-text); background: var(--color-accent-soft); }
-.race-qdot.done { color: var(--color-text-muted); }
-
-.race-stage {
-  position: relative;
-  height: 400px;
-  border-radius: var(--radius-md);
-  background:
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 38px),
-    radial-gradient(600px 300px at 50% 100%, var(--color-accent-soft), transparent 70%),
-    var(--color-bg-deep);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-}
-.race-stage.shake { animation: raceShake .4s ease; }
-@keyframes raceShake {
-  10%, 90% { transform: translate3d(-1px, 0, 0); }
-  20%, 80% { transform: translate3d(2px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-  40%, 60% { transform: translate3d(4px, 0, 0); }
-}
-.race-finish-flash {
-  position: absolute; left: 0; right: 0; bottom: 40px; height: 3px;
-  background: linear-gradient(90deg, transparent, #fff, transparent); opacity: 0; z-index: 4; pointer-events: none;
-}
-.race-finish-flash.go { animation: raceSweep .5s ease forwards; }
-@keyframes raceSweep {
-  0% { opacity: 0; transform: scaleY(1); box-shadow: none; }
-  30% { opacity: 1; box-shadow: 0 0 30px 4px rgba(255,255,255,0.7); }
-  100% { opacity: 0; transform: scaleY(8); box-shadow: none; }
-}
-.race-bigflash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 55%, #fff, transparent 60%); opacity: 0; pointer-events: none; z-index: 7; }
-.race-bigflash.go { animation: raceFlashPop .5s ease forwards; }
-@keyframes raceFlashPop { 0% { opacity: 0; } 15% { opacity: 0.8; } 100% { opacity: 0; } }
-
-.race-particle { position: absolute; border-radius: 50%; background: var(--color-accent-soft); pointer-events: none; animation: raceFloatUp linear infinite; z-index: 1; }
-@keyframes raceFloatUp { from { transform: translateY(0); opacity: 0.55; } to { transform: translateY(-360px); opacity: 0; } }
-
-.race-lanes { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 40px; }
-.race-lane { position: relative; width: 100px; height: 100%; }
-.race-lane-track {
-  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
-  width: 78px; height: 280px; border-radius: 10px;
-  background: rgba(255,255,255,0.03); border: 1px solid var(--color-border);
-}
-.race-lane-bar {
-  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%);
-  width: 78px; height: 0px; border-radius: 8px 8px 4px 4px;
-  background: linear-gradient(180deg, var(--color-accent-2) 0%, var(--color-accent-deep) 100%);
-  box-shadow: 0 0 16px rgba(123,47,247,0.4);
-  transition: height .38s cubic-bezier(0.34, 1.56, 0.64, 1), background .5s ease, box-shadow .5s ease;
-}
-/* Bug corrigé (retour utilisateur : "les trois couleurs du podium devraient
-   être or argent bronze") : .gold utilisait --tile-yellow (même jaune vif
-   que la 3e tuile QCM, voir plus haut dans ce fichier) — --tile-gold/
-   -silver/-bronze (voir :root) sont désormais des tons dédiés, jamais
-   réutilisés ailleurs pour une tuile de réponse. */
-.race-lane-bar.gold { background: linear-gradient(180deg, var(--tile-gold) 0%, var(--tile-gold-deep) 100%); box-shadow: 0 0 30px rgba(var(--tile-gold-rgb),0.55); }
-.race-lane-bar.silver { background: linear-gradient(180deg, var(--tile-silver) 0%, var(--tile-silver-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-silver-rgb),0.3); }
-.race-lane-bar.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-bronze-rgb),0.35); }
-
-.race-lane-avatar {
-  position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, 50%);
-  width: 40px; height: 40px; border-radius: 50%; background: var(--color-surface);
-  /* 112% : voir le commentaire détaillé sur .avatar-main (marge cuite dans
-     avatar22.png/avatar23.png). */
-  background-size: 112%; background-position: center;
-  border: 2px solid rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center;
-  font-size: 18px; z-index: 2; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1), border-color .3s;
-}
-.race-lane-avatar.hop { animation: raceHop .35s ease; }
-@keyframes raceHop { 30% { transform: translate(-50%, 50%) scale(1.18); } 100% { transform: translate(-50%, 50%) scale(1); } }
-.race-lane-avatar.miss { animation: raceMissShake .3s ease; }
-@keyframes raceMissShake {
-  20% { transform: translate(calc(-50% - 3px), 50%); }
-  40% { transform: translate(calc(-50% + 3px), 50%); }
-  60% { transform: translate(calc(-50% - 2px), 50%); }
-  100% { transform: translate(-50%, 50%); }
-}
-.race-lane.rank-1 .race-lane-avatar { border-color: var(--tile-gold); }
-.race-lane.rank-2 .race-lane-avatar { border-color: var(--tile-silver); }
-.race-lane.rank-3 .race-lane-avatar { border-color: var(--tile-bronze); }
-
-.race-lane-crown {
-  position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, -100%);
-  font-size: 20px; opacity: 0; z-index: 3; transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.race-lane-crown.show { animation: raceDropCrown .45s cubic-bezier(.34,1.56,.64,1) forwards; }
-@keyframes raceDropCrown { from { opacity: 0; transform: translate(-50%,-100%) translateY(-20px) rotate(-10deg); } to { opacity: 1; transform: translate(-50%,-100%) translateY(0) rotate(0); } }
-
-.race-lane-score {
-  position: absolute; left: 50%; bottom: 40px; transform: translate(-50%, calc(-100% - 28px));
-  font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; z-index: 2; color: var(--color-text);
-  transition: bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.race-lane-badge {
-  position: absolute; left: 50%; bottom: 40px; transform: translate(calc(-50% + 32px), calc(-100% - 24px));
-  font-size: 15px; opacity: 0; transition: opacity .3s, bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 2;
-}
-.race-lane-badge.show { opacity: 1; }
-.race-lane-streak {
-  position: absolute; left: 50%; bottom: 40px; transform: translate(calc(-50% - 38px), calc(-100% - 6px));
-  font-size: 11.5px; font-weight: 800; color: var(--tile-yellow); white-space: nowrap; z-index: 3;
-  opacity: 0; transition: opacity .25s, bottom .38s cubic-bezier(0.34, 1.56, 0.64, 1);
-  text-shadow: 0 0 8px rgba(255,210,63,0.55);
-}
-.race-lane-streak.show { opacity: 1; }
-
-.race-lane-name {
-  position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
-  font-size: 12.5px; font-weight: 700; color: var(--color-text-muted); white-space: nowrap;
-  transition: color .3s;
-}
-.race-lane-name.glitch { color: var(--tile-yellow); animation: raceGlitch .4s steps(2,end) 3; }
-@keyframes raceGlitch {
-  0% { transform: translateX(-50%); text-shadow: none; }
-  25% { transform: translate(calc(-50% - 2px), 1px); text-shadow: 2px 0 var(--color-accent), -2px 0 var(--color-accent-2); }
-  50% { transform: translate(calc(-50% + 2px), -1px); text-shadow: -2px 0 var(--color-accent-2), 2px 0 var(--color-accent); }
-  75% { transform: translate(calc(-50% - 1px), 0); text-shadow: 1px 0 var(--tile-yellow); }
-  100% { transform: translateX(-50%); text-shadow: none; }
-}
-
-.race-float-pop {
-  position: absolute; left: 50%; font-weight: 800; font-size: 12.5px; white-space: nowrap; color: var(--tile-green);
-  transform: translate(-50%, 0); pointer-events: none; z-index: 4; animation: raceFloatPop .8s ease forwards;
-}
-@keyframes raceFloatPop { 0% { opacity: 0; transform: translate(-50%, 0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -32px); } }
-
-@media (max-width: 640px) {
-  .race-stage { height: 320px; }
-  .race-lanes { gap: 18px; }
-  .race-lane { width: 78px; }
-  .race-lane-track, .race-lane-bar { width: 58px; }
-  .race-lane-avatar { width: 34px; height: 34px; font-size: 15px; }
-  .race-lane-score { font-size: 12px; }
-}
-
 /* Liste complète des résultats finaux : lignes réutilisées d'un rendu à
    l'autre (voir renderFullTable dans results.js) pour pouvoir animer un
    changement de position, comme le classement en cours de partie. */
@@ -9544,7 +9390,8 @@ body.display-body {
      titre doit se placer tout en haut de l'écran") — remplace l'ancien
      "safe center", qui faisait flotter l'énoncé au milieu de l'écran sur
      les questions courtes, sa position changeant d'une question à l'autre. */
-  justify-content: flex-start;
+  justify-content: center;
+  justify-content: safe center;
   overflow-y: auto;
   /* Réserve la place du bandeau badge+minuteur, désormais position:fixed
      (voir body.display-body #questionTypeBadge/#timerContainer plus bas) —
@@ -10383,7 +10230,8 @@ body.display-body #displayLeaderboard {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  justify-content: safe center;
   overflow-y: auto;
   padding: 6vh 4vw 4vh;
   box-sizing: border-box;
@@ -10649,12 +10497,6 @@ body.display-body .indice-history-card .indice-card-text { font-size: clamp(18px
 .advanced-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--color-accent); background: rgba(var(--color-accent-rgb), .12); border: 1px dashed rgba(var(--color-accent-rgb), .5); border-radius: 999px; padding: 3px 9px; margin-left: 8px; vertical-align: middle; }
 
 /* Menu "⋯" de la barre du haut (Standard) : Tutoriel / Supprimer / Dupliquer. */
-.overflow-menu { position: relative; }
-.overflow-menu-list { position: absolute; top: calc(100% + 8px); right: 0; background: var(--color-card-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 6px; display: flex; flex-direction: column; gap: 2px; min-width: 220px; z-index: 50; }
-.overflow-menu-list .btn,
-.overflow-menu-list .btn.btn-primary { justify-content: flex-start; width: 100%; background: transparent; box-shadow: none; border: none; padding: 10px 12px; font-size: 13px; color: var(--color-text); text-align: left; }
-.overflow-menu-list .btn.text-danger { color: var(--color-danger); }
-.overflow-menu-list .btn:hover { background: var(--color-surface); transform: none; }
 
 /* Blocs réservés au mode Avancé (attribut posé dans editor.html à partir de l'étape 2).
    Masquage purement visuel : les valeurs ne sont jamais effacées. */
@@ -10693,15 +10535,82 @@ body.editor-advanced [data-standard-only] { display: none !important; }
 /* 7. Tuiles du sélecteur : cascade avec rebond (plafonnée aux 8 premières). */
 .anim-tile-in { animation: animTileIn 380ms var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 70ms); }
 @keyframes animTileIn { from { opacity: 0; transform: translateY(18px) scale(0.88); } to { opacity: 1; transform: none; } }
-/* 5. Menu "⋯" : s'ouvre depuis son bouton (origine en haut à droite), sortie plus courte. */
-.overflow-menu-list { transform-origin: top right; transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
-.overflow-menu-list.is-closed { opacity: 0; transform: scale(0.96); visibility: hidden; pointer-events: none; transition: opacity 100ms var(--ease-out), transform 100ms var(--ease-out), visibility 0s linear 100ms; }
 /* Mouvement réduit : fondu simple, plus de déplacement ni de rebond. */
 @keyframes animFadeOnly { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .anim-enter, .anim-enter.is-new, .anim-item-in, .anim-form-in, .anim-tile-in { animation: animFadeOnly 150ms linear both; }
+  .anim-enter, .anim-enter.is-new, .anim-advanced, .anim-item-in, .anim-form-in, .anim-tile-in { animation: animFadeOnly 150ms linear both; }
   .mode-switch.is-ready .blob.lead, .mode-switch.is-ready .blob.trail { transition: none; }
-  .overflow-menu-list, .overflow-menu-list.is-closed { transition: opacity 100ms linear; transform: none; }
   .type-picker-tile { transition: border-color 0.15s ease; }
   .type-picker-tile:active { transform: none; }
 }
+
+/* Page de résultats en mode TV (results.js, &tv=1) : passive, plein écran, sans navigation ni boutons ;
+   podium à gauche, classement à droite. L'échelle est posée en JS (zoom de la carte). */
+body.results-tv .navbar,
+body.results-tv #resultsTabs,
+body.results-tv #detailTab,
+body.results-tv #replayQuiz,
+body.results-tv #backHome,
+body.results-tv div:has(> #backHome) { display: none !important; }
+body.results-tv .container { margin-top: 0; max-width: none; padding: 1.5vh 2vw; }
+body.results-tv .card { max-width: 1180px; width: 100%; }
+body.results-tv #podiumTab { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start; }
+body.results-tv #resultsPodium { max-width: none !important; margin: 0 !important; }
+body.results-tv #fullTable { margin-top: 0; }
+
+/* Bloc "Image et son" (editor.html #mediaBlock) : se cache quand ses deux moitiés le sont
+   (type sans illustration + son réservé à l'Avancé en mode Standard, ou aucun des deux). */
+#mediaBlock .media-card > .detail-section + .detail-section { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--color-border); }
+#mediaBlock:not(:has(.media-card > .detail-section:not(.d-none))) { display: none; }
+body.editor-standard #mediaBlock:not(:has(.media-card > .detail-section:not(.d-none):not([data-advanced]))) { display: none; }
+
+/* Apparition des blocs « Avancé » quand on bascule en mode Avancé (editor.js revealAdvancedBlocks) :
+   glissé depuis la droite avec léger flou qui se précise, puis halo d'accent qui s'éteint — bien plus
+   marqué que l'entrée standard, car c'est le seul retour visuel du changement de mode. Cascade de 100 ms. */
+.anim-advanced { border-radius: var(--radius-md); animation: animAdvIn 700ms var(--ease-spring) both, animAdvGlow 1700ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 100ms), calc(var(--i, 0) * 100ms); }
+@keyframes animAdvIn { from { opacity: 0; transform: translateX(56px) scale(0.92); filter: blur(6px); } 55% { opacity: 1; filter: blur(0); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes animAdvGlow { 0% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0), 0 0 0 0 rgba(var(--color-accent-rgb), 0); } 30% { box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), .85), 0 0 32px 4px rgba(var(--color-accent-rgb), .5); } 100% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0), 0 0 0 0 rgba(var(--color-accent-rgb), 0); } }
+
+/* ===== Animation de fin de partie (results-finale.js, tâche 049) ===== */
+.fin-stage { position: relative; height: clamp(380px, 62vh, 520px); margin-bottom: 16px; border-radius: 16px; overflow: hidden; isolation: isolate; background: radial-gradient(120% 90% at 50% 0%, #2a1650 0%, #120a28 62%, #0a0618 100%); border: 1px solid var(--color-border); }
+.fin-grid { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(127, 230, 255, .05) 0 1px, transparent 1px 36px), repeating-linear-gradient(90deg, rgba(127, 230, 255, .05) 0 1px, transparent 1px 36px); }
+.fin-status { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 12; max-width: 90%; background: rgba(255, 255, 255, .08); border: 1px solid rgba(127, 230, 255, .3); border-radius: 999px; padding: 5px 16px; font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.fin-skip { position: absolute; right: 10px; top: 10px; z-index: 13; border: 1px solid rgba(255, 255, 255, .25); background: rgba(10, 6, 24, .7); color: var(--color-text); border-radius: 999px; padding: 6px 14px; font: 800 12px 'Nunito', sans-serif; cursor: pointer; }
+.fin-skip:hover { border-color: var(--color-accent); }
+.fin-card { position: absolute; left: 0; top: 0; width: 112px; height: 66px; box-sizing: border-box; border-radius: 12px; background: linear-gradient(160deg, #241a52, #150f33); border: 1px solid rgba(127, 230, 255, .28); display: grid; grid-template-columns: 34px 1fr; column-gap: 8px; align-items: center; padding: 8px 10px; will-change: transform; z-index: 4; box-shadow: 0 0 18px rgba(127, 230, 255, .12); }
+.fin-av { grid-row: 1 / 3; width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .85); display: flex; align-items: center; justify-content: center; font: 800 13px 'Baloo 2', sans-serif; color: #fff; background-size: cover; background-position: center; text-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+.fin-name { font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: end; min-width: 0; }
+.fin-score { font-weight: 900; font-size: 12px; color: var(--color-accent); font-variant-numeric: tabular-nums; align-self: start; white-space: nowrap; }
+.fin-rank { position: absolute; top: -8px; left: -8px; min-width: 22px; height: 22px; padding: 0 4px; box-sizing: border-box; border-radius: 11px; background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2)); color: #fff; font: 800 12px 'Baloo 2', sans-serif; display: flex; align-items: center; justify-content: center; z-index: 2; }
+.fin-dust { position: absolute; pointer-events: none; z-index: 8; will-change: transform, opacity; }
+.fin-flash { position: absolute; inset: 0; opacity: 0; z-index: 20; pointer-events: none; }
+.fin-wave { position: absolute; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid #fff; opacity: 0; z-index: 15; pointer-events: none; }
+.fin-glitch { animation: finGlitch .18s steps(2) infinite; }
+@keyframes finGlitch { 0% { filter: drop-shadow(4px 0 #ff2fb3) drop-shadow(-4px 0 #00e5ff); } 50% { filter: drop-shadow(-5px 1px #ff2fb3) drop-shadow(5px -1px #00e5ff) hue-rotate(40deg); } 100% { filter: drop-shadow(3px 0 #ff2fb3) drop-shadow(-3px 0 #00e5ff) brightness(1.4); } }
+.fin-reticle { position: absolute; z-index: 10; pointer-events: none; will-change: transform; }
+.fin-reticle svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 6px #ff4d6d); }
+.fin-reticle circle, .fin-reticle path { fill: none; stroke: #ff4d6d; stroke-width: 2.5; stroke-linecap: round; }
+.fin-reticle circle.in { stroke-dasharray: 6 8; stroke-width: 2; }
+.fin-beam { position: absolute; z-index: 7; pointer-events: none; background: linear-gradient(180deg, transparent, rgba(127, 230, 255, .12) 30%, rgba(174, 242, 255, .45)); transform-origin: 50% 100%; will-change: transform; }
+.fin-portal { position: absolute; z-index: 7; border-radius: 50%; border: 2px solid #aef2ff; box-shadow: 0 0 22px 4px rgba(127, 230, 255, .8), inset 0 0 14px rgba(127, 230, 255, .7); pointer-events: none; }
+.fin-bolt { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 14; pointer-events: none; }
+.fin-bolt polyline { fill: none; stroke: #fff; stroke-width: 3; stroke-linejoin: round; filter: drop-shadow(0 0 8px #7fd4ff) drop-shadow(0 0 16px #4aa8ff); }
+/* Pendant l'animation : ni podium ni liste complète (ils révéleraient déjà le classement). */
+#podiumTab.finale-active #fullTable { display: none; }
+body.results-tv #podiumTab.finale-active { grid-template-columns: 1fr; }
+body.results-tv .fin-stage { height: 560px; }
+body.results-tv .fin-skip { display: none; }
+/* Podium 2 - 1 - 3 (results-finale.js buildPodium) */
+.fin-pod { position: absolute; left: 0; right: 0; bottom: 26px; display: flex; align-items: flex-end; justify-content: center; gap: 14px; z-index: 6; max-width: 100%; }
+.fin-pod-col { display: flex; flex-direction: column; align-items: center; width: var(--pod-w, 150px); min-width: 0; }
+.fin-pod-avwrap { position: relative; margin-bottom: 8px; }
+.fin-pod-av { width: 64px; height: 64px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .85); display: flex; align-items: center; justify-content: center; font: 800 24px 'Baloo 2', sans-serif; color: #fff; background-size: cover; background-position: center; box-shadow: 0 4px 12px rgba(0, 0, 0, .45); text-shadow: 0 1px 2px rgba(0, 0, 0, .4); will-change: transform; }
+.fin-pod-crown { position: absolute; top: -26px; left: 50%; margin-left: -14px; font-size: 26px; opacity: 0; will-change: transform; }
+.fin-pod-name { font: 800 17px 'Baloo 2', sans-serif; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+.fin-pod-score { font-weight: 900; font-size: 14px; color: var(--color-accent); margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.fin-pod-block { width: 100%; border-radius: 14px 14px 0 0; transform-origin: bottom; display: flex; align-items: flex-start; justify-content: center; padding-top: 10px; font-size: 30px; will-change: transform; }
+.fin-pod-block.gold { background: linear-gradient(180deg, var(--tile-gold) 0%, var(--tile-gold-deep) 100%); box-shadow: 0 0 30px rgba(var(--tile-gold-rgb), .55); }
+.fin-pod-block.silver { background: linear-gradient(180deg, var(--tile-silver) 0%, var(--tile-silver-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-silver-rgb), .3); }
+.fin-pod-block.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-bronze-rgb), .35); }
+@media (max-width: 640px) { .fin-pod { gap: 8px; } .fin-pod-av { width: 52px; height: 52px; font-size: 20px; } .fin-pod-name { font-size: 14px; } }
+.fin-status:empty { display: none; }
