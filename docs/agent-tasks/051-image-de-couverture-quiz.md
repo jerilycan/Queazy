@@ -17,6 +17,7 @@ quiz dans « Mes quiz » et dans l'onglet des quiz publics. Sans image : comport
 - Image automatique (initiales sur dégradé) commune éditeur + cartes : couleur tirée de l’id du quiz (`quizAutoTile`), donc stable ; les couleurs des cartes ne suivent plus leur position dans la liste.
 - Colonne `quizzes.cover` (texte, id de l'image, nullable) — **modification du schéma, à valider**.
 - Éditeur : sélecteur (modale grille), lecture/écriture à l'ouverture/sauvegarde, copie à la duplication.
+- Barre de configuration de l’éditeur réorganisée (maquette « A », choisie par l’utilisateur) : ligne 1 = pastille, titre, Standard/Avancé, Sauvegarder ; ligne 2 = partage + actions secondaires (Tutoriel, Participants, Dupliquer, Supprimer, Signaler) en boutons discrets avec icônes.
 - `select.js` : requêtes avec `cover`, rendu de l'image sur la carte, repli sur les initiales si id inconnu.
 
 ## Où choisir l'image (tranché par l'utilisateur : dans l'éditeur seulement, pas de crayon sur les cartes)

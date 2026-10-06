@@ -208,6 +208,16 @@
             <span class="quiz-cover-edit" aria-hidden="true">✎</span>
           </button>
           <input id="title" placeholder="Titre du quiz" maxlength="100" />
+          <!-- Mode d'édition (tâche 046) : Standard = l'essentiel pour créer vite,
+               Avancé = tous les réglages optionnels. Voir editor.js applyEditorMode. -->
+          <div class="mode-switch" id="modeSwitch" data-pos="0" role="tablist" aria-label="Mode d'édition">
+            <!-- Deux "gouttes" fusionnées par le filtre SVG #qzGoo (voir style.css .mode-switch) :
+                 effet liquide quand la pastille passe d'un bouton à l'autre. -->
+            <div class="goo-layer" aria-hidden="true"><span class="blob lead"></span><span class="blob trail"></span></div>
+            <button type="button" id="modeStandardBtn" class="mode-switch-btn" role="tab">Standard</button>
+            <button type="button" id="modeAdvancedBtn" class="mode-switch-btn" role="tab">Avancé</button>
+          </div>
+          <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
         </div>
         <div class="editor-top-bar-row">
           <div class="align-center d-flex gap-sm">
@@ -217,22 +227,13 @@
               Partager ce quiz publiquement
             </label>
           </div>
+          <!-- Actions secondaires (maquette « A ») : Sauvegarder reste l'action principale, en haut. -->
           <div class="editor-actions">
-            <!-- Mode d'édition (tâche 046) : Standard = l'essentiel pour créer vite,
-                 Avancé = tous les réglages optionnels. Voir editor.js applyEditorMode. -->
-            <div class="mode-switch" id="modeSwitch" data-pos="0" role="tablist" aria-label="Mode d'édition">
-              <!-- Deux "gouttes" fusionnées par le filtre SVG #qzGoo (voir style.css .mode-switch) :
-                   effet liquide quand la pastille passe d'un bouton à l'autre. -->
-              <div class="goo-layer" aria-hidden="true"><span class="blob lead"></span><span class="blob trail"></span></div>
-              <button type="button" id="modeStandardBtn" class="mode-switch-btn" role="tab">Standard</button>
-              <button type="button" id="modeAdvancedBtn" class="mode-switch-btn" role="tab">Avancé</button>
-            </div>
-            <button id="replayTutorialBtn" class="btn" type="button" title="Revoir le tutoriel de prise en main">❔ Tutoriel</button>
-            <button id="participantsQuizBtn" class="btn d-none" type="button" title="Joueurs ayant terminé ce quiz">👥 Participants</button>
-            <button id="deleteQuiz" class="btn text-danger">Supprimer ce Quiz</button>
-            <button id="saveQuiz" class="btn btn-primary px-32">Sauvegarder</button>
-            <button id="reportQuizBtn" class="btn text-danger d-none">🚩 Signaler</button>
-            <button id="duplicateQuiz" class="btn btn-primary px-32 d-none">Dupliquer dans mes quiz</button>
+            <button id="replayTutorialBtn" class="btn" type="button" title="Revoir le tutoriel de prise en main"><svg class="qa-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>Tutoriel</button>
+            <button id="participantsQuizBtn" class="btn d-none" type="button" title="Joueurs ayant terminé ce quiz"><svg class="qa-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/></svg>Participants</button>
+            <button id="duplicateQuiz" class="btn d-none" type="button" title="Dupliquer dans mes quiz"><svg class="qa-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/></svg>Dupliquer</button>
+            <button id="deleteQuiz" class="btn text-danger" type="button" title="Supprimer ce quiz"><svg class="qa-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/></svg>Supprimer</button>
+            <button id="reportQuizBtn" class="btn text-danger d-none" type="button" title="Signaler ce quiz"><svg class="qa-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg>Signaler</button>
           </div>
         </div>
       </div>

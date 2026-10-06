@@ -763,7 +763,8 @@ const applyReadOnly = () => {
   // sens en bas de l'écran.
   if (questionSaveBar) questionSaveBar.classList.add('d-none')
   if (deleteQuizBtn) deleteQuizBtn.style.display = 'none'
-  if (duplicateQuizBtn) duplicateQuizBtn.classList.remove('d-none')
+  // Lecture seule : « Dupliquer dans mes quiz » devient l'action principale (plus de Sauvegarder).
+  if (duplicateQuizBtn) { duplicateQuizBtn.classList.remove('d-none'); duplicateQuizBtn.classList.add('btn-primary'); duplicateQuizBtn.lastChild.textContent = 'Dupliquer dans mes quiz' }
   if (reportQuizBtn) reportQuizBtn.classList.remove('d-none')
   const banner = document.getElementById('readOnlyBanner')
   if (banner) banner.classList.remove('d-none')
