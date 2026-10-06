@@ -267,6 +267,11 @@ const scoreTimelinePlacement = (events, submitted) => {
   return { tileKeys, placedKeys: seq.filter(k => gapOf.has(k)), correct }
 }
 
+// Comparaison d'options QCM : espaces superflus (début/fin/doublés, insécables) et formes Unicode ignorés. Une option
+// enregistrée avec un espace de trop (« Paris ») ne correspondait jamais à ce que le joueur renvoyait (texte rogné) :
+// toutes les bonnes cases cochées, résultat faux.
+const normalizeMcqText = (s) => String(s ?? '').normalize('NFC').replace(/\s+/g, ' ').trim()
+
 const uid = () => Math.random().toString(36).slice(2, 10)
 // Code de salle : jamais de '0' (retour utilisateur : trop facilement
 // confondu avec la lettre "O" une fois lu/dicté à voix haute ou tapé à la
@@ -2439,11 +2444,11 @@ const start = async () => {
         let submitted
         try {
           const parsed = JSON.parse(payload?.content || '[]')
-          submitted = Array.isArray(parsed) ? parsed.map(s => String(s).trim()).filter(Boolean) : []
+          submitted = Array.isArray(parsed) ? parsed.map(normalizeMcqText).filter(Boolean) : []
         } catch {
-          submitted = String(payload?.content || '').split(',').map(s => s.trim()).filter(Boolean)
+          submitted = String(payload?.content || '').split(',').map(normalizeMcqText).filter(Boolean)
         }
-        const correctList = Array.isArray(q.correct) ? q.correct : []
+        const correctList = Array.isArray(q.correct) ? q.correct.map(normalizeMcqText) : []
         const correctSet = new Set(correctList)
         const submittedSet = new Set(submitted)
         const hasAnyWrong = submitted.some(s => !correctSet.has(s))

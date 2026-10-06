@@ -1580,6 +1580,8 @@ let currentIllustrationZoom = null
 const ZOOMGUESS_ANSWER_WINDOW_MS = 10000
 
 let selectedMcqOptions = []
+// Même normalisation que le serveur (normalizeMcqText) : espaces superflus et formes Unicode ignorés.
+const normMcq = (t) => String(t ?? '').normalize('NFC').replace(/\s+/g, ' ').trim()
 let currentQuestionType = 'free'
 let isGameEnded = false
 
@@ -10110,7 +10112,7 @@ socket.on('question:reveal', payload => {
       // la photo est dans son dataset (voir question:show) plutôt que dans
       // el.textContent comme pour mcq/truefalse.
       const value = payload.type === 'intrus' ? el.dataset.optionId : el.textContent
-      if ((payload.correct || []).includes(value)) {
+      if ((payload.correct || []).some(c => normMcq(c) === normMcq(value))) {
         el.classList.add('correct-reveal')
         stampEntranceAnimation(el) // "pop" de la bonne réponse : ne rejoue pas à chaque réinjection TV
       } else el.classList.add('incorrect-reveal')
@@ -10136,7 +10138,7 @@ socket.on('question:reveal', payload => {
     // truefalse/intrus restent binaires (une seule réponse possible).
     const correctList = payload.correct || []
     if (payload.type === 'mcq' && correctList.length > 1) {
-      const correctCount = correctList.reduce((acc, c) => acc + (selectedMcqOptions.includes(c) ? 1 : 0), 0)
+      const correctCount = correctList.reduce((acc, c) => acc + (selectedMcqOptions.some(o => normMcq(o) === normMcq(c)) ? 1 : 0), 0)
       if (correctCount === correctList.length && myAnsweredCorrectlyThisQuestion) {
         showMyResultBanner()
       } else if (myAnsweredCorrectlyThisQuestion) {
