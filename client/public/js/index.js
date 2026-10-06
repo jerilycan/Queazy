@@ -600,6 +600,9 @@ const previewEditorQuestion = params.get('previewEditorQuestion') === '1'
 const previewQuestionMode = !!(previewBankQuestionId || previewEditorQuestion)
 // ?view=mj : l'aperçu de l'éditeur joue la question en salle « Présenter » (écran du MJ) au lieu du mode « Jouer » (écran joueur).
 const previewAsHost = previewEditorQuestion && params.get('view') === 'mj'
+// Vues joueur de l'aperçu : la salle est créée par l'éditeur (isHost vrai), mais l'écran doit être celui d'un vrai joueur
+// (pas de Récap ni de code de salle, réservés à l'hôte).
+const previewAsPlayer = previewQuestionMode && !previewAsHost
 // Vue TV de l'aperçu : une iframe display.html (id previewTvFrame) est posée à côté par l'éditeur ; on s'en sert comme
 // fenêtre de présentation (displayWin), comme le ferait window.open() — display.js n'exige que l'origine.
 const attachPreviewTv = () => {
@@ -739,7 +742,7 @@ const QUESTION_TYPE_META = {
   reveal: { icon: '🖼️', label: 'Révélation', color: '#cfd8ea', rgb: '207,216,234', hint: 'Observe l\'image (incomplète) et devine de quoi il s\'agit — la version complète apparaît à la révélation.' },
   blindtest: { icon: '🎵', label: 'Blind Test', color: '#7b2ff7', rgb: '123,47,247', hint: 'Écoute l\'extrait, puis trouve de quoi il s\'agit.' },
   association: { icon: '🔗', label: 'Association', color: '#ff9f5a', rgb: '255,159,90', hint: 'Relie chaque élément de gauche à son binôme à droite.' },
-  timeline: { icon: '⏳', label: 'Timeline', color: '#14e0b8', rgb: '20,224,184', hint: 'Place les événements dans l\'ordre chronologique.' },
+  timeline: { icon: '⏳', label: 'Timeline', color: '#14e0b8', rgb: '20,224,184', hint: 'Glisse chaque événement au bon endroit de la frise.' },
   rangement: { icon: '🗂️', label: 'Rangement', color: '#7b2ff7', rgb: '123,47,247', hint: 'Range chaque carte dans la bonne zone.' },
   intrus: { icon: '🎯', label: 'Intrus', color: '#b34bf5', rgb: '179,75,245', hint: 'Repère la photo qui n\'a rien à voir avec les autres.' },
   pbac: { icon: '🎩', label: 'Petit Bac', color: '#c8f542', rgb: '200,245,66', hint: 'Tape ta réponse — elle sera jugée par l\'hôte, comme au vrai Petit Bac !' },
@@ -1062,6 +1065,9 @@ const orderCompareMine = document.getElementById('orderCompareMine')
 const orderCompareCorrect = document.getElementById('orderCompareCorrect')
 const timelineArea = document.getElementById('timelineArea')
 const timelineList = document.getElementById('timelineList')
+const timelineTray = document.getElementById('timelineTray')
+const timelineTrayList = document.getElementById('timelineTrayList')
+const timelineTrayCount = document.getElementById('timelineTrayCount')
 const rangementArea = document.getElementById('rangementArea')
 const rangementZonesEl = document.getElementById('rangementZones')
 const rangementTrayEl = document.getElementById('rangementTray')
@@ -1793,7 +1799,7 @@ const ORDER_LIST_GAP = 10
 // "order"/"timeline" plus haute que l'écran rendait impossible de faire
 // glisser une tuile au-delà du bord visible en un seul geste — il fallait
 // lâcher, laisser la page défiler à la main, puis reprendre. Partagé entre
-// wireOrderDrag et wireTimelineDrag (mécanique de défilement identique),
+// wireOrderDrag et wireTimelineTile (mécanique de défilement identique),
 // mais PAS la correction de dérive qu'il impose au calcul de créneau — trop
 // spécifique à chaque liste (orderList/timelineList, updateOrderRanks...)
 // pour être factorisée sans risquer d'entremêler les deux, voir ces deux
@@ -2038,143 +2044,239 @@ const revealOrderList = (correctOrder) => {
   orderCompareMine.querySelectorAll('.order-compare-text').forEach((el, i) => { el.textContent = mine[i] })
 }
 
-// --- Question "timeline" : classer des événements dans le bon ordre -------
-// Même mécanique de glisser au pointeur que la liste "order" ci-dessus
-// (wireOrderDrag), adaptée à des cartes à deux lignes (titre + description)
-// au lieu d'un simple texte. "key" = index ORIGINAL dans q.correct (voir
-// server/index.js, jamais la date elle-même, jamais montrée avant la
-// révélation) : c'est ce qui est envoyé au serveur, dans l'ordre où le
-// joueur a placé les cartes — le serveur retrie par date pour déterminer
-// l'ordre correct et compare position par position.
+// --- Question "timeline" (tâche 052) : « frise qui grandit » --------------
+// La frise affiche des repères datés (timelineAnchors, dates publiques) ; les tuiles à placer
+// (timelineItems, SANS date) attendent dans la réserve. Le joueur glisse une tuile (de la réserve
+// ou déjà posée) vers un emplacement de la frise ; les emplacements n'existent que pendant le
+// glisser, libellés selon leur position (« Avant tout ça » / « Entre les deux » / « Après tout
+// ça »), celui survolé devient « Déposer ici ». Chaque entrée = {key, anchor, title, description,
+// date?} ; key = index d'origine dans q.correct, c'est ce que reçoit le serveur (voir
+// scoreTimelinePlacement dans server/index.js), jamais une date.
 let timelineDisabled = true
 const setTimelineDisabled = (v) => { timelineDisabled = v }
-const TIMELINE_LIST_GAP = 10
+let timelineState = null // { frise: [entrée...], tray: [entrée...] }
+let myTimelineSubmission = null // clés de la frise telle qu'envoyée — pour la comparaison au reveal
 
-const wireTimelineDrag = (el) => {
-  let dragActive = false
-  el.addEventListener('pointerdown', (e) => {
-    if (timelineDisabled || dragActive) return
-    if (sendBtn.disabled) return
-    e.preventDefault()
-    dragActive = true
-    const startY = e.clientY
-    let lastPointerY = e.clientY
-    // Défilement auto (voir startAutoScrollOnDrag/wireOrderDrag, même
-    // correction de dérive appliquée ici) : point de référence pour la
-    // corriger.
-    const scrollYAtStart = window.scrollY
-    el.classList.add('dragging')
-    el.style.zIndex = '10'
-    try { el.setPointerCapture(e.pointerId) } catch {}
+const formatTimelineYear = (d) => (Number(d) < 0 ? `${-Number(d)} av. J.-C.` : String(d))
 
-    const others = Array.from(timelineList.children).filter(c => c !== el)
-    const baseRects = others.map(c => c.getBoundingClientRect())
-    const startSlot = Array.from(timelineList.children).indexOf(el)
-    const itemHeight = el.getBoundingClientRect().height + TIMELINE_LIST_GAP
-    let currentSlot = startSlot
-
-    // Voir le commentaire détaillé de la fonction équivalente dans
-    // wireOrderDrag (updateOrderTile) — même double correction de dérive.
-    const updateTimelineTile = () => {
-      const scrollDelta = window.scrollY - scrollYAtStart
-      const dy = (lastPointerY - startY) + scrollDelta
-      el.style.transform = `translateY(${dy}px) scale(1.02)`
-      const rect = el.getBoundingClientRect()
-      const center = rect.top + rect.height / 2
-      let newSlot = 0
-      baseRects.forEach(r => { if (center > (r.top - scrollDelta) + r.height / 2) newSlot++ })
-      if (newSlot === currentSlot) return
-      currentSlot = newSlot
-      others.forEach((c, i) => {
-        let shift = 0
-        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
-        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
-        c.style.transition = 'transform 0.18s ease'
-        c.style.transform = shift ? `translateY(${shift}px)` : ''
-      })
-    }
-
-    const onMove = (ev) => {
-      lastPointerY = ev.clientY
-      updateTimelineTile()
-    }
-
-    const stopAutoScroll = startAutoScrollOnDrag(() => lastPointerY, updateTimelineTile)
-
-    const cleanup = (applyReorder) => {
-      stopAutoScroll()
-      el.removeEventListener('pointermove', onMove)
-      el.removeEventListener('pointerup', onUp)
-      el.removeEventListener('pointercancel', onCancel)
-      if (applyReorder && currentSlot !== startSlot) {
-        timelineList.insertBefore(el, others[currentSlot] || null)
-      }
-      others.forEach(c => { c.style.transition = ''; c.style.transform = '' })
-      el.classList.remove('dragging')
-      el.style.zIndex = ''
-      el.style.transition = 'transform 0.2s ease'
-      el.style.transform = ''
-      setTimeout(() => { el.style.transition = '' }, 200)
-      dragActive = false
-    }
-
-    const onUp = (ev) => { try { el.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
-    const onCancel = () => cleanup(false)
-
-    el.addEventListener('pointermove', onMove)
-    el.addEventListener('pointerup', onUp)
-    el.addEventListener('pointercancel', onCancel)
-  })
+const buildTimelineCard = (entry, extraClass) => {
+  const card = document.createElement('div')
+  card.className = 'tl-card' + (extraClass ? ' ' + extraClass : '')
+  const title = document.createElement('span')
+  title.className = 'tl-card-title'
+  title.textContent = entry.title || ''
+  card.appendChild(title)
+  if (entry.description) {
+    const desc = document.createElement('span')
+    desc.className = 'tl-card-desc'
+    desc.textContent = entry.description
+    card.appendChild(desc)
+  }
+  return card
 }
 
-let myTimelineSubmission = null // [{title, description}, ...] tel qu'envoyé, dans l'ordre soumis — pour la comparaison au reveal
-
-const buildTimelineList = (items) => {
-  if (!timelineList) return
+// slotLabels : pendant un glisser, intercale un emplacement avant/entre/après les lignes de la frise
+// (hors tuile glissée, déjà retirée de timelineState.frise par l'appelant via "skipKey").
+const renderTimelineBoard = ({ dragging = null } = {}) => {
+  if (!timelineList || !timelineState) return
   timelineList.innerHTML = ''
+  const rows = timelineState.frise.filter(e => !dragging || e.key !== dragging.key)
+  const addSlot = (slotIndex) => {
+    const slot = document.createElement('div')
+    slot.className = 'tl-slot'
+    slot.dataset.slotIndex = String(slotIndex)
+    slot.dataset.label = slotIndex === 0 ? 'Avant tout ça' : (slotIndex === rows.length ? 'Après tout ça' : 'Entre les deux')
+    slot.textContent = slot.dataset.label
+    timelineList.appendChild(slot)
+  }
+  if (dragging) addSlot(0)
+  rows.forEach((entry, i) => {
+    const row = document.createElement('div')
+    row.className = 'tl-row' + (entry.anchor ? ' is-anchor' : ' is-placed')
+    const date = document.createElement('span')
+    date.className = 'tl-date'
+    date.textContent = entry.anchor ? formatTimelineYear(entry.date) : '?'
+    const dot = document.createElement('span')
+    dot.className = 'tl-dot'
+    row.appendChild(date)
+    row.appendChild(dot)
+    const card = buildTimelineCard(entry, entry.anchor ? '' : 'is-tile')
+    if (!entry.anchor) wireTimelineTile(card, entry)
+    row.appendChild(card)
+    timelineList.appendChild(row)
+    if (dragging) addSlot(i + 1)
+  })
+  if (timelineTray && timelineTrayList) {
+    timelineTrayList.innerHTML = ''
+    timelineState.tray.forEach((entry) => {
+      const tile = buildTimelineCard(entry, 'tl-tile')
+      if (dragging && dragging.key === entry.key) tile.classList.add('is-source')
+      wireTimelineTile(tile, entry)
+      timelineTrayList.appendChild(tile)
+    })
+    timelineTray.classList.toggle('d-none', timelineState.tray.length === 0)
+    if (timelineTrayCount) timelineTrayCount.textContent = String(timelineState.tray.length)
+  }
+}
+
+const buildTimelineBoard = (anchors, tiles) => {
+  if (!timelineList) return
   timelineDisabled = true
-  ;(items || []).forEach((item, uid) => {
-    const el = document.createElement('div')
-    el.className = 'timeline-item'
-    el.dataset.key = item.key
-    el.dataset.title = item.title || ''
-    el.dataset.description = item.description || ''
-    el.innerHTML = `<span class="order-item-handle">⠿</span><span class="timeline-item-text"><span class="timeline-item-title"></span><span class="timeline-item-desc"></span></span>`
-    el.querySelector('.timeline-item-title').textContent = item.title || ''
-    el.querySelector('.timeline-item-desc').textContent = item.description || ''
-    timelineList.appendChild(el)
-    wireTimelineDrag(el)
-    applyTileReveal(el, uid)
+  timelineState = {
+    frise: (anchors || []).map(a => ({ key: a.key, anchor: true, title: a.title || '', description: a.description || '', date: a.date })),
+    tray: (tiles || []).map(t => ({ key: t.key, anchor: false, title: t.title || '', description: t.description || '' }))
+  }
+  renderTimelineBoard()
+  timelineList.querySelectorAll('.tl-row').forEach((el, i) => applyTileReveal(el, i))
+  if (timelineTrayList) Array.from(timelineTrayList.children).forEach((el, i) => applyTileReveal(el, timelineList.children.length + i))
+}
+
+// Glisser d'une tuile (réserve ou déjà posée). Les écouteurs sont sur window (pas de capture du
+// pointeur) : la frise est reconstruite au début du glisser pour y faire apparaître les emplacements,
+// ce qui détache l'élément d'origine.
+let timelineDragActive = false
+const wireTimelineTile = (el, entry) => {
+  el.addEventListener('pointerdown', (e) => {
+    if (timelineDisabled || timelineDragActive || sendBtn.disabled) return
+    if (e.button !== undefined && e.button > 0) return
+    e.preventDefault()
+    timelineDragActive = true
+
+    const startRect = el.getBoundingClientRect()
+    const grabX = e.clientX - startRect.left
+    const grabY = e.clientY - startRect.top
+    const ghost = buildTimelineCard(entry, 'is-tile tl-ghost')
+    ghost.style.width = startRect.width + 'px'
+    document.body.appendChild(ghost)
+    let lastX = e.clientX
+    let lastY = e.clientY
+    let hoverSlot = null
+    let overTray = false
+
+    renderTimelineBoard({ dragging: entry })
+
+    const updateHover = () => {
+      ghost.style.transform = `translate(${lastX - grabX}px, ${lastY - grabY}px) rotate(2deg)`
+      const slots = Array.from(timelineList.querySelectorAll('.tl-slot'))
+      let best = null
+      let bestDist = 70 // tolérance verticale en px : un doigt est imprécis
+      slots.forEach((slot) => {
+        const r = slot.getBoundingClientRect()
+        const dist = lastY >= r.top && lastY <= r.bottom ? 0 : Math.min(Math.abs(lastY - r.top), Math.abs(lastY - r.bottom))
+        if (dist < bestDist) { bestDist = dist; best = slot }
+      })
+      const trayRect = timelineTray && !timelineTray.classList.contains('d-none') ? timelineTray.getBoundingClientRect() : null
+      overTray = !!trayRect && lastY >= trayRect.top && lastY <= trayRect.bottom && lastX >= trayRect.left && lastX <= trayRect.right
+      if (overTray) best = null
+      if (best !== hoverSlot) {
+        if (hoverSlot) { hoverSlot.classList.remove('is-hover'); hoverSlot.textContent = hoverSlot.dataset.label }
+        hoverSlot = best
+        if (hoverSlot) { hoverSlot.classList.add('is-hover'); hoverSlot.textContent = 'Déposer ici' }
+      }
+      if (timelineTray) timelineTray.classList.toggle('is-drop-target', overTray)
+    }
+
+    const onMove = (ev) => { lastX = ev.clientX; lastY = ev.clientY; updateHover() }
+    const stopAutoScroll = startAutoScrollOnDrag(() => lastY, updateHover)
+    updateHover()
+
+    const finish = (apply) => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      stopAutoScroll()
+      ghost.remove()
+      if (apply && (hoverSlot || overTray)) {
+        const frise = timelineState.frise.filter(x => x.key !== entry.key)
+        const tray = timelineState.tray.filter(x => x.key !== entry.key)
+        if (overTray) {
+          tray.push(entry)
+        } else {
+          frise.splice(Number(hoverSlot.dataset.slotIndex), 0, entry)
+        }
+        timelineState = { frise, tray }
+      }
+      if (timelineTray) timelineTray.classList.remove('is-drop-target')
+      renderTimelineBoard()
+      timelineDragActive = false
+    }
+    const onUp = () => finish(true)
+    const onCancel = () => finish(false)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
   })
 }
 
-const getCurrentTimelineKeys = () => Array.from(timelineList.children).map(el => Number(el.dataset.key))
-const getCurrentTimelineSubmission = () => Array.from(timelineList.children).map(el => ({ title: el.dataset.title, description: el.dataset.description }))
+// Clés de la frise telle qu'affichée (repères + tuiles posées), c'est ce qu'attend le serveur.
+const getCurrentTimelineKeys = () => (timelineState ? timelineState.frise.map(e => e.key) : [])
 
-// Révélation : même principe que revealOrderList (comparaison ligne à ligne
-// figée plutôt qu'une liste qui se réordonne sous les yeux). Comparaison par
-// TITRE (le joueur soumet des clés numériques au serveur, mais on ne les
-// reçoit pas en retour — le payload de révélation ne porte que les
-// événements triés, voir server/index.js revealQuestion) : suppose des
-// titres uniques au sein d'une même question, comme "order" suppose déjà
-// des éléments textuels uniques.
+// Même règle de « tuile bien placée » que scoreTimelinePlacement (server/index.js), recalculée ici
+// pour colorer la révélation : événements = payload.correct (avec key, anchor, date).
+const timelineCorrectKeys = (events, seq) => {
+  const dateOf = (k) => Number((events.find(e => e.key === k) || {}).date)
+  const anchorKeys = events.filter(e => e.anchor === true).map(e => e.key)
+  const tileKeys = events.filter(e => e.anchor !== true).map(e => e.key)
+  const gapOf = new Map()
+  let passed = 0
+  seq.forEach((k) => { if (anchorKeys.includes(k)) passed++; else if (tileKeys.includes(k)) gapOf.set(k, passed) })
+  const gapOk = tileKeys.filter((k) => {
+    if (!gapOf.has(k)) return false
+    const lo = anchorKeys.filter(a => dateOf(a) < dateOf(k)).length
+    const hi = anchorKeys.filter(a => dateOf(a) <= dateOf(k)).length
+    return gapOf.get(k) >= lo && gapOf.get(k) <= hi
+  })
+  const ok = new Set()
+  gapOk.forEach((k) => {
+    const mine = seq.indexOf(k)
+    const inverted = gapOk.some(u => u !== k && gapOf.get(u) === gapOf.get(k) &&
+      ((seq.indexOf(u) < mine && dateOf(u) > dateOf(k)) || (seq.indexOf(u) > mine && dateOf(u) < dateOf(k))))
+    if (!inverted) ok.add(k)
+  })
+  return ok
+}
+
+// Révélation : la frise est reconstruite dans l'ordre réel avec toutes les dates ; chaque tuile à
+// placer est marquée juste ou fausse. correctEvents = payload.correct (triés par date, avec key/anchor).
 const revealTimelineList = (correctEvents) => {
   if (!timelineList || !Array.isArray(correctEvents) || correctEvents.length === 0) return
   setTimelineDisabled(true)
+  const placed = new Set(Array.isArray(myTimelineSubmission) ? myTimelineSubmission : [])
+  const okKeys = timelineCorrectKeys(correctEvents, Array.isArray(myTimelineSubmission) ? myTimelineSubmission : [])
+  timelineList.innerHTML = ''
   timelineList.classList.add('is-revealed')
-  const mine = Array.isArray(myTimelineSubmission) && myTimelineSubmission.length === correctEvents.length
-    ? myTimelineSubmission
-    : null
-
-  Array.from(timelineList.children).forEach((el, i) => {
-    const correctEv = correctEvents[i]
-    el.querySelector('.timeline-item-title').textContent = correctEv?.title || ''
-    const dateLabel = Number.isFinite(Number(correctEv?.date)) ? ` (${correctEv.date})` : ''
-    el.querySelector('.timeline-item-desc').textContent = (correctEv?.description || '') + dateLabel
-    const isCorrect = !!mine && mine[i]?.title === correctEv?.title
-    el.classList.toggle('correct-reveal', isCorrect)
-    el.classList.toggle('incorrect-reveal', !isCorrect)
+  if (timelineTray) timelineTray.classList.add('d-none')
+  correctEvents.forEach((ev) => {
+    const row = document.createElement('div')
+    row.className = 'tl-row' + (ev.anchor ? ' is-anchor' : ' is-placed')
+    if (!ev.anchor) row.classList.add(okKeys.has(ev.key) ? 'is-correct' : 'is-incorrect')
+    const date = document.createElement('span')
+    date.className = 'tl-date'
+    date.textContent = formatTimelineYear(ev.date)
+    const dot = document.createElement('span')
+    dot.className = 'tl-dot'
+    row.appendChild(date)
+    row.appendChild(dot)
+    const card = buildTimelineCard(ev, ev.anchor ? '' : 'is-tile')
+    if (!ev.anchor && !placed.has(ev.key)) {
+      const note = document.createElement('span')
+      note.className = 'tl-card-desc'
+      note.textContent = 'Non placé'
+      card.appendChild(note)
+    }
+    row.appendChild(card)
+    timelineList.appendChild(row)
   })
+}
+
+// Anciennes questions Timeline (liste à réordonner, aucun "anchor") : l'événement à la date médiane
+// devient le repère, les autres sont à placer — même règle que l'éditeur (editor.js
+// migrateTimelineAnchors), dupliquée faute de module partagé entre les scripts du projet.
+const ensureTimelineAnchors = (events) => {
+  if (!Array.isArray(events) || events.length === 0 || !events.every(e => typeof e?.anchor !== 'boolean')) return
+  const byDate = events.map((e, i) => i).sort((a, b) => Number(events[a].date) - Number(events[b].date))
+  const medianIdx = byDate[Math.floor((events.length - 1) / 2)]
+  events.forEach((e, i) => { e.anchor = i === medianIdx })
 }
 
 // --- Question "rangement" (tâche 013) : glisser des cartes dans des zones
@@ -4095,10 +4197,7 @@ const clearRevealState = () => {
   if (gradMyMarker) gradMyMarker.classList.add('d-none')
   if (orderCompare) orderCompare.classList.add('d-none')
   if (orderList) orderList.classList.remove('d-none')
-  if (timelineList) {
-    timelineList.classList.remove('is-revealed')
-    Array.from(timelineList.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
-  }
+  if (timelineList) timelineList.classList.remove('is-revealed')
   if (associationColA) {
     Array.from(associationColA.children).forEach(el => {
       el.classList.remove('correct-reveal', 'incorrect-reveal', 'is-selected')
@@ -5761,8 +5860,10 @@ socket.on('room:created', ({ roomCode, serverUrl, hostToken, mode, autoConfig })
     // regagner. L'hôte ne voyait donc jamais ce badge du tout (pas "vide",
     // carrément invisible) alors que le texte, lui, était bien posé juste
     // en dessous.
-    persistentCode.classList.remove('d-none')
-    persistentCode.style.display = 'block'
+    if (!previewAsPlayer) {
+      persistentCode.classList.remove('d-none')
+      persistentCode.style.display = 'block'
+    }
   }
   setDisplayRoomCode(roomCode);
   const base = serverUrl || baseUrl
@@ -6090,7 +6191,7 @@ socket.on('player:token', ({ token }) => {
   // ce stade, posé par `room:created` avant que l'hôte ne reçoive son
   // propre `player:token`).
   const persistentCode = document.getElementById('persistentRoomCode')
-  if (persistentCode && isHost) {
+  if (persistentCode && isHost && !previewAsPlayer) {
     persistentCode.classList.remove('d-none')
     persistentCode.style.display = 'block'
   }
@@ -6380,7 +6481,9 @@ let gameMode = 'irl'
 // garanti.
 const updateIrlPlayerUI = () => {
   const gameActive = document.body.classList.contains('game-active')
-  const isPlayerInGame = !isHost && gameActive
+  // Aperçu « Tester cette question » (vues joueur) : la salle est créée par l'éditeur, donc isHost est vrai ici — mais
+  // l'écran doit être celui d'un VRAI joueur (logo réduit, barre de temps fine, roue crantée), pas celui d'un hôte qui joue.
+  const isPlayerInGame = (!isHost || previewAsPlayer) && gameActive
   document.body.classList.toggle('irl-player-mode', gameMode === 'irl' && isPlayerInGame)
   document.body.classList.toggle('remote-player-mode', gameMode === 'remote' && isPlayerInGame)
   // Ligne d'info du menu roue crantée (voir #irlMenuModeInfo, index.html) —
@@ -7196,6 +7299,7 @@ const emitQuestion = (index) => {
   // answer:progress reçu, voir socket.on plus bas qui la met ensuite à
   // jour) — retour utilisateur : "laisse toujours afficher l'info".
   updateGameProgressInfo(lastLobbyArr.filter(p => !p.isHost).length, 0)
+  if (q.type === 'timeline') ensureTimelineAnchors(q.correct)
   const correctOrder = Array.isArray(q.correct) ? q.correct : []
   setModerationExpected(q)
   // "association" : un seul mélange d'index, réutilisé pour dériver à la
@@ -7262,7 +7366,13 @@ const emitQuestion = (index) => {
     // "timeline" : la date reste dans q.correct (server/index.js s'en sert
     // pour scorer/révéler) mais n'est JAMAIS incluse ici — seuls titre/
     // description + une clé (index d'origine) partent au mélange.
-    timelineItems: q.type === 'timeline' ? shuffleArray(correctOrder.map((e, i) => ({ title: e?.title ?? '', description: e?.description ?? '', key: i }))) : undefined,
+    // Repères visibles (date publique, triés par date) + tuiles à placer (titre/description/clé, JAMAIS de date, mélangées).
+    timelineAnchors: q.type === 'timeline'
+      ? correctOrder.map((e, i) => ({ title: e?.title ?? '', description: e?.description ?? '', date: e?.date, key: i, anchor: e?.anchor === true })).filter(e => e.anchor).sort((a, b) => Number(a.date) - Number(b.date)).map(({ anchor, ...rest }) => rest)
+      : undefined,
+    timelineItems: q.type === 'timeline'
+      ? shuffleArray(correctOrder.map((e, i) => ({ title: e?.title ?? '', description: e?.description ?? '', key: i, anchor: e?.anchor === true })).filter(e => !e.anchor).map(({ anchor, ...rest }) => rest))
+      : undefined,
     // "rangement" (tâche 013) : zones PUBLIQUES dès le départ (ce sont les
     // cibles à taper, jamais mélangées — leur ORDRE fait partie de
     // l'affichage voulu par le créateur) ; rangementItems reprend le même
@@ -7673,8 +7783,10 @@ const launchQuiz = async () => {
   // Panneau récap (hôte) : le bouton pour l'afficher/cacher n'a de sens
   // qu'une fois la partie lancée (rien à récapituler avant) — état
   // ouvert/fermé restauré depuis la dernière fois (voir RECAP_SIDEBAR_PREF_KEY).
-  showRecapSidebarUi()
-  setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
+  if (!previewAsPlayer) {
+    showRecapSidebarUi()
+    setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
+  }
   // On émet directement la première question (au lieu de simuler un clic sur
   // nextQuestionBtn) : le bouton reste grisé/onclick=null tant que la question
   // n'est pas révélée (voir updateHostControls), donc un .click() ici ne
@@ -7786,7 +7898,7 @@ socket.on('question:show', payload => {
   // serveur continue de diffuser question:recap à toute la salle (voir
   // revealQuestion côté server/index.js) — rien à changer côté serveur, le
   // joueur n'a simplement plus le bouton qui donnerait accès au panneau.
-  if (isHost) {
+  if (isHost && !previewAsPlayer) {
     showRecapSidebarUi()
     setRecapSidebarOpen(localStorage.getItem(RECAP_SIDEBAR_PREF_KEY) === '1')
   }
@@ -7881,6 +7993,7 @@ socket.on('question:show', payload => {
   if (timelineArea) {
     timelineArea.classList.toggle('d-none', payload.type !== 'timeline')
     if (timelineList) timelineList.classList.remove('is-revealed')
+    if (timelineArea) timelineArea.classList.remove('is-locked')
   }
   if (rangementArea) {
     rangementArea.classList.toggle('d-none', payload.type !== 'rangement')
@@ -8103,7 +8216,7 @@ socket.on('question:show', payload => {
   if (blindtestArtistInput) blindtestArtistInput.disabled = false
   // Symétrique du .add('is-locked') posé dans submitCurrentAnswer — sans
   // ça, le grisage de la question précédente resterait affiché sur celle-ci.
-  ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields, rangementArea].forEach(el => {
+  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea].forEach(el => {
     if (el) el.classList.remove('is-locked')
   })
   // "Titre uniquement" (voir editor.js) : masque le champ artiste plutôt que
@@ -8154,7 +8267,7 @@ socket.on('question:show', payload => {
     buildAssociationArea(payload.pairsA, payload.pairsB, payload.pairsBKeys, payload.associationImagesUrl)
   }
   if (payload.type === 'timeline') {
-    buildTimelineList(payload.timelineItems)
+    buildTimelineBoard(payload.timelineAnchors, payload.timelineItems)
   }
   if (payload.type === 'rangement') {
     buildRangementArea(payload.zones, payload.rangementItems)
@@ -8653,8 +8766,8 @@ const submitCurrentAnswer = () => {
     myAssociationSubmission = associationState ? associationState.matches.slice() : []
     content = JSON.stringify(myAssociationSubmission)
   } else if (currentQuestionType === 'timeline') {
-    myTimelineSubmission = getCurrentTimelineSubmission() // pour la comparaison au reveal (titres)
-    content = JSON.stringify(getCurrentTimelineKeys()) // pour le serveur (clés = index d'origine)
+    myTimelineSubmission = getCurrentTimelineKeys() // pour la comparaison au reveal
+    content = JSON.stringify(myTimelineSubmission) // pour le serveur (clés = index d'origine dans q.correct)
   } else if (currentQuestionType === 'rangement') {
     // Pas d'obligation d'avoir tout rangé (score proportionnel, comme
     // "association" ci-dessus) — une carte jamais posée est simplement
@@ -8702,7 +8815,7 @@ const submitCurrentAnswer = () => {
   // visiblement après envoi — les autres restaient identiques à l'écran,
   // le joueur pouvait continuer à toucher/glisser sans aucun effet
   // visible et se demander si son geste avait un effet).
-  ;[gradSlider, orderList, associationArea, timelineList, imageWrap, blindtestFields, rangementArea].forEach(el => {
+  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea].forEach(el => {
     if (el) el.classList.add('is-locked')
   })
 }
@@ -10114,12 +10227,13 @@ socket.on('question:reveal', payload => {
   } else if (payload.type === 'timeline') {
     const correctEvents = payload.correct || []
     revealTimelineList(correctEvents)
-    const mine = Array.isArray(myTimelineSubmission) ? myTimelineSubmission : []
-    const correctCount = correctEvents.reduce((acc, ev, i) => acc + (mine[i]?.title === ev.title ? 1 : 0), 0)
-    if (correctCount === correctEvents.length && correctEvents.length > 0) {
+    if (timelineArea) timelineArea.classList.remove('is-locked')
+    const tileCount = correctEvents.filter(ev => ev.anchor !== true).length
+    const correctCount = timelineCorrectKeys(correctEvents, Array.isArray(myTimelineSubmission) ? myTimelineSubmission : []).size
+    if (correctCount === tileCount && tileCount > 0) {
       showMyResultBanner()
     } else if (myAnsweredCorrectlyThisQuestion) {
-      showMyResultBanner(`Presque ! ${correctCount}/${correctEvents.length} bien placés (+${myLastDelta} points)`, 'is-close')
+      showMyResultBanner(`Presque ! ${correctCount}/${tileCount} bien placés (+${myLastDelta} points)`, 'is-close')
     } else {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }

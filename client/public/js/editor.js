@@ -368,7 +368,8 @@ const ASSOCIATION_MAX_PAIRS = 8
 const timelineSection = document.getElementById('timelineSection')
 const timelineEditList = document.getElementById('timelineEditList')
 const addTimelineEventBtn = document.getElementById('addTimelineEvent')
-const TIMELINE_MIN_EVENTS = 3
+// Timeline « frise qui grandit » (tâche 052) : au moins un repère visible + une tuile à placer.
+const TIMELINE_MIN_EVENTS = 2
 const TIMELINE_MAX_EVENTS = 8
 
 // Question "rangement" (tâche 013) : les joueurs glissent/rangent des
@@ -2923,7 +2924,7 @@ const QTYPE_HINTS = {
   image: { icon: '📍', text: 'Les joueurs touchent l\'endroit sur l\'image qui correspond à la réponse.', color: '#2fe3ff', rgb: '47,227,255' },
   zoomguess: { icon: '🔍', text: 'Les joueurs devinent ce que montre l\'image avant qu\'elle ne se dézoome complètement.', color: '#5865f2', rgb: '88,101,242' },
   association: { icon: '🔗', text: 'Les joueurs relient chaque élément de gauche à son binôme à droite.', color: '#ff9f5a', rgb: '255,159,90' },
-  timeline: { icon: '⏳', text: 'Les joueurs placent les événements dans l\'ordre chronologique.', color: '#14e0b8', rgb: '20,224,184' },
+  timeline: { icon: '⏳', text: 'Les joueurs glissent chaque événement au bon endroit d\'une frise de repères datés.', color: '#14e0b8', rgb: '20,224,184' },
   rangement: { icon: '🗂️', text: 'Les joueurs rangent chaque carte dans la bonne zone.', color: '#7b2ff7', rgb: '123,47,247' },
   intrus: { icon: '🎯', text: 'Les joueurs repèrent la photo qui n\'a rien à voir avec les autres.', color: '#b34bf5', rgb: '179,75,245' },
   pbac: { icon: '🎩', text: 'Les joueurs tapent une réponse libre, jugée par toi pendant la partie — pas de liste à préparer.', color: '#c8f542', rgb: '200,245,66' },
@@ -4028,62 +4029,30 @@ const isValidRangementItems = (correct, zones) =>
   correct.every(it => it && typeof it === 'object' && typeof it.title === 'string' &&
     Number.isInteger(it.zone) && it.zone >= 0 && it.zone < (Array.isArray(zones) ? zones.length : 0))
 
-const TIMELINE_EDIT_LIST_GAP = 8
-let timelineEditDragActive = false
+// Tâche 052 : chaque événement porte "anchor" — true = repère affiché aux joueurs avec sa date,
+// false = tuile à placer par les joueurs (sans date). Deux repères + une tuile par défaut.
+const defaultTimelineEvents = () => [
+  { title: '', description: '', date: 0, anchor: true },
+  { title: '', description: '', date: 0, anchor: true },
+  { title: '', description: '', date: 0, anchor: false }
+]
 
-const wireTimelineEditDrag = (row) => {
-  row.addEventListener('pointerdown', (e) => {
-    if (readOnly || timelineEditDragActive) return
-    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
-    e.preventDefault()
-    timelineEditDragActive = true
-    const startY = e.clientY
-    row.classList.add('dragging')
-    try { row.setPointerCapture(e.pointerId) } catch {}
+// Anciennes questions Timeline (liste à réordonner, aucun "anchor") : l'événement à la date médiane
+// devient le repère, les autres sont à placer — la question reste jouable sans script de migration.
+const migrateTimelineAnchors = (events) => {
+  if (!events.every(e => typeof e.anchor !== 'boolean')) return
+  const byDate = events.map((e, i) => i).sort((a, b) => Number(events[a].date) - Number(events[b].date))
+  const medianIdx = byDate[Math.floor((events.length - 1) / 2)]
+  events.forEach((e, i) => { e.anchor = i === medianIdx })
+}
 
-    const others = Array.from(timelineEditList.children).filter(c => c !== row)
-    const baseRects = others.map(c => c.getBoundingClientRect())
-    const startSlot = Array.from(timelineEditList.children).indexOf(row)
-    const itemHeight = row.getBoundingClientRect().height + TIMELINE_EDIT_LIST_GAP
-    let currentSlot = startSlot
-
-    const onMove = (ev) => {
-      const dy = ev.clientY - startY
-      row.style.transform = `translateY(${dy}px) scale(1.02)`
-      const rect = row.getBoundingClientRect()
-      const center = rect.top + rect.height / 2
-      let newSlot = 0
-      baseRects.forEach(r => { if (center > r.top + r.height / 2) newSlot++ })
-      if (newSlot === currentSlot) return
-      currentSlot = newSlot
-      others.forEach((c, i) => {
-        let shift = 0
-        if (newSlot > startSlot && i >= startSlot && i < newSlot) shift = -itemHeight
-        else if (newSlot < startSlot && i >= newSlot && i < startSlot) shift = itemHeight
-        c.style.transition = 'transform 0.18s ease'
-        c.style.transform = shift ? `translateY(${shift}px)` : ''
-      })
-    }
-
-    const cleanup = (applyReorder) => {
-      row.removeEventListener('pointermove', onMove)
-      row.removeEventListener('pointerup', onUp)
-      row.removeEventListener('pointercancel', onCancel)
-      timelineEditDragActive = false
-      const q = questions[activeIndex]
-      if (applyReorder && currentSlot !== startSlot && q && Array.isArray(q.correct)) {
-        const [moved] = q.correct.splice(startSlot, 1)
-        q.correct.splice(currentSlot, 0, moved)
-      }
-      renderTimelineEvents()
-    }
-    const onUp = (ev) => { try { row.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
-    const onCancel = () => cleanup(false)
-
-    row.addEventListener('pointermove', onMove)
-    row.addEventListener('pointerup', onUp)
-    row.addEventListener('pointercancel', onCancel)
-  })
+const timelineSummary = document.getElementById('timelineSummary')
+const updateTimelineSummary = (events) => {
+  if (!timelineSummary) return
+  const anchors = events.filter(e => e.anchor).length
+  const tiles = events.length - anchors
+  timelineSummary.textContent = `${anchors} repère${anchors > 1 ? 's' : ''} visible${anchors > 1 ? 's' : ''} · ${tiles} à placer`
+  timelineSummary.classList.toggle('is-invalid', anchors < 1 || tiles < 1)
 }
 
 const renderTimelineEvents = () => {
@@ -4091,20 +4060,13 @@ const renderTimelineEvents = () => {
   timelineEditList.innerHTML = ''
   const q = questions[activeIndex]
   if (!q || q.type !== 'timeline') return
-  if (!isValidTimelineEvents(q.correct)) q.correct = [{ title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }]
+  if (!isValidTimelineEvents(q.correct)) q.correct = defaultTimelineEvents()
+  migrateTimelineAnchors(q.correct)
 
   q.correct.forEach((ev, idx) => {
     const row = document.createElement('div')
     row.className = 'option-row order-edit-row timeline-edit-row'
     row.dataset.index = idx
-
-    if (!readOnly) {
-      const handle = document.createElement('span')
-      handle.className = 'q-drag-handle'
-      handle.textContent = '⠿'
-      row.appendChild(handle)
-      wireTimelineEditDrag(row)
-    }
 
     const num = document.createElement('span')
     num.className = 'order-edit-num'
@@ -4137,10 +4099,27 @@ const renderTimelineEvents = () => {
     dateInput.className = 'timeline-date-input'
     dateInput.value = ev.date ?? 0
     dateInput.placeholder = 'Année (ex: 1789, -450)'
-    dateInput.title = 'Sert uniquement à calculer l\'ordre correct — jamais montré aux joueurs avant la révélation'
+    dateInput.title = 'Année de l\'événement (nombres négatifs acceptés pour avant J.-C.)'
     dateInput.disabled = readOnly
     dateInput.oninput = (e) => { ev.date = e.target.value === '' ? 0 : Number(e.target.value) }
     fields.appendChild(dateInput)
+
+    // Rôle de l'événement : repère (date visible) ou tuile à placer (date cachée).
+    const role = document.createElement('div')
+    role.className = 'tolerance-switch timeline-role-switch'
+    ;[[true, 'Repère visible'], [false, 'À placer']].forEach(([isAnchor, label]) => {
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'tolerance-switch-btn' + (!!ev.anchor === isAnchor ? ' active' : '')
+      btn.textContent = label
+      btn.disabled = readOnly
+      btn.onclick = () => {
+        ev.anchor = isAnchor
+        renderTimelineEvents()
+      }
+      role.appendChild(btn)
+    })
+    fields.appendChild(role)
 
     row.appendChild(fields)
 
@@ -4161,6 +4140,7 @@ const renderTimelineEvents = () => {
 
     timelineEditList.appendChild(row)
   })
+  updateTimelineSummary(q.correct)
 }
 
 if (addTimelineEventBtn) {
@@ -4172,7 +4152,7 @@ if (addTimelineEventBtn) {
       showToast(`Maximum ${TIMELINE_MAX_EVENTS} événements`, 'error')
       return
     }
-    q.correct.push({ title: '', description: '', date: 0 })
+    q.correct.push({ title: '', description: '', date: 0, anchor: false })
     renderTimelineEvents()
   }
 }
@@ -4180,10 +4160,10 @@ if (addTimelineEventBtn) {
 // --- Question "rangement" (tâche 013) : q.zones = ['Nom A', ...], q.correct
 // = [{title, description, zone}, ...] où "zone" est l'INDEX dans q.zones.
 // Deux listes d'édition DISTINCTES : les ZONES (glisser pour réordonner,
-// même mécanique que wireTimelineEditDrag ci-dessus) puis les CARTES (pas
+// même mécanique pointer-drag que les lignes order) puis les CARTES (pas
 // de glisser ici — leur ordre d'affichage dans l'éditeur n'a aucun impact
 // sur le jeu, seule l'assignation à une zone compte ; contrairement à
-// "timeline" où l'ordre EST la réponse).
+// "order" où l'ordre EST la réponse).
 
 // "zone" étant un INDEX de position (pas le nom), déplacer une zone dans la
 // liste ou en supprimer une doit remapper l'index stocké sur chaque carte
@@ -5007,9 +4987,9 @@ qType.onchange = () => {
     if (!isValidAssociationPairs(q.correct)) q.correct = [{ a: '', b: '' }, { a: '', b: '' }]
   } else if (qType.value === 'timeline') {
     // q.correct venant d'un autre type n'a pas la forme
-    // [{title,description,date}, ...] attendue ici : on repart propre sauf
+    // [{title,description,date,anchor}, ...] attendue ici : on repart propre sauf
     // s'il a déjà cette forme (ex. retour sur ce type).
-    if (!isValidTimelineEvents(q.correct)) q.correct = [{ title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }, { title: '', description: '', date: 0 }]
+    if (!isValidTimelineEvents(q.correct)) q.correct = defaultTimelineEvents()
   } else if (qType.value === 'rangement') {
     // q.zones/q.correct venant d'un autre type n'ont pas la forme attendue
     // ici (zones = liste de noms, correct = [{title,description,zone}, ...])
@@ -5537,9 +5517,10 @@ const validateQuestion = (q, i) => {
     }
   }
 
-  // Pour "timeline", entre 3 et 8 événements, chacun avec un titre et une
+  // Pour "timeline", entre 2 et 8 événements, chacun avec un titre et une
   // date numérique valide (l'ordre correct est calculé côté serveur à
-  // partir de "date", peu importe l'ordre de saisie ici).
+  // partir de "date", peu importe l'ordre de saisie ici), dont au moins un
+  // repère visible et au moins une tuile à placer (tâche 052).
   if (q.type === 'timeline') {
     const events = Array.isArray(q.correct) ? q.correct : []
     if (events.length < TIMELINE_MIN_EVENTS || events.length > TIMELINE_MAX_EVENTS) {
@@ -5550,13 +5531,23 @@ const validateQuestion = (q, i) => {
     const hasEmptyTitle = events.some(e => !e.title || !e.title.trim())
     if (hasEmptyTitle) {
       selectQuestion(i)
-      showToast(`La question ${i + 1} : chaque événement doit avoir un titre`, 'error')
+      showToast(`La question ${i + 1} : chaque événement de la frise doit avoir un titre (champ « Titre de l'événement »)`, 'error')
+      // Amène le créateur sur le premier champ vide plutôt que de le laisser chercher.
+      const emptyTitleInput = Array.from(timelineEditList.querySelectorAll('.timeline-edit-fields input[type="text"]:first-child')).find(inp => !inp.value.trim())
+      if (emptyTitleInput) { emptyTitleInput.scrollIntoView({ block: 'center' }); emptyTitleInput.focus() }
       return false
     }
     const hasInvalidDate = events.some(e => !Number.isFinite(Number(e.date)))
     if (hasInvalidDate) {
       selectQuestion(i)
       showToast(`La question ${i + 1} : chaque événement doit avoir une date (année) valide`, 'error')
+      return false
+    }
+    migrateTimelineAnchors(events)
+    const anchorCount = events.filter(e => e.anchor).length
+    if (anchorCount < 1 || anchorCount === events.length) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : il faut au moins un repère visible et un événement à placer`, 'error')
       return false
     }
   }

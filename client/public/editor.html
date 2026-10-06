@@ -667,12 +667,13 @@
           </div>
 
           <div id="timelineSection" class="detail-section d-none">
-            <label>Événements (3 à 8), glisser pour réordonner</label>
+            <label>Frise : événements (2 à 8)</label>
             <div id="timelineEditList" class="options-editor">
               <!-- Rempli par JS -->
             </div>
             <button id="addTimelineEvent" class="btn btn-nav-secondary mt-8" style="width: fit-content;">+ Ajouter un événement</button>
-            <p class="text-muted font-13 mt-8">La date sert uniquement à calculer l'ordre correct (nombres négatifs acceptés pour avant J.-C.) — jamais montrée aux joueurs. Trie automatiquement à la sauvegarde.</p>
+            <p id="timelineSummary" class="timeline-summary mt-8"></p>
+            <p class="text-muted font-13 mt-8">Les <strong>repères visibles</strong> forment la frise, avec leur date. Les événements <strong>à placer</strong> arrivent sans date : les joueurs les glissent au bon endroit de la frise. Il faut au moins un repère et un événement à placer. Années négatives acceptées (avant J.-C.).</p>
           </div>
 
           <!-- Tâche 013 : "rangement" — les joueurs glissent des cartes dans

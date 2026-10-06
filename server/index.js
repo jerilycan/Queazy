@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 // Bump manuellement à chaque changement notable — affiché en discret dans un
 // coin de la page (voir theme.js) via /server-info, juste pour repérer d'un
 // coup d'œil si le déploiement en cours est bien à jour.
-const APP_VERSION = '2.35.1'
+const APP_VERSION = '2.36.0'
 
 // Client Supabase côté serveur, utilisé uniquement en lecture seule pour des
 // réglages de jeu globaux (voir MIN_POINTS_FLOOR_DEFAULT plus bas). La clé
@@ -202,6 +202,52 @@ app.register(fastifyStatic, { root: publicDir, maxAge: '2m' })
 app.get('/health', async () => ({ ok: true }))
 
 const quizzStore = new Map()
+// "timeline" (tâche 052, « frise qui grandit ») : q.correct = [{title, description, date, anchor}, ...].
+// Les événements "anchor" sont les repères visibles (dates connues des joueurs) ; les autres sont des
+// tuiles à placer. Le joueur soumet la séquence de clés (index dans q.correct) de sa frise finale.
+// Une tuile est juste si (a) le nombre de repères placés avant elle est compatible avec sa date
+// (dates égales tolérées) et (b) elle n'est inversée, par rapport aux dates, avec aucune autre tuile
+// bien placée dans le même emplacement. Chaque tuile est jugée indépendamment des erreurs des autres
+// (comparer l'index final à l'index réel ferait tomber des tuiles justes dès qu'une seule est mal
+// posée). Une tuile absente de la soumission est fausse. Renvoie null si la question est inutilisable
+// (aucun repère ou aucune tuile).
+const scoreTimelinePlacement = (events, submitted) => {
+  if (!Array.isArray(events) || !Array.isArray(submitted)) return null
+  const dateOf = (k) => Number(events[k]?.date)
+  const anchorKeys = events.map((e, k) => k).filter(k => events[k]?.anchor === true)
+  const tileKeys = events.map((e, k) => k).filter(k => events[k]?.anchor !== true)
+  if (anchorKeys.length === 0 || tileKeys.length === 0) return null
+
+  // Séquence soumise nettoyée : clés valides et uniques seulement.
+  const seen = new Set()
+  const seq = submitted.filter(k => Number.isInteger(k) && k >= 0 && k < events.length && !seen.has(k) && seen.add(k))
+
+  // Emplacement de chaque tuile posée = nombre de repères déjà passés dans la séquence.
+  const gapOf = new Map()
+  let anchorsPassed = 0
+  seq.forEach((k) => {
+    if (events[k]?.anchor === true) anchorsPassed++
+    else gapOf.set(k, anchorsPassed)
+  })
+
+  // (a) emplacement compatible avec la date ; (b) parmi les tuiles qui passent (a), aucune inversion
+  // dans le même emplacement — une tuile fausse ne pénalise donc jamais une tuile bien placée.
+  const gapOk = tileKeys.filter((k) => {
+    if (!gapOf.has(k)) return false
+    const lo = anchorKeys.filter(a => dateOf(a) < dateOf(k)).length
+    const hi = anchorKeys.filter(a => dateOf(a) <= dateOf(k)).length
+    return gapOf.get(k) >= lo && gapOf.get(k) <= hi
+  })
+  const correct = new Set()
+  gapOk.forEach((k) => {
+    const mine = seq.indexOf(k)
+    const inverted = gapOk.some(u => u !== k && gapOf.get(u) === gapOf.get(k) &&
+      ((seq.indexOf(u) < mine && dateOf(u) > dateOf(k)) || (seq.indexOf(u) > mine && dateOf(u) < dateOf(k))))
+    if (!inverted) correct.add(k)
+  })
+  return { tileKeys, placedKeys: seq.filter(k => gapOf.has(k)), correct }
+}
+
 const uid = () => Math.random().toString(36).slice(2, 10)
 // Code de salle : jamais de '0' (retour utilisateur : trop facilement
 // confondu avec la lettre "O" une fois lu/dicté à voix haute ou tapé à la
@@ -564,12 +610,12 @@ const start = async () => {
   const revealQuestion = (io, code, room, question) => {
     const recap = buildRecap(room, question)
     if (recap) io.to(code).emit('question:recap', recap)
-    // "timeline" : q.correct n'est pas forcément trié (voir answer:submit,
-    // qui retrie systématiquement par date plutôt que de faire confiance à
-    // l'ordre de stockage) — la révélation doit montrer le VRAI ordre
-    // chronologique, pas l'ordre de saisie du créateur.
+    // "timeline" : q.correct n'est pas forcément trié (ordre de saisie du
+    // créateur) — la révélation montre le VRAI ordre chronologique, avec le
+    // champ "anchor" de chaque événement (repère visible ou tuile à placer)
+    // pour que le client sache lesquels le joueur devait placer.
     const revealCorrect = question.type === 'timeline' && Array.isArray(question.correct)
-      ? [...question.correct].sort((a, b) => Number(a?.date) - Number(b?.date))
+      ? question.correct.map((e, key) => ({ ...e, key })).sort((a, b) => Number(a?.date) - Number(b?.date))
       : question.correct
     // "image" : jusqu'ici seul le point du joueur COURANT s'affichait à la
     // révélation (voir index.js imageMarker) — retour utilisateur : montrer
@@ -2312,31 +2358,15 @@ const start = async () => {
       }
 
       if (q.type === 'timeline') {
-        // q.correct = [{title, description, date}, ...] dans l'ordre de
-        // saisie du créateur (PAS forcément trié) — l'ordre chronologique
-        // correct est toujours recalculé ici à partir de "date" plutôt que
-        // supposé déjà trié, pour rester robuste même sur un vieux quiz
-        // sauvegardé avant un éventuel bug de tri côté éditeur.
-        // "key" = index ORIGINAL dans q.correct (voir emitQuestion côté
-        // client, colonne mélangée par titre+description seulement, jamais
-        // par date) : le joueur soumet la séquence de clés dans l'ordre où
-        // il a placé les cartes. Un événement est "correctement placé" si sa
-        // position dans sa soumission correspond à sa position dans l'ordre
-        // chronologique réel — pas de tout-ou-rien, score proportionnel au
-        // nombre d'événements bien placés (demande explicite).
+        // Voir scoreTimelinePlacement (règle « tuile bien placée » et pourquoi elle ne compare pas les
+        // index finaux). Contenu soumis : séquence de clés de la frise (repères + tuiles posées).
         let submitted
         try { submitted = JSON.parse(payload?.content || '[]') } catch { submitted = null }
         const events = Array.isArray(q.correct) ? q.correct : []
-        if (!Array.isArray(submitted) || events.length === 0) return
-        const n = events.length
-        const correctOrderKeys = events
-          .map((e, i) => i)
-          .sort((a, b) => Number(events[a]?.date) - Number(events[b]?.date))
-        const correctPositionOfKey = new Map(correctOrderKeys.map((key, pos) => [key, pos]))
-        let correctCount = 0
-        submitted.slice(0, n).forEach((key, pos) => {
-          if (correctPositionOfKey.get(key) === pos) correctCount++
-        })
+        const result = scoreTimelinePlacement(events, submitted)
+        if (!result) return
+        const n = result.tileKeys.length
+        const correctCount = result.correct.size
         const fraction = Math.max(0, Math.min(1, correctCount / n))
         const delta = Math.round(pointsFor(q.startTs, Date.now(), q.timerMs, q.pointsFloor) * fraction)
         const total = (room.scores.get(socket.id) || 0) + delta
@@ -2347,15 +2377,11 @@ const start = async () => {
           if (q.historyEntry) {
             q.historyEntry.results[p.token] = correctCount === n ? 'correct' : 'incorrect'
             q.historyEntry.deltas[p.token] = delta
-            q.historyEntry.answers[p.token] = submitted.slice(0, n).map(k => events[k]?.title || '?').join(' → ')
-            // Une ligne par événement pour le détail par joueur du panneau
-            // récap (voir buildRecap) : la séquence condensée ci-dessus
-            // (answers, séparée par ' → ') devient illisible dès que la
-            // frise a plus de 3-4 événements sur une seule ligne tronquée
-            // (retour hôte : "pas lisible, une ligne = un événement").
+            q.historyEntry.answers[p.token] = result.placedKeys.map(k => events[k]?.title || '?').join(' → ')
+            // Une ligne par tuile pour le détail par joueur du panneau récap (voir buildRecap).
             q.historyEntry.answerDetails = q.historyEntry.answerDetails || {}
-            q.historyEntry.answerDetails[p.token] = submitted.slice(0, n)
-              .map((k, i) => `${i + 1}. ${events[k]?.title || '?'}`)
+            q.historyEntry.answerDetails[p.token] = result.tileKeys
+              .map(k => `${result.correct.has(k) ? '✓' : '✗'} ${events[k]?.title || '?'}${result.placedKeys.includes(k) ? '' : ' (non placé)'}`)
               .join('\n')
           }
         }

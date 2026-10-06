@@ -1192,7 +1192,13 @@
             </div>
           </div>
           <div id="timelineArea" class="timeline-area d-none">
-            <div id="timelineList" class="timeline-list"></div>
+            <!-- Frise qui grandit (tâche 052) : #timelineList = la frise (repères datés + tuiles posées),
+                 #timelineTray = les tuiles encore à placer. Voir index.js buildTimelineBoard. -->
+            <div id="timelineList" class="tl-rail"></div>
+            <div id="timelineTray" class="tl-tray d-none">
+              <div class="tl-tray-label">À insérer · <span id="timelineTrayCount"></span></div>
+              <div id="timelineTrayList" class="tl-tray-list"></div>
+            </div>
           </div>
           <!-- Tâche 013, "rangement" : les zones (noms connus dès le début,
                voir index.js payload.zones) sont rendues en colonnes dans
