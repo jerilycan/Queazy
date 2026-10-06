@@ -202,6 +202,12 @@
         <input id="title" placeholder="Titre du quiz" maxlength="100" />
         <div class="editor-top-bar-row">
           <div class="align-center d-flex gap-sm">
+            <!-- Image de couverture du quiz (tâche 051) : choisie dans la bibliothèque (js/quiz-covers.js),
+                 affichée sur la carte du quiz dans « Mes quiz ». -->
+            <button id="quizCoverBtn" class="quiz-cover-btn" type="button" title="Choisir l'image du quiz">
+              <span id="quizCoverThumb" class="quiz-cover-thumb">🖼️</span>
+              <span>Image</span>
+            </button>
             <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
               <input id="isPublic" type="checkbox" class="qz-toggle-input" />
               <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
@@ -971,6 +977,18 @@
       <button id="saveQuestion" class="btn btn-primary font-14">💾 Sauvegarder</button>
     </div>
 
+    <!-- Popup de choix de l'image du quiz (même principe que le choix d'avatar du profil) -->
+    <div id="quizCoverPopup" class="modal-overlay d-none">
+      <div class="modal-content card">
+        <h2 class="mb-lg font-32">Image du quiz</h2>
+        <div id="quizCoverGrid" class="icon-grid"></div>
+        <div class="d-flex gap-sm justify-end mt-16">
+          <button id="quizCoverNone" class="btn h-48" type="button">Aucune image</button>
+          <button id="quizCoverCancel" class="btn btn-primary h-48" type="button">Fermer</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toasts" class="toast-container"></div>
 
     <!-- Popup de signalement (quiz d'un autre créateur) -->
@@ -988,6 +1006,7 @@
 
     <!-- Confettis de la 1re sauvegarde d'un quiz (même librairie que index.html/result.html). -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js" defer></script>
+    <script src="/js/quiz-covers.js" defer></script>
     <script src="/js/ui-widgets.js" defer></script>
     <script src="/js/editor.js" defer></script>
   </body>

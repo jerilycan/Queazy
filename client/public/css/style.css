@@ -7589,6 +7589,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   flex-shrink: 0;
   box-shadow: 0 4px 10px rgba(0,0,0,0.25);
 }
+.quiz-card-avatar.has-cover { background-size: cover; background-position: center; background-repeat: no-repeat; }
 .quiz-card-title {
   font-family: 'Baloo 2', sans-serif;
   font-weight: 800;
@@ -10614,3 +10615,10 @@ body.results-tv .fin-skip { display: none; }
 .fin-pod-block.bronze { background: linear-gradient(180deg, var(--tile-bronze) 0%, var(--tile-bronze-deep) 100%); box-shadow: 0 0 18px rgba(var(--tile-bronze-rgb), .35); }
 @media (max-width: 640px) { .fin-pod { gap: 8px; } .fin-pod-av { width: 52px; height: 52px; font-size: 20px; } .fin-pod-name { font-size: 14px; } }
 .fin-status:empty { display: none; }
+
+/* Image du quiz (editor.html #quizCoverBtn, tâche 051) */
+.quiz-cover-btn { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 14px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font: 700 13px 'Nunito', sans-serif; cursor: pointer; transition: border-color .15s ease, transform .15s ease; }
+.quiz-cover-btn:hover:not(:disabled) { border-color: var(--color-accent); transform: translateY(-1px); }
+.quiz-cover-btn:disabled { opacity: .55; cursor: default; }
+.quiz-cover-thumb { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: rgba(255, 255, 255, .06) center / cover no-repeat; flex-shrink: 0; }
+.icon-opt.quiz-cover-tile { background-size: cover; background-position: center; background-repeat: no-repeat; border-radius: 14px; }
