@@ -10757,3 +10757,9 @@ body.results-tv .fin-skip { display: none; }
 /* Arrivée du podium juste après l'animation de fin (results.js launchPodium). */
 .race-stage.fin-in { animation: finPodiumIn 520ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both; }
 @keyframes finPodiumIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+/* Cérémonie de révélation du podium (3 joueurs ou moins) */
+.fin-count { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 800 140px/1 'Baloo 2', sans-serif; color: #aef2ff; text-shadow: 0 0 30px rgba(127, 230, 255, .9), 0 0 70px rgba(122, 60, 255, .7); pointer-events: none; z-index: 11; opacity: 0; }
+.fin-medal { position: absolute; z-index: 9; font-size: 34px; line-height: 1; margin: -34px 0 0 -17px; pointer-events: none; }
+.fin-card.fin-gold { border-color: #ffd24a; box-shadow: 0 0 34px rgba(255, 210, 74, .65); }
+.fin-card.fin-silver { border-color: #cfd8e3; box-shadow: 0 0 22px rgba(207, 216, 227, .45); }
+.fin-card.fin-bronze { border-color: #d98a4e; box-shadow: 0 0 22px rgba(217, 138, 78, .5); }

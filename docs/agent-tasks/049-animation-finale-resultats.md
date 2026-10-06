@@ -11,7 +11,7 @@ Effacement pixel.
 
 ## Objectif
 À l'arrivée sur la page de résultats (TV `&tv=1`, joueurs, MJ — c'est la même
-page), quand il y a plus de 3 joueurs (ou équipes) et un historique de
+page), quand il y a au moins 2 joueurs (ou équipes) et un historique de
 questions : tous les joueurs apparaissent en cartes, se réordonnent question
 après question, puis tous sauf les 3 premiers sont éliminés en rafale (ordre
 aléatoire, effets qui se chevauchent) avec l'une des 6 animations, puis le podium
@@ -22,7 +22,8 @@ Même animation et même ordre d'élimination sur tous les écrans d'une même s
 - Nouveau script `results-finale.js` (moteur + 6 effets), CSS associé.
 - Branchement dans `tryStartRace` (`results.js`) ; modes joueur et équipe.
 - Mode TV : lancement automatique, pas de bouton « Passer ».
-- Repli : ≤ 3 joueurs, historique vide ou « mouvement réduit » → comportement actuel.
+- Cérémonie de révélation du podium (cartes assombries, compte à rebours, faisceau révélant la 3ᵉ, la 2ᵉ puis la 1ʳᵉ place) quand il y a 2 ou 3 joueurs/équipes.
+- Repli : 1 joueur, historique vide ou « mouvement réduit » → podium seul (restylé dans la même DA).
 
 ## Hors périmètre
 - Aucun changement serveur / schéma / dépendance.

@@ -434,15 +434,16 @@ const finaleSeed = (key) => {
   return s >>> 0
 }
 
-// Animation de fin (tâche 049) quand il y a plus de 3 joueurs/équipes et un historique : tous
-// les joueurs en cartes, éliminés en rafale jusqu'au podium, puis la course du podium reprend
+// Animation de fin (tâche 049) dès 2 joueurs/équipes et un historique : tous les joueurs en
+// cartes, éliminés en rafale jusqu'au podium (ou, à 3 ou moins, une cérémonie de révélation du
+// podium), puis la course du podium reprend
 // directement à son état final (historique vide → pas de montée rejouée). Repli sur l'ancien
 // comportement si le script est absent, en « mouvement réduit », ou si l'animation plante.
 const launchPodium = (entities, hist) => {
   const tab = document.getElementById('podiumTab')
   const host = document.getElementById('resultsPodium')
   const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  if (!window.QzFinale || !tab || !host || reducedMotion || entities.length <= 3 || hist.length === 0) {
+  if (!window.QzFinale || !tab || !host || reducedMotion || entities.length < 2 || hist.length === 0) {
     runRace(entities.slice(0, 3), hist)
     return
   }

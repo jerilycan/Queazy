@@ -290,6 +290,41 @@
     ]
     const FX = EFFECTS[Math.abs(seed) % EFFECTS.length]
 
+    // ---- 3 joueurs ou moins : pas d'élimination, mais une cérémonie de révélation du podium —
+    // cartes assombries, compte à rebours, puis un faisceau révèle la 3ᵉ, la 2ᵉ et enfin la 1ʳᵉ place.
+    const ceremony = async () => {
+      setStatus('Le podium se prépare…')
+      C.forEach(p => A(p.el, [{ filter: 'none' }, { filter: 'blur(2.5px) brightness(0.45)' }], { duration: 500 }))
+      await sleep(700)
+      for (const n of [3, 2, 1]) {
+        const t = h('fin-count'); t.textContent = String(n)
+        stage.appendChild(t)
+        A(t, [{ opacity: 0, transform: 'scale(2.2)' }, { opacity: 1, transform: 'scale(1)', offset: 0.35 }, { opacity: 0, transform: 'scale(0.8)' }], { duration: 800 }).then(() => t.remove())
+        shockwave(W / 2, Hh / 2, 'rgba(127,230,255,.8)', 700, 800)
+        await sleep(800)
+      }
+      const MEDAL = ['🥇', '🥈', '🥉']; const TONE = ['fin-gold', 'fin-silver', 'fin-bronze']
+      const LABEL = ['🏆 Premier !', '🥈 Deuxième', '🥉 Troisième']
+      for (let r = N - 1; r >= 0; r--) {
+        const p = C[r]; const w = CW * p.s, hh = CH * p.s, x0 = p.x - w / 2, y0 = p.y - hh / 2
+        setStatus(LABEL[r])
+        const beam = h('fin-beam'); beam.style.cssText = `left:${x0 - 10}px;width:${w + 20}px;top:0;height:${y0 + hh / 2}px${r === 0 ? ';background:linear-gradient(180deg,transparent,rgba(255,210,74,.18) 30%,rgba(255,236,170,.6))' : ''}`
+        stage.appendChild(beam)
+        await A(beam, [{ opacity: 0, transform: 'scaleX(.1)' }, { opacity: 1, transform: 'scaleX(1)' }], { duration: 380, fill: 'both' })
+        await A(p.el, [{ filter: 'blur(2.5px) brightness(0.45)', transform: pose(p.x, p.y, p.s) }, { filter: 'blur(0) brightness(3)', transform: pose(p.x, p.y, p.s * 1.18), offset: 0.4 }, { filter: 'none', transform: pose(p.x, p.y, p.s * 1.1) }], { duration: 650 })
+        p.el.classList.add(TONE[r])
+        const medal = h('fin-medal'); medal.textContent = MEDAL[r]; medal.style.cssText = `left:${p.x}px;top:${y0 - 4}px`
+        stage.appendChild(medal)
+        A(medal, [{ opacity: 0, transform: 'scale(0) rotate(-40deg)' }, { opacity: 1, transform: 'scale(1) rotate(0deg)' }], { duration: 500, easing: SPRING })
+        shockwave(p.x, p.y, r === 0 ? 'rgba(255,210,74,.95)' : 'rgba(174,242,255,.9)', r === 0 ? 700 : 420, 700)
+        embers(p.x, p.y, r === 0 ? 24 : 14, r === 0 ? '#ffd24a' : '#aef2ff')
+        if (r === 0) flash('#fff', 0.55, 700)
+        A(beam, [{ opacity: 1 }, { opacity: 0 }], { duration: 500 }).then(() => beam.remove())
+        await sleep(r === 0 ? 1500 : 1000)
+      }
+      await sleep(300)
+    }
+
     let skipBtn = null
     const finish = () => { if (skipBtn) skipBtn.remove(); onDone() }
     const skip = () => { if (tok.dead) return; tok.dead = true; stage.querySelectorAll('*').forEach(el => el.getAnimations?.().forEach(a => a.cancel())); finish() }
@@ -325,6 +360,7 @@
       entities.forEach((e, i) => { const p = C[i]; const nv = 0.06 + 0.94 * ((e.score || 0) / maxTotal); countUp(p.score, Q ? cum[Q - 1][i] : 0, e.score || 0, 400); A(p.bar, [{ transform: `scaleX(${p.v})` }, { transform: `scaleX(${nv})` }], { duration: 400 }); p.v = nv })
       C.forEach((p, k) => { place(p, L0[k], 500); p.rank.textContent = String(k + 1) }) // `entities` est déjà trié par score final
       await sleep(900)
+      if (N <= 3) { await ceremony(); return }
       setStatus(FX.intro)
       await sleep(800)
       // --- rafale : ordre aléatoire (graine partagée) hors podium, intervalle qui raccourcit, effets qui se chevauchent
