@@ -2595,6 +2595,8 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 .tl-tray-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .tl-tile {
   flex: none;
+  cursor: grab;
+  touch-action: none; /* sinon le doigt fait défiler la page au lieu de glisser la tuile */
   padding: 14px 18px;
   border: none;
   background: linear-gradient(135deg, #ff2fb0, #7b2ff7);
@@ -2602,7 +2604,7 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
 }
 .tl-tile .tl-card-title { color: #fff; font-family: 'Baloo 2', sans-serif; font-size: 17px; }
 .tl-tile .tl-card-desc { color: rgba(255, 255, 255, 0.8); }
-.tl-tile.is-source { opacity: 0.35; }
+.tl-card.is-source { opacity: 0.35; }
 .tl-ghost {
   position: fixed;
   left: 0;

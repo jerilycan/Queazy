@@ -2069,24 +2069,13 @@ const buildTimelineCard = (entry, extraClass) => {
   return card
 }
 
-// slotLabels : pendant un glisser, intercale un emplacement avant/entre/après les lignes de la frise
-// (hors tuile glissée, déjà retirée de timelineState.frise par l'appelant via "skipKey").
-const renderTimelineBoard = ({ dragging = null } = {}) => {
+const renderTimelineBoard = () => {
   if (!timelineList || !timelineState) return
   timelineList.innerHTML = ''
-  const rows = timelineState.frise.filter(e => !dragging || e.key !== dragging.key)
-  const addSlot = (slotIndex) => {
-    const slot = document.createElement('div')
-    slot.className = 'tl-slot'
-    slot.dataset.slotIndex = String(slotIndex)
-    slot.dataset.label = slotIndex === 0 ? 'Avant tout ça' : (slotIndex === rows.length ? 'Après tout ça' : 'Entre les deux')
-    slot.textContent = slot.dataset.label
-    timelineList.appendChild(slot)
-  }
-  if (dragging) addSlot(0)
-  rows.forEach((entry, i) => {
+  timelineState.frise.forEach((entry) => {
     const row = document.createElement('div')
     row.className = 'tl-row' + (entry.anchor ? ' is-anchor' : ' is-placed')
+    row.dataset.key = String(entry.key)
     const date = document.createElement('span')
     date.className = 'tl-date'
     date.textContent = entry.anchor ? formatTimelineYear(entry.date) : '?'
@@ -2098,19 +2087,36 @@ const renderTimelineBoard = ({ dragging = null } = {}) => {
     if (!entry.anchor) wireTimelineTile(card, entry)
     row.appendChild(card)
     timelineList.appendChild(row)
-    if (dragging) addSlot(i + 1)
   })
   if (timelineTray && timelineTrayList) {
     timelineTrayList.innerHTML = ''
     timelineState.tray.forEach((entry) => {
       const tile = buildTimelineCard(entry, 'tl-tile')
-      if (dragging && dragging.key === entry.key) tile.classList.add('is-source')
       wireTimelineTile(tile, entry)
       timelineTrayList.appendChild(tile)
     })
     timelineTray.classList.toggle('d-none', timelineState.tray.length === 0)
     if (timelineTrayCount) timelineTrayCount.textContent = String(timelineState.tray.length)
   }
+}
+
+// Pendant un glisser : intercale les emplacements dans la frise SANS reconstruire le DOM. L'élément
+// touché doit rester dans la page jusqu'au relâchement : sur écran tactile, le retirer en plein geste
+// fait perdre son touch-action:none au doigt, le navigateur reprend alors la main pour défiler la page
+// et annule le glisser (la tuile « lâchait » dès qu'on la tirait vers le haut). slotIndex compte les
+// lignes SANS la tuile glissée (même repère que le tableau frise après retrait).
+const insertTimelineSlots = (draggedKey) => {
+  const rows = Array.from(timelineList.querySelectorAll(':scope > .tl-row')).filter(r => r.dataset.key !== String(draggedKey))
+  const makeSlot = (slotIndex) => {
+    const slot = document.createElement('div')
+    slot.className = 'tl-slot'
+    slot.dataset.slotIndex = String(slotIndex)
+    slot.dataset.label = slotIndex === 0 ? 'Avant tout ça' : (slotIndex === rows.length ? 'Après tout ça' : 'Entre les deux')
+    slot.textContent = slot.dataset.label
+    return slot
+  }
+  rows.forEach((row, i) => timelineList.insertBefore(makeSlot(i), row))
+  timelineList.appendChild(makeSlot(rows.length))
 }
 
 const buildTimelineBoard = (anchors, tiles) => {
@@ -2147,7 +2153,8 @@ const wireTimelineTile = (el, entry) => {
     let hoverSlot = null
     let overTray = false
 
-    renderTimelineBoard({ dragging: entry })
+    el.classList.add('is-source')
+    insertTimelineSlots(entry.key)
 
     const updateHover = () => {
       ghost.style.transform = `translate(${lastX - grabX}px, ${lastY - grabY}px) rotate(2deg)`
