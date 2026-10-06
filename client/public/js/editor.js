@@ -4032,9 +4032,9 @@ const isValidRangementItems = (correct, zones) =>
 // Tâche 052 : chaque événement porte "anchor" — true = repère affiché aux joueurs avec sa date,
 // false = tuile à placer par les joueurs (sans date). Deux repères + une tuile par défaut.
 const defaultTimelineEvents = () => [
-  { title: '', description: '', date: 0, anchor: true },
-  { title: '', description: '', date: 0, anchor: true },
-  { title: '', description: '', date: 0, anchor: false }
+  { title: '', date: 0, anchor: true },
+  { title: '', date: 0, anchor: true },
+  { title: '', date: 0, anchor: false }
 ]
 
 // Anciennes questions Timeline (liste à réordonner, aucun "anchor") : l'événement à la date médiane
@@ -4084,15 +4084,6 @@ const renderTimelineEvents = () => {
     titleInput.maxLength = TEXT_SHORT_MAXLENGTH
     titleInput.oninput = (e) => { ev.title = e.target.value }
     fields.appendChild(titleInput)
-
-    const descInput = document.createElement('input')
-    descInput.type = 'text'
-    descInput.value = ev.description || ''
-    descInput.placeholder = 'Description courte (optionnelle)'
-    descInput.disabled = readOnly
-    descInput.maxLength = TEXT_SHORT_MAXLENGTH
-    descInput.oninput = (e) => { ev.description = e.target.value }
-    fields.appendChild(descInput)
 
     const dateInput = document.createElement('input')
     dateInput.type = 'number'
@@ -4152,7 +4143,7 @@ if (addTimelineEventBtn) {
       showToast(`Maximum ${TIMELINE_MAX_EVENTS} événements`, 'error')
       return
     }
-    q.correct.push({ title: '', description: '', date: 0, anchor: false })
+    q.correct.push({ title: '', date: 0, anchor: false })
     renderTimelineEvents()
   }
 }

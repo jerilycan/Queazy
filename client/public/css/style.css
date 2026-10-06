@@ -7287,7 +7287,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .timeline-edit-fields {
   flex: 1;
   display: grid;
-  grid-template-columns: 1.4fr 1.4fr 110px;
+  grid-template-columns: 1fr 110px;
   gap: 8px;
 }
 /* Sélecteur plus précis que .option-row input[type="text"] (bordure nulle, fond transparent) : sans lui les champs étaient invisibles. */

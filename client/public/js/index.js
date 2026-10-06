@@ -2049,7 +2049,7 @@ const revealOrderList = (correctOrder) => {
 // (timelineItems, SANS date) attendent dans la réserve. Le joueur glisse une tuile (de la réserve
 // ou déjà posée) vers un emplacement de la frise ; les emplacements n'existent que pendant le
 // glisser, libellés selon leur position (« Avant tout ça » / « Entre les deux » / « Après tout
-// ça »), celui survolé devient « Déposer ici ». Chaque entrée = {key, anchor, title, description,
+// ça »), celui survolé devient « Déposer ici ». Chaque entrée = {key, anchor, title,
 // date?} ; key = index d'origine dans q.correct, c'est ce que reçoit le serveur (voir
 // scoreTimelinePlacement dans server/index.js), jamais une date.
 let timelineDisabled = true
@@ -2066,12 +2066,6 @@ const buildTimelineCard = (entry, extraClass) => {
   title.className = 'tl-card-title'
   title.textContent = entry.title || ''
   card.appendChild(title)
-  if (entry.description) {
-    const desc = document.createElement('span')
-    desc.className = 'tl-card-desc'
-    desc.textContent = entry.description
-    card.appendChild(desc)
-  }
   return card
 }
 
@@ -2123,8 +2117,8 @@ const buildTimelineBoard = (anchors, tiles) => {
   if (!timelineList) return
   timelineDisabled = true
   timelineState = {
-    frise: (anchors || []).map(a => ({ key: a.key, anchor: true, title: a.title || '', description: a.description || '', date: a.date })),
-    tray: (tiles || []).map(t => ({ key: t.key, anchor: false, title: t.title || '', description: t.description || '' }))
+    frise: (anchors || []).map(a => ({ key: a.key, anchor: true, title: a.title || '', date: a.date })),
+    tray: (tiles || []).map(t => ({ key: t.key, anchor: false, title: t.title || '' }))
   }
   renderTimelineBoard()
   timelineList.querySelectorAll('.tl-row').forEach((el, i) => applyTileReveal(el, i))
@@ -7368,10 +7362,10 @@ const emitQuestion = (index) => {
     // description + une clé (index d'origine) partent au mélange.
     // Repères visibles (date publique, triés par date) + tuiles à placer (titre/description/clé, JAMAIS de date, mélangées).
     timelineAnchors: q.type === 'timeline'
-      ? correctOrder.map((e, i) => ({ title: e?.title ?? '', description: e?.description ?? '', date: e?.date, key: i, anchor: e?.anchor === true })).filter(e => e.anchor).sort((a, b) => Number(a.date) - Number(b.date)).map(({ anchor, ...rest }) => rest)
+      ? correctOrder.map((e, i) => ({ title: e?.title ?? '', date: e?.date, key: i, anchor: e?.anchor === true })).filter(e => e.anchor).sort((a, b) => Number(a.date) - Number(b.date)).map(({ anchor, ...rest }) => rest)
       : undefined,
     timelineItems: q.type === 'timeline'
-      ? shuffleArray(correctOrder.map((e, i) => ({ title: e?.title ?? '', description: e?.description ?? '', key: i, anchor: e?.anchor === true })).filter(e => !e.anchor).map(({ anchor, ...rest }) => rest))
+      ? shuffleArray(correctOrder.map((e, i) => ({ title: e?.title ?? '', key: i, anchor: e?.anchor === true })).filter(e => !e.anchor).map(({ anchor, ...rest }) => rest))
       : undefined,
     // "rangement" (tâche 013) : zones PUBLIQUES dès le départ (ce sont les
     // cibles à taper, jamais mélangées — leur ORDRE fait partie de
