@@ -1235,6 +1235,22 @@ const start = async () => {
     io.to(room.hostId).emit('lobby:alreadyPlayed', { players: played })
   }
 
+  // Podium du quiz choisi (tâche 048, « score à battre » dans le salon) : top 3 de tous les temps, diffusé à TOUTE la
+  // salle à la sélection du quiz (puis rejoué à chaque arrivée, voir room:join). Liste vide = rien à afficher (quiz jamais
+  // terminé, changement de quiz, quiz généré). Échec de lecture : journalisé, jamais bloquant.
+  const broadcastQuizPodium = async (code, room) => {
+    let top = []
+    if (room.quizId) {
+      const quizId = room.quizId
+      const { data, error } = await supabaseAdmin.rpc('quiz_top_scores', { p_quiz_id: quizId, p_limit: 3 })
+      if (error) { app.log.warn({ roomCode: code, err: error.message }, 'podium du quiz indisponible'); return }
+      if (room.quizId !== quizId) return // l'hôte a changé de quiz pendant la lecture
+      top = (data || []).map(r => ({ name: r.player_name, score: r.score }))
+    }
+    room.quizPodium = top
+    io.to(code).emit('lobby:quizPodium', { top })
+  }
+
   const saveQuizResults = async (code, room) => {
     if (!room.quizId || room.resultsSaved || !room.playerAuth) return
     room.resultsSaved = true
@@ -1482,6 +1498,7 @@ const start = async () => {
       // choisie par l'hôte, en lecture seule côté client.
       io.to(code).emit('room:mode', { mode: room.mode || 'present' })
       io.to(code).emit('room:autoConfig', room.autoConfig || null)
+      if (room.quizPodium) socket.emit('lobby:quizPodium', { top: room.quizPodium })
       io.to(code).emit('lobby:list', buildPlayerList(room))
       io.to(code).emit('lobby:readyStatus', { allReady: computeAllReady(room) })
 
@@ -1647,6 +1664,7 @@ const start = async () => {
       room.quizId = quizId
       app.log.info({ roomCode: code, quizId }, 'quiz déclaré pour la salle')
       notifyAlreadyPlayed(code, room)
+      broadcastQuizPodium(code, room)
     })
 
     socket.on('game:setMode', payload => {
@@ -1812,19 +1830,6 @@ const start = async () => {
       // Nouvelle question : le classement affiché pour la précédente n'a
       // plus lieu d'être resynchronisé à un reconnectant (voir room:join).
       room.leaderboardShown = false
-
-      // Tâche 048 : "score à battre" annoncé à toute la salle au lancement de la
-      // 1re question (quiz de la table `quizzes` uniquement, room.quizId). Rien
-      // n'est envoyé si le quiz n'a jamais été terminé. Asynchrone : n'allonge
-      // jamais le démarrage de la question, un échec est juste journalisé.
-      if (room.history.length === 0 && room.quizId) {
-        const quizId = room.quizId
-        supabaseAdmin.rpc('quiz_top_scores', { p_quiz_id: quizId, p_limit: 1 }).then(({ data, error }) => {
-          if (error) { app.log.warn({ roomCode: code, err: error.message }, 'score à battre indisponible'); return }
-          const best = data && data[0]
-          if (best) io.to(code).emit('quiz:bestScore', { name: best.player_name, score: best.score })
-        })
-      }
 
       const historyEntry = { id: payload?.id, prompt: payload?.prompt, type: payload?.type, results: {}, deltas: {}, answers: {} }
       room.history.push(historyEntry)

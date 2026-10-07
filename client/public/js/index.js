@@ -5219,6 +5219,7 @@ const resetUI = () => {
   
   document.body.classList.remove('game-active', 'is-host', 'irl-player-mode', 'remote-player-mode')
   if (hostProgressBarEl) hostProgressBarEl.innerHTML = ''
+  document.getElementById('lobbyQuizPodium')?.classList.add('d-none')
   gameMode = 'irl'
   irlMenuDropdown?.classList.remove('is-open')
   // Hide all dynamic panels — 'main' (toute la zone de jeu : question,
@@ -9777,23 +9778,43 @@ socket.on('quiz:end', (endPayload) => {
   window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}${qidParam}`
 })
 
-// Tâche 048 : "score à battre" (voir server/index.js, 1re question) — bandeau
-// éphémère, jamais affiché si le quiz n'a jamais été terminé.
-let bestScoreBannerTimer = null
-socket.on('quiz:bestScore', ({ name, score }) => {
-  if (!Number.isFinite(Number(score))) return
-  let banner = document.getElementById('bestScoreBanner')
-  if (!banner) {
-    banner = document.createElement('div')
-    banner.id = 'bestScoreBanner'
-    banner.className = 'best-score-banner'
-    document.body.appendChild(banner)
-  }
-  banner.textContent = `🏆 Score à battre : ${score} pts — ${name}`
-  banner.classList.add('is-visible')
-  clearTimeout(bestScoreBannerTimer)
-  bestScoreBannerTimer = setTimeout(() => banner.classList.remove('is-visible'), 8000)
-})
+// Tâche 048 : podium du quiz choisi (« score à battre »), affiché dans le salon pour tout le monde
+// (voir server/index.js broadcastQuizPodium). Liste vide = bloc masqué.
+const lobbyQuizPodiumEl = document.getElementById('lobbyQuizPodium')
+const renderLobbyQuizPodium = (top) => {
+  if (!lobbyQuizPodiumEl) return
+  lobbyQuizPodiumEl.replaceChildren()
+  const rows = Array.isArray(top) ? top.filter(r => r && Number.isFinite(Number(r.score))).slice(0, 3) : []
+  lobbyQuizPodiumEl.classList.toggle('d-none', rows.length === 0)
+  if (rows.length === 0) return
+  const title = document.createElement('div')
+  title.className = 'lqp-title'
+  title.textContent = `🏆 Podium du quiz · score à battre : ${rows[0].score} pts`
+  const cols = document.createElement('div')
+  cols.className = 'lqp-cols'
+  // Ordre d'affichage 2 - 1 - 3 (comme le podium de fin de partie) ; un podium incomplet garde la même disposition.
+  ;[1, 0, 2].forEach((rank) => {
+    const r = rows[rank]
+    if (!r) return
+    const col = document.createElement('div')
+    col.className = `lqp-col lqp-rank-${rank + 1}`
+    const medal = document.createElement('div')
+    medal.className = 'lqp-medal'
+    medal.textContent = ['🥇', '🥈', '🥉'][rank]
+    const name = document.createElement('div')
+    name.className = 'lqp-name'
+    name.textContent = r.name || ''
+    const score = document.createElement('div')
+    score.className = 'lqp-score'
+    score.textContent = `${r.score} pts`
+    const bar = document.createElement('div')
+    bar.className = 'lqp-bar'
+    col.append(medal, name, score, bar)
+    cols.appendChild(col)
+  })
+  lobbyQuizPodiumEl.append(title, cols)
+}
+socket.on('lobby:quizPodium', ({ top }) => renderLobbyQuizPodium(top))
 
 socket.on('player:joined', ({ id, name }) => {
   if (!scores.has(id)) scores.set(id, { name, total: 0, isHost: false })

@@ -10464,24 +10464,18 @@ body.display-body .manual-adjust-badge { font-size: clamp(18px, 1.8vw, 30px); pa
 .moderation-expected-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); }
 .moderation-expected-value { font-size: 20px; font-weight: 800; color: var(--color-text); }
 
-/* Score à battre (tâche 048, voir index.js quiz:bestScore) : bandeau éphémère. */
-.best-score-banner {
-  position: fixed;
-  top: 84px;
-  left: 50%;
-  transform: translate(-50%, -12px);
-  z-index: 1700;
-  padding: 10px 22px;
-  border-radius: 999px;
-  background: var(--color-card);
-  border: 2px solid rgba(var(--color-gold-rgb), 0.7);
-  box-shadow: var(--shadow-lg);
-  font-weight: 800;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.best-score-banner.is-visible { opacity: 1; transform: translate(-50%, 0); }
+/* Podium du quiz dans le salon (tâche 048, « score à battre » — voir index.js renderLobbyQuizPodium). */
+.lobby-quiz-podium { margin: var(--space-md) auto 0; max-width: 460px; padding: 14px 16px 0; border-radius: var(--radius-lg); background: rgba(var(--color-gold-rgb), 0.07); border: 1px solid rgba(var(--color-gold-rgb), 0.4); text-align: center; overflow: hidden; }
+.lqp-title { font-weight: 800; font-size: 14px; color: var(--color-gold, #ffd24d); }
+.lqp-cols { display: flex; align-items: flex-end; justify-content: center; gap: 10px; margin-top: 12px; }
+.lqp-col { flex: 1; min-width: 0; max-width: 130px; display: flex; flex-direction: column; align-items: center; }
+.lqp-medal { font-size: 22px; line-height: 1; }
+.lqp-name { max-width: 100%; margin-top: 4px; font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lqp-score { font-weight: 800; font-size: 12px; color: var(--color-accent); font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+.lqp-bar { width: 100%; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.08)); }
+.lqp-rank-1 .lqp-bar { height: 62px; background: linear-gradient(180deg, #ffd24a, #b8860b); }
+.lqp-rank-2 .lqp-bar { height: 44px; background: linear-gradient(180deg, #e3e8f0, #8b94a7); }
+.lqp-rank-3 .lqp-bar { height: 30px; background: linear-gradient(180deg, #e0a064, #8a5a2b); }
 
 /* Top 3 du quiz sur la page de résultats (tâche 048, voir results.js). */
 .quiz-top-scores { max-width: 560px; margin: var(--space-lg) auto 0; }
