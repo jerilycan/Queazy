@@ -10664,9 +10664,11 @@ body.results-tv #backHome,
 body.results-tv div:has(> #backHome) { display: none !important; }
 body.results-tv .container { margin-top: 0; max-width: none; padding: 1.5vh 2vw; }
 body.results-tv .card { max-width: 1180px; width: 100%; }
-body.results-tv #podiumTab { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start; }
+/* TV : le podium reste seul, pleine largeur, du début à la fin (avant : deux colonnes à la fin de l'animation, le podium
+   rétrécissait pour faire place à la liste — le classement détaillé reste sur les téléphones et l'écran du MJ). */
+body.results-tv #podiumTab { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
 body.results-tv #resultsPodium { max-width: none !important; margin: 0 !important; }
-body.results-tv #fullTable { margin-top: 0; }
+body.results-tv #fullTable { display: none; }
 
 /* Bloc "Image et son" (editor.html #mediaBlock) : se cache quand ses deux moitiés le sont
    (type sans illustration + son réservé à l'Avancé en mode Standard, ou aucun des deux). */
