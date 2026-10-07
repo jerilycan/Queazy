@@ -7021,6 +7021,9 @@ let tutoVideosGridBuilt = false
 // vivent en mémoire tant que la page reste ouverte (le navigateur suspend
 // de lui-même l'animation de ceux qui sont display:none, donc pas de coût
 // CPU supplémentaire une fois cachés — seule la mémoire reste occupée).
+// Les images statiques sont gardées 1 jour par le navigateur (voir server/index.js, STATIC_BINARY_RE) : à CHAQUE GIF
+// régénéré, incrémenter cette valeur pour que les joueurs récupèrent la nouvelle version tout de suite.
+const TUTO_GIFS_VERSION = '2'
 const tutoVideoImgs = {} // type -> <img>
 const getOrCreateTutoVideoImg = (type) => {
   let img = tutoVideoImgs[type]
@@ -7039,7 +7042,7 @@ const getOrCreateTutoVideoImg = (type) => {
       tutoVideoPlaceholder?.classList.remove('d-none')
     }
   }
-  img.src = `/img/tuto/${type}.gif`
+  img.src = `/img/tuto/${type}.gif?v=${TUTO_GIFS_VERSION}`
   tutoVideoImgs[type] = img
   tutoVideoPlayerArea?.appendChild(img)
   return img
