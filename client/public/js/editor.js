@@ -4580,6 +4580,27 @@ const renderIntrusOptions = () => {
 // l'image. Cohérent avec l'exclusivité stricte attendue par
 // isValidIndiceHints (jamais les deux, jamais aucun des deux une fois
 // rempli).
+// Recadrage d'une image d'indice : contrairement à association/intrus (cadrage {x,y,zoom} rejoué côté jeu sur
+// une tuile de taille fixe), la carte d'indice change de taille en cours de question (grande, historique,
+// galerie, TV) — le cadrage est donc « cuit » dans l'image (JPEG carré), le jeu n'a rien à rejouer.
+const INDICE_CROP_VIEWPORT_W = 300
+const bakeCroppedImage = (src, pos, bg, onDone) => {
+  const img = new Image()
+  img.onload = () => {
+    const size = TILE_IMAGE_MAX_DIMENSION
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = bg || '#000'
+    ctx.fillRect(0, 0, size, size)
+    const { scale, offsetX, offsetY } = computeCropGeometry(img.naturalWidth, img.naturalHeight, size, size, pos.zoom, pos.x, pos.y)
+    ctx.drawImage(img, offsetX, offsetY, img.naturalWidth * scale, img.naturalHeight * scale)
+    onDone(canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY))
+  }
+  img.src = src
+}
+
 const renderIndiceHints = () => {
   if (!indiceList) return
   indiceList.innerHTML = ''
@@ -4613,18 +4634,15 @@ const renderIndiceHints = () => {
       thumb.src = hint.image
       thumb.alt = ''
       if (!readOnly) {
-        thumb.title = 'Cliquer pour remplacer cette image'
+        thumb.title = 'Cliquer pour recadrer ou remplacer cette image'
         thumb.classList.add('cursor-pointer')
         thumb.onclick = () => {
-          const input = document.createElement('input')
-          input.type = 'file'
-          input.accept = 'image/*'
-          input.onchange = () => {
-            const file = input.files && input.files[0]
-            if (!file) return
-            compressImageFile(file, (dataUrl) => { hint.image = dataUrl; renderIndiceHints() }, TILE_IMAGE_MAX_DIMENSION, true)
-          }
-          input.click()
+          let bg = null
+          openImageCropModal(hint.image, null, null, {
+            onBgReady: (color) => { bg = color },
+            onSave: (pos) => bakeCroppedImage(hint.image, pos, bg, (dataUrl) => { hint.image = dataUrl; renderIndiceHints() }),
+            onReplace: (dataUrl) => { hint.image = dataUrl; renderIndiceHints() }
+          }, 1, INDICE_CROP_VIEWPORT_W)
         }
       }
       row.appendChild(thumb)
@@ -5357,6 +5375,10 @@ const validateQuestion = (q, i) => {
   }
 
   if (q.type === 'mcq') {
+    // Espaces de début/fin retirés à la sauvegarde (options ET bonnes réponses restent identiques entre elles) :
+    // une option « Paris » enregistrée avec un espace de trop ne correspondait pas à la réponse d'un joueur.
+    if (Array.isArray(q.options)) q.options = q.options.map(o => (typeof o === 'string' ? o.trim() : o))
+    if (Array.isArray(q.correct)) q.correct = q.correct.map(c => (typeof c === 'string' ? c.trim() : c))
     // Au moins une option non vide
     const validOptions = (q.options || []).filter(o => o && o.trim() !== '')
     if (validOptions.length === 0) {

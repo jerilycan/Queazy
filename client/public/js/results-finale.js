@@ -34,7 +34,13 @@
 
   // Outils d'animation liés à une scène : WAAPI, attente annulable (tok.dead), compteur de points, flash / onde / étincelles.
   const makeKit = (stage, tok) => {
-    const sleep = (ms) => new Promise((res, rej) => setTimeout(() => (tok.dead ? rej(CANCEL) : res()), ms))
+    // Fenêtre masquée ou recouverte (ex. la vue TV derrière la fenêtre du MJ) : le navigateur fige les animations WAAPI mais pas
+    // les setTimeout — le scénario continuait seul, avec des tuiles restées à leur place d'origine (haut gauche) et des effets
+    // posés ailleurs. Les pauses attendent donc que la page soit de nouveau visible : animations et scénario restent synchrones.
+    const whenVisible = () => (document.hidden
+      ? new Promise((resolve) => { const on = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', on); resolve() } }; document.addEventListener('visibilitychange', on) })
+      : Promise.resolve())
+    const sleep = (ms) => new Promise((res, rej) => setTimeout(() => (tok.dead ? rej(CANCEL) : whenVisible().then(() => (tok.dead ? rej(CANCEL) : res()))), ms))
     const A = (el, kf, o = {}) => el.animate(kf, { fill: 'forwards', easing: EO, ...o }).finished.catch(() => {})
     const countUp = (el, from, to, ms) => {
       const t0 = performance.now()
@@ -171,6 +177,7 @@
     // ---- cartes (noms et avatars posés en textContent : jamais d'HTML venant des joueurs)
     const C = entities.map((e, i) => {
       const el = h('fin-card')
+      el.style.transform = pose(W / 2, Hh / 2, 1) // position de départ en dur (sinon : coin haut gauche tant que l'animation n'a pas démarré)
       const rank = h('fin-rank'); rank.textContent = String(i + 1)
       const av = h('fin-av'); fillAvatar(av, e, i, N)
       const name = h('fin-name'); name.textContent = e.name || ''; name.style.color = solid(i)
@@ -179,7 +186,7 @@
       stage.appendChild(el)
       return { i, e, el, rank, score, x: W / 2, y: Hh / 2, s: 1 }
     })
-    const place = (p, L, ms) => { A(p.el, [{ transform: pose(p.x, p.y, p.s) }, { transform: pose(L.x, L.y, L.s) }], { duration: ms, easing: IO }); p.x = L.x; p.y = L.y; p.s = L.s }
+    const place = (p, L, ms) => { A(p.el, [{ transform: pose(p.x, p.y, p.s) }, { transform: pose(L.x, L.y, L.s) }], { duration: ms, easing: IO }); p.x = L.x; p.y = L.y; p.s = L.s; p.el.style.transform = pose(p.x, p.y, p.s) /* repli : la carte reste au bon endroit même si l'animation ne tourne pas */ }
     const rankOrderAt = (q) => [...Array(N).keys()].sort((a, b) => cum[q][b] - cum[q][a] || a - b)
     const clone = (p) => { const c = p.el.cloneNode(true); c.style.transform = pose(p.x, p.y, p.s); c.style.zIndex = 8; stage.appendChild(c); return c }
 

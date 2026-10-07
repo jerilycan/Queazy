@@ -1580,6 +1580,8 @@ let currentIllustrationZoom = null
 const ZOOMGUESS_ANSWER_WINDOW_MS = 10000
 
 let selectedMcqOptions = []
+// Même normalisation que le serveur (normalizeMcqText) : espaces superflus et formes Unicode ignorés.
+const normMcq = (t) => String(t ?? '').normalize('NFC').replace(/\s+/g, ' ').trim()
 let currentQuestionType = 'free'
 let isGameEnded = false
 
@@ -2069,24 +2071,13 @@ const buildTimelineCard = (entry, extraClass) => {
   return card
 }
 
-// slotLabels : pendant un glisser, intercale un emplacement avant/entre/après les lignes de la frise
-// (hors tuile glissée, déjà retirée de timelineState.frise par l'appelant via "skipKey").
-const renderTimelineBoard = ({ dragging = null } = {}) => {
+const renderTimelineBoard = () => {
   if (!timelineList || !timelineState) return
   timelineList.innerHTML = ''
-  const rows = timelineState.frise.filter(e => !dragging || e.key !== dragging.key)
-  const addSlot = (slotIndex) => {
-    const slot = document.createElement('div')
-    slot.className = 'tl-slot'
-    slot.dataset.slotIndex = String(slotIndex)
-    slot.dataset.label = slotIndex === 0 ? 'Avant tout ça' : (slotIndex === rows.length ? 'Après tout ça' : 'Entre les deux')
-    slot.textContent = slot.dataset.label
-    timelineList.appendChild(slot)
-  }
-  if (dragging) addSlot(0)
-  rows.forEach((entry, i) => {
+  timelineState.frise.forEach((entry) => {
     const row = document.createElement('div')
     row.className = 'tl-row' + (entry.anchor ? ' is-anchor' : ' is-placed')
+    row.dataset.key = String(entry.key)
     const date = document.createElement('span')
     date.className = 'tl-date'
     date.textContent = entry.anchor ? formatTimelineYear(entry.date) : '?'
@@ -2098,19 +2089,36 @@ const renderTimelineBoard = ({ dragging = null } = {}) => {
     if (!entry.anchor) wireTimelineTile(card, entry)
     row.appendChild(card)
     timelineList.appendChild(row)
-    if (dragging) addSlot(i + 1)
   })
   if (timelineTray && timelineTrayList) {
     timelineTrayList.innerHTML = ''
     timelineState.tray.forEach((entry) => {
       const tile = buildTimelineCard(entry, 'tl-tile')
-      if (dragging && dragging.key === entry.key) tile.classList.add('is-source')
       wireTimelineTile(tile, entry)
       timelineTrayList.appendChild(tile)
     })
     timelineTray.classList.toggle('d-none', timelineState.tray.length === 0)
     if (timelineTrayCount) timelineTrayCount.textContent = String(timelineState.tray.length)
   }
+}
+
+// Pendant un glisser : intercale les emplacements dans la frise SANS reconstruire le DOM. L'élément
+// touché doit rester dans la page jusqu'au relâchement : sur écran tactile, le retirer en plein geste
+// fait perdre son touch-action:none au doigt, le navigateur reprend alors la main pour défiler la page
+// et annule le glisser (la tuile « lâchait » dès qu'on la tirait vers le haut). slotIndex compte les
+// lignes SANS la tuile glissée (même repère que le tableau frise après retrait).
+const insertTimelineSlots = (draggedKey) => {
+  const rows = Array.from(timelineList.querySelectorAll(':scope > .tl-row')).filter(r => r.dataset.key !== String(draggedKey))
+  const makeSlot = (slotIndex) => {
+    const slot = document.createElement('div')
+    slot.className = 'tl-slot'
+    slot.dataset.slotIndex = String(slotIndex)
+    slot.dataset.label = slotIndex === 0 ? 'Avant tout ça' : (slotIndex === rows.length ? 'Après tout ça' : 'Entre les deux')
+    slot.textContent = slot.dataset.label
+    return slot
+  }
+  rows.forEach((row, i) => timelineList.insertBefore(makeSlot(i), row))
+  timelineList.appendChild(makeSlot(rows.length))
 }
 
 const buildTimelineBoard = (anchors, tiles) => {
@@ -2147,7 +2155,8 @@ const wireTimelineTile = (el, entry) => {
     let hoverSlot = null
     let overTray = false
 
-    renderTimelineBoard({ dragging: entry })
+    el.classList.add('is-source')
+    insertTimelineSlots(entry.key)
 
     const updateHover = () => {
       ghost.style.transform = `translate(${lastX - grabX}px, ${lastY - grabY}px) rotate(2deg)`
@@ -5210,6 +5219,7 @@ const resetUI = () => {
   
   document.body.classList.remove('game-active', 'is-host', 'irl-player-mode', 'remote-player-mode')
   if (hostProgressBarEl) hostProgressBarEl.innerHTML = ''
+  document.getElementById('lobbyQuizPodium')?.classList.add('d-none')
   gameMode = 'irl'
   irlMenuDropdown?.classList.remove('is-open')
   // Hide all dynamic panels — 'main' (toute la zone de jeu : question,
@@ -7011,6 +7021,9 @@ let tutoVideosGridBuilt = false
 // vivent en mémoire tant que la page reste ouverte (le navigateur suspend
 // de lui-même l'animation de ceux qui sont display:none, donc pas de coût
 // CPU supplémentaire une fois cachés — seule la mémoire reste occupée).
+// Les images statiques sont gardées 1 jour par le navigateur (voir server/index.js, STATIC_BINARY_RE) : à CHAQUE GIF
+// régénéré, incrémenter cette valeur pour que les joueurs récupèrent la nouvelle version tout de suite.
+const TUTO_GIFS_VERSION = '2'
 const tutoVideoImgs = {} // type -> <img>
 const getOrCreateTutoVideoImg = (type) => {
   let img = tutoVideoImgs[type]
@@ -7029,7 +7042,7 @@ const getOrCreateTutoVideoImg = (type) => {
       tutoVideoPlaceholder?.classList.remove('d-none')
     }
   }
-  img.src = `/img/tuto/${type}.gif`
+  img.src = `/img/tuto/${type}.gif?v=${TUTO_GIFS_VERSION}`
   tutoVideoImgs[type] = img
   tutoVideoPlayerArea?.appendChild(img)
   return img
@@ -8498,6 +8511,9 @@ socket.on('question:show', payload => {
   // (voir style.css, sélecteur qui les exclut explicitement), pas besoin
   // de la reposer plusieurs fois pour la même hygiène.
   optionsDiv.style.removeProperty('--mcq-cols')
+  // QCM à plusieurs bonnes réponses : le joueur en coche plusieurs, les tuiles non cochées ne doivent donc pas
+  // s'effacer comme si elles étaient désactivées (voir .options-grid.mcq-multi dans style.css).
+  optionsDiv.classList.toggle('mcq-multi', payload.type === 'mcq' && Array.isArray(payload.correct) && payload.correct.length > 1)
   if (payload.type === 'mcq' && Array.isArray(payload.options)) {
     const mcqCols = payload.options.length <= 4 ? 2 : payload.options.length <= 6 ? 3 : 4
     optionsDiv.style.setProperty('--mcq-cols', mcqCols)
@@ -9765,23 +9781,43 @@ socket.on('quiz:end', (endPayload) => {
   window.location.href = `/result.html?room=${encodeURIComponent(roomCode)}${quizParam}${qidParam}`
 })
 
-// Tâche 048 : "score à battre" (voir server/index.js, 1re question) — bandeau
-// éphémère, jamais affiché si le quiz n'a jamais été terminé.
-let bestScoreBannerTimer = null
-socket.on('quiz:bestScore', ({ name, score }) => {
-  if (!Number.isFinite(Number(score))) return
-  let banner = document.getElementById('bestScoreBanner')
-  if (!banner) {
-    banner = document.createElement('div')
-    banner.id = 'bestScoreBanner'
-    banner.className = 'best-score-banner'
-    document.body.appendChild(banner)
-  }
-  banner.textContent = `🏆 Score à battre : ${score} pts — ${name}`
-  banner.classList.add('is-visible')
-  clearTimeout(bestScoreBannerTimer)
-  bestScoreBannerTimer = setTimeout(() => banner.classList.remove('is-visible'), 8000)
-})
+// Tâche 048 : podium du quiz choisi (« score à battre »), affiché dans le salon pour tout le monde
+// (voir server/index.js broadcastQuizPodium). Liste vide = bloc masqué.
+const lobbyQuizPodiumEl = document.getElementById('lobbyQuizPodium')
+const renderLobbyQuizPodium = (top) => {
+  if (!lobbyQuizPodiumEl) return
+  lobbyQuizPodiumEl.replaceChildren()
+  const rows = Array.isArray(top) ? top.filter(r => r && Number.isFinite(Number(r.score))).slice(0, 3) : []
+  lobbyQuizPodiumEl.classList.toggle('d-none', rows.length === 0)
+  if (rows.length === 0) return
+  const title = document.createElement('div')
+  title.className = 'lqp-title'
+  title.textContent = `🏆 Podium du quiz · score à battre : ${rows[0].score} pts`
+  const cols = document.createElement('div')
+  cols.className = 'lqp-cols'
+  // Ordre d'affichage 2 - 1 - 3 (comme le podium de fin de partie) ; un podium incomplet garde la même disposition.
+  ;[1, 0, 2].forEach((rank) => {
+    const r = rows[rank]
+    if (!r) return
+    const col = document.createElement('div')
+    col.className = `lqp-col lqp-rank-${rank + 1}`
+    const medal = document.createElement('div')
+    medal.className = 'lqp-medal'
+    medal.textContent = ['🥇', '🥈', '🥉'][rank]
+    const name = document.createElement('div')
+    name.className = 'lqp-name'
+    name.textContent = r.name || ''
+    const score = document.createElement('div')
+    score.className = 'lqp-score'
+    score.textContent = `${r.score} pts`
+    const bar = document.createElement('div')
+    bar.className = 'lqp-bar'
+    col.append(medal, name, score, bar)
+    cols.appendChild(col)
+  })
+  lobbyQuizPodiumEl.append(title, cols)
+}
+socket.on('lobby:quizPodium', ({ top }) => renderLobbyQuizPodium(top))
 
 socket.on('player:joined', ({ id, name }) => {
   if (!scores.has(id)) scores.set(id, { name, total: 0, isHost: false })
@@ -10100,7 +10136,7 @@ socket.on('question:reveal', payload => {
       // la photo est dans son dataset (voir question:show) plutôt que dans
       // el.textContent comme pour mcq/truefalse.
       const value = payload.type === 'intrus' ? el.dataset.optionId : el.textContent
-      if ((payload.correct || []).includes(value)) {
+      if ((payload.correct || []).some(c => normMcq(c) === normMcq(value))) {
         el.classList.add('correct-reveal')
         stampEntranceAnimation(el) // "pop" de la bonne réponse : ne rejoue pas à chaque réinjection TV
       } else el.classList.add('incorrect-reveal')
@@ -10126,7 +10162,7 @@ socket.on('question:reveal', payload => {
     // truefalse/intrus restent binaires (une seule réponse possible).
     const correctList = payload.correct || []
     if (payload.type === 'mcq' && correctList.length > 1) {
-      const correctCount = correctList.reduce((acc, c) => acc + (selectedMcqOptions.includes(c) ? 1 : 0), 0)
+      const correctCount = correctList.reduce((acc, c) => acc + (selectedMcqOptions.some(o => normMcq(o) === normMcq(c)) ? 1 : 0), 0)
       if (correctCount === correctList.length && myAnsweredCorrectlyThisQuestion) {
         showMyResultBanner()
       } else if (myAnsweredCorrectlyThisQuestion) {
