@@ -10663,7 +10663,7 @@ body.results-tv #replayQuiz,
 body.results-tv #backHome,
 body.results-tv div:has(> #backHome) { display: none !important; }
 body.results-tv .container { margin-top: 0; max-width: none; padding: 1.5vh 2vw; }
-body.results-tv .card { max-width: 1180px; width: 100%; }
+body.results-tv .card { max-width: min(1500px, 94vw); width: 100%; padding: 1.5vh 2vw; }
 /* TV : le podium reste seul, pleine largeur, du début à la fin (avant : deux colonnes à la fin de l'animation, le podium
    rétrécissait pour faire place à la liste — le classement détaillé reste sur les téléphones et l'écran du MJ). */
 body.results-tv #podiumTab { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
@@ -10710,7 +10710,15 @@ body.editor-standard #mediaBlock:not(:has(.media-card > .detail-section:not(.d-n
 /* Pendant l'animation : ni podium ni liste complète (ils révéleraient déjà le classement). */
 #podiumTab.finale-active #fullTable { display: none; }
 body.results-tv #podiumTab.finale-active { grid-template-columns: 1fr; }
-body.results-tv .fin-stage { height: 560px; }
+/* La TV ne défile pas : animation + podium + top 3 du quiz doivent tenir dans l'écran (hauteur proportionnelle à la fenêtre). */
+body.results-tv .fin-stage { height: clamp(300px, 62vh, 860px); }
+body.results-tv #podiumTab { gap: 1.4vh; }
+body.results-tv #resultsPodium { margin-bottom: 0 !important; }
+/* Top 3 « meilleurs scores » (tâche 048) : titre + 3 lignes côte à côte sous le podium. */
+body.results-tv .quiz-top-scores { max-width: none; margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1vh 1.6vw; }
+body.results-tv .quiz-top-title { margin: 0; font-size: clamp(16px, 1.7vw, 30px); }
+body.results-tv .quiz-top-row { margin: 0; padding: 0.8vh 1.2vw; gap: 0.8vw; font-size: clamp(15px, 1.6vw, 28px); }
+body.results-tv .quiz-top-name { flex: none; }
 body.results-tv .fin-skip { display: none; }
 /* Podium 2 - 1 - 3 (results-finale.js buildPodium) */
 .fin-pod { position: absolute; left: 0; right: 0; bottom: 26px; display: flex; align-items: flex-end; justify-content: center; gap: 14px; z-index: 6; max-width: 100%; }
