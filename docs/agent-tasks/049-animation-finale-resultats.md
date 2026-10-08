@@ -74,4 +74,4 @@ Même animation et même ordre d'élimination sur tous les écrans d'une même s
 - Ancien podium « course » supprimé : plus de pastilles de questions, de « +points » ni de séries 🔥 ; le survol d'une colonne du podium (récap par question) est conservé via `data-player-id`.
 
 ## Statut
-`en review`
+`clôturée`

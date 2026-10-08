@@ -2934,7 +2934,7 @@ const QTYPE_HINTS = {
   // utilisateur, pour un MJ qui hésiterait entre les deux) : ici la
   // révélation est LIMITÉE (5 clics max) et COÛTE des points, pas un
   // balayage continu et gratuit.
-  halo: { icon: '✨', text: 'Les joueurs cliquent jusqu\'à 5 fois (chaque clic après le 1er coûte des points) pour révéler des halos de lumière permanents sur l\'image cachée.', color: '#c4b5fd', rgb: '196,181,253' }
+  halo: { icon: '✨', text: 'Les joueurs cliquent jusqu\'à 5 fois (chaque clic coûte des points, de plus en plus) pour révéler des halos de lumière permanents sur l\'image cachée.', color: '#c4b5fd', rgb: '196,181,253' }
 }
 const qTypeHint = document.getElementById('qTypeHint')
 const updateQTypeHint = () => {
@@ -4896,7 +4896,7 @@ const createInputRow = (value, onInput, onDelete, showCheck = false, isChecked =
   const input = document.createElement('input')
   input.type = 'text'
   input.value = value
-  input.placeholder = 'Entrez du texte...'
+  input.placeholder = 'Écris ici...'
   input.style.flex = '1'
   input.disabled = readOnly
   input.maxLength = TEXT_SHORT_MAXLENGTH
@@ -6163,7 +6163,7 @@ deleteQuizBtn.onclick = async () => {
   if (!currentId) return
   const ok = window.QzUI
     ? await window.QzUI.confirm({ title: 'Supprimer ce quiz ?', message: 'Cette action est définitive et ne peut pas être annulée.', confirmLabel: 'Supprimer', danger: true })
-    : confirm('Voulez-vous vraiment supprimer ce quiz ?')
+    : confirm('Veux-tu vraiment supprimer ce quiz ?')
   if (!ok) return
   const sb = window.supabaseClient
   sb.from('quizzes').delete().eq('id', currentId)
@@ -6189,19 +6189,19 @@ deleteQuizBtn.onclick = async () => {
 const EDITOR_TOUR_STORAGE_KEY = 'queazy_editor_tutorial_dismissed'
 const EDITOR_TOUR_STEPS = [
   { target: '#title', title: 'Titre du quiz', text: 'Donne un nom à ton quiz — c\'est ce que tes joueurs verront pour le choisir.' },
+  { target: '#quizCoverBtn', title: 'Image du quiz', text: 'Choisis l\'image qui représente ton quiz dans « Mes quiz ». Sans choix, une pastille colorée est créée automatiquement.' },
+  { target: '#modeSwitch', title: 'Standard ou Avancé', text: 'Standard : l\'essentiel pour créer vite. Avancé : tous les réglages facultatifs (image, son, brouillon, banque de questions…). Tes réglages avancés sont conservés quand tu repasses en Standard.' },
   { target: '#addQuestion', title: 'Ajouter une question', text: 'Clique ici pour ajouter une nouvelle question à ton quiz.' },
   { target: '#questionList', title: 'Liste des questions', text: 'Toutes tes questions apparaissent ici. Glisse-les pour les réordonner, clique pour éditer, la croix pour supprimer.' },
-  // Ordre aligné sur la disposition actuelle du formulaire (retour
-  // utilisateur) : type + minuteur remontés tout en haut (juste sous
-  // Brouillon), avant l'énoncé — voir editor.html.
-  // 15 types au total (retour utilisateur, tâche 013 : "recherche" et
-  // "rangement" manquaient déjà à l'appel — "recherche" (tâche 009) n'avait
-  // jamais été ajouté ici, le compte "13" datait donc d'avant lui).
-  { target: '#qType', title: 'Type de question', text: '17 types disponibles : QCM, Vrai/Faux, curseur numérique, ordre, image, ZoomOut Devinette, Révélation, blind test, association, timeline, rangement, intrus, Petit Bac, recherche, indice, halo, texte libre. Chacun a sa propre zone de configuration plus bas, qui s\'adapte automatiquement à ton choix.' },
+  // Ordre aligné sur la disposition actuelle du formulaire : type + minuteur en haut, puis énoncé, image/son,
+  // réponse, « Après la révélation ». Le nombre de types est lu dans le menu (jamais écrit en dur : il avait déjà
+  // été faux à 13 puis à 15).
+  { target: '#qType', title: 'Type de question', text: `${qType.options.length} types de question disponibles (QCM, Vrai/Faux, Timeline, Blind Test…). Chacun a sa propre zone de configuration plus bas, qui s'adapte automatiquement à ton choix.` },
   { target: '#qTimer', title: 'Temps imparti', text: 'Règle en secondes le temps laissé aux joueurs pour répondre, avec les boutons - et +.' },
   { target: '#qPrompt', title: 'Énoncé de la question', text: 'Écris ta question ici — c\'est ce qui s\'affiche en grand à l\'écran pendant la partie.' },
-  { target: '#illustrationUpload', title: 'Illustration (optionnelle)', text: 'Ajoute une image au-dessus de la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },
-  { target: '#qExplanation', title: 'Explication (optionnelle)', text: 'Un texte affiché juste après la révélation de la bonne réponse, pour donner un peu de contexte.' },
+  { target: '#illustrationUpload', title: 'Image (optionnelle)', text: 'Dans « Image et son », ajoute une image sous la question, purement décorative (le type "Image" a son propre mécanisme cliquable, séparé de celle-ci).' },
+  { target: '#qExplanation', title: 'Après la révélation (optionnelle)', text: 'Un texte (et, en mode Avancé, une image et un son) affiché juste après la révélation de la bonne réponse, pour donner un peu de contexte.' },
+  { target: '#testQuestion', title: 'Tester la question', text: 'Joue la question en cours comme la verrait un joueur (mobile ou PC), l\'hôte ou l\'écran TV, sans quitter l\'éditeur.' },
   { target: '#saveQuiz', title: 'Sauvegarder', text: 'N\'oublie pas de sauvegarder une fois ton quiz prêt !' }
 ]
 // Étapes dont la cible est masquée (mode Standard : illustration...) ignorées : la visite

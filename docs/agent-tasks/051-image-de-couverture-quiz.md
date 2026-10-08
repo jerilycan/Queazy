@@ -54,11 +54,15 @@ quiz dans « Mes quiz » et dans l'onglet des quiz publics. Sans image : comport
 - [~] Vérification visuelle Browser pane : éditeur seulement (voir étape 5)
 
 ## Tests manuels recommandés
-À compléter à la relecture.
-
+- Éditeur : choisir une image depuis la pastille, sauvegarder, recharger : l'image revient ; « Aucune image » rend l'image automatique.
+- « Mes quiz » : la carte affiche l'image choisie, ou la pastille automatique (initiales + couleur stable selon le quiz) ; dupliquer un quiz copie l'image.
+- Quiz d'un autre créateur (lecture seule) : la pastille est visible mais non modifiable.
+- Écran étroit (~390 px) : barre de configuration de l'éditeur sans débordement.
+- Ajouter de vraies images dans `client/public/img/quiz-covers/` et dans `quiz-covers.js` (id stables).
 ## Risques restants
 - Tant que la colonne n'existe pas en base, les requêtes avec `cover` échouent : exécuter le SQL AVANT de déployer.
 - Poids des images de la bibliothèque (affichées en petit : prévoir des fichiers légers).
-
+- La colonne `cover` a bien été ajoutée en base (SQL exécuté, vérifié avec de vrais quiz) ; la bibliothèque d'images est encore vide en production.
+- Les couleurs automatiques sont réparties par un hash (FNV-1a) : deux quiz peuvent encore partager une teinte.
 ## Statut
-`en review`
+`clôturée`

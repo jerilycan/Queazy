@@ -5454,7 +5454,7 @@ let roomMode = 'present'
 // ce calcul plutôt que de répéter `isHost && roomMode !== 'auto'` à chaque
 // endroit concerné.
 const isPresenterHost = () => isHost && roomMode !== 'auto'
-// Tâche 042 : le bouton "Mode présentation" (#openDisplayBtn) n'a de sens
+// Tâche 042 : le bouton "Écran TV" (#openDisplayBtn) n'a de sens
 // qu'en "Présenter" IRL avec MJ dédié — même exclusion que la vue TV
 // elle-même (mode "à distance"/remote et mode "Jouer"/auto en sont hors
 // périmètre, voir le Plan de la tâche). Centralisé ici et rappelé à chaque
@@ -7585,7 +7585,7 @@ const emitQuestion = (index) => {
       return emitQuestionShow(payload)
     }).catch(() => {
       if (loadedInfo) loadedInfo.textContent = `${hostQuestionLabel} · échec de l'envoi du média`
-      log('Échec de l\'envoi du média, question non démarrée — réessayez')
+      log('Échec de l\'envoi du média, question non démarrée — réessaie')
       showAnnounce('Échec de l\'envoi du média — réessaie')
       return false
     })

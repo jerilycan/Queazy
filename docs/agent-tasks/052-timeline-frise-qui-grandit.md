@@ -70,7 +70,7 @@ Chaque étape = un diff relu et validé avant la suivante (`/implement-step`).
 - [x] 4. Client : glisser-déposer (réserve ↔ frise, déplacement d'une tuile posée, emplacements libellés, « Déposer ici », retour en réserve)
 - [x] 5. Révélation (ordre réel + dates, tuiles justes/fausses), bandeau « Presque ! x/y », récap ✓/✗, styles TV
 - [x] 6a. Nettoyage de l'ancien code (wireTimelineDrag, styles .timeline-item…)
-- [ ] 6b. /review puis /close-task
+- [x] 6b. /review puis /close-task
 
 ## Checks effectués
 - [x] `node --check <fichier>` sur chaque fichier JS modifié (étape 1 : editor.js, admin-bank.js)
@@ -78,10 +78,19 @@ Chaque étape = un diff relu et validé avant la suivante (`/implement-step`).
 - [x] Vérification visuelle Browser pane (si client touché) — étape 3-5 : aperçu « Tester » en vue joueur, PC et TV, glisser simulé en événements pointeur (emplacements, « Déposer ici », dépôt, déplacement d'une tuile posée), révélation avec bandeau « Presque ! 1/2 bien placés (+341 points) » ; — étape 1 faite : création d'une question Timeline, bascule des rôles, résumé « n repères · m à placer », migration d'une ancienne question (médiane → repère) ; la sauvegarde réelle (toast d'erreur 0 repère) reste à tester à la main
 
 ## Tests manuels recommandés
-(à remplir au /review)
-
+- **Téléphone réel** : glisser une tuile de la réserve vers la frise (vers le haut), puis une tuile déjà posée ; défilement automatique avec une frise longue ; lâcher hors emplacement (la tuile revient), lâcher sur la réserve.
+- Question à **plusieurs tuiles** (3 repères + 3 tuiles) : emplacements « Avant tout ça » / « Entre les deux » / « Après tout ça » corrects après chaque pose.
+- Score : tout juste = points pleins ; une tuile fausse ne pénalise pas les autres ; tuile non posée = fausse ; bandeau « Presque ! x/y bien placés ».
+- **Ancienne question Timeline** (sans repère) : jouable (événement à la date médiane en repère), éditable.
+- Éditeur : bascule « Repère visible / À placer », message d'erreur sans repère ou sans tuile, sauvegarde puis rechargement.
+- Vue TV et MJ d'une partie « Présenter » avec une question Timeline ; aperçu « Tester » en vue joueur.
+- Dates négatives (avant J.-C.) et dates égales.
 ## Risques restants
-(à remplir au /review)
-
+- Glisser testé avec des événements pointeur simulés, jamais avec un vrai doigt : le correctif « la tuile se lâche vers le haut » (touch-action + élément touché conservé) reste à confirmer sur téléphone.
+- Pas d'alternative clavier ni « toucher l'emplacement » (même limite que Ordre/Rangement).
+- La règle de score existe en double (serveur `scoreTimelinePlacement`, client `timelineCorrectKeys`) et la migration des anciennes questions aussi (éditeur / `emitQuestion`) — pas de module partagé dans ce projet ; à garder synchronisées.
+- Un glisser en cours quand le chrono se termine laisse la frise se modifier après l'envoi (sans effet sur le score) jusqu'à la révélation.
+- Une question inutilisable côté serveur (aucun repère ou aucune tuile) ignore la réponse sans message (l'éditeur l'interdit à la sauvegarde).
+- La description courte des événements a été retirée (anciens textes conservés en base, non affichés).
 ## Statut
-`en review`
+`clôturée`
