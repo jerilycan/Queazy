@@ -107,7 +107,7 @@ Chaque étape = un diff relu et validé avant la suivante (`/implement-step`). *
 - [x] 3. Chiffres : nombre de types du tutoriel lu dans `qType.options.length` (liste exhaustive retirée) ; « Indices (1 à 6) » corrigé ; aide du Halo corrigée. **A4 non fait** (bornes « 2 à 8 »… laissées en dur, justes aujourd'hui).
 - [x] 4. Tutoiement, orthographe : C2, C3, C4, C5, D1 faits. **C1 volontairement NON modifié** (« Préparez-vous pour le début de la partie » s'adresse à toute la salle — décision utilisateur).
 - [x] 5. Mécaniques : tutoriel de l'éditeur réécrit (12 étapes dont Image du quiz, Standard/Avancé, Tester ; Image / Après la révélation corrigés), info-bulle du mode à distance, encart Standard (catégorie, difficulté).
-- [ ] 6. Vérification et relecture
+- [x] 6. Vérification et relecture (voir ci-dessous)
 
 ## Checks effectués
 - [x] `node --check <fichier>` sur chaque fichier JS modifié (étape 1 : aucun fichier de code modifié)
@@ -115,10 +115,17 @@ Chaque étape = un diff relu et validé avant la suivante (`/implement-step`). *
 - [x] Vérification (si client touché) : textes servis par le serveur local relus sur index, display et editor ; les 12 cibles du tutoriel existent dans `editor.html` (script) et le nombre de types calculé vaut 17. **Non vérifié à l'œil** : le tutoriel lui-même (l'éditeur exige une connexion, session perdue dans le volet).
 
 ## Tests manuels recommandés
-(à remplir au /review)
-
+- **Éditeur, bouton « Tutoriel »** : parcourir les 12 étapes en mode Standard puis en mode Avancé (les étapes dont la cible est masquée sont sautées) ; vérifier l'ordre, les textes et que « 17 types » correspond bien au menu.
+- Étape « Tester la question » : visible seulement quand une question est ouverte.
+- Salon : texte « Préparez-vous… » inchangé (volontaire, s'adresse à toute la salle) ; info-bulle « Quiz à distance » (« en présentiel », « barre du haut »).
+- Bouton « 🖥️ Écran TV » côté hôte en partie « Présenter » : ouvre bien la fenêtre TV ; écran d'attente TV : « Le quiz va bientôt commencer ».
+- Éditeur : placeholders (« Écris ta question ici... », « Écris ici... »), « Indices (1 à 6) » (vérifier qu'on peut bien en ajouter 6), aide du Halo, encart du mode Standard.
+- Supprimer un quiz depuis l'éditeur : la boîte de confirmation habituelle s'affiche (le « Veux-tu vraiment… » n'est qu'un repli sans la bibliothèque d'interface).
 ## Risques restants
-(à remplir au /review)
-
+- Le tutoriel de l'éditeur n'a pas été vu à l'œil (connexion requise, session perdue dans le volet de test) : seuls ses textes et ses 12 cibles ont été vérifiés par script.
+- Les bornes affichées (« 2 à 8 », « 3 à 8 », « 4 à 12 », durées et poids maximaux) restent écrites en dur à côté des constantes du code : elles sont justes aujourd'hui mais peuvent dériver (c'est ainsi que « Indices (1 à 4) » est devenu faux). Piste : les lire depuis les constantes (non faite, décision utilisateur).
+- Le glossaire (hôte, Écran TV…) ne couvre que les textes affichés : des commentaires de code utilisent encore « MJ ».
+- L'extraction automatique des textes ne voit que les chaînes entre guillemets : un texte construit par morceaux a pu lui échapper.
+- Quatre sources de description des types de question restent indépendantes (`QUESTION_TYPE_META`, `QTYPE_HINTS`, textes de l'éditeur, GIF) : aucune contradiction trouvée après correction du Halo, mais rien ne garantit qu'elles le resteront.
 ## Statut
-`en cours`
+`en review`
