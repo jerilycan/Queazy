@@ -56,14 +56,17 @@ question jamais sauvegardée.
 - [x] Vérification visuelle Browser pane : vue MJ (interface hôte), vue TV (miroir + révélation « Paris » en vert), joueur PC ; joueur mobile validé par l'utilisateur. Un seul type testé (texte libre).
 
 ## Tests manuels recommandés
-À compléter à la relecture.
-
+- « Tester » sur **chaque type de question** (images, blind test, ordre, association, rangement, indice, halo...) dans les 4 vues (joueur mobile, joueur PC, MJ, TV).
+- Vue joueur : en-tête de vrai joueur (logo réduit, barre fine, roue crantée), **sans Récap ni code de salle**.
+- Vue MJ : bouton « Mode présentation », fin de question puis « Suivant ».
+- Question non sauvegardée (brouillon) et question avec image/son lourds : l'aperçu les reçoit par message de l'éditeur.
+- Fermer la fenêtre en pleine question : aucune salle ni écriture qui traîne.
 ## Risques restants
 - L'aperçu dépend du mode « Jouer » : son comportement (scores, classement final) doit rester sans effet de bord (pas d'écriture en base, vérifier `quiz_results`).
 - Vue TV : la page MJ cachée tourne dans l'iframe (1100×700 hors écran) ; la TV réelle est plein écran (le zoom/mise à l'échelle réel peut différer).
 - Vue MJ : le bouton « Mode présentation » ouvre une vraie fenêtre ; la fin de question demande « Suivant » comme en vraie partie.
 - Seul le type texte libre a été essayé : à passer sur les autres types (images, blind test, ordre…).
 - Audio : l'autoplay peut être bloqué dans l'iframe avant une interaction.
-
+- Le mode joueur de l'aperçu est forcé côté client (`previewAsPlayer`) alors que l'éditeur est hôte de la salle : tout nouveau comportement lié à `isHost` doit être revu pour l'aperçu.
 ## Statut
-`en review`
+`clôturée`

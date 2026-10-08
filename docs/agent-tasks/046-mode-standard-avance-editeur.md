@@ -228,4 +228,4 @@ purement visuel (aucune valeur n'est jamais effacée)._
 - Jamais testé sur Firefox/Safari (filtre SVG « gooey », `visibility`/`transform` du menu).
 
 ## Statut
-`relue — prête à livrer`
+`clôturée`

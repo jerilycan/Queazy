@@ -245,8 +245,11 @@ contrat `room:join` (rétro-compatible : le JWT est optionnel).
   editor.js` OK.
 
 ## Tests manuels recommandés
-_À remplir par `/plan-feature`._
-
+- **Deux comptes réels** : un joueur termine un quiz en mode « Présenter » ; le top 3 s'affiche sous le podium des résultats (joueur, MJ, TV) et le résultat est bien enregistré.
+- **Salon** : à la sélection d'un quiz déjà terminé, le podium (score à battre) apparaît chez tous les joueurs, y compris ceux qui arrivent après ; il disparaît si on change pour un quiz sans résultat.
+- « Déjà participé » : avertissement à l'hôte quand un joueur connecté a déjà fait le quiz ; liste des participants dans la configuration du quiz.
+- Invités (sans compte) : rien enregistré, aucun podium faussé.
+- Mode « Jouer » (quiz généré) : aucun enregistrement ni podium.
 ## Risques restants
 - **Lignes de test à supprimer dans la vraie base** : `delete from
   public.quiz_results where room_code in ('4HR2P','MK5NS','KG8PX','ABW2H');`
@@ -259,6 +262,8 @@ _À remplir par `/plan-feature`._
   évidence de la partie du jour dans le top 3.
 - **Non poussé** : commits locaux dans le worktree `../QuEazy-test` (083cc97 →
   55736de), la table SQL est déjà créée en base.
-
+- **Le bandeau « score à battre » de la 1re question a été remplacé** par le podium du salon (`lobby:quizPodium`, diffusé par le serveur à la sélection du quiz et à chaque arrivée).
+- Podium du salon et top 3 TV vérifiés avec des données d'exemple seulement : aucun quiz n'a de résultat réel en base à ce jour.
+- Le miroir TV du salon n'existe pas (la TV ne montre pas le salon).
 ## Statut
-`en review`
+`clôturée`
