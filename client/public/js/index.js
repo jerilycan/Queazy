@@ -1381,6 +1381,11 @@ if (haloWrap) {
     // Une fois les 5 clics épuisés, plus aucun effet — pas d'erreur, juste
     // no-op (périmètre explicite de la tâche 020).
     if (haloClicksState.length >= HALO_MAX_CLICKS) return
+    // Retour utilisateur : on pouvait encore révéler l'image après avoir
+    // validé sa réponse (gratuitement, la pénalité étant figée à l'envoi —
+    // voir extraPayload dans submitCurrentAnswer). Garde JS en plus du
+    // .is-locked posé à l'envoi : même verrou que les autres types.
+    if (hasAnsweredThisQuestion) return
     const rect = haloWrap.getBoundingClientRect()
     if (rect.width === 0 || rect.height === 0) return
     // Normalisé sur l'image réellement affichée (getHaloImageBox), pas sur
@@ -8223,7 +8228,7 @@ socket.on('question:show', payload => {
   if (blindtestArtistInput) blindtestArtistInput.disabled = false
   // Symétrique du .add('is-locked') posé dans submitCurrentAnswer — sans
   // ça, le grisage de la question précédente resterait affiché sur celle-ci.
-  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea].forEach(el => {
+  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea, haloWrap].forEach(el => {
     if (el) el.classList.remove('is-locked')
   })
   // "Titre uniquement" (voir editor.js) : masque le champ artiste plutôt que
@@ -8825,7 +8830,7 @@ const submitCurrentAnswer = () => {
   // visiblement après envoi — les autres restaient identiques à l'écran,
   // le joueur pouvait continuer à toucher/glisser sans aucun effet
   // visible et se demander si son geste avait un effet).
-  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea].forEach(el => {
+  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea, haloWrap].forEach(el => {
     if (el) el.classList.add('is-locked')
   })
 }

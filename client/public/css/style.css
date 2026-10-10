@@ -2312,6 +2312,10 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
   opacity: 0.5;
   pointer-events: none;
 }
+/* Halo : verrouillé aussi à l'envoi, mais SANS grisage — l'image est déjà
+   presque entièrement noire, l'assombrir rendrait illisibles les zones
+   révélées que le joueur veut continuer à regarder. */
+#haloWrap.is-locked { pointer-events: none; }
 
 /* Question "association" : deux colonnes de cartes cliquables (voir
    index.js buildAssociationArea) — pas de trait à tracer entre les deux
