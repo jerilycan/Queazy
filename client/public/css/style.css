@@ -5458,6 +5458,9 @@ body.game-active .navbar .brand-logo-svg { height: 72px; }
   background: rgba(5, 5, 15, 0.92);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  /* Le pincement à deux doigts pilote le zoom de la caméra (voir index.js,
+     pinch du scanner) au lieu de zoomer la page. */
+  touch-action: none;
   display: flex;
   flex-direction: column;
   align-items: center;

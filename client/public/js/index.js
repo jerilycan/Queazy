@@ -366,6 +366,69 @@ const applyQrScanZoom = (value) => {
 }
 if (qrScanZoomInput) qrScanZoomInput.oninput = () => applyQrScanZoom(Number(qrScanZoomInput.value))
 
+// Retour utilisateur : pincer l'écran du scanner zoomait la PAGE, pas la
+// caméra. Le pincement est désormais capté sur tout l'overlay (touch-action:
+// none côté CSS) et converti en valeur du curseur de zoom ci-dessus — même
+// chemin applyQrScanZoom, donc zoom matériel si la caméra le permet,
+// numérique sinon. Le zoom suit le rapport des écarts entre les deux doigts
+// depuis le début du geste.
+const qrPinchPointers = new Map()
+let qrPinchStartDist = 0
+let qrPinchStartZoom = 1
+const qrPinchDist = () => {
+  const [a, b] = Array.from(qrPinchPointers.values())
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+if (qrScanOverlay && qrScanZoomInput) {
+  qrScanOverlay.addEventListener('pointerdown', (e) => {
+    qrPinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (qrPinchPointers.size === 2) {
+      qrPinchStartDist = qrPinchDist()
+      qrPinchStartZoom = Number(qrScanZoomInput.value) || 1
+    }
+  })
+  qrScanOverlay.addEventListener('pointermove', (e) => {
+    if (!qrPinchPointers.has(e.pointerId)) return
+    qrPinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (qrPinchPointers.size !== 2 || !qrPinchStartDist) return
+    const min = Number(qrScanZoomInput.min) || 1
+    const max = Number(qrScanZoomInput.max) || 4
+    const zoom = Math.min(max, Math.max(min, qrPinchStartZoom * qrPinchDist() / qrPinchStartDist))
+    qrScanZoomInput.value = zoom
+    applyQrScanZoom(Number(qrScanZoomInput.value))
+  })
+  const endPinch = (e) => {
+    qrPinchPointers.delete(e.pointerId)
+    if (qrPinchPointers.size < 2) qrPinchStartDist = 0
+  }
+  qrScanOverlay.addEventListener('pointerup', endPinch)
+  qrScanOverlay.addEventListener('pointercancel', endPinch)
+  // Safari iOS ne respecte pas toujours touch-action pour le pincement : on
+  // bloque aussi ses événements de geste natifs (zoom de page) sur l'overlay.
+  qrScanOverlay.addEventListener('gesturestart', (e) => e.preventDefault())
+  qrScanOverlay.addEventListener('gesturechange', (e) => e.preventDefault())
+  qrScanOverlay.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault() }, { passive: false })
+}
+
+// Retour utilisateur : un scan réussi doit mener DIRECTEMENT au lobby, sur le
+// choix d'avatar — plus de pseudo à taper ni de bouton "Rejoindre" à
+// cliquer. Rejoindre ouvre déjà ce choix tout seul (room:join:success ->
+// showBuilder, où le pseudo reste modifiable). Pseudo enregistré
+// (nameInput pré-rempli depuis queazy_profile_name) : même chemin que
+// joinBtn ; sinon, pseudo invité généré, même chemin que confirmGuestJoin.
+// Le scan est un geste volontaire du joueur : pas le risque de "joueur
+// fantôme" qui interdit l'auto-join sur un simple chargement de ?room=
+// (voir socket.on('connect'), branche preRoom).
+const joinScannedRoom = (code) => {
+  roomInput.value = code
+  if (nameInput.value.trim()) {
+    joinBtn.click()
+    return
+  }
+  guestNameInput.value = `Invité#${Math.floor(Math.random() * 9000) + 1000}`
+  confirmGuestJoin.click()
+}
+
 const stopQrScan = () => {
   if (qrScanRAF) cancelAnimationFrame(qrScanRAF)
   qrScanRAF = null
@@ -377,6 +440,8 @@ const stopQrScan = () => {
     qrScanStream = null
   }
   if (qrScanVideo) { qrScanVideo.srcObject = null; qrScanVideo.style.transform = '' }
+  qrPinchPointers.clear()
+  qrPinchStartDist = 0
   qrScanDigitalZoom = 1
   if (qrScanZoomInput) qrScanZoomInput.value = 1
   if (qrScanOverlay) qrScanOverlay.classList.add('d-none')
@@ -404,9 +469,8 @@ const tickQrScan = () => {
       const result = window.jsQR ? window.jsQR(imageData.data, sw, sh, { inversionAttempts: 'attemptBoth' }) : null
       const code = result && extractRoomCodeFromQrText(result.data)
       if (code) {
-        roomInput.value = code
         stopQrScan()
-        nameInput.focus()
+        joinScannedRoom(code)
         return
       }
     }
@@ -483,8 +547,7 @@ if (qrScanBtn && qrScanFile) {
       const result = window.jsQR ? window.jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' }) : null
       const code = result && extractRoomCodeFromQrText(result.data)
       if (code) {
-        roomInput.value = code
-        nameInput.focus()
+        joinScannedRoom(code)
       } else if (qrScanError) {
         qrScanError.textContent = result
           ? 'QR code non reconnu comme salle Queazy.'
