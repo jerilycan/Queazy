@@ -759,12 +759,27 @@ window.addEventListener('message', (event) => {
 // pour les résultats — plus aucun miroir n'arrivera. La TV charge elle-même
 // la page de résultats (URL relative same-origin uniquement, jamais une URL
 // arbitraire reçue par message).
+// Retour utilisateur : un `location.href = url` faisait quitter le plein
+// écran juste avant l'animation de fin — tout changement de page le coupe,
+// et le navigateur refuse d'y revenir sans un nouveau clic. La page de
+// résultats est donc chargée dans une iframe qui recouvre tout l'écran : ce
+// document-ci reste affiché (plein écran conservé) et l'animation se lance
+// toute seule au chargement de l'iframe, comme avant.
 window.addEventListener('message', (event) => {
   if (event.origin !== location.origin) return
   if (event.data?.type !== 'queazy-display-results') return
   const url = event.data.url
   if (typeof url !== 'string' || !url.startsWith('/result.html?')) return
-  location.href = url
+  if (document.getElementById('displayResultsFrame')) return // message reçu deux fois : ne pas relancer l'animation
+  const frame = document.createElement('iframe')
+  frame.id = 'displayResultsFrame'
+  frame.className = 'display-results-frame'
+  frame.title = 'Résultats'
+  // autoplay : la fanfare du podium (voir results.js onWinner) hérite de
+  // l'autorisation déjà accordée à cette page.
+  frame.allow = 'autoplay'
+  frame.src = url
+  document.body.appendChild(frame)
 })
 
 // --- Plein écran (étape 6) ---------------------------------------------

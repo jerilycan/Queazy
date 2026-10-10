@@ -9425,6 +9425,19 @@ body.irl-player-mode .irl-menu-btn, body.remote-player-mode .irl-menu-btn { disp
    neutraliser explicitement pour obtenir un plein écran sans cadre.
    Placé en toute fin de fichier (même raison que le bloc Responsive juste
    au-dessus) pour primer sur les définitions de base à spécificité égale. */
+/* Résultats de fin de partie chargés PAR-DESSUS la vue TV (voir display.js,
+   queazy-display-results) plutôt que par un changement de page, qui ferait
+   quitter le plein écran. Au-dessus de tout, y compris le bouton plein
+   écran (Échap reste disponible pour en sortir). */
+.display-results-frame {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  z-index: 20000;
+  background: var(--color-bg);
+}
 body.display-body {
   height: 100vh;
   overflow: hidden; /* jamais de scrollbar sur un écran projeté */
