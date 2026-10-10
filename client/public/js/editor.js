@@ -3176,6 +3176,11 @@ const renderFreeVariantChips = (q) => {
     freeVariantsChipList.appendChild(chip)
   })
   if (freeVariantsCount) freeVariantsCount.textContent = String(variants.length)
+  // Bug corrigé (retour utilisateur : "papa" en réponse, "maman" en variante,
+  // "maman" refusé par le testeur) : la pastille n'était recalculée qu'à la
+  // frappe dans le champ testeur — une variante ajoutée/supprimée APRÈS
+  // avoir tapé le test laissait un ✗ périmé affiché.
+  updateFreeAnswerTestPill(q)
 }
 
 const populateFreeAnswer = (q) => {
@@ -3304,6 +3309,7 @@ if (freeMainAnswer) {
     if (!q || q.type !== 'free') return
     if (!Array.isArray(q.correct)) q.correct = ['']
     q.correct[0] = freeMainAnswer.value
+    updateFreeAnswerTestPill(q)
   }
 }
 
@@ -3313,9 +3319,7 @@ if (freeVariantsToggle) {
 
 if (freeVariantAddInput) {
   freeVariantAddInput.maxLength = TEXT_SHORT_MAXLENGTH
-  freeVariantAddInput.onkeydown = (e) => {
-    if (e.key !== 'Enter') return
-    e.preventDefault()
+  const commitFreeVariant = () => {
     const q = questions[activeIndex]
     if (!q || q.type !== 'free') return
     const value = freeVariantAddInput.value.trim()
@@ -3331,6 +3335,15 @@ if (freeVariantAddInput) {
     freeVariantAddInput.value = ''
     renderFreeVariantChips(q)
   }
+  freeVariantAddInput.onkeydown = (e) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    commitFreeVariant()
+  }
+  // Bug corrigé (même retour utilisateur) : une variante tapée puis quittée
+  // sans Entrée (clic ailleurs, clavier mobile) restait dans le champ sans
+  // jamais rejoindre q.correct — perdue sans le moindre signal.
+  freeVariantAddInput.onblur = commitFreeVariant
 }
 
 // Même glisser au pointeur que la liste "ordre" en jeu (voir index.js
