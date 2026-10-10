@@ -7269,11 +7269,11 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 }
 
 /* Même glisser au pointeur (pointerdown/move/up, un seul réordonnancement DOM
-   au relâchement — voir wireOrderEditDrag) que la liste "ordre" en jeu (voir
+   au relâchement — voir wireListEditDrag) que la liste "ordre" en jeu (voir
    index.js wireOrderDrag), pour un rendu et un ressenti identiques. Toute la
    ligne est saisissable (pas seulement la poignée ⠿, simple indice visuel),
    sauf le champ texte et le bouton supprimer qui gardent leur comportement
-   propre (voir l'exclusion e.target dans wireOrderEditDrag). */
+   propre (voir l'exclusion e.target dans wireListEditDrag). */
 .order-edit-row { position: relative; cursor: grab; touch-action: none; }
 .order-edit-row.dragging { z-index: 10; box-shadow: var(--shadow-lg); cursor: grabbing; }
 .order-edit-row input[type="text"] { cursor: text; touch-action: auto; }
@@ -7334,7 +7334,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 /* Ligne d'édition "indice" (tâche 014) — même base .option-row, mais avec
    une vignette cliquable (mode image, remplace CET indice) OU un champ
    texte (mode texte), suivis d'un petit champ délai en secondes. Glisser-
-   déposer disponible (tâche 044, wireIndiceEditDrag) : déplace le CONTENU
+   déposer disponible (tâche 044, wireListEditDrag) : déplace le CONTENU
    d'un indice, les délais déjà utilisés sont réassignés dans le nouvel
    ordre — l'ordre d'apparition en jeu reste entièrement dérivé du délai,
    voir editor.js renderIndiceHints. */

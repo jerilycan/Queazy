@@ -840,7 +840,7 @@ const moveQuestion = (fromIdx, toIdx) => {
 
 // Même glisser au pointeur que la liste "ordre" en jeu (voir index.js
 // wireOrderDrag) et que la liste de réponses "ordre" de cet éditeur (voir
-// wireOrderEditDrag plus bas) : rects des AUTRES lignes figés une seule fois
+// wireListEditDrag plus bas) : rects des AUTRES lignes figés une seule fois
 // au pointerdown, la ligne saisie suit le pointeur via son propre transform,
 // un "newSlot" recalculé à chaque mouvement à partir de ces rects figés, et
 // un seul réordonnancement (via moveQuestion) au relâchement. Remplace
@@ -3355,22 +3355,26 @@ if (freeVariantAddInput) {
 const ORDER_EDIT_LIST_GAP = 8
 let orderEditDragActive = false
 
-// Toute la ligne est saisissable (pas seulement la poignée ⠿), sauf le champ
-// texte et le bouton supprimer, qui doivent garder leur propre comportement
-// (édition/clic) plutôt que de déclencher un glisser.
-const wireOrderEditDrag = (row) => {
+// Toute la ligne est saisissable (pas seulement la poignée ⠿), sauf les
+// champs, les boutons et les vignettes cliquables (indice image), qui doivent
+// garder leur propre comportement (édition/clic) plutôt que de déclencher un
+// glisser. Partagé entre la liste "ordre" et la liste "indice" (tâche 044) :
+// `listEl` est le conteneur des lignes, `onDrop(from, to)` applique le
+// réordonnancement à la question ET reconstruit la liste — appelé même sans
+// déplacement (from === to) pour effacer les transform du geste.
+const wireListEditDrag = (row, listEl, onDrop) => {
   row.addEventListener('pointerdown', (e) => {
     if (readOnly || orderEditDragActive) return
-    if (e.target.tagName === 'INPUT' || e.target.closest('button')) return
+    if (e.target.closest('input, button, img')) return
     e.preventDefault()
     orderEditDragActive = true
     const startY = e.clientY
     row.classList.add('dragging')
     try { row.setPointerCapture(e.pointerId) } catch {}
 
-    const others = Array.from(orderEditList.children).filter(c => c !== row)
+    const others = Array.from(listEl.children).filter(c => c !== row)
     const baseRects = others.map(c => c.getBoundingClientRect())
-    const startSlot = Array.from(orderEditList.children).indexOf(row)
+    const startSlot = Array.from(listEl.children).indexOf(row)
     const itemHeight = row.getBoundingClientRect().height + ORDER_EDIT_LIST_GAP
     let currentSlot = startSlot
 
@@ -3397,15 +3401,7 @@ const wireOrderEditDrag = (row) => {
       row.removeEventListener('pointerup', onUp)
       row.removeEventListener('pointercancel', onCancel)
       orderEditDragActive = false
-      const q = questions[activeIndex]
-      if (applyReorder && currentSlot !== startSlot && q && Array.isArray(q.correct)) {
-        const [moved] = q.correct.splice(startSlot, 1)
-        q.correct.splice(currentSlot, 0, moved)
-      }
-      // Reconstruction complète plutôt qu'un simple insertBefore : les lignes
-      // portent un <input> texte librement édité, un rendu frais à partir de
-      // q.correct est la seule source de vérité fiable (numéros, closures).
-      renderOrderItems()
+      onDrop(startSlot, applyReorder ? currentSlot : startSlot)
     }
     const onUp = (ev) => { try { row.releasePointerCapture(ev.pointerId) } catch {}; cleanup(true) }
     const onCancel = () => cleanup(false)
@@ -3437,7 +3433,17 @@ const renderOrderItems = () => {
       handle.className = 'q-drag-handle'
       handle.textContent = '⠿'
       row.appendChild(handle)
-      wireOrderEditDrag(row)
+      wireListEditDrag(row, orderEditList, (from, to) => {
+        if (from !== to) {
+          const [moved] = q.correct.splice(from, 1)
+          q.correct.splice(to, 0, moved)
+        }
+        // Reconstruction complète plutôt qu'un simple insertBefore : les
+        // lignes portent un <input> texte librement édité, un rendu frais à
+        // partir de q.correct est la seule source de vérité fiable (numéros,
+        // closures).
+        renderOrderItems()
+      })
     }
 
     const num = document.createElement('span')
@@ -4621,11 +4627,11 @@ const renderIndiceHints = () => {
   if (!q || q.type !== 'indice') return
   if (!Array.isArray(q.hints)) q.hints = []
 
-  // Tri purement VISUEL par délai croissant (le Plan écarte un ordre de
-  // liste séparé/glisser-déposer : l'ordre d'apparition en jeu est
-  // entièrement dérivé de delayS) — on édite les objets d'origine (pas des
-  // copies), q.hints reste la seule source de vérité malgré ce tri
-  // d'affichage.
+  // Tri par délai croissant : l'ordre d'apparition en jeu reste entièrement
+  // dérivé de delayS (voir index.js buildIndiceArea) — on édite les objets
+  // d'origine (pas des copies), q.hints reste la seule source de vérité
+  // malgré ce tri d'affichage. Le glisser-déposer (tâche 044, voir plus bas)
+  // ne crée donc pas d'ordre séparé : il réassigne les délais.
   const sorted = q.hints.slice().sort((a, b) => (Number(a.delayS) || 0) - (Number(b.delayS) || 0))
 
   // Le tout premier indice (le plus tôt à apparaître) est TOUJOURS à 0s,
@@ -4640,6 +4646,33 @@ const renderIndiceHints = () => {
     const isFirst = sortedIdx === 0
     const row = document.createElement('div')
     row.className = 'option-row indice-edit-row'
+
+    if (!readOnly) {
+      const handle = document.createElement('span')
+      handle.className = 'q-drag-handle'
+      handle.textContent = '⠿'
+      row.appendChild(handle)
+      // Déplace le CONTENU de l'indice (texte/image), les délais restent
+      // attachés aux positions : l'indice glissé en tête prend le 0s de la
+      // première ligne, etc. — la grille de délais choisie par le créateur
+      // est conservée, seul l'ordre des contenus change. q.hints est
+      // reconstruit dans l'ordre trié, ce qui satisfait aussi la règle
+      // "délais non décroissants" de isValidIndiceHints.
+      wireListEditDrag(row, indiceList, (from, to) => {
+        if (from !== to) {
+          // Re-trié : un délai modifié au clavier depuis le dernier rendu
+          // (delayInput.oninput ne reconstruit pas la liste) peut avoir
+          // désordonné `sorted` — la grille réassignée reste croissante.
+          const delays = sorted.map(h => Number(h.delayS) || 0).sort((a, b) => a - b)
+          const reordered = sorted.slice()
+          const [moved] = reordered.splice(from, 1)
+          reordered.splice(to, 0, moved)
+          reordered.forEach((h, i) => { h.delayS = delays[i] })
+          q.hints = reordered
+        }
+        renderIndiceHints()
+      })
+    }
 
     if (hint.image) {
       const thumb = document.createElement('img')
