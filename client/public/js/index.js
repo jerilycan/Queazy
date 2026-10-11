@@ -7061,15 +7061,16 @@ const renderLobbyGrid = (arr) => {
 }
 socket.on('lobby:list', renderLobbyGrid)
 
-// --- GIFs de démo par type de question (chantier v1.54, retour
-// utilisateur ; passés en GIFs locaux au chantier v2.14) : accessible
+// --- Démos par type de question (chantier v1.54, retour utilisateur ;
+// passées en GIFs locaux au chantier v2.14, puis en vidéos MP4) : accessible
 // depuis le lobby (bouton "Comment jouer ?"), AVANT le lancement de la
 // partie — jamais en jeu, où l'intro courte suffit (voir showQuestionIntro
-// plus haut). Remplace l'ancien lecteur <video> branché sur le bucket
-// Supabase Storage "tuto-videos" (jamais rempli en pratique) : un GIF par
-// type, committé en statique dans client/public/img/tuto/<type>.gif, mêmes
-// slugs que QUESTION_TYPE_META — servi comme n'importe quel autre asset,
-// aucune dépendance réseau/Supabase pour cette modal.
+// plus haut). Une vidéo par type, committée en statique dans
+// client/public/img/tuto/<type>.mp4, mêmes slugs que QUESTION_TYPE_META —
+// servie comme n'importe quel autre asset, aucune dépendance
+// réseau/Supabase pour cette modal. MP4 (H.264) plutôt que GIF : 2 Mo au
+// total au lieu de 55 Mo, pour un rendu identique — muet, en boucle,
+// lecture inline (playsinline, sans quoi iOS ouvre le lecteur plein écran).
 const tutoVideosBtn = document.getElementById('tutoVideosBtn')
 const tutoVideosModal = document.getElementById('tutoVideosModal')
 const closeTutoVideosBtn = document.getElementById('closeTutoVideos')
@@ -7078,48 +7079,49 @@ const tutoVideoPlayerArea = document.getElementById('tutoVideoPlayerArea')
 const tutoVideoPlaceholder = document.getElementById('tutoVideoPlaceholder')
 const tutoVideoPlaceholderText = document.getElementById('tutoVideoPlaceholderText')
 let tutoVideosGridBuilt = false
-// Retour utilisateur : un <img> UNIQUE dont on changeait le src (même après
-// avoir préchargé les 16 GIFs en arrière-plan côté cache HTTP, voir git
-// blame) restait perceptiblement lent à chaque clic — le cache HTTP évite le
-// re-téléchargement, mais le navigateur redécode quand même l'animation à
-// chaque affectation de src. Un <img> PERSISTANT par type (créé une seule
-// fois, jamais recyclé) élimine ce redécodage : une fois chargé, changer de
-// type ne fait plus que basculer une classe d-none, aucun travail réseau ni
-// décodage à refaire. Coût accepté en échange : jusqu'à 16 GIFs décodés
-// vivent en mémoire tant que la page reste ouverte (le navigateur suspend
-// de lui-même l'animation de ceux qui sont display:none, donc pas de coût
-// CPU supplémentaire une fois cachés — seule la mémoire reste occupée).
-// Les images statiques sont gardées 1 jour par le navigateur (voir server/index.js, STATIC_BINARY_RE) : à CHAQUE GIF
-// régénéré, incrémenter cette valeur pour que les joueurs récupèrent la nouvelle version tout de suite.
-const TUTO_GIFS_VERSION = '2'
-const tutoVideoImgs = {} // type -> <img>
-const getOrCreateTutoVideoImg = (type) => {
-  let img = tutoVideoImgs[type]
-  if (img) return img
-  img = document.createElement('img')
-  img.className = 'tuto-video-player d-none'
-  img.alt = ''
-  img.loading = 'eager'
-  img.onerror = () => {
-    // Pas (encore) de GIF pour CE type : message dédié plutôt qu'un lecteur
-    // cassé — seulement pertinent si ce type est celui affiché à l'instant.
-    img.dataset.broken = 'true'
-    if (img.classList.contains('active') && tutoVideoPlaceholderText) {
+// Un lecteur PERSISTANT par type (créé une seule fois, jamais recyclé) :
+// changer de type ne fait que basculer une classe d-none, sans recharger ni
+// redécoder (retour utilisateur du temps des GIFs : un lecteur unique dont on
+// changeait le src restait perceptiblement lent à chaque clic). Contrairement
+// à un GIF caché, une vidéo cachée n'est pas suspendue d'office : on met
+// donc en pause toutes celles qui ne sont pas affichées.
+// Les fichiers statiques sont gardés 1 jour par le navigateur (voir server/index.js, STATIC_BINARY_RE) : à CHAQUE
+// vidéo régénérée, incrémenter cette valeur pour que les joueurs récupèrent la nouvelle version tout de suite.
+const TUTO_VIDEOS_VERSION = '1'
+const tutoVideoEls = {} // type -> <video>
+const getOrCreateTutoVideoEl = (type) => {
+  let video = tutoVideoEls[type]
+  if (video) return video
+  video = document.createElement('video')
+  video.className = 'tuto-video-player d-none'
+  // muted en propriété ET en attribut : Safari iOS ne lit automatiquement
+  // une vidéo que si l'attribut est présent dès l'insertion.
+  video.muted = true
+  video.setAttribute('muted', '')
+  video.loop = true
+  video.playsInline = true
+  video.preload = 'auto'
+  video.addEventListener('error', () => {
+    // Pas (encore) de vidéo pour CE type : message dédié plutôt qu'un
+    // lecteur cassé — seulement pertinent si ce type est celui affiché.
+    video.dataset.broken = 'true'
+    if (video.classList.contains('active') && tutoVideoPlaceholderText) {
       tutoVideoPlaceholderText.textContent = `Démo bientôt disponible pour ${QUESTION_TYPE_META[type]?.label || 'ce type'}.`
-      img.classList.add('d-none')
+      video.classList.add('d-none')
       tutoVideoPlaceholder?.classList.remove('d-none')
     }
-  }
-  img.src = `/img/tuto/${type}.gif?v=${TUTO_GIFS_VERSION}`
-  tutoVideoImgs[type] = img
-  tutoVideoPlayerArea?.appendChild(img)
-  return img
+  })
+  video.src = `/img/tuto/${type}.mp4?v=${TUTO_VIDEOS_VERSION}`
+  tutoVideoEls[type] = video
+  tutoVideoPlayerArea?.appendChild(video)
+  return video
 }
-// Précharge les 15 GIFs restants en arrière-plan, un par un (jamais tous en
-// parallèle : ça ralentirait le tout premier, celui affiché immédiatement à
-// l'ouverture) — dès qu'ils existent comme <img> réels dans le DOM (voir
-// getOrCreateTutoVideoImg), plus aucune latence en les sélectionnant
-// ensuite. Lancée une seule fois (tutoVideosPrefetchStarted).
+// Précharge les autres vidéos en arrière-plan, une par une (jamais toutes en
+// parallèle : ça ralentirait la toute première, celle affichée à
+// l'ouverture). 'suspend' en plus de 'canplaythrough' : Safari iOS ne
+// précharge pas une vidéo qui n'est pas lue et n'émettrait jamais
+// 'canplaythrough' — sans ça, la file resterait bloquée sur la première.
+// Lancée une seule fois (tutoVideosPrefetchStarted).
 let tutoVideosPrefetchStarted = false
 const prefetchTutoVideosInBackground = () => {
   if (tutoVideosPrefetchStarted) return
@@ -7130,10 +7132,11 @@ const prefetchTutoVideosInBackground = () => {
     if (i >= types.length) return
     const type = types[i]
     i += 1
-    if (tutoVideoImgs[type]) { next(); return }
-    const img = getOrCreateTutoVideoImg(type)
-    img.addEventListener('load', next, { once: true })
-    img.addEventListener('error', next, { once: true })
+    if (tutoVideoEls[type]) { next(); return }
+    const video = getOrCreateTutoVideoEl(type)
+    let done = false
+    const once = () => { if (!done) { done = true; next() } }
+    ;['canplaythrough', 'suspend', 'error'].forEach(ev => video.addEventListener(ev, once, { once: true }))
   }
   next()
 }
@@ -7143,18 +7146,30 @@ const selectTutoVideoType = (type) => {
   tutoVideoTypeGrid?.querySelectorAll('.tuto-video-tile').forEach(tile => {
     tile.classList.toggle('active', tile.dataset.type === type)
   })
-  Object.entries(tutoVideoImgs).forEach(([t, img]) => {
-    img.classList.toggle('active', t === type)
-    if (t !== type) img.classList.add('d-none')
+  Object.entries(tutoVideoEls).forEach(([t, video]) => {
+    video.classList.toggle('active', t === type)
+    if (t !== type) {
+      video.classList.add('d-none')
+      video.pause()
+    }
   })
-  const img = getOrCreateTutoVideoImg(type)
-  if (img.dataset.broken === 'true') {
+  const video = getOrCreateTutoVideoEl(type)
+  // Un lecteur tout juste créé n'était pas encore dans la boucle ci-dessus :
+  // sans ce marquage, une vidéo manquante dès le premier affichage
+  // n'affichait jamais son message (voir le handler 'error').
+  video.classList.add('active')
+  if (video.dataset.broken === 'true') {
     tutoVideoPlaceholderText.textContent = `Démo bientôt disponible pour ${QUESTION_TYPE_META[type]?.label || 'ce type'}.`
     tutoVideoPlaceholder.classList.remove('d-none')
     return
   }
   tutoVideoPlaceholder.classList.add('d-none')
-  img.classList.remove('d-none')
+  video.classList.remove('d-none')
+  // Démo reprise depuis le début à chaque sélection.
+  video.currentTime = 0
+  // Lecture refusée (mode économie d'énergie iOS, réglage navigateur) : la
+  // première image reste affichée, rien de plus à faire.
+  video.play().catch(() => {})
 }
 const buildTutoVideosGrid = () => {
   if (tutoVideosGridBuilt || !tutoVideoTypeGrid) return
@@ -7173,19 +7188,18 @@ const openTutoVideosModal = () => {
   buildTutoVideosGrid()
   tutoVideosModal?.classList.remove('d-none')
   selectTutoVideoType(Object.keys(QUESTION_TYPE_META)[0])
-  // Léger différé : laisse le tout premier GIF (déjà demandé juste
+  // Léger différé : laisse la toute première vidéo (déjà demandée juste
   // au-dessus) démarrer son propre chargement avant de lancer la file de
-  // préchargement des 15 autres derrière, plutôt que de lui faire
-  // concurrence dès la même frame. Sans effet les fois suivantes (tous déjà
-  // chargés, tutoVideosPrefetchStarted coupe court immédiatement).
+  // préchargement des autres derrière. Sans effet les fois suivantes
+  // (tutoVideosPrefetchStarted coupe court immédiatement).
   setTimeout(prefetchTutoVideosInBackground, 400)
 }
 const closeTutoVideosModal = () => {
   tutoVideosModal?.classList.add('d-none')
-  // Les <img> restent EN VIE dans le DOM (voir tutoVideoImgs) — c'est tout
-  // l'intérêt : une réouverture bascule instantanément, rien à recharger.
-  // Rien à couper ici : display:none suffit au navigateur pour suspendre
-  // l'animation des GIFs cachés (pas de coût CPU en arrière-plan).
+  // Les <video> restent EN VIE dans le DOM (voir tutoVideoEls) : une
+  // réouverture bascule instantanément, rien à recharger. Pause pour ne
+  // pas laisser une lecture tourner derrière la modale fermée.
+  Object.values(tutoVideoEls).forEach(video => video.pause())
 }
 if (tutoVideosBtn) tutoVideosBtn.onclick = openTutoVideosModal
 if (closeTutoVideosBtn) closeTutoVideosBtn.onclick = closeTutoVideosModal

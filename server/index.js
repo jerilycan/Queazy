@@ -207,9 +207,9 @@ const publicDir = path.join(__dirname, '..', 'client', 'public')
 // revalidation (Cache-Control: max-age=0 par défaut, voir plus haut) pour
 // le cas le plus fréquent : naviguer entre plusieurs pages de l'appli en
 // quelques secondes dans la même session.
-// Images, sons et polices (avatars, icônes, GIF du tuto...) changent très rarement : cache d'un jour pour qu'un
+// Images, sons, vidéos et polices (avatars, icônes, vidéos du tuto...) changent très rarement : cache d'un jour pour qu'un
 // joueur qui revient — ou qui ouvre la grille d'avatars une 2e fois — ne les retélécharge pas (3,5 Mo d'avatars).
-const STATIC_BINARY_RE = /.(png|jpe?g|gif|webp|svg|ico|wav|mp3|ogg|woff2?)$/i
+const STATIC_BINARY_RE = /.(png|jpe?g|gif|webp|svg|ico|wav|mp3|ogg|mp4|woff2?)$/i
 app.register(fastifyStatic, {
   root: publicDir,
   maxAge: '2m',
