@@ -3601,6 +3601,7 @@ let blindtestAnalyser = null
 let blindtestGain = null
 let blindtestPulseRAF = null
 let myBlindTestSubmission = null // { title, artist } — capturé à l'envoi (voir sendBtn.onclick)
+let currentBlindtestTitleOnly = false // « Titre uniquement » de la question en cours (posé à question:show)
 
 // Curseur de volume "maison" (div + pointer events) plutôt qu'un
 // <input type="range"> restylé — voir style.css .volume-track pour le
@@ -8321,6 +8322,7 @@ socket.on('question:show', payload => {
   // de le laisser visible mais inutile — rien ne l'attend côté scoring
   // (voir server/index.js), le montrer inviterait à le remplir pour rien.
   if (blindtestArtistInput) blindtestArtistInput.classList.toggle('d-none', payload.type === 'blindtest' && !!payload.titleOnly)
+  currentBlindtestTitleOnly = payload.type === 'blindtest' && !!payload.titleOnly
   // Tout le monde démarre verrouillé : la question puis les tuiles se
   // révèlent d'abord (ci-dessous), le chrono et les réponses ne s'activent
   // qu'à startTs. L'hôte, lui, reste verrouillé en permanence EN MODE
@@ -10409,7 +10411,10 @@ socket.on('question:reveal', payload => {
     // quelqu'un qui a pourtant gagné des points.
     const normLite = s => (s || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim()
     const titleOk = !!myBlindTestSubmission?.title && correctTitles.some(t => normLite(t) === normLite(myBlindTestSubmission.title))
-    const artistOk = !!myBlindTestSubmission?.artist && correctArtists.some(a => normLite(a) === normLite(myBlindTestSubmission.artist))
+    // Bug corrigé : en « Titre uniquement », aucun artiste n'est demandé —
+    // exiger un artiste juste faisait afficher « Presque ! » à un joueur qui
+    // avait pourtant trouvé le titre exact (et marqué tous les points).
+    const artistOk = currentBlindtestTitleOnly || (!!myBlindTestSubmission?.artist && correctArtists.some(a => normLite(a) === normLite(myBlindTestSubmission.artist)))
     // Retour utilisateur (capture, "j'ai eu faux, c'est pas confus") :
     // #revealAnswerText affiche ICI "Toi : ..." à côté de "Bonne réponse"
     // (voir revealBlindTestAnswer) — en vert fixe, une mauvaise réponse
