@@ -7115,6 +7115,10 @@ const tutoVideoPlaceholder = document.getElementById('tutoVideoPlaceholder')
 const tutoVideoPlaceholderText = document.getElementById('tutoVideoPlaceholderText')
 const tutoVideoSteps = document.getElementById('tutoVideoSteps')
 let tutoVideosGridBuilt = false
+// Types montrés dans « Comment jouer ? » : tous, sauf ceux qu'on ne peut plus
+// créer — "reveal" (tâche 026, retrait doux : les anciennes questions restent
+// jouables, mais aucun joueur n'en découvrira de nouvelle).
+const TUTO_TYPES = Object.keys(QUESTION_TYPE_META).filter(type => type !== 'reveal')
 // Étapes affichées AVANT la vidéo de chaque type (retour utilisateur : lire
 // d'abord ce qui va se passer, puis regarder). Mêmes numéros que les
 // pastilles ①②③★ incrustées dans les vidéos — à garder alignés si une
@@ -7127,7 +7131,6 @@ const TUTO_STEPS = {
   order: [['1', 'Lis la consigne'], ['2', 'Fais glisser pour remettre dans l’ordre', 'Attrape un élément et dépose-le à sa place'], ['3', 'Valide… puis attends', 'Le bon ordre apparaît à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
   image: [['1', 'Lis la consigne'], ['2', "Touche le bon endroit de l'image", 'Les boutons − et + zooment pour viser juste'], ['3', 'Valide… puis attends', 'La bonne zone apparaît à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
   zoomguess: [['1', "L'image est très zoomée…", 'et se dézoome petit à petit'], ['2', 'Devine avant le dézoom complet', 'Tape ta réponse dès que tu reconnais'], ['3', 'Valide… puis attends', "L'image entière apparaît à la fin"], ['★', 'Plus tu devines tôt, plus tu marques de points']],
-  reveal: [['1', "Observe l'image incomplète", 'Des morceaux sont cachés'], ['2', 'Devine de quoi il s’agit', 'et tape ta réponse'], ['3', 'Valide… puis attends', "L'image complète se dévoile à la fin"], ['★', 'Plus tu réponds vite, plus tu marques de points']],
   blindtest: [['1', "Écoute l'extrait", 'Monte le son avec le curseur 🔊'], ['2', 'Trouve le titre…', '…et l’artiste : chacun rapporte des points'], ['3', 'Valide… puis attends', 'La réponse tombe à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
   association: [['1', 'Lis la consigne'], ['2', 'Touche un élément à gauche…', '…puis son binôme à droite'], ['3', 'Valide… puis attends', 'Les bonnes paires apparaissent à la fin'], ['★', 'Chaque bonne paire rapporte des points']],
   timeline: [['1', 'Lis la consigne'], ['2', 'Glisse chaque événement', 'au bon endroit de la frise'], ['3', 'Valide… puis attends', 'Les dates apparaissent à la fin'], ['★', 'Chaque événement bien placé rapporte des points']],
@@ -7245,7 +7248,7 @@ let tutoVideosPrefetchStarted = false
 const prefetchTutoVideosInBackground = () => {
   if (tutoVideosPrefetchStarted) return
   tutoVideosPrefetchStarted = true
-  const types = Object.keys(QUESTION_TYPE_META)
+  const types = TUTO_TYPES
   let i = 0
   const next = () => {
     if (i >= types.length) return
@@ -7294,7 +7297,7 @@ const selectTutoVideoType = (type) => {
 const buildTutoVideosGrid = () => {
   if (tutoVideosGridBuilt || !tutoVideoTypeGrid) return
   tutoVideosGridBuilt = true
-  tutoVideoTypeGrid.innerHTML = Object.entries(QUESTION_TYPE_META).map(([type, meta]) => `
+  tutoVideoTypeGrid.innerHTML = TUTO_TYPES.map(type => [type, QUESTION_TYPE_META[type]]).map(([type, meta]) => `
     <button type="button" class="tuto-video-tile" data-type="${type}" style="--qt-color:${meta.color};--qt-color-rgb:${meta.rgb}">
       <span class="tuto-video-tile-icon">${meta.icon}</span>
       <span>${meta.label}</span>
@@ -7307,7 +7310,7 @@ const buildTutoVideosGrid = () => {
 const openTutoVideosModal = () => {
   buildTutoVideosGrid()
   tutoVideosModal?.classList.remove('d-none')
-  selectTutoVideoType(Object.keys(QUESTION_TYPE_META)[0])
+  selectTutoVideoType(TUTO_TYPES[0])
   // Léger différé : laisse la toute première vidéo (déjà demandée juste
   // au-dessus) démarrer son propre chargement avant de lancer la file de
   // préchargement des autres derrière. Sans effet les fois suivantes
