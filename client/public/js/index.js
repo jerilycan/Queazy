@@ -7138,6 +7138,25 @@ const TUTO_STEPS = {
   indice: [['1', 'Un premier indice…'], ['2', 'Un nouvel indice arrive', 'toutes les quelques secondes'], ['3', 'Devine dès que tu peux', 'Tape, valide… puis attends'], ['★', 'Moins tu attends d’indices, plus tu marques de points']],
   halo: [['1', 'Une image cachée sous un voile'], ['2', 'Touche pour percer le voile', '5 clics max — chacun coûte des points'], ['3', 'Devine, valide… puis attends', "L'image entière apparaît à la fin"], ['★', 'Moins de clics, plus de points !']]
 }
+// Instant (en secondes) où chaque étape commence dans la vidéo de son type,
+// mêmes indices que TUTO_STEPS — relevé au rendu des vidéos : à refaire si
+// une vidéo est régénérée. Sert à allumer l'étape en cours pendant la lecture
+// (retour utilisateur : plus aucune légende incrustée dans les vidéos).
+const TUTO_STEP_STARTS = {}
+let tutoStepItems = [] // <li> de la liste affichée
+let tutoStepsType = null // type dont la liste est affichée
+// Allume l'étape dont le début est le plus récent à l'instant t de la vidéo
+// (une étape reste allumée jusqu'au début de la suivante, et la boucle
+// repart sur la première).
+const updateTutoActiveStep = (type, t) => {
+  if (type !== tutoStepsType || !tutoVideoSteps) return
+  const starts = TUTO_STEP_STARTS[type]
+  if (!starts) return
+  let idx = 0
+  starts.forEach((s, i) => { if (t >= s) idx = i })
+  tutoVideoSteps.classList.add('is-synced')
+  tutoStepItems.forEach((li, i) => li.classList.toggle('is-active', i === idx))
+}
 // textContent partout (jamais innerHTML) : rien d'injectable, même si ces
 // textes venaient un jour d'ailleurs que de ce fichier.
 const renderTutoSteps = (type) => {
@@ -7147,6 +7166,11 @@ const renderTutoSteps = (type) => {
   tutoVideoSteps.classList.toggle('d-none', !steps)
   if (!steps) return
   tutoVideoSteps.replaceChildren()
+  // Pas d'étape allumée tant que la vidéo n'a pas commencé (ni si elle ne
+  // peut pas être lue) : la liste reste alors entièrement lisible.
+  tutoVideoSteps.classList.remove('is-synced')
+  tutoStepsType = type
+  tutoStepItems = []
   if (meta) {
     tutoVideoSteps.style.setProperty('--qt-color', meta.color)
     tutoVideoSteps.style.setProperty('--qt-color-rgb', meta.rgb)
@@ -7169,6 +7193,7 @@ const renderTutoSteps = (type) => {
     }
     li.append(badge, body)
     list.appendChild(li)
+    tutoStepItems.push(li)
   })
   tutoVideoSteps.append(title, list)
 }
@@ -7204,6 +7229,7 @@ const getOrCreateTutoVideoEl = (type) => {
       tutoVideoPlaceholder?.classList.remove('d-none')
     }
   })
+  video.addEventListener('timeupdate', () => updateTutoActiveStep(type, video.currentTime))
   video.src = `/img/tuto/${type}.mp4?v=${TUTO_VIDEOS_VERSION}`
   tutoVideoEls[type] = video
   tutoVideoPlayerArea?.appendChild(video)

@@ -8248,8 +8248,8 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   font-weight: 800;
   color: var(--qt-color, var(--color-accent));
 }
-.tuto-video-steps ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.tuto-video-steps li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; font-weight: 700; line-height: 1.3; color: var(--color-text); }
+.tuto-video-steps ol { list-style: none; margin: 0 -6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tuto-video-steps li { display: flex; align-items: flex-start; gap: 10px; padding: 4px 6px; font-size: 14px; font-weight: 700; line-height: 1.3; color: var(--color-text); }
 .tuto-video-steps li small { display: block; margin-top: 1px; font-weight: 600; font-size: 12.5px; color: var(--color-text-muted); }
 /* Même pastille que les repères ①②③ de la vidéo, pour faire le lien entre les deux. */
 .tuto-step-n {
@@ -8266,6 +8266,18 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
 }
 .tuto-step-n.is-gold { background: linear-gradient(135deg, var(--tile-yellow), var(--color-flame)); color: #3a2400; }
+/* Étape en cours dans la vidéo (voir updateTutoActiveStep) : les autres
+   s'estompent, l'étape active s'allume — le lien vidéo ↔ liste remplace les
+   anciennes légendes incrustées. Aucun effet tant que la vidéo n'a pas
+   commencé (classe is-synced posée à la première mise à jour de lecture). */
+.tuto-video-steps li { border-radius: 8px; transition: opacity 0.25s ease, background-color 0.25s ease; }
+.tuto-video-steps.is-synced li { opacity: 0.45; }
+.tuto-video-steps.is-synced li.is-active { opacity: 1; background: rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.14); }
+.tuto-video-steps li.is-active .tuto-step-n { box-shadow: 0 0 0 3px rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.35); }
+@media (prefers-reduced-motion: no-preference) {
+  .tuto-step-n { transition: transform 0.25s cubic-bezier(0.23, 1, 0.32, 1); }
+  .tuto-video-steps li.is-active .tuto-step-n { transform: scale(1.12); }
+}
 .tuto-video-player-area {
   flex: none;
   /* Dans sa colonne (.tuto-video-col) : pleine largeur, mais jamais plus
