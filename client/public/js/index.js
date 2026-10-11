@@ -1434,6 +1434,31 @@ const ensureHaloResizeObserver = () => {
   haloResizeObserver = new ResizeObserver(() => renderHaloMask())
   haloResizeObserver.observe(haloWrap)
 }
+// Bug corrigé (retour joueurs : « on clique dans une partie de l'image sans
+// rien ») : .halo-wrap a une taille fixée par le CSS (joueur, régie, TV),
+// l'image y est en object-fit:contain — dès que son ratio diffère du cadre,
+// des bandes vides (noires sous le voile, comme l'image) restaient
+// cliquables pour rien. Le cadre est donc ramené au ratio EXACT de l'image,
+// dans la place que la mise en page lui accorde : styles inline retirés le
+// temps de mesurer cette place, puis plus grand rectangle au bon ratio qui y
+// tient. Rappelé au chargement de l'image, à l'affichage de la question et
+// au redimensionnement de la fenêtre.
+const fitHaloWrap = () => {
+  if (!haloWrap || !haloImg) return
+  haloWrap.style.width = ''
+  haloWrap.style.height = ''
+  const natW = haloImg.naturalWidth, natH = haloImg.naturalHeight
+  if (!natW || !natH) return
+  const box = haloWrap.getBoundingClientRect()
+  if (!box.width || !box.height) return
+  const ratio = natW / natH
+  const w = Math.min(box.width, box.height * ratio)
+  haloWrap.style.width = `${w}px`
+  haloWrap.style.height = `${w / ratio}px`
+  renderHaloMask()
+}
+if (haloImg) haloImg.addEventListener('load', fitHaloWrap)
+window.addEventListener('resize', () => { if (currentQuestionType === 'halo') fitHaloWrap() })
 const updateHaloCounter = () => {
   if (!haloCounter) return
   const remaining = Math.max(0, HALO_MAX_CLICKS - haloClicksState.length)
@@ -8141,6 +8166,9 @@ socket.on('question:show', payload => {
       renderHaloMask()
       updateHaloCounter()
       ensureHaloResizeObserver()
+      // Image déjà en cache : son 'load' a pu se déclencher avant que la zone
+      // ne soit affichée (taille nulle, rien à ajuster) — on réajuste ici.
+      requestAnimationFrame(fitHaloWrap)
     }
   }
   if (blindtestArea) {
