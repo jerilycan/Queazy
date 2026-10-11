@@ -5610,10 +5610,13 @@ const loadBankCategories = async () => {
   updateAutoAccordionSummaries()
 }
 
-// Types jamais proposés en mode "Jouer" : le Petit Bac n'a pas de bonne réponse
-// prédéfinie, seul un MJ peut juger la validité d'une réponse (retour
-// utilisateur) — sans MJ, ce type ne peut pas fonctionner.
-const AUTO_EXCLUDED_TYPES = ['pbac']
+// Types jamais proposés en mode "Jouer" :
+// - le Petit Bac n'a pas de bonne réponse prédéfinie, seul un MJ peut juger
+//   la validité d'une réponse (retour utilisateur) — sans MJ, ce type ne
+//   peut pas fonctionner ;
+// - la Révélation ne peut plus être créée (tâche 026, retrait doux) : les
+//   anciennes questions de la banque ne doivent plus sortir non plus.
+const AUTO_EXCLUDED_TYPES = ['pbac', 'reveal']
 
 // Types cochés par défaut (tâche 021) : réutilise QUESTION_TYPE_META tel
 // quel — seule source de vérité des 17 types, jamais dupliquée ici.
