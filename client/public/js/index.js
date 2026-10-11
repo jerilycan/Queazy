@@ -7148,7 +7148,24 @@ const TUTO_STEPS = {
 // mêmes indices que TUTO_STEPS — relevé au rendu des vidéos : à refaire si
 // une vidéo est régénérée. Sert à allumer l'étape en cours pendant la lecture
 // (retour utilisateur : plus aucune légende incrustée dans les vidéos).
-const TUTO_STEP_STARTS = {}
+const TUTO_STEP_STARTS = {
+  free: [0.6, 2.2, 4.2, 6.1],
+  mcq: [0.8, 2.4, 3.3, 5.2],
+  truefalse: [0.6, 2.2, 3.2, 5.1],
+  graduation: [0.8, 2.4, 4.2, 6.1],
+  order: [0.9, 2.5, 6.9, 8.8],
+  image: [0.4, 2.0, 2.9, 4.8],
+  zoomguess: [0.5, 3.4, 5.3, 7.2],
+  blindtest: [0.6, 3.2, 7.6, 9.5],
+  association: [0.6, 2.2, 7.1, 9.0],
+  timeline: [0.6, 2.2, 5.2, 7.1],
+  rangement: [0.6, 2.2, 7.6, 9.5],
+  intrus: [0.4, 2.0, 3.0, 4.9],
+  pbac: [0.8, 2.4, 4.3, 6.4],
+  recherche: [0.6, 2.2, 5.1, 9.5],
+  indice: [0.5, 2.3, 4.5, 8.9],
+  halo: [0.8, 2.4, 5.4, 9.6]
+}
 let tutoStepItems = [] // <li> de la liste affichée
 let tutoStepsType = null // type dont la liste est affichée
 // Allume l'étape dont le début est le plus récent à l'instant t de la vidéo
@@ -7211,7 +7228,7 @@ const renderTutoSteps = (type) => {
 // donc en pause toutes celles qui ne sont pas affichées.
 // Les fichiers statiques sont gardés 1 jour par le navigateur (voir server/index.js, STATIC_BINARY_RE) : à CHAQUE
 // vidéo régénérée, incrémenter cette valeur pour que les joueurs récupèrent la nouvelle version tout de suite.
-const TUTO_VIDEOS_VERSION = '5'
+const TUTO_VIDEOS_VERSION = '6'
 const tutoVideoEls = {} // type -> <video>
 const getOrCreateTutoVideoEl = (type) => {
   let video = tutoVideoEls[type]
