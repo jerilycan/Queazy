@@ -2522,13 +2522,15 @@ const start = async () => {
         // (voir moderation:pbacGroup, basé sur une comparaison ENTRE
         // joueurs — inapplicable sans hôte pour trancher). Simplification
         // assumée : toute réponse non vide est validée directement au plein
-        // barème (PBAC_BASE_POINTS + vitesse), sans partage de points entre
-        // réponses similaires — mieux qu'une question bloquée indéfiniment
-        // (tâche 024). Comportement "Présenter" INCHANGÉ (toujours en
-        // attente de regroupement par l'hôte).
+        // barème (PBAC_BASE_POINTS), sans partage de points entre réponses
+        // similaires — mieux qu'une question bloquée indéfiniment (tâche 024).
+        // Jamais de composante vitesse au Petit Bac (1000 / 500 / 0, comme en
+        // "Présenter") : avec pointsFor, le client recevait moins de 1000 et
+        // affichait à tort « Presque ! Quelqu'un d'autre a donné la même
+        // réponse » (voir question:reveal côté index.js). Comportement
+        // "Présenter" INCHANGÉ (toujours en attente de regroupement par l'hôte).
         if (room.mode === 'auto') {
-          const submitTs = Date.now()
-          const delta = Math.max(0, pointsFor(q.startTs, submitTs, q.timerMs, q.pointsFloor))
+          const delta = PBAC_BASE_POINTS
           const total = (room.scores.get(socket.id) || 0) + delta
           room.scores.set(socket.id, total)
           if (p?.token) {
