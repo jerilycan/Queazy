@@ -2518,7 +2518,11 @@ const start = async () => {
           emitProgress()
           return
         }
-        // Mode "Jouer" : pas de MJ pour regrouper les réponses similaires
+        // Salle 'auto' : le Petit Bac est exclu des quiz du mode "Jouer" (voir
+        // AUTO_EXCLUDED_TYPES côté index.js, un MJ est indispensable pour juger
+        // une réponse) — ce chemin ne sert donc plus qu'à l'aperçu « Tester »
+        // de l'éditeur, où le créateur joue seul sa question.
+        // Pas de MJ pour regrouper les réponses similaires
         // (voir moderation:pbacGroup, basé sur une comparaison ENTRE
         // joueurs — inapplicable sans hôte pour trancher). Simplification
         // assumée : toute réponse non vide est validée directement au plein

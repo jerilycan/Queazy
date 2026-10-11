@@ -5584,11 +5584,16 @@ const loadBankCategories = async () => {
   updateAutoAccordionSummaries()
 }
 
+// Types jamais proposés en mode "Jouer" : le Petit Bac n'a pas de bonne réponse
+// prédéfinie, seul un MJ peut juger la validité d'une réponse (retour
+// utilisateur) — sans MJ, ce type ne peut pas fonctionner.
+const AUTO_EXCLUDED_TYPES = ['pbac']
+
 // Types cochés par défaut (tâche 021) : réutilise QUESTION_TYPE_META tel
 // quel — seule source de vérité des 17 types, jamais dupliquée ici.
 const renderAutoTypeList = () => {
   if (!autoTypeList) return
-  autoTypeList.innerHTML = Object.entries(QUESTION_TYPE_META).map(([type, meta]) => `
+  autoTypeList.innerHTML = Object.entries(QUESTION_TYPE_META).filter(([type]) => !AUTO_EXCLUDED_TYPES.includes(type)).map(([type, meta]) => `
     <label class="auto-config-check">
       <input type="checkbox" class="auto-type-check" value="${type}" checked />
       <span>${meta.icon} ${meta.label}</span>
@@ -5859,6 +5864,10 @@ const generateAutoQuiz = async () => {
     let query = window.supabaseClient.from('bank_questions').select('id,category,type,question').eq('difficulty', difficulty).eq('status', 'approved')
     if (categories.length > 0) query = query.in('category', categories)
     if (types.length > 0) query = query.in('type', types)
+    // Filet en plus de la liste de types (voir AUTO_EXCLUDED_TYPES) : aucun
+    // type coché = aucun filtre, et une config enregistrée avant ce retrait
+    // pourrait encore contenir "pbac".
+    query = query.not('type', 'in', `(${AUTO_EXCLUDED_TYPES.join(',')})`)
     const { data, error } = await query
     if (error) {
       console.error('[bank] génération du quiz auto impossible :', error)
