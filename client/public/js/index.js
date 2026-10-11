@@ -7180,7 +7180,7 @@ const renderTutoSteps = (type) => {
 // donc en pause toutes celles qui ne sont pas affichées.
 // Les fichiers statiques sont gardés 1 jour par le navigateur (voir server/index.js, STATIC_BINARY_RE) : à CHAQUE
 // vidéo régénérée, incrémenter cette valeur pour que les joueurs récupèrent la nouvelle version tout de suite.
-const TUTO_VIDEOS_VERSION = '4'
+const TUTO_VIDEOS_VERSION = '5'
 const tutoVideoEls = {} // type -> <video>
 const getOrCreateTutoVideoEl = (type) => {
   let video = tutoVideoEls[type]
