@@ -8184,6 +8184,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    toujours sur PC, mais un joueur peut ouvrir cette modal depuis son
    téléphone). Voir index.js openTutoVideosModal/selectTutoVideoType. */
 .tuto-videos-card { max-height: 85vh; overflow-y: auto; }
+
 .tuto-videos-layout {
   display: flex;
   gap: 16px;
@@ -8224,15 +8225,54 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   background: rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.22);
 }
 .tuto-video-tile-icon { font-size: 20px; }
-.tuto-video-player-area {
+/* Colonne de droite : étapes du type choisi, puis la vidéo (retour
+   utilisateur : lire d'abord ce qui va se passer, ensuite regarder). */
+.tuto-video-col {
   flex: 1;
   min-width: 0;
-  /* Sans ça, l'alignement par défaut du flex row (.tuto-videos-layout,
-     align-items: stretch) étire ce panneau à la hauteur de la grille de
-     types à sa gauche (8 rangées ≈ 700px) au lieu de respecter aspect-ratio
-     ci-dessous — le lecteur se retrouvait large et plat, GIF minuscule avec
-     bandes noires en haut/bas (retour utilisateur, capture desktop). */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   align-self: flex-start;
+}
+.tuto-video-steps {
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 10px);
+  background: rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.08);
+  border: 1px solid rgba(var(--qt-color-rgb, var(--color-accent-rgb)), 0.3);
+}
+.tuto-video-steps-title {
+  margin: 0 0 8px;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--qt-color, var(--color-accent));
+}
+.tuto-video-steps ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tuto-video-steps li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; font-weight: 700; line-height: 1.3; color: var(--color-text); }
+.tuto-video-steps li small { display: block; margin-top: 1px; font-weight: 600; font-size: 12.5px; color: var(--color-text-muted); }
+/* Même pastille que les repères ①②③ de la vidéo, pour faire le lien entre les deux. */
+.tuto-step-n {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
+}
+.tuto-step-n.is-gold { background: linear-gradient(135deg, var(--tile-yellow), var(--color-flame)); color: #3a2400; }
+.tuto-video-player-area {
+  flex: none;
+  /* Dans sa colonne (.tuto-video-col) : pleine largeur, mais jamais plus
+     large que ce que permet max-height:60vh au ratio du lecteur — sinon le
+     ratio céderait et la vidéo flotterait dans des bandes noires. */
+  width: min(100%, calc(60vh * 372 / 663));
+  margin: 0 auto;
   /* Portrait (écran de jeu tel qu'affiché à un joueur), pas 16/9 : c'était
      pensé pour d'anciennes vidéos de démo potentiellement en paysage (jamais
      déposées en pratique). Les GIFs réels (chantier v2.14, un par type de
@@ -8273,7 +8313,8 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
      juste l'ordre visuel flex) — les 16 tuiles à elles seules dépassent déjà
      85vh sur téléphone (.tuto-videos-card), le lecteur restait hors champ
      tant qu'on n'avait pas scrollé toute la grille pour l'atteindre. */
-  .tuto-video-player-area { flex: none; width: min(100%, 320px); margin: 0 auto 12px; max-height: none; order: -1; }
+  .tuto-video-col { flex: none; order: -1; margin-bottom: 12px; }
+  .tuto-video-player-area { width: min(100%, 320px); margin: 0 auto; max-height: none; }
 }
 .tuto-video-player { width: 100%; height: 100%; object-fit: contain; background: #000; }
 .tuto-video-placeholder {
@@ -8287,6 +8328,18 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   text-align: center;
 }
 .tuto-video-placeholder-icon { font-size: 30px; opacity: 0.6; }
+/* Grand écran : fenêtre élargie, étapes et vidéo côte à côte à droite de la
+   grille — empilées, la vidéo passait sous le pli de la fenêtre (85vh) et
+   n'était visible qu'en faisant défiler. Spécificité doublée pour l'emporter
+   sur l'utilitaire .max-w-700 posé sur la carte ; bloc placé APRÈS les
+   règles de base de la fenêtre pour l'emporter à spécificité égale. */
+@media (min-width: 960px) {
+  .modal-content.tuto-videos-card { max-width: min(1000px, 94vw); }
+  .tuto-video-type-grid { flex-basis: 32%; }
+  .tuto-video-col { flex-direction: row; align-items: flex-start; }
+  .tuto-video-steps { flex: 1; min-width: 0; }
+  .tuto-video-col .tuto-video-player-area { flex: none; width: min(300px, calc(60vh * 372 / 663)); margin: 0; }
+}
 
 .leader-overlay {
   position: fixed; inset: 0; z-index: 1000;

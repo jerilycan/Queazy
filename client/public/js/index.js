@@ -7113,7 +7113,65 @@ const tutoVideoTypeGrid = document.getElementById('tutoVideoTypeGrid')
 const tutoVideoPlayerArea = document.getElementById('tutoVideoPlayerArea')
 const tutoVideoPlaceholder = document.getElementById('tutoVideoPlaceholder')
 const tutoVideoPlaceholderText = document.getElementById('tutoVideoPlaceholderText')
+const tutoVideoSteps = document.getElementById('tutoVideoSteps')
 let tutoVideosGridBuilt = false
+// Étapes affichées AVANT la vidéo de chaque type (retour utilisateur : lire
+// d'abord ce qui va se passer, puis regarder). Mêmes numéros que les
+// pastilles ①②③★ incrustées dans les vidéos — à garder alignés si une
+// vidéo est refaite. [numéro, texte, précision facultative]
+const TUTO_STEPS = {
+  free: [['1', 'Lis la question'], ['2', 'Tape ta réponse', "Pas de propositions : à toi de l'écrire !"], ['3', 'Valide… puis attends', 'Le résultat tombe à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  mcq: [['1', 'Lis la question'], ['2', 'Touche la bonne réponse', 'Selon la question, plusieurs peuvent être justes'], ['3', 'Valide… puis attends', 'Le résultat tombe à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  truefalse: [['1', "Lis l'affirmation"], ['2', 'Choisis Vrai ou Faux'], ['3', 'Valide… puis attends', 'Le résultat tombe à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  graduation: [['1', 'Lis la question'], ['2', 'Glisse le curseur sur ta réponse', 'Les boutons − et + affinent la valeur'], ['3', 'Valide… puis attends', 'Plus tu es proche, plus tu gagnes'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  order: [['1', 'Lis la consigne'], ['2', 'Fais glisser pour remettre dans l’ordre', 'Attrape un élément et dépose-le à sa place'], ['3', 'Valide… puis attends', 'Le bon ordre apparaît à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  image: [['1', 'Lis la consigne'], ['2', "Touche le bon endroit de l'image", 'Les boutons − et + zooment pour viser juste'], ['3', 'Valide… puis attends', 'La bonne zone apparaît à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  zoomguess: [['1', "L'image est très zoomée…", 'et se dézoome petit à petit'], ['2', 'Devine avant le dézoom complet', 'Tape ta réponse dès que tu reconnais'], ['3', 'Valide… puis attends', "L'image entière apparaît à la fin"], ['★', 'Plus tu devines tôt, plus tu marques de points']],
+  reveal: [['1', "Observe l'image incomplète", 'Des morceaux sont cachés'], ['2', 'Devine de quoi il s’agit', 'et tape ta réponse'], ['3', 'Valide… puis attends', "L'image complète se dévoile à la fin"], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  blindtest: [['1', "Écoute l'extrait", 'Monte le son avec le curseur 🔊'], ['2', 'Trouve le titre…', '…et l’artiste : chacun rapporte des points'], ['3', 'Valide… puis attends', 'La réponse tombe à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  association: [['1', 'Lis la consigne'], ['2', 'Touche un élément à gauche…', '…puis son binôme à droite'], ['3', 'Valide… puis attends', 'Les bonnes paires apparaissent à la fin'], ['★', 'Chaque bonne paire rapporte des points']],
+  timeline: [['1', 'Lis la consigne'], ['2', 'Glisse chaque événement', 'au bon endroit de la frise'], ['3', 'Valide… puis attends', 'Les dates apparaissent à la fin'], ['★', 'Chaque événement bien placé rapporte des points']],
+  rangement: [['1', 'Lis la consigne'], ['2', 'Glisse chaque carte', 'dans la bonne zone'], ['3', 'Valide… puis attends', 'Chaque carte bien rangée compte'], ['★', 'Plus tu ranges juste et vite, plus tu marques de points']],
+  intrus: [['1', 'Observe les photos'], ['2', "Touche l'intrus", "Celle qui n'a rien à voir avec les autres"], ['3', 'Valide… puis attends', 'Le résultat tombe à la fin du chrono'], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  pbac: [['1', 'Lis la catégorie'], ['2', 'Tape une réponse qui colle', 'Toutes les réponses valables comptent'], ['3', "L'hôte valide les réponses", 'Même réponse qu’un autre joueur ? Points partagés'], ['★', 'Sois original pour garder tous les points !']],
+  recherche: [['1', "L'image est cachée dans le noir"], ['2', "Balaie l'image du doigt", 'Seule la zone sous ton doigt s’éclaire'], ['3', 'Tape, valide… puis attends', "L'image entière apparaît à la fin"], ['★', 'Plus tu réponds vite, plus tu marques de points']],
+  indice: [['1', 'Un premier indice…'], ['2', 'Un nouvel indice arrive', 'toutes les quelques secondes'], ['3', 'Devine dès que tu peux', 'Tape, valide… puis attends'], ['★', 'Moins tu attends d’indices, plus tu marques de points']],
+  halo: [['1', 'Une image cachée sous un voile'], ['2', 'Touche pour percer le voile', '5 clics max — chacun coûte des points'], ['3', 'Devine, valide… puis attends', "L'image entière apparaît à la fin"], ['★', 'Moins de clics, plus de points !']]
+}
+// textContent partout (jamais innerHTML) : rien d'injectable, même si ces
+// textes venaient un jour d'ailleurs que de ce fichier.
+const renderTutoSteps = (type) => {
+  if (!tutoVideoSteps) return
+  const steps = TUTO_STEPS[type]
+  const meta = QUESTION_TYPE_META[type]
+  tutoVideoSteps.classList.toggle('d-none', !steps)
+  if (!steps) return
+  tutoVideoSteps.replaceChildren()
+  if (meta) {
+    tutoVideoSteps.style.setProperty('--qt-color', meta.color)
+    tutoVideoSteps.style.setProperty('--qt-color-rgb', meta.rgb)
+  }
+  const title = document.createElement('h3')
+  title.className = 'tuto-video-steps-title'
+  title.textContent = meta ? `${meta.icon} ${meta.label}` : ''
+  const list = document.createElement('ol')
+  steps.forEach(([n, text, small]) => {
+    const li = document.createElement('li')
+    const badge = document.createElement('span')
+    badge.className = 'tuto-step-n' + (n === '★' ? ' is-gold' : '')
+    badge.textContent = n
+    const body = document.createElement('span')
+    body.textContent = text
+    if (small) {
+      const sm = document.createElement('small')
+      sm.textContent = small
+      body.appendChild(sm)
+    }
+    li.append(badge, body)
+    list.appendChild(li)
+  })
+  tutoVideoSteps.append(title, list)
+}
 // Un lecteur PERSISTANT par type (créé une seule fois, jamais recyclé) :
 // changer de type ne fait que basculer une classe d-none, sans recharger ni
 // redécoder (retour utilisateur du temps des GIFs : un lecteur unique dont on
@@ -7188,6 +7246,7 @@ const selectTutoVideoType = (type) => {
       video.pause()
     }
   })
+  renderTutoSteps(type)
   const video = getOrCreateTutoVideoEl(type)
   // Un lecteur tout juste créé n'était pas encore dans la boucle ci-dessus :
   // sans ce marquage, une vidéo manquante dès le premier affichage

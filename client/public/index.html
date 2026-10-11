@@ -705,15 +705,22 @@
           </div>
           <div class="tuto-videos-layout">
             <div id="tutoVideoTypeGrid" class="tuto-video-type-grid"></div>
-            <div id="tutoVideoPlayerArea" class="tuto-video-player-area">
-              <!-- Un <img> par type (rempli par buildTutoVideoImages côté
-                   index.js), jamais un <img> unique dont on change le src :
-                   voir le commentaire sur buildTutoVideoImages pour le
-                   pourquoi (retour utilisateur : changer de type restait
-                   perceptiblement lent malgré le préchargement réseau). -->
-              <div id="tutoVideoPlaceholder" class="tuto-video-placeholder">
-                <span class="tuto-video-placeholder-icon">🎬</span>
-                <span id="tutoVideoPlaceholderText">Choisis un type de question.</span>
+            <!-- Étapes du type choisi AVANT la vidéo (retour utilisateur : on lit
+                 d'abord ce qui va se passer, puis on regarde) — remplies par
+                 selectTutoVideoType côté index.js (TUTO_STEPS). Les pastilles
+                 ①②③ de la vidéo renvoient à cette liste. -->
+            <div class="tuto-video-col">
+              <div id="tutoVideoSteps" class="tuto-video-steps d-none"></div>
+              <div id="tutoVideoPlayerArea" class="tuto-video-player-area">
+                <!-- Un <video> par type (créé par getOrCreateTutoVideoEl côté
+                     index.js), jamais un lecteur unique dont on change le src :
+                     voir le commentaire sur tutoVideoEls pour le pourquoi
+                     (retour utilisateur : changer de type restait
+                     perceptiblement lent malgré le préchargement réseau). -->
+                <div id="tutoVideoPlaceholder" class="tuto-video-placeholder">
+                  <span class="tuto-video-placeholder-icon">🎬</span>
+                  <span id="tutoVideoPlaceholderText">Choisis un type de question.</span>
+                </div>
               </div>
             </div>
           </div>
