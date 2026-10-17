@@ -685,13 +685,17 @@ window.addEventListener('message', (event) => {
 // de logique de rendu par type de question dupliquée ici, juste deux
 // petits éléments génériques indépendants du type.
 const displayReactionLayer = document.getElementById('displayReactionLayer')
+// Même table que decisionLook dans index.js (juste / presque / faux).
+const decisionLook = (correct, close) => correct && close
+  ? { cls: 'is-close', icon: '🟡' }
+  : correct ? { cls: 'is-correct', icon: '✅' } : { cls: 'is-incorrect', icon: '❌' }
 window.addEventListener('message', (event) => {
   if (event.origin !== location.origin) return
   if (event.data?.type !== 'queazy-display-floating-answer') return
   if (!displayReactionLayer) return
-  const { text, correct } = event.data
+  const { text, correct, close } = event.data
   const el = document.createElement('div')
-  el.className = `floating-answer ${correct ? 'is-correct' : 'is-incorrect'}`
+  el.className = `floating-answer ${decisionLook(correct, close).cls}`
   el.textContent = text
   el.style.left = `${10 + Math.random() * 55}%`
   const zig = (0.75 + Math.random() * 0.5) * (Math.random() < 0.5 ? -1 : 1)
@@ -728,12 +732,13 @@ window.addEventListener('message', (event) => {
   if (event.origin !== location.origin) return
   if (event.data?.type !== 'queazy-display-moderation-feed-line') return
   if (!displayModerationFeed) return
-  const { name, correct, content } = event.data
+  const { name, correct, close } = event.data
   if (typeof name !== 'string' || !name.trim()) return
   displayModerationFeed.classList.remove('d-none')
+  const look = decisionLook(correct, close)
   const line = document.createElement('div')
-  line.className = `moderation-feed-line ${correct ? 'is-correct' : 'is-incorrect'}`
-  line.innerHTML = `<span class="moderation-feed-icon">${correct ? '✅' : '❌'}</span><span class="moderation-feed-name"></span>`
+  line.className = `moderation-feed-line ${look.cls}`
+  line.innerHTML = `<span class="moderation-feed-icon">${look.icon}</span><span class="moderation-feed-name"></span>`
   line.querySelector('.moderation-feed-name').textContent = name
   displayModerationFeed.prepend(line)
   while (displayModerationFeed.children.length > DISPLAY_MODERATION_FEED_MAX_LINES) {

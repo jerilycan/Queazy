@@ -4568,11 +4568,17 @@ const MODERATION_FEED_MAX_LINES = 6
 // dernières réponses s'affiche en direct comme avant (rien à retenir).
 let questionRevealedForModerationFeed = true
 let moderationFeedQueue = []
-const renderModerationDecision = ({ name, correct, content }) => {
+// Classe et icône d'une décision : juste, presque (close, voir
+// emitModerationDecision côté serveur) ou fausse. display.js a la même table.
+const decisionLook = (correct, close) => correct && close
+  ? { cls: 'is-close', icon: '🟡' }
+  : correct ? { cls: 'is-correct', icon: '✅' } : { cls: 'is-incorrect', icon: '❌' }
+const renderModerationDecision = ({ name, correct, close, content }) => {
   if (!moderationFeed || typeof name !== 'string' || !name.trim()) return
+  const look = decisionLook(correct, close)
   const line = document.createElement('div')
-  line.className = `moderation-feed-line ${correct ? 'is-correct' : 'is-incorrect'}`
-  line.innerHTML = `<span class="moderation-feed-icon">${correct ? '✅' : '❌'}</span><span class="moderation-feed-name"></span>`
+  line.className = `moderation-feed-line ${look.cls}`
+  line.innerHTML = `<span class="moderation-feed-icon">${look.icon}</span><span class="moderation-feed-name"></span>`
   line.querySelector('.moderation-feed-name').textContent = name
   moderationFeed.prepend(line)
   while (moderationFeed.children.length > MODERATION_FEED_MAX_LINES) {
@@ -4582,14 +4588,14 @@ const renderModerationDecision = ({ name, correct, content }) => {
   // de disparaître, ou en rouge si mauvaise" — même traitement que les
   // réactions (voir spawnFloatingReaction ci-dessous), avec le texte de la
   // réponse à la place d'un emoji.
-  if (typeof content === 'string' && content.trim()) spawnFloatingAnswer(content.trim(), correct)
+  if (typeof content === 'string' && content.trim()) spawnFloatingAnswer(content.trim(), correct, close)
   // Retour utilisateur : "les animations de validation doivent aussi
   // apparaître côté présentation" — canal léger dédié (voir display.js),
   // pas de mirroring HTML (voir le commentaire sur #displayModerationFeed
   // dans display.html pour la raison). Posté APRÈS le rendu ci-dessus, donc
   // respecte déjà la même mise en file tant que la question n'est pas
   // révélée (voir socket.on('moderation:decision') juste en dessous).
-  pushDisplayModerationFeedLine({ name, correct, content })
+  pushDisplayModerationFeedLine({ name, correct, close, content })
 }
 socket.on('moderation:decision', (decision) => {
   if (!questionRevealedForModerationFeed) { moderationFeedQueue.push(decision); return }
@@ -4623,10 +4629,10 @@ const spawnFloatingReaction = (emoji) => {
 // lente en vrai zigzag (voir .floating-answer/answerFloatZigzag côté CSS,
 // retour utilisateur : "pas trop rapide... qu'on puisse un peu le lire") —
 // une carte texte bordée vert/rouge au lieu d'un simple emoji.
-const spawnFloatingAnswer = (text, correct) => {
+const spawnFloatingAnswer = (text, correct, close = false) => {
   if (!reactionLayer) return
   const el = document.createElement('div')
-  el.className = `floating-answer ${correct ? 'is-correct' : 'is-incorrect'}`
+  el.className = `floating-answer ${decisionLook(correct, close).cls}`
   el.textContent = text
   el.style.left = `${10 + Math.random() * 55}%` // marge à droite pour la largeur de la carte (pas un simple point comme un emoji)
   // Légère variation d'amplitude du zigzag d'une carte à l'autre (0.75-1.25),
@@ -4636,7 +4642,7 @@ const spawnFloatingAnswer = (text, correct) => {
   el.style.setProperty('--zig', zig.toFixed(2))
   reactionLayer.appendChild(el)
   el.addEventListener('animationend', () => el.remove(), { once: true })
-  pushDisplayFloatingAnswer(text, correct)
+  pushDisplayFloatingAnswer(text, correct, close)
 }
 
 let lastReactionSentTs = 0
@@ -4970,9 +4976,9 @@ const pushDisplayIntroTick = (text) => {
 // complète de #displayStage à chaque fois. display.js recrée la carte
 // localement (mêmes classes CSS que .floating-answer, voir style.css),
 // jamais via du HTML cloné.
-const pushDisplayFloatingAnswer = (text, correct) => {
+const pushDisplayFloatingAnswer = (text, correct, close) => {
   if (!displayWin || displayWin.closed) return
-  displayWin.postMessage({ type: 'queazy-display-floating-answer', text, correct }, location.origin)
+  displayWin.postMessage({ type: 'queazy-display-floating-answer', text, correct, close }, location.origin)
 }
 
 // Bug remonté en test réel ("les réactions ne sont pas reproduites côté TV,
@@ -4991,9 +4997,9 @@ const pushDisplayFloatingReaction = (emoji) => {
 // (voir plus bas), qui respecte déjà la mise en file tant que la question
 // n'est pas révélée — ce canal hérite donc du même timing, rien à refaire
 // ici.
-const pushDisplayModerationFeedLine = ({ name, correct, content }) => {
+const pushDisplayModerationFeedLine = ({ name, correct, close, content }) => {
   if (!displayWin || displayWin.closed) return
-  displayWin.postMessage({ type: 'queazy-display-moderation-feed-line', name, correct, content }, location.origin)
+  displayWin.postMessage({ type: 'queazy-display-moderation-feed-line', name, correct, close, content }, location.origin)
 }
 
 // Bug remonté en test réel ("la notif des joueurs ayant eu juste/faux à la

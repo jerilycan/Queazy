@@ -7922,6 +7922,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .moderation-feed-icon { font-size: 14px; flex: none; }
 .moderation-feed-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .moderation-feed-line.is-correct { box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.45); }
+.moderation-feed-line.is-close { box-shadow: inset 0 0 0 1px rgba(var(--tile-yellow-rgb), 0.55); }
 .moderation-feed-line.is-incorrect { box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.45); opacity: 0.75; }
 
 .moderation-wait-reactions { display: flex; gap: 10px; margin-top: 6px; }
@@ -8049,6 +8050,11 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .floating-answer.is-incorrect {
   border-color: var(--color-danger);
   box-shadow: 0 0 16px rgba(var(--color-danger-rgb), 0.5);
+}
+/* « Presque » : réponse valable mais partagée (Petit Bac), voir decisionLook. */
+.floating-answer.is-close {
+  border-color: var(--tile-yellow);
+  box-shadow: 0 0 16px rgba(var(--tile-yellow-rgb), 0.5);
 }
 
 /* Intro par type de question — écran PARTAGÉ hôte + joueurs (chantier

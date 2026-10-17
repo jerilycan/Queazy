@@ -2728,9 +2728,11 @@ const start = async () => {
     // content (optionnel) : texte de la réponse jugée — retour utilisateur,
     // sert à l'animation "réponse qui volette" (voir index.js
     // spawnFloatingAnswer), pas juste le pseudo du joueur.
-    const emitModerationDecision = (io, code, name, correct, content) => {
+    // close : version « presque » (jaune) d'une réponse juste — aujourd'hui
+    // une réponse Petit Bac validée mais donnée par plusieurs joueurs.
+    const emitModerationDecision = (io, code, name, correct, content, close = false) => {
       if (!name) return
-      io.to(code).emit('moderation:decision', { name, correct, content: typeof content === 'string' ? content : undefined })
+      io.to(code).emit('moderation:decision', { name, correct, close: !!(correct && close), content: typeof content === 'string' ? content : undefined })
     }
 
     // Résout un champ (titre OU artiste) d'un item de modération "blindtest" —
@@ -2834,7 +2836,9 @@ const start = async () => {
         }
         if (q && q.historyEntry === historyEntry) q.answered?.add(item.token)
         if (delta > 0) io.to(code).emit('score:update', { playerId: currentId, delta, total })
-        emitModerationDecision(io, code, p?.name, delta > 0, item.content)
+        // Réponse valable mais partagée (points divisés, voire nuls à 3+) :
+        // « presque » plutôt que rouge, qui ferait croire à un refus.
+        emitModerationDecision(io, code, p?.name, true, item.content, n > 1)
       }
       io.to(code).emit('moderation:pbacGrouped', { answerIds: group.map(([id]) => id), size: n, delta })
       // Retour utilisateur : les réponses validées doivent s'afficher sur
