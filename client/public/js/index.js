@@ -4276,8 +4276,41 @@ socket.on('score:adjust', ({ playerId, delta, total }) => {
   }
 })
 
+// Petit Bac : réponses validées par le MJ (voir #pbacValidated et
+// server/index.js moderation:pbacGroup). Une puce par famille, textes
+// distincts séparés par « / » ; textContent uniquement (saisies joueurs).
+// Reconstruite en entier à chaque envoi : le serveur renvoie toujours la
+// liste complète, aucun état à tenir ici.
+const pbacValidated = document.getElementById('pbacValidated')
+const pbacValidatedList = document.getElementById('pbacValidatedList')
+const renderPbacValidated = (answers) => {
+  if (!pbacValidated || !pbacValidatedList) return
+  const families = Array.isArray(answers) ? answers.filter(a => Array.isArray(a?.texts) && a.texts.length) : []
+  pbacValidated.classList.toggle('d-none', families.length === 0)
+  // Les puces déjà affichées gardent leur place (pas de nouvelle animation
+  // d'entrée) : seules les familles en plus sont ajoutées.
+  if (families.length < pbacValidatedList.children.length) pbacValidatedList.replaceChildren()
+  families.slice(pbacValidatedList.children.length).forEach(({ texts, size }) => {
+    const chip = document.createElement('span')
+    chip.className = `pbac-chip${size === 2 ? ' is-shared' : size > 2 ? ' is-void' : ''}`
+    chip.textContent = texts.join(' / ')
+    if (size > 1) {
+      const count = document.createElement('span')
+      count.className = 'pbac-chip-count'
+      count.textContent = `×${size}`
+      chip.appendChild(count)
+    }
+    pbacValidatedList.appendChild(chip)
+  })
+}
+socket.on('pbac:validated', ({ answers } = {}) => {
+  if (currentQuestionType !== 'pbac') return
+  renderPbacValidated(answers)
+})
+
 const clearRevealState = () => {
   closeRevealPopup()
+  renderPbacValidated([])
   Array.from(optionsDiv.children).forEach(el => el.classList.remove('correct-reveal', 'incorrect-reveal'))
   if (revealAnswerText) { revealAnswerText.classList.add('d-none'); revealAnswerText.classList.remove('is-incorrect', 'is-close'); revealAnswerText.textContent = '' }
   if (revealPopupAnswerTitle) { revealPopupAnswerTitle.classList.add('d-none'); revealPopupAnswerTitle.classList.remove('is-incorrect', 'is-close'); revealPopupAnswerTitle.innerHTML = '' }
@@ -10423,6 +10456,8 @@ socket.on('question:reveal', payload => {
     revealFreeAnswer((payload.correct || [])[0] || '')
     showMyResultBanner()
   } else if (payload.type === 'pbac') {
+    // Liste finale (aussi pour un hôte/une TV qui se reconnecte à la révélation).
+    renderPbacValidated(payload.pbacValidated)
     // Aucune "bonne réponse" à révéler (catégorie ouverte) : seul mon propre
     // résultat compte. myLastDelta == PBAC_BASE_POINTS -> réponse unique,
     // 0 < myLastDelta < PBAC_BASE_POINTS -> réponse en double (voir server/

@@ -1381,6 +1381,14 @@
                plus bas en reprend une copie (tâche 032, "la réponse comme un
                titre"), pour que la réponse reste visible même quand cette
                popup masque le plateau. -->
+          <!-- Petit Bac : réponses validées par le MJ, une puce par famille
+               (retour utilisateur : elles doivent se voir sur l'écran de
+               présentation, qui copie cette zone). Remplie par
+               renderPbacValidated (index.js), seulement après le chrono. -->
+          <div id="pbacValidated" class="pbac-validated d-none">
+            <div class="pbac-validated-title">Réponses validées</div>
+            <div id="pbacValidatedList" class="pbac-validated-list"></div>
+          </div>
           <div id="revealAnswerText" class="reveal-answer d-none"></div>
           <div id="myResultBanner" class="my-result-banner d-none"></div>
         </div>

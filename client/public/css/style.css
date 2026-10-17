@@ -7975,6 +7975,18 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
    montée (retour utilisateur, 2e passage : "pas trop rapide... qu'on
    puisse un peu le lire"). --zig (posé en JS, voir spawnFloatingAnswer)
    fait légèrement varier l'amplitude du zigzag d'une carte à l'autre. */
+/* Petit Bac : réponses validées par le MJ (voir #pbacValidated, index.html).
+   Puces vertes comme une bonne réponse ; « ×2 » quand la réponse est
+   partagée (points divisés), grisée à partir de 3 (plus aucun point). */
+.pbac-validated { max-width: 700px; margin: var(--space-md) auto 0; text-align: center; }
+.pbac-validated-title { font-weight: 800; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); margin-bottom: 8px; }
+.pbac-validated-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.pbac-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; background: var(--tile-green); color: var(--tile-green-ink); font-weight: 700; animation: pbacChipIn 0.35s ease-out; }
+.pbac-chip.is-shared { background: var(--tile-yellow); color: #3a2e00; }
+.pbac-chip.is-void { background: var(--gradient-card); color: var(--color-text-muted); border: 2px solid var(--color-border); }
+.pbac-chip-count { font-size: 0.8em; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.18); }
+@keyframes pbacChipIn { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .pbac-chip { animation: none; } }
 .floating-answer {
   position: absolute;
   bottom: -60px;

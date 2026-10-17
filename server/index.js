@@ -687,7 +687,8 @@ const start = async () => {
       revealAudioVolumePct: question.revealAudioVolumePct ?? 100,
       target: question.type === 'graduation' ? question.correct?.[0] : undefined,
       tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined,
-      players: imagePlayers
+      players: imagePlayers,
+      pbacValidated: question.type === 'pbac' ? (question.pbacValidated || []) : undefined
     }
     io.to(code).emit('question:reveal', question.revealPayload)
   }
@@ -1975,6 +1976,9 @@ const start = async () => {
         }
 
         io.to(code).emit('timer:end', timerEndPayload(question))
+        // Familles Petit Bac déjà validées pendant le chrono : gardées pour
+        // elles jusqu'ici (voir moderation:pbacGroup), affichées maintenant.
+        if (question.pbacValidated?.length) io.to(code).emit('pbac:validated', { id: question.id, answers: question.pbacValidated })
 
         // Si une réponse texte libre est encore en attente de validation par
         // l'hôte, on ne révèle pas tout de suite : voir revealQuestion, elle
@@ -2316,6 +2320,14 @@ const start = async () => {
 
         q.submissions?.set(token, `${socket.id}:${submitTs}`)
 
+        // Champ juste d'office (correspondance exacte) : même notification
+        // vert/rouge qu'un champ validé par le MJ (voir la branche générique
+        // plus bas pour la raison), un par champ comme resolveBlindTestField.
+        if (room.mode !== 'auto') {
+          if (titleStatus === 'correct') emitModerationDecision(io, code, p?.name, true, titleInput)
+          if (artistStatus === 'correct') emitModerationDecision(io, code, p?.name, true, artistInput)
+        }
+
         if (titleStatus === 'pending' || artistStatus === 'pending') {
           const answerId = `${socket.id}:${submitTs}`
           // Pas de clé "artist" du tout en mode titre seul (plutôt qu'une
@@ -2620,6 +2632,17 @@ const start = async () => {
         q.answered?.add(token)
         q.submissions?.set(token, 'correct')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        // Retour utilisateur : seules les réponses tranchées par le MJ
+        // apparaissaient en vert/rouge (feed + réponse qui s'envole, voir
+        // moderation:decision côté index.js) — une réponse juste du premier
+        // coup (correspondance exacte, texte libre par exemple) passait
+        // inaperçue. Même notification ici ; le client la met déjà en file
+        // jusqu'à la révélation, rien ne fuite pendant la question. Ni
+        // Vrai/Faux ni Intrus (choix binaires, jamais de saisie), ni le mode
+        // "Jouer" (aucune modération, tout y est automatique).
+        if (room.mode !== 'auto' && q.type !== 'truefalse' && q.type !== 'intrus') {
+          emitModerationDecision(io, code, p?.name, true, payload?.content)
+        }
         emitProgress()
       } else {
         // Pour Vrai/Faux ('truefalse') et Intrus ('intrus'), c'est binaire :
@@ -2814,6 +2837,19 @@ const start = async () => {
         emitModerationDecision(io, code, p?.name, delta > 0, item.content)
       }
       io.to(code).emit('moderation:pbacGrouped', { answerIds: group.map(([id]) => id), size: n, delta })
+      // Retour utilisateur : les réponses validées doivent s'afficher sur
+      // l'écran de présentation. Une entrée par famille (textes distincts,
+      // casse ignorée) avec sa taille pour le « ×2 ». Diffusée seulement
+      // une fois le chrono fini (sinon les autres joueurs y piocheraient
+      // des idées) — voir aussi endQuestion et question.revealPayload.
+      if (q && q.historyEntry === historyEntry) {
+        const seen = new Set()
+        const texts = group.map(([, item]) => String(item.content || '').trim())
+          .filter(t => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))
+        q.pbacValidated = q.pbacValidated || []
+        q.pbacValidated.push({ texts, size: n })
+        if (q.ended) io.to(code).emit('pbac:validated', { id: q.id, answers: q.pbacValidated })
+      }
       if (room.pending.size === 0 && q && q.historyEntry === historyEntry && q.ended) {
         revealQuestion(io, code, room, q)
       }
