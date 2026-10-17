@@ -4629,7 +4629,30 @@ const spawnFloatingReaction = (emoji) => {
 // lente en vrai zigzag (voir .floating-answer/answerFloatZigzag côté CSS,
 // retour utilisateur : "pas trop rapide... qu'on puisse un peu le lire") —
 // une carte texte bordée vert/rouge au lieu d'un simple emoji.
+// Lâchées une à une (retour utilisateur : à la révélation, toutes les
+// décisions mises en file pendant la question partaient d'un coup,
+// illisible) : file d'attente, une carte toutes les FLOATING_ANSWER_GAP_MS.
+// La TV suit le même rythme (pushDisplayFloatingAnswer appelé au lâcher).
+// Vidée à chaque nouvelle question (voir clearFloatingAnswerQueue).
+const FLOATING_ANSWER_GAP_MS = 650
+let floatingAnswerQueue = []
+let floatingAnswerTimer = null
+const releaseNextFloatingAnswer = () => {
+  const next = floatingAnswerQueue.shift()
+  if (!next) { floatingAnswerTimer = null; return }
+  launchFloatingAnswer(...next)
+  floatingAnswerTimer = setTimeout(releaseNextFloatingAnswer, FLOATING_ANSWER_GAP_MS)
+}
 const spawnFloatingAnswer = (text, correct, close = false) => {
+  floatingAnswerQueue.push([text, correct, close])
+  if (!floatingAnswerTimer) releaseNextFloatingAnswer()
+}
+const clearFloatingAnswerQueue = () => {
+  clearTimeout(floatingAnswerTimer)
+  floatingAnswerTimer = null
+  floatingAnswerQueue = []
+}
+const launchFloatingAnswer = (text, correct, close) => {
   if (!reactionLayer) return
   const el = document.createElement('div')
   el.className = `floating-answer ${decisionLook(correct, close).cls}`
@@ -10769,6 +10792,7 @@ socket.on('question:show', () => {
   // doit rien montrer aux joueurs avant sa révélation).
   questionRevealedForModerationFeed = false
   moderationFeedQueue = []
+  clearFloatingAnswerQueue()
   // Bug remonté en test réel ("il y a toujours la notif des joueurs ayant
   // eu juste/faux à la question précédente") : moderationFeedQueue est bien
   // remise à zéro ci-dessus (rien de NOUVEAU ne s'affiche), mais rien ne
