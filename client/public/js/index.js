@@ -6112,7 +6112,7 @@ const setupLiveProfile = () => {
       const roomCode = roomInput.value.trim()
       const name = (nameBox.value.trim() || 'Player')
       const avatar = selectedIcon || AVATAR_CHOICES[0]
-      socket.emit('player:profile', { roomCode, name, avatar })
+      emitPlayerProfile(roomCode, name, avatar)
     }, 200)
     nameBox.addEventListener('input', handler)
     nameBox._bound = true
@@ -6409,6 +6409,16 @@ const rememberJoin = (roomCode, playerName, avatar, token) => {
   sessionStorage.setItem(QUEAZY_LAST_JOIN_KEY, JSON.stringify({ roomCode, playerName, avatar, token }))
 }
 const forgetJoin = () => sessionStorage.removeItem(QUEAZY_LAST_JOIN_KEY)
+// Pseudo/avatar changés dans le salon : à retenir aussi pour la reconnexion.
+// Bug remonté (« mon avatar est un T-rex et sur le podium c'est un shiba ») :
+// seul le serveur apprenait le nouveau choix, myJoinedAvatar et
+// queazy_last_join gardaient celui du room:join initial — la moindre
+// reconnexion (micro-coupure, mise en veille) renvoyait l'ancien avatar,
+// que room:join réapplique (payload.avatar prioritaire, voir server/index.js).
+const emitPlayerProfile = (roomCode, name, avatar) => {
+  socket.emit('player:profile', { roomCode, name, avatar })
+  if (myJoinedRoomCode && myJoinedToken) rememberJoin(myJoinedRoomCode, name, avatar, myJoinedToken)
+}
 const readLastJoin = () => {
   let lastJoin = null
   try { lastJoin = JSON.parse(sessionStorage.getItem(QUEAZY_LAST_JOIN_KEY) || 'null') } catch { lastJoin = null }
@@ -7428,7 +7438,7 @@ if (saveBtn) {
     localStorage.setItem('queazy_profile_name', name)
     localStorage.setItem('queazy_profile_avatar', avatar)
     
-    socket.emit('player:profile', { roomCode, name, avatar })
+    emitPlayerProfile(roomCode, name, avatar)
     socket.emit('player:ready', { roomCode, ready: true })
     
     hideBuilder()
