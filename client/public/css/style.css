@@ -7837,6 +7837,14 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
      raison que le gap ci-dessus. */
   padding: var(--space-sm);
 }
+/* Retour utilisateur : titres pas centrés dans leur case — les marges par
+   défaut du <h4> (≈21px) et du <p> (14px), inégales, décalaient le bloc
+   titre + date vers le bas et l'écartaient. Marges retirées : le centrage
+   vertical (align-center sur .quiz-item) s'applique enfin au texte, et le
+   gap remplace l'espace entre titre et date. */
+#quizSelectPopup .quiz-item > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#quizSelectPopup .quiz-item h4,
+#quizSelectPopup .quiz-item p { margin: 0; }
 
 /* Classement plein écran */
 /* Popup "en attente de validation" (modération d'une réponse libre) — flotte
