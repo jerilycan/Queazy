@@ -46,7 +46,7 @@ const TYPE_LABELS = {
   zoomguess: 'ZoomOut Devinette', reveal: 'Révélation', blindtest: 'Blind Test',
   association: 'Association', timeline: 'Timeline', rangement: 'Rangement',
   intrus: 'Intrus', pbac: 'Petit Bac', recherche: 'Recherche', indice: 'Indice',
-  halo: 'Halo'
+  halo: 'Halo', echelle: 'Échelle'
 }
 const DIFFICULTY_LABELS = { facile: 'Facile', moyen: 'Moyenne', difficile: 'Difficile' }
 
@@ -148,6 +148,12 @@ const describeAnswer = (q) => {
       const title = q.correct?.title?.[0]
       const artist = q.correct?.artist?.[0]
       return [title && `Titre : ${title}`, artist && `Artiste : ${artist}`].filter(Boolean).join(' — ') || '—'
+    }
+    case 'echelle': {
+      // Hauteurs en cm (voir editor.js) : référence → réponse.
+      const ref = Number(q.refHeight), item = Number(q.correct?.[0])
+      if (!(ref > 0) || !(item > 0)) return '—'
+      return `${q.refLabel || 'Référence'} ${ref} cm → ${q.itemLabel || 'élément'} ${item} cm`
     }
     // free / pbac / indice / recherche / halo / image / zoomguess / reveal :
     // toutes des réponses texte libre, q.correct = tableau de variantes

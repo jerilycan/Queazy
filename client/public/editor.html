@@ -314,6 +314,7 @@
                 <option value="rangement">🗂️ Rangement</option>
                 <option value="indice">💡 Indice</option>
                 <option value="halo">✨ Halo</option>
+                <option value="echelle">📏 Échelle</option>
               </select>
               <!-- Aperçu de la mécanique (retour utilisateur : réutiliser la
                    démo joueur ici aussi) — même texte que la popup montrée
@@ -408,6 +409,51 @@
               <button type="button" id="removeHaloBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
             </div>
             <p class="text-muted font-13 mt-8">Les joueurs cliquent jusqu'à 5 fois sur l'image (entièrement noire au départ) pour révéler des halos de lumière permanents — chaque clic coûte un peu plus de points.</p>
+          </div>
+
+          <!-- "Échelle" (tâche 054, inspiré de Magnitudle) : une référence de
+               hauteur connue et un élément dont les joueurs devinent la
+               hauteur réelle en le redimensionnant. Images recadrées au ras
+               du dessin et gardées transparentes (voir processScaleImage
+               dans editor.js) : c'est leur hauteur VISIBLE qui fait l'échelle. -->
+          <div id="echelleSection" class="detail-section d-none">
+            <p class="text-muted font-13">Idéal : des PNG à fond transparent. Les marges vides sont retirées automatiquement.</p>
+            <div class="echelle-slots">
+            <div class="echelle-slot">
+              <div class="echelle-slot-title">Référence</div>
+              <input type="file" id="echelleRefUpload" accept="image/*" class="cursor-pointer" />
+              <div id="echelleRefPreviewWrap" class="echelle-preview-wrap d-none mt-8">
+                <img id="echelleRefPreviewImg" class="echelle-preview-img" alt="" />
+                <button type="button" id="removeEchelleRefBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+              </div>
+              <p id="echelleRefOpaque" class="text-muted font-13 mt-8 d-none">Pas de fond transparent : l'image entière servira de silhouette.</p>
+              <label for="echelleRefLabel" class="mt-8">Nom</label>
+              <input type="text" id="echelleRefLabel" maxlength="60" placeholder="Ex. Nintendo Wii" />
+              <label for="echelleRefHeight" class="mt-8">Hauteur réelle</label>
+              <div class="echelle-height-row">
+                <input type="number" id="echelleRefHeight" min="0.1" step="0.1" inputmode="decimal" placeholder="cm" />
+                <span class="echelle-height-unit">cm</span>
+                <span id="echelleRefHeightM" class="text-muted font-13"></span>
+              </div>
+            </div>
+            <div class="echelle-slot">
+              <div class="echelle-slot-title">À deviner</div>
+              <input type="file" id="echelleItemUpload" accept="image/*" class="cursor-pointer" />
+              <div id="echelleItemPreviewWrap" class="echelle-preview-wrap d-none mt-8">
+                <img id="echelleItemPreviewImg" class="echelle-preview-img" alt="" />
+                <button type="button" id="removeEchelleItemBtn" class="illustration-remove-btn" title="Retirer l'image">✕</button>
+              </div>
+              <p id="echelleItemOpaque" class="text-muted font-13 mt-8 d-none">Pas de fond transparent : l'image entière servira de silhouette.</p>
+              <label for="echelleItemLabel" class="mt-8">Nom</label>
+              <input type="text" id="echelleItemLabel" maxlength="60" placeholder="Ex. Psykokwak" />
+              <label for="echelleItemHeight" class="mt-8">Hauteur réelle (la réponse)</label>
+              <div class="echelle-height-row">
+                <input type="number" id="echelleItemHeight" min="0.1" step="0.1" inputmode="decimal" placeholder="cm" />
+                <span class="echelle-height-unit">cm</span>
+                <span id="echelleItemHeightM" class="text-muted font-13"></span>
+              </div>
+            </div>
+            </div>
           </div>
 
           <!-- "Révélation" : deux images DISTINCTES (contrairement à

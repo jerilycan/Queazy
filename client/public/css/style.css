@@ -61,6 +61,10 @@
      douce, distinct des violets déjà pris par intrus/zoomguess/rangement. */
   --color-halo: #c4b5fd;
   --color-halo-rgb: 196,181,253;
+  /* "echelle" (tâche 054) : même situation que "halo", nouveau token (rose
+     corail, distinct du magenta d'accent et du rouge de truefalse). */
+  --color-echelle: #fb7185;
+  --color-echelle-rgb: 251,113,133;
   --color-accent-soft: rgba(255,47,176,0.14);
   --color-accent-rgb: 255,47,176;
   --color-border: rgba(255,255,255,0.10);
@@ -190,6 +194,8 @@
      --color-gold juste au-dessus) — présent dans les deux blocs :root. */
   --color-halo: #c4b5fd;
   --color-halo-rgb: 196,181,253;
+  --color-echelle: #fb7185;
+  --color-echelle-rgb: 251,113,133;
   --shadow-sm: 0 4px 12px rgba(35,25,65,0.08);
   --shadow-md: 0 16px 40px rgba(35,25,65,0.16);
   --shadow-lg: 0 20px 48px rgba(35,25,65,0.22);
@@ -6636,6 +6642,7 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .question-item.type-recherche { --qt-color: var(--color-flame); }
 .question-item.type-indice { --qt-color: var(--color-gold); }
 .question-item.type-halo { --qt-color: var(--color-halo); }
+.question-item.type-echelle { --qt-color: var(--color-echelle); }
 
 /* Même rappel de couleur que la sidebar, mais sur la grande tuile d'édition
    (.question-detail) — option "C" retenue après maquette (bordure teintée +
@@ -6663,6 +6670,19 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
 .question-detail[data-qtype="recherche"] { --qt-color: var(--color-flame); }
 .question-detail[data-qtype="indice"] { --qt-color: var(--color-gold); }
 .question-detail[data-qtype="halo"] { --qt-color: var(--color-halo); }
+.question-detail[data-qtype="echelle"] { --qt-color: var(--color-echelle); }
+
+/* "Échelle" (tâche 054) : deux emplacements côte à côte (référence / à
+   deviner), empilés sur téléphone. Aperçu sur damier : on voit tout de
+   suite si le fond est bien transparent et si le recadrage est au ras. */
+.echelle-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-md); margin-top: var(--space-sm); }
+.echelle-slot { display: flex; flex-direction: column; padding: var(--space-sm); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); min-width: 0; }
+.echelle-slot-title { font-weight: 800; margin-bottom: 8px; }
+.echelle-preview-wrap { position: relative; align-self: flex-start; padding: 6px; border-radius: var(--radius-sm, 8px); background: repeating-conic-gradient(rgba(255,255,255,0.10) 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+.echelle-preview-img { display: block; max-height: 140px; max-width: 100%; }
+.echelle-height-row { display: flex; align-items: center; gap: 8px; }
+.echelle-height-row input { max-width: 120px; }
+.echelle-height-unit { font-weight: 700; }
 
 .question-item:hover {
   background: var(--color-accent-soft);

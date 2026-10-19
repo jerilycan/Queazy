@@ -359,7 +359,7 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 
 ## Étapes réalisées
 - [x] Étape 1 — serveur : réponse, points, révélation
-- [ ] Étape 2 — éditeur : création de la question
+- [x] Étape 2 — éditeur : création de la question
 - [ ] Étape 3 — écran de jeu : affichage et réglage
 - [ ] Étape 4 — révélation : silhouettes de tous les joueurs
 - [ ] Étape 5 — écran TV et « Comment jouer ? »
@@ -367,6 +367,7 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 ## Checks effectués
 - [ ] `node --check <fichier>` sur chaque fichier JS modifié
   - [x] Étape 1 : `node --check server/index.js` OK
+  - [x] Étape 2 : `node --check` OK sur `editor.js` et `admin-bank.js`
 - [ ] Démarrage serveur vérifié (si `server/index.js` touché)
   - [x] Étape 1 : le serveur démarre sur le port 3100. Seul avertissement
     au boot : la lecture Supabase de `min_points_floor`, sans réseau dans
@@ -382,6 +383,19 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
     - récap : réponses « 80 cm », « 84 cm », « 1,04 m », « 1,60 m » ; états
       correct / correct / presque / incorrect ; 50 % de bonnes réponses.
 - [ ] Vérification visuelle Browser pane (si client touché)
+  - [x] Étape 2 : éditeur piloté dans Chromium (Playwright, 1280 px et
+    390 px), question « Échelle » créée depuis la grille :
+    - un PNG 200×300 transparent, avec une silhouette 60×120 au milieu,
+      est recadré à 60×120 (ratio 0,5) et exporté en WebP transparent ;
+    - un PNG entièrement opaque est gardé entier, `refOpaque` vaut
+      `true` et la remarque « Pas de fond transparent » s'affiche ;
+    - les champs (images, noms, hauteurs) reviennent à l'identique après
+      un changement de question ;
+    - validation : refusée sans énoncé, acceptée à 23 cm / 80 cm, refusée
+      à 23 cm / 9000 cm (hors bornes, avec message explicite), refusée
+      sans image ;
+    - captures vérifiées : deux colonnes sur ordinateur, empilées sur
+      téléphone, aperçu sur damier.
 
 ## Tests manuels recommandés
 _(à remplir)_
@@ -390,6 +404,15 @@ _(à remplir)_
 _(à remplir — à surveiller dès le plan : la lisibilité des silhouettes de
 tous les joueurs quand ils sont nombreux, 15-20 en soirée, en particulier
 sur un téléphone)_
+- Étape 2 : la sauvegarde réelle vers Supabase Storage n'a pas pu être
+  testée ici (pas de réseau vers Supabase). `refImage` et `itemImage` sont
+  ajoutées à `uploadQuestionMedia`, et les fichiers partent en
+  `image/webp`, ou en `image/png` sur Safari. À vérifier en vrai : si le
+  bucket `quiz-media` limite les types de fichiers dans le tableau de bord
+  Supabase (rien dans `schema.sql`), le WebP pourrait y être refusé.
+- Étape 2 : le glisser-déposer d'un fichier sur l'éditeur n'est pas
+  branché pour ce type (deux emplacements, la cible serait ambiguë). Il
+  faut passer par les boutons de chaque emplacement.
 
 ## Statut
 `ouverte`

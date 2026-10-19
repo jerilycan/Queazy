@@ -543,6 +543,27 @@ const HALO_RADIUS_MIN = 5
 const HALO_RADIUS_MAX = 35
 const HALO_RADIUS_DEFAULT = 15
 
+// "Échelle" (tâche 054) : deux emplacements (référence / à deviner), même
+// structure — clés 'Ref' et 'Item' reprises dans les id de editor.html.
+const echelleSection = document.getElementById('echelleSection')
+const ECHELLE_SLOTS = ['Ref', 'Item'].map(key => ({
+  key,
+  upload: document.getElementById(`echelle${key}Upload`),
+  previewWrap: document.getElementById(`echelle${key}PreviewWrap`),
+  previewImg: document.getElementById(`echelle${key}PreviewImg`),
+  removeBtn: document.getElementById(`removeEchelle${key}Btn`),
+  opaqueNote: document.getElementById(`echelle${key}Opaque`),
+  label: document.getElementById(`echelle${key}Label`),
+  height: document.getElementById(`echelle${key}Height`),
+  heightM: document.getElementById(`echelle${key}HeightM`)
+}))
+// Bornes de la taille à deviner autour de la référence : DOIT rester égal à
+// SCALE_BOUND_FACTOR côté serveur (server/index.js) et au curseur du jeu.
+const SCALE_BOUND_FACTOR = 200
+// Hauteur max d'une silhouette après recadrage : largement assez pour un
+// grand écran, et un fichier léger (WebP/PNG transparents, pas de JPEG).
+const SCALE_IMAGE_MAX_DIMENSION = 600
+
 // Type "Révélation" : deux images distinctes (q.enigmeImage / q.reponseImage,
 // jamais mélangées avec q.image/q.illustration des autres types) — l'énigme
 // affichée pendant les réponses, la réponse révélée en fondu à la fin du
@@ -745,6 +766,7 @@ const applyReadOnly = () => {
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn, zoomGuessZoomInput,
     rechercheUploadInput, removeRechercheBtn,
     haloUploadInput, removeHaloBtn, haloRadiusMinusBtn, haloRadiusPlusBtn, haloRadiusInput,
+    ...ECHELLE_SLOTS.flatMap(slot => [slot.upload, slot.removeBtn, slot.label, slot.height]),
     revealEnigmeUploadInput, removeRevealEnigmeBtn, revealReponseUploadInput, removeRevealReponseBtn,
     revealImageUploadInput, removeRevealImageBtn, revealAudioUploadInput, removeRevealAudioBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
@@ -950,7 +972,7 @@ const QTYPE_ICON = {
   free: '📝', mcq: '🔘', truefalse: '✅', graduation: '↔️', order: '↕️',
   image: '📍', zoomguess: '🔍', reveal: '🖼️', blindtest: '🎵',
   association: '🔗', timeline: '⏳', intrus: '🎯', pbac: '🎩', recherche: '🔦',
-  rangement: '🗂️', indice: '💡', halo: '✨'
+  rangement: '🗂️', indice: '💡', halo: '✨', echelle: '📏'
 }
 
 // Miroir JS des règles .question-item.type-* de style.css (--qt-color) —
@@ -978,7 +1000,9 @@ const QTYPE_COLOR = {
   // un des 16 précédents — nouveau token dédié --color-halo (lavande pâle,
   // évoque une lueur/halo doux, distinct des violets déjà pris par
   // intrus/zoomguess/rangement).
-  halo: 'var(--color-halo)'
+  halo: 'var(--color-halo)',
+  // "Échelle" (tâche 054) : même situation que "halo", nouveau token dédié.
+  echelle: 'var(--color-echelle)'
 }
 
 // --- Animations de création (tâche 046 bis) ---
@@ -1766,6 +1790,146 @@ if (haloUploadInput) {
     })
   }
 }
+
+// "Échelle" (tâche 054) : PAS compressImageFile, qui recompresse en JPEG —
+// la transparence y disparaît (fond noir), alors que c'est elle qui donne
+// la silhouette. Ici : recadrage au ras des pixels non transparents (la
+// hauteur VISIBLE du dessin doit être la hauteur réelle saisie, une marge
+// vide fausserait l'échelle), réduction, export WebP transparent, ou PNG
+// si le navigateur ne sait pas encoder le WebP (Safari). onSuccess reçoit
+// { dataUrl, ratio (largeur/hauteur), opaque (aucun pixel transparent) }.
+const SCALE_ALPHA_THRESHOLD = 10
+const processScaleImage = (file, onSuccess) => {
+  if (!file) return
+  if (!file.type || !file.type.startsWith('image/')) {
+    showToast('Ce fichier n\'est pas une image', 'error')
+    return
+  }
+  if (file.size > IMAGE_MAX_UPLOAD_BYTES) {
+    showToast('Image trop lourde (10 Mo max)', 'error')
+    return
+  }
+  const img = new Image()
+  const objectUrl = URL.createObjectURL(file)
+  img.onload = () => {
+    URL.revokeObjectURL(objectUrl)
+    // Lecture des pixels sur une copie déjà réduite (2000 px max) : une
+    // photo de 6000 px prendrait sinon un temps visible au getImageData.
+    const readScale = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight))
+    const src = document.createElement('canvas')
+    src.width = Math.max(1, Math.round(img.naturalWidth * readScale))
+    src.height = Math.max(1, Math.round(img.naturalHeight * readScale))
+    const sctx = src.getContext('2d')
+    sctx.drawImage(img, 0, 0, src.width, src.height)
+    const { data } = sctx.getImageData(0, 0, src.width, src.height)
+    let x0 = src.width, y0 = src.height, x1 = -1, y1 = -1, opaque = true
+    for (let y = 0; y < src.height; y++) {
+      for (let x = 0; x < src.width; x++) {
+        const a = data[(y * src.width + x) * 4 + 3]
+        if (a < 255) opaque = false
+        if (a <= SCALE_ALPHA_THRESHOLD) continue
+        if (x < x0) x0 = x
+        if (x > x1) x1 = x
+        if (y < y0) y0 = y
+        if (y > y1) y1 = y
+      }
+    }
+    if (x1 < 0) {
+      showToast('Cette image est entièrement transparente', 'error')
+      return
+    }
+    const cropW = x1 - x0 + 1, cropH = y1 - y0 + 1
+    const outScale = Math.min(1, SCALE_IMAGE_MAX_DIMENSION / Math.max(cropW, cropH))
+    const out = document.createElement('canvas')
+    out.width = Math.max(1, Math.round(cropW * outScale))
+    out.height = Math.max(1, Math.round(cropH * outScale))
+    out.getContext('2d').drawImage(src, x0, y0, cropW, cropH, 0, 0, out.width, out.height)
+    const webp = out.toDataURL('image/webp', 0.9)
+    const dataUrl = webp.startsWith('data:image/webp') ? webp : out.toDataURL('image/png')
+    onSuccess({ dataUrl, ratio: cropW / cropH, opaque })
+  }
+  img.onerror = () => {
+    // Même cas que compressImageFile : type annoncé mais image illisible.
+    URL.revokeObjectURL(objectUrl)
+    showToast('Impossible de lire cette image', 'error')
+  }
+  img.src = objectUrl
+}
+
+// « 1,20 m » à côté du champ en cm, dès 100 cm (repère pour le créateur).
+const formatEchelleMeters = (cm) => Number(cm) >= 100 ? `= ${(Number(cm) / 100).toFixed(2).replace('.', ',')} m` : ''
+// Champ d'un emplacement sur la question : référence (ref*) ou élément (item*).
+// La hauteur de l'élément vit dans q.correct[0] (comme la cible de
+// "graduation") : c'est la réponse, retirée de la diffusion par le serveur.
+const echelleFieldsOf = (q, key) => key === 'Ref'
+  ? { image: 'refImage', ratio: 'refRatio', opaque: 'refOpaque', label: 'refLabel', getHeight: () => q.refHeight, setHeight: v => { q.refHeight = v } }
+  : { image: 'itemImage', ratio: 'itemRatio', opaque: 'itemOpaque', label: 'itemLabel', getHeight: () => q.correct?.[0], setHeight: v => { q.correct = [v] } }
+
+const populateEchelleFields = (q) => {
+  if (!echelleSection || q.type !== 'echelle') return
+  ECHELLE_SLOTS.forEach(slot => {
+    const f = echelleFieldsOf(q, slot.key)
+    if (slot.previewWrap) slot.previewWrap.classList.toggle('d-none', !q[f.image])
+    if (slot.previewImg && q[f.image]) slot.previewImg.src = q[f.image]
+    if (slot.opaqueNote) slot.opaqueNote.classList.toggle('d-none', !(q[f.image] && q[f.opaque]))
+    if (slot.label) slot.label.value = q[f.label] || ''
+    const h = f.getHeight()
+    if (slot.height) slot.height.value = Number(h) > 0 ? h : ''
+    if (slot.heightM) slot.heightM.textContent = formatEchelleMeters(h)
+  })
+}
+
+ECHELLE_SLOTS.forEach(slot => {
+  if (slot.upload) {
+    slot.upload.onchange = () => {
+      const file = slot.upload.files && slot.upload.files[0]
+      slot.upload.value = ''
+      if (!file || !questions[activeIndex]) return
+      processScaleImage(file, ({ dataUrl, ratio, opaque }) => {
+        const q = questions[activeIndex]
+        const f = echelleFieldsOf(q, slot.key)
+        q[f.image] = dataUrl
+        q[f.ratio] = ratio
+        q[f.opaque] = opaque
+        populateEchelleFields(q)
+      })
+    }
+  }
+  if (slot.removeBtn) {
+    slot.removeBtn.onclick = () => {
+      if (!questions[activeIndex]) return
+      QzUI.confirm({
+        title: 'Retirer cette image ?',
+        message: 'Il faudra réimporter une image pour en remettre une.',
+        confirmLabel: 'Retirer',
+        danger: true
+      }).then((ok) => {
+        const q = questions[activeIndex]
+        if (!ok || !q) return
+        const f = echelleFieldsOf(q, slot.key)
+        q[f.image] = null
+        q[f.ratio] = null
+        q[f.opaque] = false
+        populateEchelleFields(q)
+      })
+    }
+  }
+  if (slot.label) {
+    slot.label.oninput = () => {
+      const q = questions[activeIndex]
+      if (q) q[echelleFieldsOf(q, slot.key).label] = slot.label.value
+    }
+  }
+  if (slot.height) {
+    slot.height.oninput = () => {
+      const q = questions[activeIndex]
+      if (!q) return
+      const v = Number(String(slot.height.value).replace(',', '.'))
+      echelleFieldsOf(q, slot.key).setHeight(v > 0 ? Math.round(v * 10) / 10 : null)
+      if (slot.heightM) slot.heightM.textContent = formatEchelleMeters(v)
+    }
+  }
+})
 
 if (removeHaloBtn) {
   removeHaloBtn.onclick = () => {
@@ -2842,6 +3006,7 @@ const selectQuestion = (index) => {
   populateZoomGuessFields(q)
   populateRechercheFields(q)
   populateHaloFields(q)
+  populateEchelleFields(q)
   populateRevealFields(q)
   populateRevealMediaFields(q)
   populateAudioFields(q)
@@ -2934,7 +3099,8 @@ const QTYPE_HINTS = {
   // utilisateur, pour un MJ qui hésiterait entre les deux) : ici la
   // révélation est LIMITÉE (5 clics max) et COÛTE des points, pas un
   // balayage continu et gratuit.
-  halo: { icon: '✨', text: 'Les joueurs cliquent jusqu\'à 5 fois (chaque clic coûte des points, de plus en plus) pour révéler des halos de lumière permanents sur l\'image cachée.', color: '#c4b5fd', rgb: '196,181,253' }
+  halo: { icon: '✨', text: 'Les joueurs cliquent jusqu\'à 5 fois (chaque clic coûte des points, de plus en plus) pour révéler des halos de lumière permanents sur l\'image cachée.', color: '#c4b5fd', rgb: '196,181,253' },
+  echelle: { icon: '📏', text: 'Les joueurs agrandissent ou rétrécissent l\'élément jusqu\'à sa vraie taille, à côté de la référence. Plus ils sont précis, plus ils marquent.', color: '#fb7185', rgb: '251,113,133' }
 }
 const qTypeHint = document.getElementById('qTypeHint')
 const updateQTypeHint = () => {
@@ -2957,6 +3123,7 @@ const toggleTypeSections = () => {
   if (zoomGuessSection) zoomGuessSection.classList.toggle('d-none', qType.value !== 'zoomguess')
   if (rechercheSection) rechercheSection.classList.toggle('d-none', qType.value !== 'recherche')
   if (haloSection) haloSection.classList.toggle('d-none', qType.value !== 'halo')
+  if (echelleSection) echelleSection.classList.toggle('d-none', qType.value !== 'echelle')
   // Réglages Avancé de ces deux types : affichés sous la réponse (voir editor.html).
   const zoomGuessSettings = document.getElementById('zoomGuessSettings')
   if (zoomGuessSettings) zoomGuessSettings.classList.toggle('d-none', qType.value !== 'zoomguess')
@@ -2988,7 +3155,7 @@ const toggleTypeSections = () => {
   }
   // Bloc média : « Son » seul quand l'illustration est masquée (le type a déjà sa propre image, juste au-dessus).
   const mediaBlockLabel = document.getElementById('mediaBlockLabel')
-  if (mediaBlockLabel) mediaBlockLabel.textContent = qType.value === 'blindtest' ? 'Image' : qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice' || qType.value === 'halo' ? 'Son' : 'Image et son'
+  if (mediaBlockLabel) mediaBlockLabel.textContent = qType.value === 'blindtest' ? 'Image' : qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice' || qType.value === 'halo' || qType.value === 'echelle' ? 'Son' : 'Image et son'
   if (associationSection) associationSection.classList.toggle('d-none', qType.value !== 'association')
   if (timelineSection) timelineSection.classList.toggle('d-none', qType.value !== 'timeline')
   if (rangementSection) rangementSection.classList.toggle('d-none', qType.value !== 'rangement')
@@ -3000,7 +3167,7 @@ const toggleTypeSections = () => {
   // cliquable, "zoomguess"/"recherche"/"halo" la sienne comme photo à
   // deviner, "reveal" ses deux images énigme/réponse, "indice" une image
   // PAR indice — pas comme simple décoration).
-  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice' || qType.value === 'halo')
+  if (illustrationSection) illustrationSection.classList.toggle('d-none', qType.value === 'image' || qType.value === 'zoomguess' || qType.value === 'reveal' || qType.value === 'recherche' || qType.value === 'indice' || qType.value === 'halo' || qType.value === 'echelle')
   // "blindtest" a ses deux propres listes de réponses (titre/artiste, voir
   // blindtestAnswersSection ci-dessus) au lieu de la liste générique "correct".
   // "mcq" a aussi sa propre façon de désigner la bonne réponse : la case à
@@ -5023,6 +5190,11 @@ qType.onchange = () => {
     if (!Array.isArray(q.correct)) q.correct = ['']
     if (!Number.isFinite(q.haloRadius)) q.haloRadius = HALO_RADIUS_DEFAULT
     populateHaloFields(q)
+  } else if (qType.value === 'echelle') {
+    // q.correct venant d'un autre type est une liste de textes/objets : ici
+    // c'est [hauteur en cm] — repart vide sauf s'il est déjà un nombre.
+    if (!(Number(q.correct?.[0]) > 0) || typeof q.correct?.[0] !== 'number') q.correct = []
+    populateEchelleFields(q)
   } else if (qType.value === 'reveal') {
     // Même logique que "zoomguess" juste au-dessus (q.correct venant d'un
     // autre type peut être un objet/une forme spécifique) : on repart sur
@@ -5490,6 +5662,25 @@ const validateQuestion = (q, i) => {
       showToast(`La question ${i + 1} : renseignez au moins une réponse acceptée`, 'error')
       return false
     }
+  } else if (q.type === 'echelle') {
+    // Deux images, deux hauteurs > 0, et une taille à deviner dans les
+    // bornes que le joueur peut atteindre (voir SCALE_BOUND_FACTOR).
+    if (!q.refImage || !q.itemImage) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : importe l'image de référence et l'image à deviner`, 'error')
+      return false
+    }
+    const refH = Number(q.refHeight), itemH = Number(q.correct?.[0])
+    if (!(refH > 0) || !(itemH > 0)) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : renseigne la hauteur réelle des deux éléments (en cm)`, 'error')
+      return false
+    }
+    if (itemH > refH * SCALE_BOUND_FACTOR || itemH < refH / SCALE_BOUND_FACTOR) {
+      selectQuestion(i)
+      showToast(`La question ${i + 1} : l'élément à deviner doit faire entre ${SCALE_BOUND_FACTOR} fois moins et ${SCALE_BOUND_FACTOR} fois plus que la référence — choisis une référence plus proche en taille`, 'error')
+      return false
+    }
   } else if (q.type === 'halo') {
     // Même règle que "recherche"/"zoomguess" ci-dessus : une image à
     // révéler ET au moins une réponse acceptée sont obligatoires.
@@ -5788,6 +5979,8 @@ const uploadQuestionMedia = async (sb, ownerId, qs) => {
     field(q, 'reponseImage')
     field(q, 'revealImage')
     field(q, 'revealAudio')
+    field(q, 'refImage')
+    field(q, 'itemImage')
     if (q.type === 'association' && Array.isArray(q.correct)) {
       q.correct.forEach(pair => {
         field(pair, 'aImage')
