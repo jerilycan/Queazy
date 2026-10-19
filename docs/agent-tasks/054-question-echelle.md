@@ -434,10 +434,16 @@ sur un téléphone)_
 - Étape 3 : le type apparaît déjà dans la grille « Comment jouer ? », mais
   sans vidéo ni liste d'étapes. C'est prévu à l'étape 5, ne pas pousser
   avant.
-- Étape 3 : un élément beaucoup plus PETIT que la référence (fourmi à
-  côté d'une Wii) devient minuscule sur la scène, puisque la vue suit la
-  plus grande silhouette. On peut le régler avec −/+ et la pastille de
-  taille, mais on ne peut pas zoomer dessus. À juger en test réel.
+- Étape 3 (ajout validé par l'utilisateur) : **zoom sur un élément plus
+  petit que la référence**. Tant que l'élément fait au moins 1/4 de la
+  référence, la vue reste cadrée sur la référence. En dessous, elle suit
+  l'élément et la référence sort par le haut, comme un zoom d'appareil
+  photo. Doigt maintenu juste au-dessus du sol : la vue zoome en continu et
+  l'élément rétrécit encore. Vérifié : 70 × « − » depuis 23 cm donne
+  5,8 cm, l'élément occupant 18 % de la scène ; maintenu près du sol, on
+  descend jusqu'à la borne de 0,1 cm et l'élément reste visible. Effet
+  assumé : zoomée, la base de la référence remplit tout le fond de la
+  scène.
 - Étape 2 : le glisser-déposer d'un fichier sur l'éditeur n'est pas
   branché pour ce type (deux emplacements, la cible serait ambiguë). Il
   faut passer par les boutons de chaque emplacement.

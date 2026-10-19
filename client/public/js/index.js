@@ -1372,8 +1372,15 @@ const echelleState = { refHeight: 100, height: 100, refRatio: 1, itemRatio: 1, v
 const formatScaleHeight = (cm) => cm < 100
   ? `${Math.round(cm * 10) / 10} cm`.replace('.', ',')
   : `${(cm / 100).toFixed(2).replace('.', ',')} m`
+// Vue cadrée sur la plus grande silhouette — sauf quand l'élément devient
+// bien plus PETIT que la référence (retour utilisateur : une fourmi à côté
+// d'une Wii finissait en point invisible) : la vue suit alors l'élément, la
+// référence sort par le haut (zoom façon appareil photo). Elle reste
+// entière tant que l'élément fait au moins 1/ECHELLE_REF_ZOOM_LIMIT d'elle.
+const ECHELLE_REF_ZOOM_LIMIT = 4
 const echelleFitView = () => {
-  echelleState.viewHeight = ECHELLE_VIEW_MARGIN * Math.max(echelleState.refHeight, echelleState.height)
+  const { refHeight, height } = echelleState
+  echelleState.viewHeight = ECHELLE_VIEW_MARGIN * Math.max(height, Math.min(refHeight, height * ECHELLE_REF_ZOOM_LIMIT))
 }
 const sizeEchelleFigure = (el, height, ratio) => {
   if (!el) return
@@ -1407,16 +1414,25 @@ if (echelleScene) {
   // Doigt maintenu dans le haut de la scène (ECHELLE_ZOOM_ZONE) : la vue
   // s'élargit en continu et l'élément grandit avec — sans ça, un élément 4×
   // plus grand que la référence demandait de lâcher et reprendre une dizaine
-  // de fois (la vue étant figée pendant le glisser, voir plus haut).
+  // de fois (la vue étant figée pendant le glisser, voir plus haut). Même
+  // chose dans l'autre sens, doigt maintenu juste au-dessus du sol : la vue
+  // zoome et l'élément continue de rétrécir.
   const ECHELLE_ZOOM_ZONE = 0.1
   const zoomOutStep = () => {
     zoomOutRaf = null
     if (!echelleState.dragging) return
     const r = echelleScene.getBoundingClientRect()
-    if (lastClientY > r.top + r.height * ECHELLE_ZOOM_ZONE) return
-    const maxView = ECHELLE_VIEW_MARGIN * echelleState.refHeight * SCALE_BOUND_FACTOR
-    if (echelleState.viewHeight >= maxView) return
-    echelleState.viewHeight = Math.min(maxView, echelleState.viewHeight * 1.025)
+    const skyPx = r.height * ECHELLE_SKY_PCT / 100
+    const ref = echelleState.refHeight
+    let factor = 0
+    if (lastClientY < r.top + r.height * ECHELLE_ZOOM_ZONE) factor = 1.025
+    else if (lastClientY > r.top + skyPx * (1 - ECHELLE_ZOOM_ZONE)) factor = 1 / 1.025
+    if (!factor) return
+    const maxView = ECHELLE_VIEW_MARGIN * ref * SCALE_BOUND_FACTOR
+    const minView = ECHELLE_VIEW_MARGIN * ref / SCALE_BOUND_FACTOR
+    const next = Math.min(maxView, Math.max(minView, echelleState.viewHeight * factor))
+    if (next === echelleState.viewHeight) return
+    echelleState.viewHeight = next
     setFromClientY(lastClientY)
     zoomOutRaf = requestAnimationFrame(zoomOutStep)
   }
