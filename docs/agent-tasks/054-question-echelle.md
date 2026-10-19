@@ -27,7 +27,16 @@ En partie :
 À la révélation :
 - la silhouette **grisée à la vraie taille** apparaît à côté de celle du
   joueur, sur les téléphones, chez le MJ et sur l'écran TV ;
-- un bandeau donne la réponse du joueur, la vraie taille et l'écart.
+- un bandeau donne la réponse du joueur, la vraie taille et l'écart ;
+- **les silhouettes de tous les joueurs** s'affichent, chacune à la
+  taille proposée par son joueur, pour que tout le monde les voie
+  (demande de l'utilisateur, comme les points de chaque joueur au
+  mode « image ») :
+  - le **pseudo** est écrit au-dessus de chaque silhouette ;
+  - chaque joueur a **sa propre couleur**, la même pour sa silhouette et
+    son pseudo, pour qu'on les distingue ;
+  - la couleur est attribuée par le serveur et transmise avec la
+    révélation, pour être identique sur tous les écrans.
 
 Points :
 - **selon la précision uniquement**, sans composante vitesse (décision
@@ -59,9 +68,15 @@ fonctionne donc en « Présenter » comme en « Jouer ».
   - réception de la taille proposée, avec contrôle des bornes ;
   - calcul des points de précision, sans vitesse ;
   - historique et récap ;
-  - vraie taille transmise dans `revealPayload`.
+  - vraie taille transmise dans `revealPayload` ;
+  - liste de tous les joueurs ayant répondu (pseudo, taille proposée,
+    indice de couleur), sur le modèle de `imagePlayers` du mode « image ».
 - **Révélation** :
   - silhouette grisée à la vraie taille ;
+  - silhouettes de tous les joueurs, chacune de sa couleur, avec le pseudo
+    au-dessus. Disposition à fixer au plan : côte à côte sur le sol, avec
+    une réduction automatique quand il y a beaucoup de joueurs, et des
+    pseudos qui ne se chevauchent pas ;
   - bandeau « Ta réponse / Réelle / écart » ;
   - bandeau personnel Bonne réponse / Presque / Mauvaise réponse, cohérent
     avec les points.
@@ -133,7 +148,9 @@ _(à remplir par `/plan-feature`)_
 _(à remplir)_
 
 ## Risques restants
-_(à remplir)_
+_(à remplir — à surveiller dès le plan : la lisibilité des silhouettes de
+tous les joueurs quand ils sont nombreux, 15-20 en soirée, en particulier
+sur un téléphone)_
 
 ## Statut
 `ouverte`
