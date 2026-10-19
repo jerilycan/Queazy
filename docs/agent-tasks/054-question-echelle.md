@@ -360,7 +360,7 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 ## Étapes réalisées
 - [x] Étape 1 — serveur : réponse, points, révélation
 - [x] Étape 2 — éditeur : création de la question
-- [ ] Étape 3 — écran de jeu : affichage et réglage
+- [x] Étape 3 — écran de jeu : affichage et réglage
 - [ ] Étape 4 — révélation : silhouettes de tous les joueurs
 - [ ] Étape 5 — écran TV et « Comment jouer ? »
 
@@ -368,6 +368,7 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 - [ ] `node --check <fichier>` sur chaque fichier JS modifié
   - [x] Étape 1 : `node --check server/index.js` OK
   - [x] Étape 2 : `node --check` OK sur `editor.js` et `admin-bank.js`
+  - [x] Étape 3 : `node --check client/public/js/index.js` OK
 - [ ] Démarrage serveur vérifié (si `server/index.js` touché)
   - [x] Étape 1 : le serveur démarre sur le port 3100. Seul avertissement
     au boot : la lecture Supabase de `min_points_floor`, sans réseau dans
@@ -396,6 +397,20 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
       sans image ;
     - captures vérifiées : deux colonnes sur ordinateur, empilées sur
       téléphone, aperçu sur damier.
+  - [x] Étape 3 : vraie partie locale (MJ « Présenter » 1280 px + joueur
+    390 px tactile). La question passe par le vrai `emitQuestion`, avec des
+    images en base64, donc par le relais multi-images :
+    - les deux images arrivent chez le joueur ; légendes « Nintendo Wii
+      · 23 cm » et « Psykokwak » ;
+    - l'élément démarre à 23 cm, à la taille de la référence ;
+    - « Valider » s'ouvre à l'ouverture des réponses ;
+    - glisser : le haut de l'élément suit le doigt ;
+    - doigt maintenu en haut de la scène 0,9 s : la vue s'élargit
+      jusqu'à 1,04 m, puis le réglage est précis à 80 cm ;
+    - 5 × « − » : 72,5 cm (80 / 1,02⁵) ;
+    - « Valider » envoie `72.5` et la scène se verrouille ;
+    - côté MJ (et donc TV) : pas de −/+ ni de pastille de taille, et la
+      scène tient dans la carte sans être coupée.
 
 ## Tests manuels recommandés
 _(à remplir)_
@@ -410,6 +425,19 @@ sur un téléphone)_
   `image/webp`, ou en `image/png` sur Safari. À vérifier en vrai : si le
   bucket `quiz-media` limite les types de fichiers dans le tableau de bord
   Supabase (rien dans `schema.sql`), le WebP pourrait y être refusé.
+- Étape 3 : ajouté en cours de route au plan, le **dézoom continu**.
+  Pendant un glisser, la vue est figée pour que l'élément ne fuie pas sous
+  le doigt. Sans dézoom, impossible de dépasser la hauteur visible : un
+  élément 4× plus grand que la référence demandait de lâcher et reprendre
+  une dizaine de fois. Désormais, garder le doigt dans les 10 % du haut de
+  la scène élargit la vue en continu.
+- Étape 3 : le type apparaît déjà dans la grille « Comment jouer ? », mais
+  sans vidéo ni liste d'étapes. C'est prévu à l'étape 5, ne pas pousser
+  avant.
+- Étape 3 : un élément beaucoup plus PETIT que la référence (fourmi à
+  côté d'une Wii) devient minuscule sur la scène, puisque la vue suit la
+  plus grande silhouette. On peut le régler avec −/+ et la pastille de
+  taille, mais on ne peut pas zoomer dessus. À juger en test réel.
 - Étape 2 : le glisser-déposer d'un fichier sur l'éditeur n'est pas
   branché pour ce type (deux emplacements, la cible serait ambiguë). Il
   faut passer par les boutons de chaque emplacement.

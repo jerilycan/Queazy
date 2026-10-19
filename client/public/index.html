@@ -1344,6 +1344,31 @@
             </div>
             <div id="haloCounter" class="halo-counter"></div>
           </div>
+          <!-- Question "échelle" (tâche 054) : référence et élément posés sur
+               le même sol ; le joueur règle la hauteur de l'élément en
+               glissant le doigt sur la scène (le haut de l'élément suit le
+               doigt), ou finement avec −/+. Toutes les tailles sont en %
+               de la scène (voir renderEchelleScene, index.js) : la copie de
+               #stageWrap sur la TV reste juste à n'importe quelle taille. -->
+          <div id="echelleArea" class="echelle-area d-none">
+            <div id="echelleScene" class="echelle-scene" aria-label="Scène : agrandis ou rétrécis l'élément">
+              <div class="echelle-ground"></div>
+              <div id="echelleRef" class="echelle-figure is-ref">
+                <img id="echelleRefImg" class="echelle-img" alt="" draggable="false" />
+              </div>
+              <div id="echelleItem" class="echelle-figure is-item">
+                <span id="echelleItemReadout" class="echelle-readout"></span>
+                <img id="echelleItemImg" class="echelle-img" alt="" draggable="false" />
+              </div>
+              <div id="echelleRefCaption" class="echelle-caption is-ref"></div>
+              <div id="echelleItemCaption" class="echelle-caption is-item"></div>
+            </div>
+            <div class="echelle-controls">
+              <button type="button" id="echelleMinusBtn" class="echelle-step-btn" aria-label="Rétrécir">−</button>
+              <span class="echelle-controls-hint">Glisse sur la scène pour régler la taille</span>
+              <button type="button" id="echellePlusBtn" class="echelle-step-btn" aria-label="Agrandir">+</button>
+            </div>
+          </div>
           <!-- Question "indice" (tâche 014) : indices texte/image qui
                apparaissent progressivement pendant la question, chacun à un
                délai configurable — timing calé sur payload.startTs et

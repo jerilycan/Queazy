@@ -817,13 +817,16 @@ const QUESTION_TYPE_META = {
   // des points à CHAQUE clic (barème -50/-100/-150/-200/-250, voir
   // server/index.js HALO_CLICK_PENALTIES — plus de 1er clic gratuit), pas un
   // balayage continu et gratuit.
-  halo: { icon: '✨', label: 'Halo', color: '#c4b5fd', rgb: '196,181,253', hint: 'Clique jusqu\'à 5 fois sur l\'image noire pour révéler des halos de lumière permanents (chaque clic coûte un peu plus de points), puis valide ta réponse.' }
+  halo: { icon: '✨', label: 'Halo', color: '#c4b5fd', rgb: '196,181,253', hint: 'Clique jusqu\'à 5 fois sur l\'image noire pour révéler des halos de lumière permanents (chaque clic coûte un peu plus de points), puis valide ta réponse.' },
+  // "Échelle" (tâche 054) : même couleur que --color-echelle (style.css) et
+  // QTYPE_COLOR/QTYPE_HINTS (editor.js).
+  echelle: { icon: '📏', label: 'Échelle', color: '#fb7185', rgb: '251,113,133', hint: 'Agrandis ou rétrécis l\'élément jusqu\'à sa vraie taille, à côté de la référence, puis valide. Seule la précision compte.' }
 }
 // Types dont la mécanique n'est pas évidente au premier coup d'œil (retour
 // utilisateur) : l'intro reste affichée un peu plus longtemps pour ceux-là
 // avant de lancer le décompte (voir INTRO_DURATION_COMPLEX_MS). Les autres
 // (QCM, Vrai/Faux, texte libre...) sont auto-explicites, intro plus courte.
-const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche', 'rangement', 'indice', 'halo'])
+const COMPLEX_TYPES = new Set(['order', 'image', 'zoomguess', 'association', 'timeline', 'intrus', 'pbac', 'recherche', 'rangement', 'indice', 'halo', 'echelle'])
 const questionTypeBadge = document.getElementById('questionTypeBadge')
 const questionTypeBadgeIcon = document.getElementById('questionTypeBadgeIcon')
 const questionTypeBadgeLabel = document.getElementById('questionTypeBadgeLabel')
@@ -1339,6 +1342,175 @@ const HALO_DEFAULT_RADIUS_PCT = 15
 // commentaire de reset à l'affichage).
 let haloClicksState = [] // [{x, y}] normalisés 0-1, dans l'ordre des clics
 let haloRadiusPct = HALO_DEFAULT_RADIUS_PCT
+
+// --- Question "échelle" (tâche 054) ---
+// Hauteurs en cm. La scène montre une hauteur "visible" (viewHeight) sur sa
+// partie au-dessus du sol (ECHELLE_SKY_PCT) : chaque silhouette y prend
+// hauteur / viewHeight de cette partie, en %, rien en pixels — la copie de
+// #stageWrap sur la TV reste donc juste à toute taille. viewHeight suit la
+// plus grande silhouette (×ECHELLE_VIEW_MARGIN) pour que tout reste visible,
+// mais reste FIGÉE pendant un glisser : sinon le haut de l'élément fuirait
+// sous le doigt (la scène se redimensionnerait à chaque mouvement).
+const echelleArea = document.getElementById('echelleArea')
+const echelleScene = document.getElementById('echelleScene')
+const echelleRefEl = document.getElementById('echelleRef')
+const echelleItemEl = document.getElementById('echelleItem')
+const echelleRefImg = document.getElementById('echelleRefImg')
+const echelleItemImg = document.getElementById('echelleItemImg')
+const echelleItemReadout = document.getElementById('echelleItemReadout')
+const echelleRefCaption = document.getElementById('echelleRefCaption')
+const echelleItemCaption = document.getElementById('echelleItemCaption')
+const echelleMinusBtn = document.getElementById('echelleMinusBtn')
+const echellePlusBtn = document.getElementById('echellePlusBtn')
+// DOIT rester égal à SCALE_BOUND_FACTOR (server/index.js, editor.js).
+const SCALE_BOUND_FACTOR = 200
+const ECHELLE_SKY_PCT = 84
+const ECHELLE_VIEW_MARGIN = 1.15
+const ECHELLE_STEP_RATIO = 1.02 // un appui sur −/+ : ±2 % de la taille
+const echelleState = { refHeight: 100, height: 100, refRatio: 1, itemRatio: 1, viewHeight: 115, disabled: true, dragging: false }
+// Même format que formatScaleHeight côté serveur (récap) : « 23 cm », « 1,20 m ».
+const formatScaleHeight = (cm) => cm < 100
+  ? `${Math.round(cm * 10) / 10} cm`.replace('.', ',')
+  : `${(cm / 100).toFixed(2).replace('.', ',')} m`
+const echelleFitView = () => {
+  echelleState.viewHeight = ECHELLE_VIEW_MARGIN * Math.max(echelleState.refHeight, echelleState.height)
+}
+const sizeEchelleFigure = (el, height, ratio) => {
+  if (!el) return
+  el.style.height = `${(height / echelleState.viewHeight) * ECHELLE_SKY_PCT}%`
+  el.style.aspectRatio = String(ratio > 0 ? ratio : 1)
+}
+const renderEchelleScene = () => {
+  sizeEchelleFigure(echelleRefEl, echelleState.refHeight, echelleState.refRatio)
+  sizeEchelleFigure(echelleItemEl, echelleState.height, echelleState.itemRatio)
+  if (echelleItemReadout) echelleItemReadout.textContent = formatScaleHeight(echelleState.height)
+  if (echelleScene) echelleScene.setAttribute('aria-valuetext', formatScaleHeight(echelleState.height))
+}
+const setEchelleHeight = (h, refit) => {
+  const ref = echelleState.refHeight
+  echelleState.height = Math.min(ref * SCALE_BOUND_FACTOR, Math.max(ref / SCALE_BOUND_FACTOR, h))
+  if (refit) echelleFitView()
+  renderEchelleScene()
+}
+if (echelleScene) {
+  // Le haut de l'élément suit le doigt : hauteur = distance doigt-sol,
+  // ramenée à la hauteur visible de la scène.
+  let lastClientY = 0
+  let zoomOutRaf = null
+  const setFromClientY = (clientY) => {
+    lastClientY = clientY
+    const r = echelleScene.getBoundingClientRect()
+    const skyPx = r.height * ECHELLE_SKY_PCT / 100
+    const groundY = r.top + skyPx
+    setEchelleHeight(Math.max(0, groundY - clientY) / skyPx * echelleState.viewHeight, false)
+  }
+  // Doigt maintenu dans le haut de la scène (ECHELLE_ZOOM_ZONE) : la vue
+  // s'élargit en continu et l'élément grandit avec — sans ça, un élément 4×
+  // plus grand que la référence demandait de lâcher et reprendre une dizaine
+  // de fois (la vue étant figée pendant le glisser, voir plus haut).
+  const ECHELLE_ZOOM_ZONE = 0.1
+  const zoomOutStep = () => {
+    zoomOutRaf = null
+    if (!echelleState.dragging) return
+    const r = echelleScene.getBoundingClientRect()
+    if (lastClientY > r.top + r.height * ECHELLE_ZOOM_ZONE) return
+    const maxView = ECHELLE_VIEW_MARGIN * echelleState.refHeight * SCALE_BOUND_FACTOR
+    if (echelleState.viewHeight >= maxView) return
+    echelleState.viewHeight = Math.min(maxView, echelleState.viewHeight * 1.025)
+    setFromClientY(lastClientY)
+    zoomOutRaf = requestAnimationFrame(zoomOutStep)
+  }
+  const trackPointer = (clientY) => {
+    setFromClientY(clientY)
+    if (!zoomOutRaf) zoomOutRaf = requestAnimationFrame(zoomOutStep)
+  }
+  echelleScene.addEventListener('pointerdown', e => {
+    if (echelleState.disabled) return
+    echelleState.dragging = true
+    echelleScene.classList.add('is-dragging')
+    try { echelleScene.setPointerCapture(e.pointerId) } catch {}
+    trackPointer(e.clientY)
+  })
+  echelleScene.addEventListener('pointermove', e => {
+    if (echelleState.dragging) trackPointer(e.clientY)
+  })
+  const endDrag = (e) => {
+    if (!echelleState.dragging) return
+    echelleState.dragging = false
+    cancelAnimationFrame(zoomOutRaf)
+    zoomOutRaf = null
+    echelleScene.classList.remove('is-dragging')
+    try { echelleScene.releasePointerCapture(e.pointerId) } catch {}
+    // Recadrage seulement au lâcher : l'élément peut avoir atteint le haut
+    // de la scène, la vue s'élargit alors pour pouvoir le grandir encore.
+    echelleFitView()
+    renderEchelleScene()
+  }
+  echelleScene.addEventListener('pointerup', endDrag)
+  echelleScene.addEventListener('pointercancel', endDrag)
+  // Clavier (accessibilité), même pas que −/+.
+  echelleScene.tabIndex = 0
+  echelleScene.setAttribute('role', 'slider')
+  echelleScene.addEventListener('keydown', e => {
+    if (echelleState.disabled) return
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setEchelleHeight(echelleState.height * ECHELLE_STEP_RATIO, true)
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setEchelleHeight(echelleState.height / ECHELLE_STEP_RATIO, true)
+    else return
+    e.preventDefault()
+  })
+}
+// −/+ : un appui = ±2 %, maintenu = répété (accélère une fois lancé).
+;[[echelleMinusBtn, 1 / ECHELLE_STEP_RATIO], [echellePlusBtn, ECHELLE_STEP_RATIO]].forEach(([btn, factor]) => {
+  if (!btn) return
+  let holdTimer = null
+  const stop = () => { clearTimeout(holdTimer); holdTimer = null }
+  const tick = (delay) => {
+    if (echelleState.disabled) return stop()
+    setEchelleHeight(echelleState.height * factor, true)
+    holdTimer = setTimeout(() => tick(Math.max(40, delay * 0.85)), delay)
+  }
+  btn.addEventListener('pointerdown', e => {
+    if (echelleState.disabled) return
+    e.preventDefault()
+    stop()
+    tick(350)
+  })
+  ;['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => btn.addEventListener(ev, stop))
+  // Clavier : Entrée/Espace déclenchent un clic sans pointerdown.
+  btn.addEventListener('click', e => { if (e.detail === 0 && !echelleState.disabled) setEchelleHeight(echelleState.height * factor, true) })
+})
+// Affichage d'une nouvelle question "échelle" : l'élément démarre à la
+// taille de la référence (aucun indice sur la réponse).
+const showEchelleQuestion = (payload) => {
+  echelleState.refHeight = Number(payload.refHeight) > 0 ? Number(payload.refHeight) : 100
+  echelleState.refRatio = Number(payload.refRatio) || 1
+  echelleState.itemRatio = Number(payload.itemRatio) || 1
+  echelleState.height = echelleState.refHeight
+  echelleState.disabled = true
+  echelleState.dragging = false
+  echelleFitView()
+  renderEchelleScene()
+  // MJ en mode "Présenter" (et donc la TV, qui copie son écran) : il ne
+  // répond pas — ni −/+ ni pastille de taille, qui afficherait une taille
+  // de départ sans signification pour la salle.
+  if (echelleArea) echelleArea.classList.toggle('is-spectator', isPresenterHost())
+  if (echelleRefCaption) echelleRefCaption.textContent = `${payload.refLabel || 'Référence'} · ${formatScaleHeight(echelleState.refHeight)}`
+  if (echelleItemCaption) echelleItemCaption.textContent = payload.itemLabel || '?'
+  const setImages = (refSrc, itemSrc) => {
+    if (echelleRefImg) loadQuestionImage(echelleRefImg, refSrc || '', () => {})
+    if (echelleItemImg) loadQuestionImage(echelleItemImg, itemSrc || '', () => {})
+  }
+  if (payload.scaleImagesUrl) {
+    // Images encore en base64 (aperçu, brouillon jamais sauvegardé) :
+    // relais multi-images, voir emitQuestion.
+    fetch(payload.scaleImagesUrl).then(res => res.json()).then(({ images }) => {
+      const byId = Object.fromEntries((images || []).map(it => [it.id, it.image]))
+      setImages(byId.ref, byId.item)
+    }).catch(err => console.error('[echelle] images introuvables :', err))
+  } else {
+    setImages(payload.refImageUrl, payload.itemImageUrl)
+  }
+}
 
 // Le calque du masque (.halo-overlay) couvre TOUT .halo-wrap, mais l'image
 // elle-même (.halo-img, object-fit:contain) peut ne remplir qu'UNE PARTIE
@@ -7783,6 +7955,13 @@ const emitQuestion = (index) => {
     // pénalité de clics, elle, dépend seulement de leur NOMBRE, pas du
     // rayon, voir server/index.js).
     haloRadius: q.type === 'halo' ? (q.haloRadius || HALO_DEFAULT_RADIUS_PCT) : undefined,
+    // "échelle" (tâche 054) : tout est public SAUF la hauteur à deviner
+    // (q.correct, retirée par le serveur avant diffusion).
+    refHeight: q.type === 'echelle' ? Number(q.refHeight) : undefined,
+    refRatio: q.type === 'echelle' ? Number(q.refRatio) || 1 : undefined,
+    itemRatio: q.type === 'echelle' ? Number(q.itemRatio) || 1 : undefined,
+    refLabel: q.type === 'echelle' ? (q.refLabel || '') : undefined,
+    itemLabel: q.type === 'echelle' ? (q.itemLabel || '') : undefined,
     // Volume propre à l'extrait Blind Test/son facultatif (même principe que
     // revealAudioVolumePct ci-dessus) — celui-ci, lui, PASSE PAR le
     // passthrough générique côté serveur (aucun risque de spoiler, contrairement
@@ -7848,6 +8027,19 @@ const emitQuestion = (index) => {
     const photoOptions = q.options.filter(o => o && typeof o.image === 'string' && o.image)
     if (photoOptions.length > 0) {
       uploads.push(uploadRoomIntrusImages(roomCode, photoOptions).then(url => { payload.intrusImagesUrl = url }))
+    }
+  }
+  if (q.type === 'echelle') {
+    // URL Supabase (quiz sauvegardé) : passées telles quelles. Base64 encore
+    // non sauvegardé (aperçu « Tester ») : relais multi-images de "intrus",
+    // réutilisé tel quel (ids 'ref'/'item' acceptés par son contrôle) — une
+    // seule question à la fois par salle, donc aucun conflit d'emplacement.
+    const isUrl = v => typeof v === 'string' && /^https?:\/\//.test(v)
+    if (isUrl(q.refImage) && isUrl(q.itemImage)) {
+      payload.refImageUrl = q.refImage
+      payload.itemImageUrl = q.itemImage
+    } else if (q.refImage && q.itemImage) {
+      uploads.push(uploadRoomIntrusImages(roomCode, [{ id: 'ref', image: q.refImage }, { id: 'item', image: q.itemImage }]).then(url => { payload.scaleImagesUrl = url }))
     }
   }
   if (q.type === 'association') {
@@ -8329,6 +8521,10 @@ socket.on('question:show', payload => {
       }
     }
   }
+  if (echelleArea) {
+    echelleArea.classList.toggle('d-none', payload.type !== 'echelle')
+    if (payload.type === 'echelle') showEchelleQuestion(payload)
+  }
   if (haloArea) {
     haloArea.classList.toggle('d-none', payload.type !== 'halo')
     if (payload.type === 'halo') {
@@ -8523,7 +8719,7 @@ socket.on('question:show', payload => {
   if (blindtestArtistInput) blindtestArtistInput.disabled = false
   // Symétrique du .add('is-locked') posé dans submitCurrentAnswer — sans
   // ça, le grisage de la question précédente resterait affiché sur celle-ci.
-  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea, haloWrap].forEach(el => {
+  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea, haloWrap, echelleArea].forEach(el => {
     if (el) el.classList.remove('is-locked')
   })
   // "Titre uniquement" (voir editor.js) : masque le champ artiste plutôt que
@@ -8543,7 +8739,7 @@ socket.on('question:show', payload => {
   const freeTextEl = document.getElementById('freeText')
   freeTextEl.classList.add('d-none')
   if (!isPresenterHost()) {
-    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association' || payload.type === 'timeline' || payload.type === 'rangement'
+    const isTileType = payload.type === 'mcq' || payload.type === 'truefalse' || payload.type === 'intrus' || payload.type === 'graduation' || payload.type === 'order' || payload.type === 'image' || payload.type === 'association' || payload.type === 'timeline' || payload.type === 'rangement' || payload.type === 'echelle'
     const isBlindtest = payload.type === 'blindtest'
     freeTextEl.classList.toggle('mcq-mode', isTileType)
     answerInput.classList.toggle('d-none', isTileType || isBlindtest)
@@ -8643,6 +8839,7 @@ socket.on('question:show', payload => {
       setAssociationDisabled(false)
       setTimelineDisabled(false)
       setRangementDisabled(false)
+      echelleState.disabled = false
       // Garde-fou en plus du nettoyage normal dans applyTileReveal
       // (animationend) : au cas où cet évènement ne se déclencherait pas
       // (onglet mis en arrière-plan pendant l'entrée, navigateur capricieux...),
@@ -8761,7 +8958,7 @@ socket.on('question:show', payload => {
         submitCurrentAnswer()
       } else if (currentQuestionType === 'image' && imageSelectedPoint) {
         submitCurrentAnswer()
-      } else if (currentQuestionType === 'order' || currentQuestionType === 'graduation' || currentQuestionType === 'association' || currentQuestionType === 'timeline' || currentQuestionType === 'rangement') {
+      } else if (currentQuestionType === 'order' || currentQuestionType === 'graduation' || currentQuestionType === 'association' || currentQuestionType === 'timeline' || currentQuestionType === 'rangement' || currentQuestionType === 'echelle') {
         // Ces cinq types n'ont aucune garde de contenu dans
         // submitCurrentAnswer (voir plus bas) : l'état actuellement affiché
         // — modifié ou pas (ordre mélangé tel quel, curseur resté au
@@ -9052,6 +9249,8 @@ const submitCurrentAnswer = () => {
   } else if (currentQuestionType === 'graduation') {
     myGradAnswerValue = gradState.value
     content = String(gradState.value)
+  } else if (currentQuestionType === 'echelle') {
+    content = String(Math.round(echelleState.height * 10) / 10)
   } else if (currentQuestionType === 'order') {
     myOrderSubmission = getCurrentOrderTexts()
     content = JSON.stringify(myOrderSubmission)
@@ -9112,6 +9311,7 @@ const submitCurrentAnswer = () => {
   setAssociationDisabled(true)
   setTimelineDisabled(true)
   setRangementDisabled(true)
+  echelleState.disabled = true
   imageDisabled = true
   if (blindtestTitleInput) blindtestTitleInput.disabled = true
   if (blindtestArtistInput) blindtestArtistInput.disabled = true
@@ -9126,7 +9326,7 @@ const submitCurrentAnswer = () => {
   // visiblement après envoi — les autres restaient identiques à l'écran,
   // le joueur pouvait continuer à toucher/glisser sans aucun effet
   // visible et se demander si son geste avait un effet).
-  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea, haloWrap].forEach(el => {
+  ;[gradSlider, orderList, associationArea, timelineArea, imageWrap, blindtestFields, rangementArea, haloWrap, echelleArea].forEach(el => {
     if (el) el.classList.add('is-locked')
   })
 }
