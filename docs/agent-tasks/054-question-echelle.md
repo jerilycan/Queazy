@@ -358,7 +358,7 @@ fenêtre « Comment jouer ? ».
 dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 
 ## Étapes réalisées
-- [ ] Étape 1 — serveur : réponse, points, révélation
+- [x] Étape 1 — serveur : réponse, points, révélation
 - [ ] Étape 2 — éditeur : création de la question
 - [ ] Étape 3 — écran de jeu : affichage et réglage
 - [ ] Étape 4 — révélation : silhouettes de tous les joueurs
@@ -366,7 +366,21 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 
 ## Checks effectués
 - [ ] `node --check <fichier>` sur chaque fichier JS modifié
+  - [x] Étape 1 : `node --check server/index.js` OK
 - [ ] Démarrage serveur vérifié (si `server/index.js` touché)
+  - [x] Étape 1 : le serveur démarre sur le port 3100. Seul avertissement
+    au boot : la lecture Supabase de `min_points_floor`, sans réseau dans
+    l'environnement de test (préexistant).
+  - [x] Étape 1 : partie simulée par sockets, 4 joueurs, référence 23 cm,
+    vraie taille 80 cm :
+    - `question:show` ne contient pas `correct` ; `refHeight` est bien
+      présent ;
+    - points obtenus : 80 cm → 1000, 84 cm (+5 %) → 1000, 104 cm
+      (+30 %) → 669, 160 cm (×2) → 0, sans `score:update` ;
+    - `revealPayload` : `target` = 80, `players` donne le pseudo, la taille
+      et `colorIdx` 0 à 3 ;
+    - récap : réponses « 80 cm », « 84 cm », « 1,04 m », « 1,60 m » ; états
+      correct / correct / presque / incorrect ; 50 % de bonnes réponses.
 - [ ] Vérification visuelle Browser pane (si client touché)
 
 ## Tests manuels recommandés

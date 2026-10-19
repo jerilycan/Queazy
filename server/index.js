@@ -662,6 +662,22 @@ const start = async () => {
         })
         .filter(Boolean)
     }
+    // "echelle" (tâche 054) : silhouette de TOUS les joueurs à la révélation
+    // (retour utilisateur), chacune de sa couleur avec son pseudo au-dessus.
+    // colorIdx attribué une fois par joueur (par token, dans l'ordre de sa
+    // première réponse à une question échelle) et gardé toute la partie :
+    // même couleur sur tous les écrans et d'une question à l'autre. Le client
+    // le ramène dans sa palette (modulo).
+    let scalePlayers
+    if (question.type === 'echelle') {
+      if (!room.playerColorIdx) room.playerColorIdx = new Map()
+      scalePlayers = Object.entries(question.scaleGuesses || {})
+        .filter(([tok]) => tok !== room.hostToken || room.mode === 'auto')
+        .map(([tok, height]) => {
+          if (!room.playerColorIdx.has(tok)) room.playerColorIdx.set(tok, room.playerColorIdx.size)
+          return { name: room.tokens.get(tok)?.name || 'Joueur', height, colorIdx: room.playerColorIdx.get(tok) }
+        })
+    }
     // Gardé sur la question (même principe que question.showPayload, voir
     // room:join) : un hôte/joueur qui se reconnecte PENDANT la phase
     // révélation ou classement n'avait jusqu'ici RIEN pour se resynchroniser
@@ -685,9 +701,9 @@ const start = async () => {
       // les joueurs") — voir index.js effectiveVolume, qui le MULTIPLIE avec
       // le volume personnel du joueur/le fader général, jamais un remplacement.
       revealAudioVolumePct: question.revealAudioVolumePct ?? 100,
-      target: question.type === 'graduation' ? question.correct?.[0] : undefined,
+      target: question.type === 'graduation' || question.type === 'echelle' ? question.correct?.[0] : undefined,
       tolerance: question.type === 'graduation' ? (question.tolerance ?? GRAD_CORRECT_ABS_TOLERANCE_DEFAULT) : undefined,
-      players: imagePlayers,
+      players: question.type === 'echelle' ? scalePlayers : imagePlayers,
       pbacValidated: question.type === 'pbac' ? (question.pbacValidated || []) : undefined
     }
     io.to(code).emit('question:reveal', question.revealPayload)
@@ -1120,6 +1136,34 @@ const start = async () => {
   // après avoir tout révélé.
   const HALO_MAX_CLICKS = 5
   const HALO_CLICK_PENALTIES = [50, 100, 150, 200, 250]
+
+  // "echelle" (tâche 054) : deviner la hauteur réelle d'un élément à côté
+  // d'une référence de hauteur connue. Points selon la PRÉCISION seule (pas
+  // de vitesse, décision utilisateur), mesurée en RAPPORT et non en cm — 10
+  // cm d'erreur pèsent lourd sur une fourmi, presque rien sur une girafe :
+  // écart r = |ln(proposé / réel)|, plein barème jusqu'à SCALE_FULL_RATIO
+  // (±5 %), 0 point à partir de SCALE_ZERO_RATIO (×2 ou ÷2), linéaire en
+  // log entre les deux. SCALE_CORRECT_RATIO (±10 %) ne sert qu'au verdict
+  // binaire du récap/des stats (historyEntry.results). SCALE_BOUND_FACTOR :
+  // bornes de la réponse autour de la référence, identiques au curseur
+  // côté client (index.js) et à la validation de l'éditeur (editor.js).
+  const SCALE_FULL_RATIO = 1.05
+  const SCALE_ZERO_RATIO = 2
+  const SCALE_CORRECT_RATIO = 1.1
+  const SCALE_BOUND_FACTOR = 200
+  const SCALE_MAX_POINTS = 1000
+  const scalePoints = (guess, target) => {
+    const r = Math.abs(Math.log(guess / target))
+    const full = Math.log(SCALE_FULL_RATIO), zero = Math.log(SCALE_ZERO_RATIO)
+    if (r <= full) return SCALE_MAX_POINTS
+    if (r >= zero) return 0
+    return Math.round(SCALE_MAX_POINTS * (zero - r) / (zero - full))
+  }
+  // Hauteur lisible pour le récap (« 23 cm », « 1,20 m ») — même format que
+  // l'écran de jeu (voir formatScaleHeight dans index.js).
+  const formatScaleHeight = (cm) => cm < 100
+    ? `${Math.round(cm * 10) / 10} cm`.replace('.', ',')
+    : `${(cm / 100).toFixed(2).replace('.', ',')} m`
 
   // Une zone stockée est soit un polygone { points:[{x,y},...] } (nouveau
   // format, tracé à main levée), soit un rectangle legacy { x0,y0,x1,y1 }
@@ -1909,7 +1953,7 @@ const start = async () => {
       // que options juste au-dessus — sert à buildRecap à retraduire l'id
       // d'une option TEXTE en son contenu réel (plutôt qu'en "Image N", qui
       // n'aurait aucun sens pour une option qui n'a jamais été une photo).
-      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length + (room.mode === 'auto' ? 1 : 0), options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, intrusTexts: payload?.type === 'intrus' && payload?.intrusTexts && typeof payload.intrusTexts === 'object' ? payload.intrusTexts : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined, revealAudioVolumePct: Number.isFinite(Number(payload?.revealAudioVolumePct)) ? Math.min(100, Math.max(0, Number(payload.revealAudioVolumePct))) : 100 }
+      const question = { id: payload?.id, type: payload?.type, correct: payload?.correct || [], zones: Array.isArray(payload?.zones) ? payload.zones : undefined, explanation: payload?.explanation || '', min: payload?.min, max: payload?.max, tolerance: Number.isFinite(Number(payload?.tolerance)) ? Math.max(0, Number(payload.tolerance)) : null, refHeight: payload?.type === 'echelle' && Number(payload?.refHeight) > 0 ? Number(payload.refHeight) : undefined, titleOnly: !!payload?.titleOnly, requireAllCorrect: payload?.requireAllCorrect !== false, timerMs: payload?.timerMs || 15000, pointsFloor: floorForSpeedLevel(room.speedLevel), startTs: Date.now() + ANSWER_WINDOW_BUFFER_MS, answered: new Set(), submissions: new Map(), pending: room.pending, singleAttempt: payload?.singleAttempt !== false, historyEntry, ended: false, expectedPlayers: activePlayers(room).length + (room.mode === 'auto' ? 1 : 0), options: payload?.type === 'intrus' && Array.isArray(payload.options) ? payload.options : undefined, intrusTexts: payload?.type === 'intrus' && payload?.intrusTexts && typeof payload.intrusTexts === 'object' ? payload.intrusTexts : undefined, reponseImage, revealImage: payload?.revealImage || undefined, revealAudio: payload?.revealAudio || undefined, revealPos: payload?.revealPos || undefined, revealBg: payload?.revealBg || undefined, revealAudioVolumePct: Number.isFinite(Number(payload?.revealAudioVolumePct)) ? Math.min(100, Math.max(0, Number(payload.revealAudioVolumePct))) : 100 }
       room.currentQuestion = question
 
       // Pour 'graduation', ne jamais diffuser la valeur cible : sinon elle est
@@ -1928,6 +1972,7 @@ const start = async () => {
       // 'halo' (tâche 020) : même raison que 'recherche' — la réponse se
       // devine visuellement (image cachée, révélée par clics), q.correct ne
       // doit jamais être lisible en devtools avant même le premier clic.
+      // 'echelle' (tâche 054) : q.correct EST la vraie hauteur à deviner.
       // revealImage/revealAudio/revealPos/revealBg (tâche 017/018) : même
       // raison qu'explanation — déjà copiés sur l'objet question ci-dessus
       // (et sur question.revealPayload, voir revealQuestion) pour la
@@ -1941,7 +1986,7 @@ const start = async () => {
       // laisser la réponse en clair dès le départ (devtools) viderait le
       // gameplay de son sens. Même traitement que zoomguess/recherche/reveal,
       // qui devinent aussi progressivement.
-      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'rangement' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal' || payload?.type === 'recherche' || payload?.type === 'indice' || payload?.type === 'halo')
+      const broadcastPayload = (payload?.type === 'graduation' || payload?.type === 'order' || payload?.type === 'image' || payload?.type === 'blindtest' || payload?.type === 'association' || payload?.type === 'timeline' || payload?.type === 'rangement' || payload?.type === 'zoomguess' || payload?.type === 'intrus' || payload?.type === 'reveal' || payload?.type === 'recherche' || payload?.type === 'indice' || payload?.type === 'halo' || payload?.type === 'echelle')
         ? payloadWithoutCorrectOrExplanation
         : { ...payloadWithoutCorrectOrExplanation, correct }
 
@@ -2080,6 +2125,39 @@ const start = async () => {
         q.answered?.add(token)
         q.submissions?.set(token, 'graded')
         io.to(code).emit('score:update', { playerId: socket.id, delta, total })
+        emitProgress()
+        return
+      }
+
+      if (q.type === 'echelle') {
+        // Taille proposée en cm. Bornes autour de la référence (voir
+        // SCALE_BOUND_FACTOR) : une valeur hors bornes ne peut venir que d'un
+        // client modifié, ramenée dans la plage plutôt que rejetée.
+        const guess = Number(payload?.content)
+        const target = Number(q.correct?.[0])
+        const ref = Number(q.refHeight)
+        if (!Number.isFinite(guess) || guess <= 0 || !(target > 0) || !(ref > 0)) return
+        const clamped = Math.min(ref * SCALE_BOUND_FACTOR, Math.max(ref / SCALE_BOUND_FACTOR, guess))
+        const delta = scalePoints(clamped, target)
+        const isCorrect = Math.abs(Math.log(clamped / target)) <= Math.log(SCALE_CORRECT_RATIO)
+        const total = (room.scores.get(socket.id) || 0) + delta
+        room.scores.set(socket.id, total)
+        const p = room.players.get(socket.id)
+        if (p?.token) {
+          room.tokens.set(p.token, { id: socket.id, name: p.name, score: total, teamId: p.teamId || null })
+          if (q.historyEntry) {
+            q.historyEntry.results[p.token] = isCorrect ? 'correct' : 'incorrect'
+            q.historyEntry.deltas[p.token] = delta
+            q.historyEntry.answers[p.token] = formatScaleHeight(clamped)
+          }
+          // Taille de CHAQUE joueur, pour afficher toutes les silhouettes à
+          // la révélation (voir revealQuestion) — même principe qu'imagePoints.
+          if (!q.scaleGuesses) q.scaleGuesses = {}
+          q.scaleGuesses[p.token] = clamped
+        }
+        q.answered?.add(token)
+        q.submissions?.set(token, 'graded')
+        if (delta > 0) io.to(code).emit('score:update', { playerId: socket.id, delta, total })
         emitProgress()
         return
       }
