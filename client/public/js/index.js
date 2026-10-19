@@ -7503,7 +7503,11 @@ const TUTO_STEPS = {
   pbac: [['1', 'Lis la catégorie'], ['2', 'Tape une réponse qui colle', 'Toutes les réponses valables comptent'], ['3', "L'hôte valide les réponses", 'Même réponse qu’un autre joueur ? Points partagés'], ['★', 'Sois original pour garder tous les points !']],
   recherche: [['1', "L'image est cachée dans le noir"], ['2', "Balaie l'image du doigt", 'Seule la zone sous ton doigt s’éclaire'], ['3', 'Tape, valide… puis attends', "L'image entière apparaît à la fin"], ['★', 'Plus tu réponds vite, plus tu marques de points']],
   indice: [['1', 'Un premier indice…'], ['2', 'Un nouvel indice arrive', 'toutes les quelques secondes'], ['3', 'Devine dès que tu peux', 'Tape, valide… puis attends'], ['★', 'Moins tu attends d’indices, plus tu marques de points']],
-  halo: [['1', 'Une image cachée sous un voile'], ['2', 'Touche pour percer le voile', '5 clics max — chacun coûte des points'], ['3', 'Devine, valide… puis attends', "L'image entière apparaît à la fin"], ['★', 'Moins de clics, plus de points !']]
+  halo: [['1', 'Une image cachée sous un voile'], ['2', 'Touche pour percer le voile', '5 clics max — chacun coûte des points'], ['3', 'Devine, valide… puis attends', "L'image entière apparaît à la fin"], ['★', 'Moins de clics, plus de points !']],
+  // "Échelle" (tâche 054) : pas encore de vidéo — la fenêtre affiche « Démo
+  // bientôt disponible » à la place (voir getOrCreateTutoVideoEl), et pas
+  // d'entrée dans TUTO_STEP_STARTS tant qu'elle n'existe pas.
+  echelle: [['1', 'Observe la référence', 'Sa vraie taille est écrite dessous'], ['2', "Agrandis ou rétrécis l'élément", 'Glisse sur la scène, ou −/+ pour affiner'], ['3', 'Valide… puis attends', 'Toutes les silhouettes apparaissent à la fin'], ['★', 'Plus tu es précis, plus tu marques', 'Pas de bonus de vitesse ici']]
 }
 // Instant (en secondes) où chaque étape commence dans la vidéo de son type,
 // mêmes indices que TUTO_STEPS — relevé au rendu des vidéos : à refaire si

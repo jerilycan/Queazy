@@ -362,7 +362,7 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 - [x] Étape 2 — éditeur : création de la question
 - [x] Étape 3 — écran de jeu : affichage et réglage
 - [x] Étape 4 — révélation : silhouettes de tous les joueurs
-- [ ] Étape 5 — écran TV et « Comment jouer ? »
+- [x] Étape 5 — écran TV et « Comment jouer ? »
 
 ## Checks effectués
 - [ ] `node --check <fichier>` sur chaque fichier JS modifié
@@ -370,6 +370,7 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
   - [x] Étape 2 : `node --check` OK sur `editor.js` et `admin-bank.js`
   - [x] Étape 3 : `node --check client/public/js/index.js` OK
   - [x] Étape 4 : `node --check client/public/js/index.js` OK
+  - [x] Étape 5 : `node --check client/public/js/index.js` OK
 - [ ] Démarrage serveur vérifié (si `server/index.js` touché)
   - [x] Étape 1 : le serveur démarre sur le port 3100. Seul avertissement
     au boot : la lecture Supabase de `min_points_floor`, sans réseau dans
@@ -426,6 +427,15 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
     - TV : l'animation d'entrée des silhouettes n'est plus rejouée à chaque
       mise à jour du miroir (`data-anim-start`, reprise par
       `resumeEntranceAnimations`).
+  - [x] Étape 5 :
+    - TV ouverte depuis la vue MJ, capturée PENDANT la question : scène
+      entière, référence et élément aux bonnes proportions, ni −/+ ni
+      pastille de taille. Aucun changement nécessaire dans `display.js`,
+      les tailles en % suffisent. La révélation sur TV était déjà vérifiée
+      à l'étape 4 ;
+    - « Comment jouer ? » : tuile « 📏 Échelle » présente, 4 étapes
+      affichées, message « Démo bientôt disponible pour Échelle. » à la
+      place de la vidéo (absence de fichier gérée par le code existant).
 
 ## Tests manuels recommandés
 _(à remplir)_
@@ -459,9 +469,10 @@ sur un téléphone)_
   élément 4× plus grand que la référence demandait de lâcher et reprendre
   une dizaine de fois. Désormais, garder le doigt dans les 10 % du haut de
   la scène élargit la vue en continu.
-- Étape 3 : le type apparaît déjà dans la grille « Comment jouer ? », mais
-  sans vidéo ni liste d'étapes. C'est prévu à l'étape 5, ne pas pousser
-  avant.
+- Étape 5 : pas encore de vidéo de démo dans « Comment jouer ? » (hors
+  périmètre). Elle se générera avec le moteur de démos hors dépôt, puis il
+  faudra ajouter `TUTO_STEP_STARTS.echelle` et monter
+  `TUTO_VIDEOS_VERSION`.
 - Étape 3 (ajout validé par l'utilisateur) : **zoom sur un élément plus
   petit que la référence**. Tant que l'élément fait au moins 1/4 de la
   référence, la vue reste cadrée sur la référence. En dessous, elle suit
