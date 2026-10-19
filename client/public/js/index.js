@@ -1361,9 +1361,34 @@ const echelleItemReadout = document.getElementById('echelleItemReadout')
 const echelleRefCaption = document.getElementById('echelleRefCaption')
 const echelleItemCaption = document.getElementById('echelleItemCaption')
 const echelleMinusBtn = document.getElementById('echelleMinusBtn')
+const echelleRevealLayer = document.getElementById('echelleRevealLayer')
+// Taille envoyée par CE joueur (null s'il n'a pas répondu) — pour le
+// bandeau de révélation (écart en %).
+let myScaleAnswer = null
+// Image de l'élément, gardée pour les silhouettes de la révélation.
+let echelleItemSrc = ''
+// Palette des silhouettes (--scale-player-N, style.css) ; colorIdx vient du
+// serveur, stable sur toute la partie (voir revealQuestion).
+const SCALE_PLAYER_COLORS = 12
+// Révélation : la vue englobe la vraie taille, la référence et les réponses
+// — mais pas plus de ECHELLE_REVEAL_MAX_SPAN fois la plus grande des deux
+// premières, sinon une seule réponse délirante (×200) écraserait toutes les
+// autres en points invisibles. Une silhouette plus haute sort par le haut,
+// son pseudo reste affiché en haut de la scène.
+const ECHELLE_REVEAL_MAX_SPAN = 3
+// Recouvrement toléré entre deux silhouettes voisines (largeur max d'une
+// silhouette / largeur de sa colonne) : au-delà, la vue s'élargit pour les
+// rapetisser toutes — les hauteurs restent exactes, seul le zoom change.
+const ECHELLE_REVEAL_MAX_OVERLAP = 2.2
+// Largeur moyenne estimée d'un pseudo (px) : décide sur combien de rangées
+// les répartir pour qu'ils ne se recouvrent pas.
+const ECHELLE_REVEAL_LABEL_PX = 64
 const echellePlusBtn = document.getElementById('echellePlusBtn')
 // DOIT rester égal à SCALE_BOUND_FACTOR (server/index.js, editor.js).
 const SCALE_BOUND_FACTOR = 200
+// DOIT rester égal à SCALE_MAX_POINTS (server/index.js) : sert seulement au
+// libellé du bandeau (Bonne réponse / Presque), comme PBAC_BASE_POINTS.
+const SCALE_MAX_POINTS = 1000
 const ECHELLE_SKY_PCT = 84
 const ECHELLE_VIEW_MARGIN = 1.15
 const ECHELLE_STEP_RATIO = 1.02 // un appui sur −/+ : ±2 % de la taille
@@ -1495,9 +1520,84 @@ if (echelleScene) {
   // Clavier : Entrée/Espace déclenchent un clic sans pointerdown.
   btn.addEventListener('click', e => { if (e.detail === 0 && !echelleState.disabled) setEchelleHeight(echelleState.height * factor, true) })
 })
+// Révélation (tâche 054) : la silhouette grisée à la vraie taille et celle de
+// CHAQUE joueur à la taille qu'il a proposée (retour utilisateur : comme les
+// points de chacun au mode "image"), alignées sur le sol et triées par
+// taille — la grisée prend sa place dans le rang. Hauteurs exactes (jamais
+// une grille de vignettes) : c'est la comparaison qui fait la révélation ;
+// les largeurs peuvent se chevaucher, d'où des silhouettes translucides.
+// Couleur par joueur = aplat (mask-image sur l'image de l'élément), même
+// couleur pour son pseudo. textContent partout (pseudos saisis par les joueurs).
+const renderEchelleReveal = (target, players) => {
+  if (!echelleRevealLayer || !echelleArea) return
+  const t = Number(target)
+  if (!(t > 0)) return
+  const list = (Array.isArray(players) ? players : [])
+    .filter(p => Number(p?.height) > 0)
+    .map(p => ({ name: p.name || 'Joueur', height: Number(p.height), colorIdx: Number(p.colorIdx) || 0 }))
+  const entries = [{ height: t, isTarget: true, name: 'Réponse' }, ...list].sort((a, b) => a.height - b.height)
+  const base = Math.max(echelleState.refHeight, t)
+  const tallest = Math.max(base, ...entries.map(e => e.height))
+  // Colonnes à droite de la référence (calée à gauche à la révélation, voir
+  // style.css .echelle-area.is-revealed).
+  const left0 = 22, span = 76
+  echelleArea.classList.add('is-revealed')
+  const rect = echelleScene ? echelleScene.getBoundingClientRect() : null
+  const slotPx = rect && rect.width ? rect.width * span / 100 / entries.length : 0
+  let view = ECHELLE_VIEW_MARGIN * Math.min(tallest, base * ECHELLE_REVEAL_MAX_SPAN)
+  if (slotPx) {
+    // Largeur (px) d'une silhouette de hauteur h pour une vue donnée :
+    // h / vue × ciel × hauteur de scène × ratio — on élargit la vue jusqu'à
+    // ce que la plus grande silhouette visible tienne dans sa colonne.
+    const visibleTallest = Math.min(tallest, view * 100 / ECHELLE_SKY_PCT)
+    const needed = visibleTallest * (echelleState.itemRatio || 1) * (ECHELLE_SKY_PCT / 100) * rect.height / (slotPx * ECHELLE_REVEAL_MAX_OVERLAP)
+    view = Math.max(view, needed)
+  }
+  const labelRows = slotPx ? Math.min(4, Math.max(1, Math.ceil(ECHELLE_REVEAL_LABEL_PX / slotPx))) : 1
+  echelleState.height = t
+  echelleState.viewHeight = view
+  renderEchelleScene()
+  echelleRevealLayer.replaceChildren()
+  const maskUrl = echelleItemSrc ? `url("${echelleItemSrc.replace(/"/g, '%22')}")` : ''
+  entries.forEach((e, i) => {
+    const leftPct = left0 + (i + 0.5) * span / entries.length
+    const heightPct = Math.min(e.height / echelleState.viewHeight, 1 / ECHELLE_SKY_PCT * 100) * ECHELLE_SKY_PCT
+    const clipped = e.height > echelleState.viewHeight * 100 / ECHELLE_SKY_PCT
+    const fig = document.createElement('div')
+    fig.className = `echelle-ghost${e.isTarget ? ' is-target' : ''}`
+    // Animation d'entrée reprise là où elle en est sur la TV (copie de
+    // #stageWrap), au lieu d'être rejouée à chaque mise à jour du miroir
+    // (voir resumeEntranceAnimations dans display.js).
+    fig.dataset.animStart = String(Date.now())
+    fig.style.left = `${leftPct}%`
+    fig.style.height = `${heightPct}%`
+    fig.style.aspectRatio = String(echelleState.itemRatio || 1)
+    if (!e.isTarget) fig.style.setProperty('--c', `var(--scale-player-${e.colorIdx % SCALE_PLAYER_COLORS})`)
+    if (maskUrl) {
+      fig.style.webkitMaskImage = maskUrl
+      fig.style.maskImage = maskUrl
+    }
+    const label = document.createElement('div')
+    label.className = `echelle-ghost-name${e.isTarget ? ' is-target' : ''}${clipped && !e.isTarget ? ' is-clipped' : ''}`
+    label.style.left = `${leftPct}%`
+    // Rangée du pseudo (0 = juste au-dessus de la silhouette) : décalée d'une
+    // ligne par rangée pour que des voisins serrés ne se recouvrent pas.
+    label.style.setProperty('--row', String(i % labelRows))
+    // Étiquette de la vraie taille SOUS le sol, sous la silhouette grisée :
+    // le dessus reste aux pseudos (elle est plus large, elle les masquait).
+    if (!clipped && !e.isTarget) label.style.bottom = `${100 - ECHELLE_SKY_PCT + heightPct}%`
+    if (!e.isTarget) label.style.setProperty('--c', `var(--scale-player-${e.colorIdx % SCALE_PLAYER_COLORS})`)
+    label.textContent = e.isTarget ? `Réponse · ${formatScaleHeight(e.height)}` : e.name
+    echelleRevealLayer.append(fig, label)
+  })
+}
+
 // Affichage d'une nouvelle question "échelle" : l'élément démarre à la
 // taille de la référence (aucun indice sur la réponse).
 const showEchelleQuestion = (payload) => {
+  myScaleAnswer = null
+  if (echelleRevealLayer) echelleRevealLayer.replaceChildren()
+  if (echelleArea) echelleArea.classList.remove('is-revealed')
   echelleState.refHeight = Number(payload.refHeight) > 0 ? Number(payload.refHeight) : 100
   echelleState.refRatio = Number(payload.refRatio) || 1
   echelleState.itemRatio = Number(payload.itemRatio) || 1
@@ -1513,6 +1613,7 @@ const showEchelleQuestion = (payload) => {
   if (echelleRefCaption) echelleRefCaption.textContent = `${payload.refLabel || 'Référence'} · ${formatScaleHeight(echelleState.refHeight)}`
   if (echelleItemCaption) echelleItemCaption.textContent = payload.itemLabel || '?'
   const setImages = (refSrc, itemSrc) => {
+    echelleItemSrc = itemSrc || ''
     if (echelleRefImg) loadQuestionImage(echelleRefImg, refSrc || '', () => {})
     if (echelleItemImg) loadQuestionImage(echelleItemImg, itemSrc || '', () => {})
   }
@@ -9266,7 +9367,8 @@ const submitCurrentAnswer = () => {
     myGradAnswerValue = gradState.value
     content = String(gradState.value)
   } else if (currentQuestionType === 'echelle') {
-    content = String(Math.round(echelleState.height * 10) / 10)
+    myScaleAnswer = Math.round(echelleState.height * 10) / 10
+    content = String(myScaleAnswer)
   } else if (currentQuestionType === 'order') {
     myOrderSubmission = getCurrentOrderTexts()
     content = JSON.stringify(myOrderSubmission)
@@ -10726,6 +10828,21 @@ socket.on('question:reveal', payload => {
     } else {
       showMyResultBanner('Mauvaise réponse', 'is-incorrect')
     }
+  } else if (payload.type === 'echelle') {
+    renderEchelleReveal(payload.target, payload.players)
+    const t = Number(payload.target)
+    const mine = Number(myScaleAnswer)
+    if (t > 0 && mine > 0) {
+      const pct = Math.round((mine / t - 1) * 100)
+      revealFreeAnswer(`Réelle : ${formatScaleHeight(t)} · Ta réponse : ${formatScaleHeight(mine)} (${pct > 0 ? '+' : ''}${pct} %)`)
+    } else if (t > 0) {
+      revealFreeAnswer(formatScaleHeight(t))
+    }
+    // Barème de précision (voir server/index.js scalePoints) : plein barème
+    // = "Bonne réponse", des points sans le plein = "Presque".
+    if (myLastDelta >= SCALE_MAX_POINTS) showMyResultBanner()
+    else if (myAnsweredCorrectlyThisQuestion) showMyResultBanner(`Presque ! +${myLastDelta} points`, 'is-close')
+    else showMyResultBanner('Mauvaise réponse', 'is-incorrect')
   } else if (payload.type === 'graduation') {
     positionGradTargetMarker(payload.target)
     // Retour utilisateur : "la bonne réponse ne s'affiche pas... il devrait

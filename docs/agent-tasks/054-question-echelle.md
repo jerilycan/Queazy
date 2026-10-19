@@ -361,7 +361,7 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 - [x] Étape 1 — serveur : réponse, points, révélation
 - [x] Étape 2 — éditeur : création de la question
 - [x] Étape 3 — écran de jeu : affichage et réglage
-- [ ] Étape 4 — révélation : silhouettes de tous les joueurs
+- [x] Étape 4 — révélation : silhouettes de tous les joueurs
 - [ ] Étape 5 — écran TV et « Comment jouer ? »
 
 ## Checks effectués
@@ -369,6 +369,7 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
   - [x] Étape 1 : `node --check server/index.js` OK
   - [x] Étape 2 : `node --check` OK sur `editor.js` et `admin-bank.js`
   - [x] Étape 3 : `node --check client/public/js/index.js` OK
+  - [x] Étape 4 : `node --check client/public/js/index.js` OK
 - [ ] Démarrage serveur vérifié (si `server/index.js` touché)
   - [x] Étape 1 : le serveur démarre sur le port 3100. Seul avertissement
     au boot : la lecture Supabase de `min_points_floor`, sans réseau dans
@@ -411,6 +412,20 @@ dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
     - « Valider » envoie `72.5` et la scène se verrouille ;
     - côté MJ (et donc TV) : pas de −/+ ni de pastille de taille, et la
       scène tient dans la carte sans être coupée.
+  - [x] Étape 4 : vraie partie locale (MJ, écran TV ouvert depuis la vue
+    MJ, joueurs), avec 4 puis 15 joueurs ; Léa répond depuis l'interface
+    (72,5 cm), les autres par socket, pour une vraie taille de 80 cm :
+    - bandeaux de Léa : « Réelle : 80 cm · Ta réponse : 72,5 cm (-9 %) »
+      et « Presque ! +923 points » (jaune) ; un joueur à 80 cm voit « Bonne
+      réponse ! +1000 points » ;
+    - silhouettes triées par taille, la grisée « Réponse · 80 cm » à sa
+      place, avec son étiquette sous le sol ; un pseudo de la couleur du
+      joueur au-dessus de chaque silhouette ;
+    - à 15 joueurs : pseudos répartis sur plusieurs rangées, tous lisibles
+      sur téléphone et TV ; la vue s'élargit pour limiter le recouvrement ;
+    - TV : l'animation d'entrée des silhouettes n'est plus rejouée à chaque
+      mise à jour du miroir (`data-anim-start`, reprise par
+      `resumeEntranceAnimations`).
 
 ## Tests manuels recommandés
 _(à remplir)_
@@ -419,6 +434,19 @@ _(à remplir)_
 _(à remplir — à surveiller dès le plan : la lisibilité des silhouettes de
 tous les joueurs quand ils sont nombreux, 15-20 en soirée, en particulier
 sur un téléphone)_
+- Étape 4 : les aplats de couleur utilisent `mask-image`, testé
+  uniquement avec des images en `data:` (relais de l'aperçu). Avec une
+  vraie URL Supabase Storage, le navigateur exige que le stockage autorise
+  CORS pour ce masque. Supabase l'autorise normalement, mais c'est à
+  vérifier en vrai sur une question sauvegardée. Si les aplats
+  n'apparaissent pas (rectangles pleins de couleur), il faut revoir le
+  rendu.
+- Étape 4 : au-delà de 12 joueurs, les couleurs se répètent (palette de
+  12, reprise en boucle). Les pseudos restent la distinction.
+- Étape 4 : à 15+ joueurs, les silhouettes sont petites, surtout sur
+  téléphone, et la TV garde de la hauteur vide au-dessus. La vue est
+  élargie pour que les largeurs ne se chevauchent pas trop, puisque les
+  hauteurs doivent rester exactes. À juger en soirée réelle.
 - Étape 2 : la sauvegarde réelle vers Supabase Storage n'a pas pu être
   testée ici (pas de réseau vers Supabase). `refImage` et `itemImage` sont
   ajoutées à `uploadQuestionMedia`, et les fichiers partent en

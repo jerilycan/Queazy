@@ -65,6 +65,21 @@
      corail, distinct du magenta d'accent et du rouge de truefalse). */
   --color-echelle: #fb7185;
   --color-echelle-rgb: 251,113,133;
+  /* Silhouettes des joueurs à la révélation "échelle" (index.js
+     SCALE_PLAYER_COLORS) : 12 teintes bien distinctes, lisibles sur fond
+     sombre comme clair (la scène a son propre fond), reprises en boucle. */
+  --scale-player-0: #ff5d73;
+  --scale-player-1: #ffb020;
+  --scale-player-2: #3ddc84;
+  --scale-player-3: #38bdf8;
+  --scale-player-4: #a78bfa;
+  --scale-player-5: #f472b6;
+  --scale-player-6: #facc15;
+  --scale-player-7: #2dd4bf;
+  --scale-player-8: #fb923c;
+  --scale-player-9: #818cf8;
+  --scale-player-10: #a3e635;
+  --scale-player-11: #e879f9;
   --color-accent-soft: rgba(255,47,176,0.14);
   --color-accent-rgb: 255,47,176;
   --color-border: rgba(255,255,255,0.10);
@@ -3516,6 +3531,45 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
   touch-action: manipulation;
 }
 .echelle-step-btn:active { transform: scale(0.94); }
+/* Révélation : l'élément du joueur cède la place au rang de silhouettes. */
+.echelle-reveal-layer { position: absolute; inset: 0; pointer-events: none; }
+.echelle-area.is-revealed .echelle-figure.is-item,
+.echelle-area.is-revealed .echelle-caption.is-item,
+.echelle-area.is-revealed .echelle-controls { display: none; }
+.echelle-ghost {
+  position: absolute;
+  bottom: 16%;
+  transform: translateX(-50%);
+  background: var(--c, #fff);
+  opacity: 0.78;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: echelleGhostIn 0.5s cubic-bezier(.22,1,.36,1) both;
+  transform-origin: 50% 100%;
+}
+.echelle-ghost.is-target { background: #d9dce6; opacity: 0.9; z-index: 2; }
+.echelle-ghost-name {
+  position: absolute;
+  transform: translate(-50%, -4px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(10, 8, 20, 0.75);
+  color: var(--c, #fff);
+  font-weight: 800;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 3;
+}
+.echelle-ghost-name { transform: translate(-50%, calc(-4px - var(--row, 0) * 1.7em)); }
+.echelle-ghost-name.is-target { background: #d9dce6; color: #1a1630; top: calc(84% + 6px); bottom: auto; transform: translateX(-50%); z-index: 4; }
+/* Silhouette plus haute que la vue : pseudo calé en haut de la scène. */
+.echelle-ghost-name.is-clipped { top: 4px; transform: translate(-50%, calc(var(--row, 0) * 1.7em)); }
+.echelle-area.is-revealed .echelle-figure.is-ref { left: 11%; }
+.echelle-area.is-revealed .echelle-caption.is-ref { left: 2%; transform: none; max-width: 30%; text-align: left; white-space: normal; font-size: 12px; }
+@keyframes echelleGhostIn { from { transform: translateX(-50%) scaleY(0); } to { transform: translateX(-50%) scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .echelle-ghost { animation: none; } }
 .echelle-area.is-spectator .echelle-controls,
 .echelle-area.is-spectator .echelle-readout { display: none; }
 .echelle-area.is-spectator .echelle-scene { cursor: default; max-height: 46vh; }
