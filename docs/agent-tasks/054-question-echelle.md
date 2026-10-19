@@ -134,10 +134,235 @@ fonctionne donc en « Présenter » comme en « Jouer ».
   la poignée et de la révélation.
 
 ## Plan
-_(à remplir par `/plan-feature`)_
+
+Identifiant du type : `echelle`.
+
+Forme de la question, sauvegardée dans `quizzes.questions` et dans
+`bank_questions.question`, sans changement de schéma :
+
+```
+{ type: 'echelle', prompt,
+  refImage, refLabel, refHeight,      // référence (hauteur en cm, publique)
+  refRatio,                           // largeur/hauteur après recadrage
+  itemImage, itemLabel, itemRatio,    // élément à deviner
+  correct: [itemHeightCm],            // vraie taille : jamais diffusée avant la révélation
+  timerMs, ... }
+```
+
+Les ratios sont calculés et stockés par l'éditeur : l'écran de jeu
+dimensionne ainsi les silhouettes sans attendre le chargement des images.
+
+### Étape 1 — Serveur : réponse, points et révélation (`server/index.js`)
+
+**Diffusion de la question.**
+- Ajouter `'echelle'` à la liste des types dont `correct` est retiré de
+  `broadcastPayload`, comme `graduation`. La vraie taille n'est donc
+  jamais lisible dans les outils de développement avant la fin.
+- Copier `refHeight` sur l'objet `question`, pour les bornes.
+
+**Réponse (`answer:submit`, branche dédiée).** `content` est la taille
+proposée en cm.
+- Rejeter une valeur non finie ou ≤ 0.
+- La ramener dans les bornes `[refHeight / 200, refHeight × 200]`, les
+  mêmes que le curseur côté client.
+- Garder la taille proposée de chaque joueur dans
+  `question.scaleGuesses[token]`, comme `imagePoints` au mode « image ».
+
+**Points : précision seule, sans `pointsFor` (décision utilisateur).**
+- Écart r = |ln(proposé / réel)|.
+- r ≤ ln(1,05), soit 5 % d'écart ou moins : 1000 points.
+- r ≥ ln(2), soit ×2 ou ÷2 : 0 point.
+- Entre les deux, décroissance linéaire sur l'échelle logarithmique.
+- Constantes nommées : `SCALE_FULL_RATIO` = 1,05, `SCALE_ZERO_RATIO` = 2.
+
+> Trade-off : le rapport plutôt que des centimètres, pour que 10 cm
+> d'erreur pèsent beaucoup sur une fourmi et presque rien sur une girafe.
+> Le choix linéaire en log reste simple, et les seuils sont à régler
+> après un test en partie.
+
+**Historique et récap.**
+- `results` vaut `'correct'` si l'écart est ≤ 10 %, sinon `'incorrect'` :
+  le récap et les statistiques ont besoin d'un verdict binaire.
+- `deltas` reçoit les points réels.
+- `answers` reçoit une chaîne lisible, par exemple « 1,20 m ».
+
+**Révélation (`revealPayload`).**
+- `target` : la vraie taille.
+- `players` : `[{ name, height, colorIdx }]` pour chaque joueur ayant
+  répondu, sans l'hôte.
+- `colorIdx` est attribué une fois par joueur (`room.playerColorIdx`, par
+  token, dans l'ordre de première réponse) puis réutilisé à chaque
+  question. Un même joueur garde ainsi sa couleur toute la partie, et
+  tous les écrans voient la même couleur.
+
+Vérification : une partie simulée par sockets (même harnais que les tests
+précédents). On contrôle les points à 0 %, 5 %, 30 % et ×2, que la vraie
+taille est absente de `question:show`, et le contenu de `revealPayload`.
+
+### Étape 2 — Éditeur : création de la question (`editor.html`, `editor.js`, `admin-bank.js`)
+
+**Type.**
+- Option « 📏 Échelle » dans la liste des types.
+- Icône et couleur dans les tables d'`editor.js`, à côté de `graduation`.
+
+**Section `#echelleSection`.**
+- Deux blocs, « Référence » et « À deviner ». Chacun a une image, un
+  libellé (« Nintendo Wii », « Psykokwak ») et une hauteur.
+- Hauteur saisie en cm, avec un rappel en m quand elle dépasse 100 cm.
+
+**Traitement des images (`processScaleImage`, nouvelle fonction).**
+- Pas de `compressImageFile` : il passe en JPEG, ce qui détruit la
+  transparence et donc la silhouette.
+- Recadrage au ras des pixels non transparents : boîte englobante des
+  pixels dont l'alpha est > 10, lue sur un canvas.
+- Réduction à 600 px de haut maximum.
+- Export en WebP avec transparence si le navigateur le permet, sinon en
+  PNG.
+- Si l'image n'a aucune transparence : on la garde entière, avec une
+  remarque au créateur (« pas de fond transparent : l'image entière
+  servira de silhouette »).
+- Calcul et stockage de `refRatio` / `itemRatio`.
+
+> Trade-off : une fonction dédiée plutôt qu'une option de plus à
+> `compressImageFile`, déjà utilisée partout pour des photos (JPEG
+> voulu). On évite de toucher un chemin partagé.
+
+**Validation à la sauvegarde.**
+- Les deux images sont présentes.
+- Les deux hauteurs sont > 0.
+- La hauteur de l'élément est dans les bornes `[réf / 200, réf × 200]`,
+  sinon un message dit pourquoi.
+
+**Envoi des médias.** Ajouter `refImage` et `itemImage` à
+`uploadQuestionMedia`, pour qu'elles soient envoyées vers Supabase
+Storage comme les autres images.
+
+**Admin de la banque.** Ajouter le libellé « Échelle » et un résumé
+(« Wii 23 cm → Psykokwak ») dans `admin-bank.js`.
+
+Vérification : créer, sauvegarder, recharger et réouvrir une question,
+avec un PNG transparent et avec un JPEG.
+
+### Étape 3 — Écran de jeu : affichage et réglage (`index.html`, `index.js`, `style.css`)
+
+**Métadonnées.**
+- `QUESTION_TYPE_META.echelle` : icône, libellé, couleur, consigne.
+- Le type apparaît alors dans la liste « Jouer » et dans « Comment
+  jouer ? ».
+
+**Envoi des images (`emitQuestion`).**
+- Les URL Supabase sont transmises telles quelles
+  (`refImageUrl` / `itemImageUrl`).
+- Pour une image encore en base64 (aperçu « Tester », vieux brouillon),
+  on réutilise le relais multi-images `/api/room-intrus-images` avec les
+  identifiants `ref` / `item`.
+
+> Trade-off : aucun nouvel endpoint serveur. Ce relais ne sert qu'à une
+> question à la fois, donc partager son emplacement est sans risque.
+> Commentaire à l'appui dans le code.
+
+**Zone `#echelleArea` dans `#stageWrap`.**
+- Une scène au ratio fixe, avec un sol.
+- La référence à gauche, l'élément à deviner à droite, posés sur le sol.
+- Taille de chaque silhouette = hauteur / hauteur visible de la scène, en
+  % : tout est relatif, donc la copie de la scène sur la TV reste juste à
+  n'importe quelle taille.
+
+**Réglage de la taille.**
+- Une poignée sur l'élément, à glisser vers le haut ou le bas (pointer
+  events, comme le Halo et la Timeline).
+- Un curseur logarithmique en dessous, pour le réglage fin et
+  l'accessibilité. Pas de 1 % de la taille.
+- L'élément démarre à la hauteur de la référence, sans indice sur la
+  réponse.
+- La taille courante est affichée : « 1,20 m ».
+
+**Dézoom automatique.** La hauteur visible vaut 1,15 × la plus grande
+taille à l'écran, pour que tout reste visible. Elle est lissée pour
+éviter les sauts.
+
+**Envoi et verrouillage.**
+- Envoi de la taille dans `submitCurrentAnswer`.
+- Ajout à la liste des types auto-envoyés en fin de chrono (même règle
+  que `graduation` : l'état affiché est toujours une réponse valide).
+- `.is-locked` après l'envoi, retiré à la question suivante.
+
+**Images à l'écran.** Pendant la question, on affiche les vraies images,
+plus reconnaissables qu'un aplat. Les aplats colorés ne servent qu'à la
+révélation (étape 4).
+
+Vérification : une partie en local sur téléphone (372 px) et sur grand
+écran.
+
+### Étape 4 — Révélation : silhouettes de tous les joueurs (`index.js`, `style.css`)
+
+**Éléments affichés.**
+- La silhouette grisée à la vraie taille.
+- Une silhouette par joueur, en aplat de sa couleur : `mask-image` sur
+  l'image de l'élément, fond = couleur du joueur, palette de 12 couleurs
+  `--scale-player-0..11`, reprise en boucle au-delà de 12 joueurs.
+- Le pseudo au-dessus de chaque silhouette, dans la même couleur.
+- La référence, toujours affichée.
+
+**Disposition.**
+- Toutes les silhouettes alignées sur le sol, triées par taille, la
+  grisée à sa place dans le rang.
+- L'échelle est recalculée pour inclure la plus grande taille proposée.
+- Les largeurs peuvent se chevaucher, mais pas les hauteurs, qui doivent
+  rester vraies. Les silhouettes sont donc semi-transparentes.
+- Les pseudos sont répartis sur deux rangées en alternance quand ils sont
+  serrés.
+
+> Trade-off : on garde les hauteurs exactes plutôt qu'une grille de
+> vignettes. Une grille serait plus lisible à 20 joueurs, mais on n'y
+> verrait plus les tailles, qui sont tout l'intérêt de la révélation.
+
+**Bandeaux.**
+- Bandeau `#revealAnswerText` : « Réelle : 0,80 m · Ta réponse : 1,20 m
+  (+50 %) ».
+- Bandeau personnel, selon les points :
+  - 1000 : « Bonne réponse » ;
+  - plus de 0 : « Presque ! (+X points) », en jaune ;
+  - 0 : « Mauvaise réponse ».
+
+Vérification : une partie simulée à 3 puis à 15 joueurs. Captures
+téléphone, MJ et TV.
+
+> Risque à contrôler à cette étape : `mask-image` sur une image Supabase
+> Storage demande une réponse CORS du stockage. Si les en-têtes manquent,
+> repli : silhouette en image réelle avec un contour coloré
+> (`drop-shadow`) plutôt qu'un aplat.
+
+### Étape 5 — Écran TV et « Comment jouer ? » (`display.js`, `index.js`)
+
+**Écran TV.**
+- Contrôler la copie de `#echelleArea`, qui doit déjà être juste puisque
+  tout est en %.
+- N'ajuster `display.js` que si le cadrage sur grand écran l'exige, comme
+  pour `#haloWrap`.
+
+**« Comment jouer ? ».**
+- `TUTO_STEPS.echelle` : « Observe la référence », « Agrandis ou
+  rétrécis », « Valide… puis attends », « ★ Plus tu es précis, plus tu
+  marques ».
+- Pas de vidéo pour l'instant (hors périmètre) : la grille et la fenêtre
+  doivent gérer un type sans vidéo. Soit on affiche seulement les étapes,
+  soit on retire le type de la grille vidéo. Choix à faire à l'étape, au
+  plus simple.
+
+Vérification : la TV ouverte depuis la vue MJ pendant une partie, et la
+fenêtre « Comment jouer ? ».
+
+**Interdictions du `CLAUDE.md` :** aucune étape ne touche
+`supabase/schema.sql`, `render.yaml` ni les dépendances npm. Le type entre
+dans le `jsonb` existant de `bank_questions` et `quizzes.questions`.
 
 ## Étapes réalisées
-- [ ] _(à remplir)_
+- [ ] Étape 1 — serveur : réponse, points, révélation
+- [ ] Étape 2 — éditeur : création de la question
+- [ ] Étape 3 — écran de jeu : affichage et réglage
+- [ ] Étape 4 — révélation : silhouettes de tous les joueurs
+- [ ] Étape 5 — écran TV et « Comment jouer ? »
 
 ## Checks effectués
 - [ ] `node --check <fichier>` sur chaque fichier JS modifié
