@@ -489,3 +489,21 @@ sur un téléphone)_
 
 ## Statut
 `ouverte`
+
+## Retour après mise en ligne (v2.37, test sur téléphone)
+Retour de l'utilisateur : réglage « pas fameux », surtout sur téléphone.
+Corrigé :
+- **Le glisser sur la scène et ses zooms automatiques sont supprimés.** Le
+  doigt masquait l'élément, et `touch-action: none` sur la scène bloquait
+  le défilement de la page. La taille se règle maintenant uniquement avec
+  − et +, sur des boutons agrandis à 60 px, ou au clavier. La vue se
+  recadre après chaque appui pour garder l'élément visible.
+- **Le maintien des boutons accélère.** La répétition est de plus en plus
+  rapide (jusqu'à toutes les 50 ms) et le pas grandit jusqu'à ±6 %. Un
+  appui simple reste à ±2 %.
+- Vérifié en local (390 px tactile) :
+  - un appui + : de 23 à 23,5 cm ;
+  - + maintenu 2 s : 1,01 m ;
+  - − maintenu 1,5 s : 42 cm ;
+  - un tap sur la scène ne change plus la taille, et `touch-action` revient
+    à `auto` : la page défile.

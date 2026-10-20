@@ -1348,9 +1348,8 @@ let haloRadiusPct = HALO_DEFAULT_RADIUS_PCT
 // partie au-dessus du sol (ECHELLE_SKY_PCT) : chaque silhouette y prend
 // hauteur / viewHeight de cette partie, en %, rien en pixels — la copie de
 // #stageWrap sur la TV reste donc juste à toute taille. viewHeight suit la
-// plus grande silhouette (×ECHELLE_VIEW_MARGIN) pour que tout reste visible,
-// mais reste FIGÉE pendant un glisser : sinon le haut de l'élément fuirait
-// sous le doigt (la scène se redimensionnerait à chaque mouvement).
+// plus grande silhouette (×ECHELLE_VIEW_MARGIN) pour que tout reste visible
+// (voir echelleFitView, recadrage après chaque appui sur −/+).
 const echelleArea = document.getElementById('echelleArea')
 const echelleScene = document.getElementById('echelleScene')
 const echelleRefEl = document.getElementById('echelleRef')
@@ -1392,7 +1391,7 @@ const SCALE_MAX_POINTS = 1000
 const ECHELLE_SKY_PCT = 84
 const ECHELLE_VIEW_MARGIN = 1.15
 const ECHELLE_STEP_RATIO = 1.02 // un appui sur −/+ : ±2 % de la taille
-const echelleState = { refHeight: 100, height: 100, refRatio: 1, itemRatio: 1, viewHeight: 115, disabled: true, dragging: false }
+const echelleState = { refHeight: 100, height: 100, refRatio: 1, itemRatio: 1, viewHeight: 115, disabled: true }
 // Même format que formatScaleHeight côté serveur (récap) : « 23 cm », « 1,20 m ».
 const formatScaleHeight = (cm) => cm < 100
   ? `${Math.round(cm * 10) / 10} cm`.replace('.', ',')
@@ -1424,72 +1423,13 @@ const setEchelleHeight = (h, refit) => {
   if (refit) echelleFitView()
   renderEchelleScene()
 }
+// Réglage UNIQUEMENT par −/+ (retour utilisateur après test sur téléphone :
+// le glisser sur la scène et son zoom automatique étaient peu maniables —
+// le doigt masquait l'élément et la scène bloquait le défilement de la
+// page). La vue se recadre toute seule après chaque pas (echelleFitView),
+// pour que l'élément reste visible. Clavier (accessibilité) : flèches, même
+// pas qu'un appui.
 if (echelleScene) {
-  // Le haut de l'élément suit le doigt : hauteur = distance doigt-sol,
-  // ramenée à la hauteur visible de la scène.
-  let lastClientY = 0
-  let zoomOutRaf = null
-  const setFromClientY = (clientY) => {
-    lastClientY = clientY
-    const r = echelleScene.getBoundingClientRect()
-    const skyPx = r.height * ECHELLE_SKY_PCT / 100
-    const groundY = r.top + skyPx
-    setEchelleHeight(Math.max(0, groundY - clientY) / skyPx * echelleState.viewHeight, false)
-  }
-  // Doigt maintenu dans le haut de la scène (ECHELLE_ZOOM_ZONE) : la vue
-  // s'élargit en continu et l'élément grandit avec — sans ça, un élément 4×
-  // plus grand que la référence demandait de lâcher et reprendre une dizaine
-  // de fois (la vue étant figée pendant le glisser, voir plus haut). Même
-  // chose dans l'autre sens, doigt maintenu juste au-dessus du sol : la vue
-  // zoome et l'élément continue de rétrécir.
-  const ECHELLE_ZOOM_ZONE = 0.1
-  const zoomOutStep = () => {
-    zoomOutRaf = null
-    if (!echelleState.dragging) return
-    const r = echelleScene.getBoundingClientRect()
-    const skyPx = r.height * ECHELLE_SKY_PCT / 100
-    const ref = echelleState.refHeight
-    let factor = 0
-    if (lastClientY < r.top + r.height * ECHELLE_ZOOM_ZONE) factor = 1.025
-    else if (lastClientY > r.top + skyPx * (1 - ECHELLE_ZOOM_ZONE)) factor = 1 / 1.025
-    if (!factor) return
-    const maxView = ECHELLE_VIEW_MARGIN * ref * SCALE_BOUND_FACTOR
-    const minView = ECHELLE_VIEW_MARGIN * ref / SCALE_BOUND_FACTOR
-    const next = Math.min(maxView, Math.max(minView, echelleState.viewHeight * factor))
-    if (next === echelleState.viewHeight) return
-    echelleState.viewHeight = next
-    setFromClientY(lastClientY)
-    zoomOutRaf = requestAnimationFrame(zoomOutStep)
-  }
-  const trackPointer = (clientY) => {
-    setFromClientY(clientY)
-    if (!zoomOutRaf) zoomOutRaf = requestAnimationFrame(zoomOutStep)
-  }
-  echelleScene.addEventListener('pointerdown', e => {
-    if (echelleState.disabled) return
-    echelleState.dragging = true
-    echelleScene.classList.add('is-dragging')
-    try { echelleScene.setPointerCapture(e.pointerId) } catch {}
-    trackPointer(e.clientY)
-  })
-  echelleScene.addEventListener('pointermove', e => {
-    if (echelleState.dragging) trackPointer(e.clientY)
-  })
-  const endDrag = (e) => {
-    if (!echelleState.dragging) return
-    echelleState.dragging = false
-    cancelAnimationFrame(zoomOutRaf)
-    zoomOutRaf = null
-    echelleScene.classList.remove('is-dragging')
-    try { echelleScene.releasePointerCapture(e.pointerId) } catch {}
-    // Recadrage seulement au lâcher : l'élément peut avoir atteint le haut
-    // de la scène, la vue s'élargit alors pour pouvoir le grandir encore.
-    echelleFitView()
-    renderEchelleScene()
-  }
-  echelleScene.addEventListener('pointerup', endDrag)
-  echelleScene.addEventListener('pointercancel', endDrag)
-  // Clavier (accessibilité), même pas que −/+.
   echelleScene.tabIndex = 0
   echelleScene.setAttribute('role', 'slider')
   echelleScene.addEventListener('keydown', e => {
@@ -1500,25 +1440,29 @@ if (echelleScene) {
     e.preventDefault()
   })
 }
-// −/+ : un appui = ±2 %, maintenu = répété (accélère une fois lancé).
-;[[echelleMinusBtn, 1 / ECHELLE_STEP_RATIO], [echellePlusBtn, ECHELLE_STEP_RATIO]].forEach(([btn, factor]) => {
+// −/+ : un appui = ±2 % (réglage fin). Maintenu : répété de plus en plus
+// vite ET par pas de plus en plus grands (jusqu'à ±6 % par répétition) —
+// seul moyen de réglage désormais, il faut pouvoir passer de 23 cm à 2 m
+// en quelques secondes sans enchaîner des dizaines d'appuis.
+const ECHELLE_HOLD_MAX_STEP = 1.06
+;[[echelleMinusBtn, -1], [echellePlusBtn, 1]].forEach(([btn, dir]) => {
   if (!btn) return
   let holdTimer = null
   const stop = () => { clearTimeout(holdTimer); holdTimer = null }
-  const tick = (delay) => {
+  const tick = (delay, step) => {
     if (echelleState.disabled) return stop()
-    setEchelleHeight(echelleState.height * factor, true)
-    holdTimer = setTimeout(() => tick(Math.max(40, delay * 0.85)), delay)
+    setEchelleHeight(echelleState.height * step ** dir, true)
+    holdTimer = setTimeout(() => tick(Math.max(50, delay * 0.75), Math.min(ECHELLE_HOLD_MAX_STEP, step * 1.008)), delay)
   }
   btn.addEventListener('pointerdown', e => {
     if (echelleState.disabled) return
     e.preventDefault()
     stop()
-    tick(350)
+    tick(300, ECHELLE_STEP_RATIO)
   })
   ;['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => btn.addEventListener(ev, stop))
   // Clavier : Entrée/Espace déclenchent un clic sans pointerdown.
-  btn.addEventListener('click', e => { if (e.detail === 0 && !echelleState.disabled) setEchelleHeight(echelleState.height * factor, true) })
+  btn.addEventListener('click', e => { if (e.detail === 0 && !echelleState.disabled) setEchelleHeight(echelleState.height * ECHELLE_STEP_RATIO ** dir, true) })
 })
 // Révélation (tâche 054) : la silhouette grisée à la vraie taille et celle de
 // CHAQUE joueur à la taille qu'il a proposée (retour utilisateur : comme les
@@ -1603,7 +1547,6 @@ const showEchelleQuestion = (payload) => {
   echelleState.itemRatio = Number(payload.itemRatio) || 1
   echelleState.height = echelleState.refHeight
   echelleState.disabled = true
-  echelleState.dragging = false
   echelleFitView()
   renderEchelleScene()
   // MJ en mode "Présenter" (et donc la TV, qui copie son écran) : il ne
