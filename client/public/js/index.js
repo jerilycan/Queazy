@@ -1358,7 +1358,7 @@ let haloRadiusPct = HALO_DEFAULT_RADIUS_PCT
 // partie au-dessus du sol (ECHELLE_SKY_PCT) : chaque silhouette y prend
 // hauteur / viewHeight de cette partie, en %, rien en pixels — la copie de
 // #stageWrap sur la TV reste donc juste à toute taille. viewHeight est cadrée
-// au départ de la question (echelleFitView) puis ne change plus que par les
+// au départ de la question (echelleStartView) puis ne change plus que par les
 // boutons loupe (méthode Magnitudle, jamais de zoom automatique).
 const echelleArea = document.getElementById('echelleArea')
 const echelleScene = document.getElementById('echelleScene')
@@ -1423,15 +1423,29 @@ const ECHELLE_ZOOM_MAX_IN = 1
 const formatScaleHeight = (cm) => cm < 100
   ? `${Math.round(cm * 10) / 10} cm`.replace('.', ',')
   : `${(cm / 100).toFixed(2).replace('.', ',')} m`
-// Vue cadrée sur la plus grande silhouette — sauf quand l'élément devient
-// bien plus PETIT que la référence (retour utilisateur : une fourmi à côté
-// d'une Wii finissait en point invisible) : la vue suit alors l'élément, la
-// référence sort par le haut (zoom façon appareil photo). Elle reste
-// entière tant que l'élément fait au moins 1/ECHELLE_REF_ZOOM_LIMIT d'elle.
-const ECHELLE_REF_ZOOM_LIMIT = 4
-const echelleFitView = () => {
-  const { refHeight, height } = echelleState
-  echelleState.viewHeight = ECHELLE_VIEW_MARGIN * Math.max(height, Math.min(refHeight, height * ECHELLE_REF_ZOOM_LIMIT))
+// Vue de départ (retour utilisateur, captures à l'appui : les silhouettes
+// démarraient en remplissant toute la scène) : comme Magnitudle, cadrée pour
+// que la référence ET l'estimation (qui démarre à la même hauteur) tiennent
+// confortablement, en hauteur comme en largeur — une référence très large
+// (image paysage, image opaque) débordait sinon sur toute la scène.
+//  - hauteur : la référence occupe au plus ECHELLE_START_REF_SHARE du ciel ;
+//  - largeur : chacune tient dans sa colonne (référence centrée à 18 %,
+//    estimation à 55 %, voir style.css) sans se chevaucher.
+// Mesuré sur la vraie scène si elle est affichée, sinon sur son ratio 4/3.
+const ECHELLE_START_REF_SHARE = 0.45
+const echelleStartView = () => {
+  const { refHeight, refRatio, itemRatio } = echelleState
+  const r = echelleScene?.getBoundingClientRect()
+  const wOverH = r && r.width && r.height ? r.width / r.height : 4 / 3
+  // Largeur d'une silhouette de hauteur refHeight, en fraction de la largeur
+  // de scène, pour une vue v : refHeight / v × ciel × ratio / (W/H).
+  const widthShare = (ratio) => refHeight * (ECHELLE_SKY_PCT / 100) * ratio / wOverH
+  echelleState.viewHeight = Math.max(
+    refHeight / ECHELLE_START_REF_SHARE,
+    widthShare(refRatio) / 0.28, // référence : bords dans [4 %, 32 %]
+    widthShare(itemRatio) / 0.42, // estimation : largeur max 42 %
+    (widthShare(refRatio) + widthShare(itemRatio)) / 0.62 // pas de chevauchement entre 18 % et 55 %
+  )
 }
 const sizeEchelleFigure = (el, height, ratio) => {
   if (!el) return
@@ -1448,10 +1462,9 @@ const renderEchelleScene = () => {
   if (echelleEstimateTag) echelleEstimateTag.style.left = `${echelleState.itemX}%`
   if (echelleScene) echelleScene.setAttribute('aria-valuetext', formatScaleHeight(echelleState.height))
 }
-const setEchelleHeight = (h, refit) => {
+const setEchelleHeight = (h) => {
   const ref = echelleState.refHeight
   echelleState.height = Math.min(ref * SCALE_BOUND_FACTOR, Math.max(ref / SCALE_BOUND_FACTOR, h))
-  if (refit) echelleFitView()
   renderEchelleScene()
 }
 // Réglage à la manière de Magnitudle (retour utilisateur, après test sur
@@ -1537,9 +1550,9 @@ if (echelleScene) {
     if (gesture.mode === 'pinch') {
       const pts = [...pointers.values()]
       if (pts.length < 2) return
-      setEchelleHeight(gesture.initHeight * dist(pts[0], pts[1]) / gesture.initDist, false)
+      setEchelleHeight(gesture.initHeight * dist(pts[0], pts[1]) / gesture.initDist)
     } else if (gesture.mode === 'resize') {
-      setEchelleHeight(gesture.initHeight * dist(p, gesture.foot) / gesture.initDist, false)
+      setEchelleHeight(gesture.initHeight * dist(p, gesture.foot) / gesture.initDist)
     } else if (gesture.mode === 'move') {
       const r = echelleScene.getBoundingClientRect()
       const skyPx = (r.height * ECHELLE_SKY_PCT / 100) || 1
@@ -1566,8 +1579,8 @@ if (echelleScene) {
   echelleScene.setAttribute('role', 'slider')
   echelleScene.addEventListener('keydown', e => {
     if (echelleState.disabled) return
-    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setEchelleHeight(echelleState.height * ECHELLE_STEP_RATIO, false)
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setEchelleHeight(echelleState.height / ECHELLE_STEP_RATIO, false)
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setEchelleHeight(echelleState.height * ECHELLE_STEP_RATIO)
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setEchelleHeight(echelleState.height / ECHELLE_STEP_RATIO)
     else return
     e.preventDefault()
   })
@@ -1652,6 +1665,17 @@ const renderEchelleReveal = (target, players) => {
 
 // Affichage d'une nouvelle question "échelle" : l'élément démarre à la
 // taille de la référence (aucun indice sur la réponse).
+// « 3,5× plus grand », « 2× plus petit », « même taille » : taille
+// rapportée à la référence (révélation, voir question:reveal). Une décimale
+// sous ×10, entier au-delà ; ±5 % autour de 1 compte pour « même taille ».
+const formatScaleFactor = (height, refHeight) => {
+  const r = height / refHeight
+  if (!(r > 0) || !Number.isFinite(r)) return ''
+  if (Math.abs(Math.log(r)) <= Math.log(1.05)) return 'même taille'
+  const f = r >= 1 ? r : 1 / r
+  const txt = f < 10 ? String(Math.round(f * 10) / 10).replace('.', ',') : String(Math.round(f))
+  return `${txt}× plus ${r >= 1 ? 'grand' : 'petit'}`
+}
 // Silhouettes en aplat : l'image sert de masque à un fond uni (bleu pour la
 // référence, rouge pour l'estimation). Une image d'un autre domaine n'est
 // utilisable en masque que si son serveur l'autorise (CORS) — sinon le masque
@@ -1687,7 +1711,7 @@ const showEchelleQuestion = (payload) => {
   echelleState.itemX = 55
   echelleState.itemElev = 0
   echelleState.disabled = true
-  echelleFitView()
+  echelleStartView()
   echelleState.baseView = echelleState.viewHeight
   renderEchelleScene()
   echelleUpdateZoomButtons()
@@ -10926,13 +10950,16 @@ socket.on('question:reveal', payload => {
     }
   } else if (payload.type === 'echelle') {
     renderEchelleReveal(payload.target, payload.players)
+    // Retour utilisateur : pas seulement la taille, aussi le multiplicateur
+    // par rapport à la référence (« 3,5× plus grand que la Wii »), pour la
+    // vraie réponse comme pour celle du joueur — c'est ce qu'il estimait à l'œil.
     const t = Number(payload.target)
     const mine = Number(myScaleAnswer)
-    if (t > 0 && mine > 0) {
-      const pct = Math.round((mine / t - 1) * 100)
-      revealFreeAnswer(`Réelle : ${formatScaleHeight(t)} · Ta réponse : ${formatScaleHeight(mine)} (${pct > 0 ? '+' : ''}${pct} %)`)
-    } else if (t > 0) {
-      revealFreeAnswer(formatScaleHeight(t))
+    if (t > 0) {
+      const answer = `Réponse : ${formatScaleHeight(t)} (${formatScaleFactor(t, echelleState.refHeight)} que ${echelleRefLabel || 'la référence'})`
+      revealFreeAnswer(mine > 0
+        ? `${answer} · Toi : ${formatScaleHeight(mine)} (${formatScaleFactor(mine, echelleState.refHeight)})`
+        : answer)
     }
     // Barème de précision (voir server/index.js scalePoints) : plein barème
     // = "Bonne réponse", des points sans le plein = "Presque".
