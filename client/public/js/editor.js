@@ -3100,7 +3100,7 @@ const QTYPE_HINTS = {
   // révélation est LIMITÉE (5 clics max) et COÛTE des points, pas un
   // balayage continu et gratuit.
   halo: { icon: '✨', text: 'Les joueurs cliquent jusqu\'à 5 fois (chaque clic coûte des points, de plus en plus) pour révéler des halos de lumière permanents sur l\'image cachée.', color: '#c4b5fd', rgb: '196,181,253' },
-  echelle: { icon: '📏', text: 'Les joueurs agrandissent ou rétrécissent l\'élément jusqu\'à sa vraie taille, à côté de la référence. Plus ils sont précis, plus ils marquent.', color: '#fb7185', rgb: '251,113,133' }
+  echelle: { icon: '📏', text: 'Les joueurs pincent l\'élément (ou tirent sa poignée) jusqu\'à sa vraie taille, à côté de la référence — dont la taille leur reste cachée. Plus ils sont précis, plus ils marquent.', color: '#fb7185', rgb: '251,113,133' }
 }
 const qTypeHint = document.getElementById('qTypeHint')
 const updateQTypeHint = () => {

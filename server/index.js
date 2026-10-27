@@ -1140,24 +1140,32 @@ const start = async () => {
   // "echelle" (tâche 054) : deviner la hauteur réelle d'un élément à côté
   // d'une référence de hauteur connue. Points selon la PRÉCISION seule (pas
   // de vitesse, décision utilisateur), mesurée en RAPPORT et non en cm — 10
-  // cm d'erreur pèsent lourd sur une fourmi, presque rien sur une girafe :
-  // écart r = |ln(proposé / réel)|, plein barème jusqu'à SCALE_FULL_RATIO
-  // (±5 %), 0 point à partir de SCALE_ZERO_RATIO (×2 ou ÷2), linéaire en
-  // log entre les deux. SCALE_CORRECT_RATIO (±10 %) ne sert qu'au verdict
-  // binaire du récap/des stats (historyEntry.results). SCALE_BOUND_FACTOR :
-  // bornes de la réponse autour de la référence, identiques au curseur
-  // côté client (index.js) et à la validation de l'éditeur (editor.js).
-  const SCALE_FULL_RATIO = 1.05
-  const SCALE_ZERO_RATIO = 2
+  // cm d'erreur pèsent lourd sur une fourmi, presque rien sur une girafe.
+  // Barème repris de Magnitudle (retour utilisateur : « applique toute leur
+  // méthode de jeu ») : paliers [rapport, % des points], interpolés en
+  // échelle logarithmique entre deux paliers — plein barème jusqu'à ±6 %,
+  // 33 % des points à ×2, plus rien à partir de ×5 (l'ancien barème tombait
+  // à 0 dès ×2, jugé trop sévère). SCALE_CORRECT_RATIO (±10 %) ne sert qu'au
+  // verdict binaire du récap/des stats (historyEntry.results).
+  // SCALE_BOUND_FACTOR : bornes de la réponse autour de la référence,
+  // identiques à l'éditeur (editor.js) et au jeu (index.js).
+  const SCALE_ANCHORS = [[1, 100], [1.06, 100], [1.12, 90], [1.2, 80], [1.35, 65], [1.5, 53], [2, 33], [3, 14], [5, 0]]
   const SCALE_CORRECT_RATIO = 1.1
   const SCALE_BOUND_FACTOR = 200
   const SCALE_MAX_POINTS = 1000
   const scalePoints = (guess, target) => {
-    const r = Math.abs(Math.log(guess / target))
-    const full = Math.log(SCALE_FULL_RATIO), zero = Math.log(SCALE_ZERO_RATIO)
-    if (r <= full) return SCALE_MAX_POINTS
-    if (r >= zero) return 0
-    return Math.round(SCALE_MAX_POINTS * (zero - r) / (zero - full))
+    const ratio = guess >= target ? guess / target : target / guess
+    if (!Number.isFinite(ratio)) return 0
+    if (ratio <= SCALE_ANCHORS[1][0]) return SCALE_MAX_POINTS
+    for (let i = 2; i < SCALE_ANCHORS.length; i++) {
+      const [f0, p0] = SCALE_ANCHORS[i - 1]
+      const [f1, p1] = SCALE_ANCHORS[i]
+      if (ratio <= f1) {
+        const t = (Math.log(ratio) - Math.log(f0)) / (Math.log(f1) - Math.log(f0))
+        return Math.round(SCALE_MAX_POINTS * (p0 + (p1 - p0) * t) / 100)
+      }
+    }
+    return 0
   }
   // Hauteur lisible pour le récap (« 23 cm », « 1,20 m ») — même format que
   // l'écran de jeu (voir formatScaleHeight dans index.js).

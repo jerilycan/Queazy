@@ -507,3 +507,37 @@ Corrigé :
   - − maintenu 1,5 s : 42 cm ;
   - un tap sur la scène ne change plus la taille, et `touch-action` revient
     à `auto` : la page défile.
+
+## Méthode de jeu de Magnitudle (demande de l'utilisateur)
+L'utilisateur a fourni les fichiers JS de Magnitudle (« Size It Up »). Ils
+ont servi de **référence pour la mécanique**, rien n'a été recopié. Repris
+et réécrit à la façon de QuEazy :
+- **Pincement à deux doigts** sur la scène : la taille suit l'écartement en
+  proportion.
+- **Poignée ↗** au coin de l'élément : la taille suit la distance
+  doigt-pied de l'élément.
+- **Glisser l'élément** le long du sol (`itemX`), pour le poser contre la
+  référence ; il devient translucide pendant le déplacement.
+- **Zoom manuel uniquement**, avec deux boutons loupe (×0,75 par appui).
+  On peut dézoomer jusqu'à 25 fois le champ de départ et zoomer jusqu'à
+  4 fois plus près, ce qui est un ajout de notre part pour les éléments
+  minuscules. Plus aucun recadrage automatique pendant le réglage. Les
+  boutons − et + sont retirés.
+- **Ligne pointillée** à la hauteur de la référence.
+- **Taille de la référence et taille choisie cachées** pendant la
+  question (comparaison à l'œil) ; elles réapparaissent à la révélation.
+- **Barème** : paliers de Magnitudle (rapport → % des points)
+  1,06 → 100, 1,12 → 90, 1,2 → 80, 1,35 → 65, 1,5 → 53, 2 → 33, 3 → 14,
+  5 → 0, interpolés en log, sur 1000 points.
+- Vérifié en local :
+  - points : +5 % → 1000, ×1,5 → 530, ×2 → 330, ×5 → 0 ;
+  - pincement tactile, doigts deux fois plus écartés : 23 → 46 cm ;
+  - poignée tirée de +25 % : 46 → 57,5 cm ;
+  - glisser : l'élément passe à 43 % de la largeur sans changer de
+    taille ;
+  - 2 dézooms puis 1 zoom : la vue passe de 47 à 84 puis 63 cm ;
+  - aucune taille affichée pendant la question.
+- `touch-action: none` est revenu sur la scène, indispensable pour pincer :
+  la page ne défile pas quand le doigt est sur la scène, comme sur
+  Magnitudle.
+

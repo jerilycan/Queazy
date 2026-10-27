@@ -820,7 +820,7 @@ const QUESTION_TYPE_META = {
   halo: { icon: '✨', label: 'Halo', color: '#c4b5fd', rgb: '196,181,253', hint: 'Clique jusqu\'à 5 fois sur l\'image noire pour révéler des halos de lumière permanents (chaque clic coûte un peu plus de points), puis valide ta réponse.' },
   // "Échelle" (tâche 054) : même couleur que --color-echelle (style.css) et
   // QTYPE_COLOR/QTYPE_HINTS (editor.js).
-  echelle: { icon: '📏', label: 'Échelle', color: '#fb7185', rgb: '251,113,133', hint: 'Agrandis ou rétrécis l\'élément jusqu\'à sa vraie taille, à côté de la référence, puis valide. Seule la précision compte.' }
+  echelle: { icon: '📏', label: 'Échelle', color: '#fb7185', rgb: '251,113,133', hint: 'Pince l\'élément à deux doigts (ou tire sa poignée ↗) jusqu\'à sa vraie taille à côté de la référence, puis valide. Seule la précision compte.' }
 }
 // Types dont la mécanique n'est pas évidente au premier coup d'œil (retour
 // utilisateur) : l'intro reste affichée un peu plus longtemps pour ceux-là
@@ -1359,13 +1359,18 @@ const echelleItemImg = document.getElementById('echelleItemImg')
 const echelleItemReadout = document.getElementById('echelleItemReadout')
 const echelleRefCaption = document.getElementById('echelleRefCaption')
 const echelleItemCaption = document.getElementById('echelleItemCaption')
-const echelleMinusBtn = document.getElementById('echelleMinusBtn')
+const echelleZoomOutBtn = document.getElementById('echelleZoomOutBtn')
+const echelleZoomInBtn = document.getElementById('echelleZoomInBtn')
+const echelleHandle = document.getElementById('echelleHandle')
 const echelleRevealLayer = document.getElementById('echelleRevealLayer')
+const echelleRefLine = document.getElementById('echelleRefLine')
 // Taille envoyée par CE joueur (null s'il n'a pas répondu) — pour le
 // bandeau de révélation (écart en %).
 let myScaleAnswer = null
 // Image de l'élément, gardée pour les silhouettes de la révélation.
 let echelleItemSrc = ''
+// Nom de la référence (légende), complété par sa taille à la révélation.
+let echelleRefLabel = ''
 // Palette des silhouettes (--scale-player-N, style.css) ; colorIdx vient du
 // serveur, stable sur toute la partie (voir revealQuestion).
 const SCALE_PLAYER_COLORS = 12
@@ -1382,7 +1387,6 @@ const ECHELLE_REVEAL_MAX_OVERLAP = 2.2
 // Largeur moyenne estimée d'un pseudo (px) : décide sur combien de rangées
 // les répartir pour qu'ils ne se recouvrent pas.
 const ECHELLE_REVEAL_LABEL_PX = 64
-const echellePlusBtn = document.getElementById('echellePlusBtn')
 // DOIT rester égal à SCALE_BOUND_FACTOR (server/index.js, editor.js).
 const SCALE_BOUND_FACTOR = 200
 // DOIT rester égal à SCALE_MAX_POINTS (server/index.js) : sert seulement au
@@ -1391,7 +1395,16 @@ const SCALE_MAX_POINTS = 1000
 const ECHELLE_SKY_PCT = 84
 const ECHELLE_VIEW_MARGIN = 1.15
 const ECHELLE_STEP_RATIO = 1.02 // un appui sur −/+ : ±2 % de la taille
-const echelleState = { refHeight: 100, height: 100, refRatio: 1, itemRatio: 1, viewHeight: 115, disabled: true }
+// itemX : position horizontale de l'élément (en % de la scène), qu'on peut
+// glisser pour le poser contre la référence. baseView : vue de départ de la
+// question, repère des bornes du zoom manuel (boutons loupe).
+const echelleState = { refHeight: 100, height: 100, refRatio: 1, itemRatio: 1, viewHeight: 115, baseView: 115, itemX: 70, disabled: true }
+// Zoom manuel (boutons loupe, jamais automatique) : ×0,75 par appui, jusqu'à
+// 25 fois plus de champ que la vue de départ pour les grands éléments, et 4
+// fois moins pour bien voir un élément minuscule.
+const ECHELLE_ZOOM_STEP = 0.75
+const ECHELLE_ZOOM_MAX_OUT = 25
+const ECHELLE_ZOOM_MAX_IN = 4
 // Même format que formatScaleHeight côté serveur (récap) : « 23 cm », « 1,20 m ».
 const formatScaleHeight = (cm) => cm < 100
   ? `${Math.round(cm * 10) / 10} cm`.replace('.', ',')
@@ -1414,6 +1427,8 @@ const sizeEchelleFigure = (el, height, ratio) => {
 const renderEchelleScene = () => {
   sizeEchelleFigure(echelleRefEl, echelleState.refHeight, echelleState.refRatio)
   sizeEchelleFigure(echelleItemEl, echelleState.height, echelleState.itemRatio)
+  if (echelleItemEl) echelleItemEl.style.left = `${echelleState.itemX}%`
+  if (echelleRefLine) echelleRefLine.style.bottom = `${100 - ECHELLE_SKY_PCT + (echelleState.refHeight / echelleState.viewHeight) * ECHELLE_SKY_PCT}%`
   if (echelleItemReadout) echelleItemReadout.textContent = formatScaleHeight(echelleState.height)
   if (echelleScene) echelleScene.setAttribute('aria-valuetext', formatScaleHeight(echelleState.height))
 }
@@ -1423,47 +1438,111 @@ const setEchelleHeight = (h, refit) => {
   if (refit) echelleFitView()
   renderEchelleScene()
 }
-// Réglage UNIQUEMENT par −/+ (retour utilisateur après test sur téléphone :
-// le glisser sur la scène et son zoom automatique étaient peu maniables —
-// le doigt masquait l'élément et la scène bloquait le défilement de la
-// page). La vue se recadre toute seule après chaque pas (echelleFitView),
-// pour que l'élément reste visible. Clavier (accessibilité) : flèches, même
-// pas qu'un appui.
+// Réglage à la manière de Magnitudle (retour utilisateur, après test sur
+// téléphone de la version −/+ : « applique toute leur méthode de jeu ») :
+//  - deux doigts posés sur la scène : la taille suit l'écartement des doigts,
+//    en proportion (doigts deux fois plus écartés = élément deux fois plus grand) ;
+//  - poignée ↗ au coin de l'élément : la taille suit la distance entre le
+//    doigt et le pied de l'élément (point fixe quand il grandit) ;
+//  - un doigt sur l'élément : on le fait glisser le long du sol, pour le
+//    poser contre la référence et comparer ;
+//  - zoom de la scène UNIQUEMENT par les boutons loupe, jamais automatique :
+//    un élément qui dépasse sort simplement par le haut, au joueur de dézoomer.
+// Pointer events (souris, doigt, stylet), un seul chemin ; touch-action:none
+// sur la scène (voir style.css) pour que le navigateur ne zoome/défile pas
+// la page pendant le geste.
+const ECHELLE_HANDLE_SLOP_PX = 14 // zone tactile de la poignée, en plus de sa taille
+const echelleUpdateZoomButtons = () => {
+  const v = echelleState.viewHeight, base = echelleState.baseView
+  if (echelleZoomOutBtn) echelleZoomOutBtn.disabled = echelleState.disabled || v >= base * ECHELLE_ZOOM_MAX_OUT * 0.999
+  if (echelleZoomInBtn) echelleZoomInBtn.disabled = echelleState.disabled || v <= base / ECHELLE_ZOOM_MAX_IN * 1.001
+}
+const echelleZoom = (factor) => {
+  if (echelleState.disabled) return
+  const base = echelleState.baseView
+  echelleState.viewHeight = Math.min(base * ECHELLE_ZOOM_MAX_OUT, Math.max(base / ECHELLE_ZOOM_MAX_IN, echelleState.viewHeight * factor))
+  renderEchelleScene()
+  echelleUpdateZoomButtons()
+}
+if (echelleZoomOutBtn) echelleZoomOutBtn.onclick = () => echelleZoom(1 / ECHELLE_ZOOM_STEP)
+if (echelleZoomInBtn) echelleZoomInBtn.onclick = () => echelleZoom(ECHELLE_ZOOM_STEP)
 if (echelleScene) {
+  const pointers = new Map() // pointerId -> { x, y }
+  let gesture = null // { mode: 'pinch' | 'resize' | 'move', ... }
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
+  const inRect = (r, x, y, pad = 0) => x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad
+  // Pied de l'élément (centre du bas) : seul point qui ne bouge pas quand il
+  // grandit (posé au sol, centré sur itemX).
+  const itemFoot = () => {
+    const r = echelleItemEl.getBoundingClientRect()
+    return { x: (r.left + r.right) / 2, y: r.bottom }
+  }
+  const startGesture = (p) => {
+    const pts = [...pointers.values()]
+    if (pts.length >= 2) {
+      gesture = { mode: 'pinch', initDist: Math.max(1, dist(pts[0], pts[1])), initHeight: echelleState.height }
+      return
+    }
+    if (echelleHandle && inRect(echelleHandle.getBoundingClientRect(), p.x, p.y, ECHELLE_HANDLE_SLOP_PX)) {
+      const foot = itemFoot()
+      gesture = { mode: 'resize', foot, initDist: Math.max(1, dist(p, foot)), initHeight: echelleState.height }
+      echelleScene.classList.add('is-resizing')
+      return
+    }
+    if (echelleItemEl && inRect(echelleItemEl.getBoundingClientRect(), p.x, p.y)) {
+      gesture = { mode: 'move', startX: p.x, initItemX: echelleState.itemX }
+      echelleScene.classList.add('is-moving')
+      return
+    }
+    gesture = null
+  }
+  echelleScene.addEventListener('pointerdown', e => {
+    if (echelleState.disabled) return
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    try { echelleScene.setPointerCapture(e.pointerId) } catch {}
+    startGesture({ x: e.clientX, y: e.clientY })
+    e.preventDefault()
+  })
+  echelleScene.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return
+    const p = { x: e.clientX, y: e.clientY }
+    pointers.set(e.pointerId, p)
+    if (!gesture || echelleState.disabled) return
+    if (gesture.mode === 'pinch') {
+      const pts = [...pointers.values()]
+      if (pts.length < 2) return
+      setEchelleHeight(gesture.initHeight * dist(pts[0], pts[1]) / gesture.initDist, false)
+    } else if (gesture.mode === 'resize') {
+      setEchelleHeight(gesture.initHeight * dist(p, gesture.foot) / gesture.initDist, false)
+    } else if (gesture.mode === 'move') {
+      const w = echelleScene.getBoundingClientRect().width || 1
+      echelleState.itemX = Math.min(92, Math.max(8, gesture.initItemX + (p.x - gesture.startX) / w * 100))
+      renderEchelleScene()
+    }
+  })
+  const endPointer = (e) => {
+    if (!pointers.delete(e.pointerId)) return
+    try { echelleScene.releasePointerCapture(e.pointerId) } catch {}
+    // Un doigt levé pendant un pincement : on ne bascule PAS sur un
+    // déplacement avec le doigt restant (l'élément sauterait) — geste terminé.
+    if (pointers.size === 0 || gesture?.mode === 'pinch') {
+      gesture = null
+      echelleScene.classList.remove('is-resizing', 'is-moving')
+    }
+  }
+  echelleScene.addEventListener('pointerup', endPointer)
+  echelleScene.addEventListener('pointercancel', endPointer)
+  // Clavier (accessibilité) : flèches = ±2 % de taille.
   echelleScene.tabIndex = 0
   echelleScene.setAttribute('role', 'slider')
   echelleScene.addEventListener('keydown', e => {
     if (echelleState.disabled) return
-    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setEchelleHeight(echelleState.height * ECHELLE_STEP_RATIO, true)
-    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setEchelleHeight(echelleState.height / ECHELLE_STEP_RATIO, true)
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setEchelleHeight(echelleState.height * ECHELLE_STEP_RATIO, false)
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setEchelleHeight(echelleState.height / ECHELLE_STEP_RATIO, false)
     else return
     e.preventDefault()
   })
 }
-// −/+ : un appui = ±2 % (réglage fin). Maintenu : répété de plus en plus
-// vite ET par pas de plus en plus grands (jusqu'à ±6 % par répétition) —
-// seul moyen de réglage désormais, il faut pouvoir passer de 23 cm à 2 m
-// en quelques secondes sans enchaîner des dizaines d'appuis.
-const ECHELLE_HOLD_MAX_STEP = 1.06
-;[[echelleMinusBtn, -1], [echellePlusBtn, 1]].forEach(([btn, dir]) => {
-  if (!btn) return
-  let holdTimer = null
-  const stop = () => { clearTimeout(holdTimer); holdTimer = null }
-  const tick = (delay, step) => {
-    if (echelleState.disabled) return stop()
-    setEchelleHeight(echelleState.height * step ** dir, true)
-    holdTimer = setTimeout(() => tick(Math.max(50, delay * 0.75), Math.min(ECHELLE_HOLD_MAX_STEP, step * 1.008)), delay)
-  }
-  btn.addEventListener('pointerdown', e => {
-    if (echelleState.disabled) return
-    e.preventDefault()
-    stop()
-    tick(300, ECHELLE_STEP_RATIO)
-  })
-  ;['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => btn.addEventListener(ev, stop))
-  // Clavier : Entrée/Espace déclenchent un clic sans pointerdown.
-  btn.addEventListener('click', e => { if (e.detail === 0 && !echelleState.disabled) setEchelleHeight(echelleState.height * ECHELLE_STEP_RATIO ** dir, true) })
-})
 // Révélation (tâche 054) : la silhouette grisée à la vraie taille et celle de
 // CHAQUE joueur à la taille qu'il a proposée (retour utilisateur : comme les
 // points de chacun au mode "image"), alignées sur le sol et triées par
@@ -1486,6 +1565,7 @@ const renderEchelleReveal = (target, players) => {
   // style.css .echelle-area.is-revealed).
   const left0 = 22, span = 76
   echelleArea.classList.add('is-revealed')
+  if (echelleRefCaption) echelleRefCaption.textContent = `${echelleRefLabel} · ${formatScaleHeight(echelleState.refHeight)}`
   const rect = echelleScene ? echelleScene.getBoundingClientRect() : null
   const slotPx = rect && rect.width ? rect.width * span / 100 / entries.length : 0
   let view = ECHELLE_VIEW_MARGIN * Math.min(tallest, base * ECHELLE_REVEAL_MAX_SPAN)
@@ -1546,14 +1626,21 @@ const showEchelleQuestion = (payload) => {
   echelleState.refRatio = Number(payload.refRatio) || 1
   echelleState.itemRatio = Number(payload.itemRatio) || 1
   echelleState.height = echelleState.refHeight
+  echelleState.itemX = 70
   echelleState.disabled = true
   echelleFitView()
+  echelleState.baseView = echelleState.viewHeight
   renderEchelleScene()
+  echelleUpdateZoomButtons()
   // MJ en mode "Présenter" (et donc la TV, qui copie son écran) : il ne
   // répond pas — ni −/+ ni pastille de taille, qui afficherait une taille
   // de départ sans signification pour la salle.
   if (echelleArea) echelleArea.classList.toggle('is-spectator', isPresenterHost())
-  if (echelleRefCaption) echelleRefCaption.textContent = `${payload.refLabel || 'Référence'} · ${formatScaleHeight(echelleState.refHeight)}`
+  // Taille de la référence CACHÉE pendant la question (comme Magnitudle) : on
+  // compare à l'œil, pas au calcul — affichée à la révélation (voir
+  // renderEchelleReveal).
+  echelleRefLabel = payload.refLabel || 'Référence'
+  if (echelleRefCaption) echelleRefCaption.textContent = echelleRefLabel
   if (echelleItemCaption) echelleItemCaption.textContent = payload.itemLabel || '?'
   const setImages = (refSrc, itemSrc) => {
     echelleItemSrc = itemSrc || ''
@@ -7450,7 +7537,7 @@ const TUTO_STEPS = {
   // "Échelle" (tâche 054) : pas encore de vidéo — la fenêtre affiche « Démo
   // bientôt disponible » à la place (voir getOrCreateTutoVideoEl), et pas
   // d'entrée dans TUTO_STEP_STARTS tant qu'elle n'existe pas.
-  echelle: [['1', 'Observe la référence', 'Sa vraie taille est écrite dessous'], ['2', "Agrandis ou rétrécis l'élément", 'Glisse sur la scène, ou −/+ pour affiner'], ['3', 'Valide… puis attends', 'Toutes les silhouettes apparaissent à la fin'], ['★', 'Plus tu es précis, plus tu marques', 'Pas de bonus de vitesse ici']]
+  echelle: [['1', 'Compare avec la référence', "Sa taille reste cachée : tout se joue à l'œil"], ['2', "Pince l'élément à deux doigts", 'Ou tire sa poignée ↗ · glisse-le pour le déplacer · 🔍 pour zoomer'], ['3', 'Valide… puis attends', 'Toutes les silhouettes apparaissent à la fin'], ['★', 'Plus tu es précis, plus tu marques', 'Pas de bonus de vitesse ici']]
 }
 // Instant (en secondes) où chaque étape commence dans la vidéo de son type,
 // mêmes indices que TUTO_STEPS — relevé au rendu des vidéos : à refaire si
@@ -8904,6 +8991,7 @@ socket.on('question:show', payload => {
       setTimelineDisabled(false)
       setRangementDisabled(false)
       echelleState.disabled = false
+      echelleUpdateZoomButtons()
       // Garde-fou en plus du nettoyage normal dans applyTileReveal
       // (animationend) : au cas où cet évènement ne se déclencherait pas
       // (onglet mis en arrière-plan pendant l'entrée, navigateur capricieux...),
@@ -9377,6 +9465,7 @@ const submitCurrentAnswer = () => {
   setTimelineDisabled(true)
   setRangementDisabled(true)
   echelleState.disabled = true
+  echelleUpdateZoomButtons()
   imageDisabled = true
   if (blindtestTitleInput) blindtestTitleInput.disabled = true
   if (blindtestArtistInput) blindtestArtistInput.disabled = true

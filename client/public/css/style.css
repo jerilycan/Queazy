@@ -3467,7 +3467,17 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
   box-shadow: var(--shadow-lg);
   user-select: none;
   -webkit-user-select: none;
+  /* Pincement / poignée / glisser gérés par index.js : le navigateur ne doit
+     ni zoomer ni faire défiler la page pendant le geste sur la scène. */
+  touch-action: none;
 }
+.echelle-scene.is-resizing { cursor: nwse-resize; }
+.echelle-scene.is-moving { cursor: grabbing; }
+/* Pendant le déplacement, l'élément laisse voir la référence derrière lui. */
+.echelle-scene.is-moving .echelle-figure.is-item { opacity: 0.7; }
+.echelle-ref-line { position: absolute; z-index: 1; left: 0; right: 0; height: 0; border-top: 2px dashed rgba(255,255,255,0.28); pointer-events: none; transition: bottom 0.25s cubic-bezier(.22,1,.36,1); }
+.echelle-area.is-revealed .echelle-ref-line { display: none; }
+.echelle-figure.is-item { cursor: grab; }
 .echelle-scene:focus-visible { outline: 3px solid var(--color-echelle); outline-offset: 3px; }
 .echelle-ground { position: absolute; left: 0; right: 0; top: 84%; bottom: 0; border-top: 2px solid rgba(var(--color-echelle-rgb), 0.7); background: rgba(0,0,0,0.25); }
 .echelle-figure {
@@ -3484,6 +3494,10 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
    15 % de marge au-dessus de la plus grande silhouette (ECHELLE_VIEW_MARGIN),
    la pastille y tient. */
 .echelle-readout {
+  /* Taille choisie CACHÉE pendant la question (on compare à l'œil, comme la
+     taille de la référence) — l'élément reste dans le DOM pour un éventuel
+     retour arrière. */
+  display: none;
   position: absolute;
   bottom: 100%;
   left: 50%;
@@ -3516,19 +3530,40 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
 .echelle-step-btn {
   -webkit-touch-callout: none;
   width: 60px;
-  height: 60px;
+  height: 52px;
   flex: 0 0 auto;
   border-radius: 50%;
   border: 1px solid var(--color-border);
   background: var(--gradient-card);
   color: var(--color-text);
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
 }
 .echelle-step-btn:active { transform: scale(0.94); }
+.echelle-step-btn:disabled { opacity: 0.35; cursor: default; }
+/* Poignée ↗ au coin de l'élément (redimensionnement à un doigt). */
+.echelle-handle {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--gradient-card);
+  color: var(--color-echelle);
+  font-weight: 800;
+  font-size: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.echelle-area.is-spectator .echelle-handle,
+.echelle-area.is-locked .echelle-handle { display: none; }
 /* Révélation : l'élément du joueur cède la place au rang de silhouettes. */
 .echelle-reveal-layer { position: absolute; inset: 0; pointer-events: none; }
 .echelle-area.is-revealed .echelle-figure.is-item,

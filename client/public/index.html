@@ -1345,19 +1345,25 @@
             <div id="haloCounter" class="halo-counter"></div>
           </div>
           <!-- Question "échelle" (tâche 054) : référence et élément posés sur
-               le même sol ; le joueur règle la hauteur de l'élément
-               uniquement avec −/+ (maintien = plus vite). Toutes les tailles sont en %
+               le même sol ; le joueur règle la hauteur de l'élément en le
+               pinçant à deux doigts ou en tirant la poignée ↗ de son coin,
+               le déplace en le faisant glisser, et zoome la scène avec les
+               boutons loupe (jamais de zoom automatique). Toutes les tailles sont en %
                de la scène (voir renderEchelleScene, index.js) : la copie de
                #stageWrap sur la TV reste juste à n'importe quelle taille. -->
           <div id="echelleArea" class="echelle-area d-none">
-            <div id="echelleScene" class="echelle-scene" aria-label="Scène : agrandis ou rétrécis l'élément avec − et +">
+            <div id="echelleScene" class="echelle-scene" aria-label="Scène : agrandis ou rétrécis l'élément (pincer, ou tirer la poignée ; flèches au clavier)">
               <div class="echelle-ground"></div>
+              <!-- Repère pointillé à la hauteur de la référence, sur toute la
+                   largeur (comme Magnitudle) : aide à comparer à l'œil. -->
+              <div id="echelleRefLine" class="echelle-ref-line"></div>
               <div id="echelleRef" class="echelle-figure is-ref">
                 <img id="echelleRefImg" class="echelle-img" alt="" draggable="false" />
               </div>
               <div id="echelleItem" class="echelle-figure is-item">
                 <span id="echelleItemReadout" class="echelle-readout"></span>
                 <img id="echelleItemImg" class="echelle-img" alt="" draggable="false" />
+                <span id="echelleHandle" class="echelle-handle" aria-hidden="true">↗</span>
               </div>
               <!-- Révélation : silhouette grisée à la vraie taille + celle de
                    chaque joueur, de sa couleur, pseudo au-dessus (voir
@@ -1367,9 +1373,9 @@
               <div id="echelleItemCaption" class="echelle-caption is-item"></div>
             </div>
             <div class="echelle-controls">
-              <button type="button" id="echelleMinusBtn" class="echelle-step-btn" aria-label="Rétrécir">−</button>
-              <span class="echelle-controls-hint">Maintiens − ou + pour aller plus vite</span>
-              <button type="button" id="echellePlusBtn" class="echelle-step-btn" aria-label="Agrandir">+</button>
+              <button type="button" id="echelleZoomOutBtn" class="echelle-step-btn" aria-label="Dézoomer la scène (plus de place)">🔍−</button>
+              <span class="echelle-controls-hint">Pince à deux doigts ou tire la poignée ↗ · glisse pour déplacer</span>
+              <button type="button" id="echelleZoomInBtn" class="echelle-step-btn" aria-label="Rezoomer la scène">🔍+</button>
             </div>
           </div>
           <!-- Question "indice" (tâche 014) : indices texte/image qui
