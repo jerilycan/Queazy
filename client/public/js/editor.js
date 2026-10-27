@@ -557,6 +557,12 @@ const ECHELLE_SLOTS = ['Ref', 'Item'].map(key => ({
   height: document.getElementById(`echelle${key}Height`),
   heightM: document.getElementById(`echelle${key}HeightM`)
 }))
+// Réglage par question : retrait automatique du fond à l'import (activé par
+// défaut, q.scaleKeepBg = true le désactive). Les fichiers d'origine sont
+// gardés en mémoire (non sauvegardés) pour réappliquer le réglage sans
+// réimporter ; après rechargement du quiz, il faut réimporter.
+const echelleRemoveBgToggle = document.getElementById('echelleRemoveBgToggle')
+const echelleOriginalFiles = new WeakMap()
 // Bornes de la taille à deviner autour de la référence : DOIT rester égal à
 // SCALE_BOUND_FACTOR côté serveur (server/index.js) et au curseur du jeu.
 const SCALE_BOUND_FACTOR = 200
@@ -766,7 +772,7 @@ const applyReadOnly = () => {
     zoomGuessUploadInput, removeZoomGuessBtn, zoomGuessZoomMinusBtn, zoomGuessZoomPlusBtn, zoomGuessZoomInput,
     rechercheUploadInput, removeRechercheBtn,
     haloUploadInput, removeHaloBtn, haloRadiusMinusBtn, haloRadiusPlusBtn, haloRadiusInput,
-    ...ECHELLE_SLOTS.flatMap(slot => [slot.upload, slot.removeBtn, slot.label, slot.height]),
+    ...ECHELLE_SLOTS.flatMap(slot => [slot.upload, slot.removeBtn, slot.label, slot.height]), echelleRemoveBgToggle,
     revealEnigmeUploadInput, removeRevealEnigmeBtn, revealReponseUploadInput, removeRevealReponseBtn,
     revealImageUploadInput, removeRevealImageBtn, revealAudioUploadInput, removeRevealAudioBtn,
     audioUploadInput, audioStartInput, audioDurationInput, audioPreviewBtn, audioExtractBtn,
@@ -1809,7 +1815,8 @@ const SCALE_ALPHA_THRESHOLD = 10
 // touché même s'il contient la même couleur. Marche très bien sur fond uni
 // (fond blanc, détourage, clipart), pas sur une photo au fond chargé : dans
 // ce cas on n'efface rien et l'éditeur le signale.
-// Renvoie 'already' (déjà transparente), 'removed' ou 'busy' (fond chargé).
+// Renvoie 'already' (déjà transparente), 'removed' ou 'busy' (fond chargé) ;
+// processScaleImage donne 'kept' quand le créateur a désactivé le retrait.
 const SCALE_BG_TOLERANCE = 48 // distance RVB à la couleur de fond (bruit JPEG, léger dégradé)
 const removeUniformBackground = (ctx, w, h) => {
   const imgData = ctx.getImageData(0, 0, w, h)
@@ -1859,7 +1866,7 @@ const removeUniformBackground = (ctx, w, h) => {
   ctx.putImageData(imgData, 0, 0)
   return 'removed'
 }
-const processScaleImage = (file, onSuccess) => {
+const processScaleImage = (file, removeBg, onSuccess) => {
   if (!file) return
   if (!file.type || !file.type.startsWith('image/')) {
     showToast('Ce fichier n\'est pas une image', 'error')
@@ -1882,7 +1889,7 @@ const processScaleImage = (file, onSuccess) => {
     src.height = Math.max(1, Math.round(img.naturalHeight * readScale))
     const sctx = src.getContext('2d')
     sctx.drawImage(img, 0, 0, src.width, src.height)
-    const bgStatus = removeUniformBackground(sctx, src.width, src.height)
+    const bgStatus = removeBg ? removeUniformBackground(sctx, src.width, src.height) : 'kept'
     const { data } = sctx.getImageData(0, 0, src.width, src.height)
     let x0 = src.width, y0 = src.height, x1 = -1, y1 = -1, opaque = true
     for (let y = 0; y < src.height; y++) {
@@ -1929,6 +1936,7 @@ const echelleFieldsOf = (q, key) => key === 'Ref'
 
 const populateEchelleFields = (q) => {
   if (!echelleSection || q.type !== 'echelle') return
+  if (echelleRemoveBgToggle) echelleRemoveBgToggle.checked = !q.scaleKeepBg
   ECHELLE_SLOTS.forEach(slot => {
     const f = echelleFieldsOf(q, slot.key)
     if (slot.previewWrap) slot.previewWrap.classList.toggle('d-none', !q[f.image])
@@ -1936,8 +1944,9 @@ const populateEchelleFields = (q) => {
     // Message selon ce qu'a donné l'import (voir removeUniformBackground).
     const note = !q[f.image] ? ''
       : q[f.bg] === 'removed' ? 'Fond retiré automatiquement : vérifie l\'aperçu ci-dessus.'
-        : q[f.opaque] ? 'Fond trop chargé pour être retiré automatiquement : l\'image restera telle quelle en jeu. Pour une silhouette, prends une image sur fond uni ou un PNG transparent.'
-          : ''
+        : q[f.bg] === 'kept' && q[f.opaque] ? 'Fond conservé : l\'image restera telle quelle en jeu.'
+          : q[f.opaque] ? 'Fond trop chargé pour être retiré automatiquement : l\'image restera telle quelle en jeu. Pour une silhouette, prends une image sur fond uni ou un PNG transparent.'
+            : ''
     if (slot.opaqueNote) {
       slot.opaqueNote.textContent = note
       slot.opaqueNote.classList.toggle('d-none', !note)
@@ -1949,21 +1958,44 @@ const populateEchelleFields = (q) => {
   })
 }
 
+// Import d'une image dans un emplacement, avec le réglage de retrait du fond
+// de la question. La question est capturée : l'image arrive en asynchrone.
+const importEchelleImage = (q, slotKey, file) => {
+  processScaleImage(file, !q.scaleKeepBg, ({ dataUrl, ratio, opaque, bgStatus }) => {
+    const f = echelleFieldsOf(q, slotKey)
+    q[f.image] = dataUrl
+    q[f.ratio] = ratio
+    q[f.opaque] = opaque
+    q[f.bg] = bgStatus
+    if (questions[activeIndex] === q) populateEchelleFields(q)
+  })
+}
+
+if (echelleRemoveBgToggle) {
+  echelleRemoveBgToggle.onchange = () => {
+    const q = questions[activeIndex]
+    if (!q) return
+    q.scaleKeepBg = !echelleRemoveBgToggle.checked
+    // Réapplique le réglage aux images déjà importées dans cette session.
+    const originals = echelleOriginalFiles.get(q) || {}
+    let missing = false
+    ECHELLE_SLOTS.forEach(slot => {
+      if (originals[slot.key]) importEchelleImage(q, slot.key, originals[slot.key])
+      else if (q[echelleFieldsOf(q, slot.key).image]) missing = true
+    })
+    if (missing) showToast('Réimporte les images pour appliquer ce réglage', 'info')
+  }
+}
+
 ECHELLE_SLOTS.forEach(slot => {
   if (slot.upload) {
     slot.upload.onchange = () => {
       const file = slot.upload.files && slot.upload.files[0]
       slot.upload.value = ''
-      if (!file || !questions[activeIndex]) return
-      processScaleImage(file, ({ dataUrl, ratio, opaque, bgStatus }) => {
-        const q = questions[activeIndex]
-        const f = echelleFieldsOf(q, slot.key)
-        q[f.image] = dataUrl
-        q[f.ratio] = ratio
-        q[f.opaque] = opaque
-        q[f.bg] = bgStatus
-        populateEchelleFields(q)
-      })
+      const q = questions[activeIndex]
+      if (!file || !q) return
+      echelleOriginalFiles.set(q, { ...echelleOriginalFiles.get(q), [slot.key]: file })
+      importEchelleImage(q, slot.key, file)
     }
   }
   if (slot.removeBtn) {
@@ -1982,6 +2014,8 @@ ECHELLE_SLOTS.forEach(slot => {
         q[f.ratio] = null
         q[f.opaque] = false
         q[f.bg] = null
+        const originals = echelleOriginalFiles.get(q)
+        if (originals) delete originals[slot.key]
         populateEchelleFields(q)
       })
     }
