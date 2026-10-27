@@ -1799,6 +1799,66 @@ if (haloUploadInput) {
 // si le navigateur ne sait pas encoder le WebP (Safari). onSuccess reçoit
 // { dataUrl, ratio (largeur/hauteur), opaque (aucun pixel transparent) }.
 const SCALE_ALPHA_THRESHOLD = 10
+// Retrait automatique du fond à l'import (retour utilisateur : « un filtre
+// qui transforme ton image en png, pour avoir tout le temps la même DA » —
+// en jeu, seule une image à fond transparent devient une silhouette en
+// aplat, une photo opaque restait un rectangle). Sans dépendance : on prend
+// la couleur dominante des bords comme couleur de fond, puis on efface
+// toute la zone de cette couleur RELIÉE aux bords (remplissage depuis les
+// bords, comme un pot de peinture) — l'objet, au centre, n'est jamais
+// touché même s'il contient la même couleur. Marche très bien sur fond uni
+// (fond blanc, détourage, clipart), pas sur une photo au fond chargé : dans
+// ce cas on n'efface rien et l'éditeur le signale.
+// Renvoie 'already' (déjà transparente), 'removed' ou 'busy' (fond chargé).
+const SCALE_BG_TOLERANCE = 48 // distance RVB à la couleur de fond (bruit JPEG, léger dégradé)
+const removeUniformBackground = (ctx, w, h) => {
+  const imgData = ctx.getImageData(0, 0, w, h)
+  const d = imgData.data
+  for (let i = 3; i < d.length; i += 4) if (d[i] < 255) return 'already'
+  // Couleur de fond = médiane des pixels du pourtour.
+  const border = []
+  for (let x = 0; x < w; x++) border.push(x, (h - 1) * w + x)
+  for (let y = 1; y < h - 1; y++) border.push(y * w, y * w + w - 1)
+  const median = (ch) => {
+    const v = border.map(p => d[p * 4 + ch]).sort((a, b) => a - b)
+    return v[v.length >> 1]
+  }
+  const bg = [median(0), median(1), median(2)]
+  const distBg = (p) => {
+    const i = p * 4
+    return Math.hypot(d[i] - bg[0], d[i + 1] - bg[1], d[i + 2] - bg[2])
+  }
+  // Pourtour pas assez uniforme : ce n'est pas un fond uni.
+  const closeBorder = border.filter(p => distBg(p) < SCALE_BG_TOLERANCE)
+  if (closeBorder.length < border.length * 0.6) return 'busy'
+  // Remplissage depuis les bords (4 voisins).
+  const removed = new Uint8Array(w * h)
+  const queue = new Int32Array(w * h)
+  let head = 0, tail = 0
+  closeBorder.forEach(p => { if (!removed[p]) { removed[p] = 1; queue[tail++] = p } })
+  while (head < tail) {
+    const p = queue[head++]
+    const x = p % w, y = (p - x) / w
+    const next = [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]
+    for (const n of next) {
+      if (n < 0 || removed[n] || distBg(n) >= SCALE_BG_TOLERANCE) continue
+      removed[n] = 1
+      queue[tail++] = n
+    }
+  }
+  // Presque tout effacé : l'objet a la couleur du fond, on n'y touche pas.
+  if (tail > w * h * 0.97) return 'busy'
+  for (let p = 0; p < w * h; p++) {
+    if (removed[p]) { d[p * 4 + 3] = 0; continue }
+    // Bord adouci : un pixel de l'objet collé au fond et encore proche de sa
+    // couleur (anticrénelage) devient semi-transparent.
+    const x = p % w
+    const touchesBg = (x > 0 && removed[p - 1]) || (x < w - 1 && removed[p + 1]) || (p >= w && removed[p - w]) || (p < w * (h - 1) && removed[p + w])
+    if (touchesBg) d[p * 4 + 3] = Math.round(255 * Math.min(1, distBg(p) / (SCALE_BG_TOLERANCE * 2)))
+  }
+  ctx.putImageData(imgData, 0, 0)
+  return 'removed'
+}
 const processScaleImage = (file, onSuccess) => {
   if (!file) return
   if (!file.type || !file.type.startsWith('image/')) {
@@ -1813,14 +1873,16 @@ const processScaleImage = (file, onSuccess) => {
   const objectUrl = URL.createObjectURL(file)
   img.onload = () => {
     URL.revokeObjectURL(objectUrl)
-    // Lecture des pixels sur une copie déjà réduite (2000 px max) : une
-    // photo de 6000 px prendrait sinon un temps visible au getImageData.
-    const readScale = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight))
+    // Lecture des pixels sur une copie déjà réduite (1200 px max, le double
+    // de la taille finale) : une photo de 6000 px prendrait sinon un temps
+    // visible au getImageData et au retrait du fond.
+    const readScale = Math.min(1, 1200 / Math.max(img.naturalWidth, img.naturalHeight))
     const src = document.createElement('canvas')
     src.width = Math.max(1, Math.round(img.naturalWidth * readScale))
     src.height = Math.max(1, Math.round(img.naturalHeight * readScale))
     const sctx = src.getContext('2d')
     sctx.drawImage(img, 0, 0, src.width, src.height)
+    const bgStatus = removeUniformBackground(sctx, src.width, src.height)
     const { data } = sctx.getImageData(0, 0, src.width, src.height)
     let x0 = src.width, y0 = src.height, x1 = -1, y1 = -1, opaque = true
     for (let y = 0; y < src.height; y++) {
@@ -1846,7 +1908,7 @@ const processScaleImage = (file, onSuccess) => {
     out.getContext('2d').drawImage(src, x0, y0, cropW, cropH, 0, 0, out.width, out.height)
     const webp = out.toDataURL('image/webp', 0.9)
     const dataUrl = webp.startsWith('data:image/webp') ? webp : out.toDataURL('image/png')
-    onSuccess({ dataUrl, ratio: cropW / cropH, opaque })
+    onSuccess({ dataUrl, ratio: cropW / cropH, opaque, bgStatus })
   }
   img.onerror = () => {
     // Même cas que compressImageFile : type annoncé mais image illisible.
@@ -1862,8 +1924,8 @@ const formatEchelleMeters = (cm) => Number(cm) >= 100 ? `= ${(Number(cm) / 100).
 // La hauteur de l'élément vit dans q.correct[0] (comme la cible de
 // "graduation") : c'est la réponse, retirée de la diffusion par le serveur.
 const echelleFieldsOf = (q, key) => key === 'Ref'
-  ? { image: 'refImage', ratio: 'refRatio', opaque: 'refOpaque', label: 'refLabel', getHeight: () => q.refHeight, setHeight: v => { q.refHeight = v } }
-  : { image: 'itemImage', ratio: 'itemRatio', opaque: 'itemOpaque', label: 'itemLabel', getHeight: () => q.correct?.[0], setHeight: v => { q.correct = [v] } }
+  ? { image: 'refImage', ratio: 'refRatio', opaque: 'refOpaque', bg: 'refBgStatus', label: 'refLabel', getHeight: () => q.refHeight, setHeight: v => { q.refHeight = v } }
+  : { image: 'itemImage', ratio: 'itemRatio', opaque: 'itemOpaque', bg: 'itemBgStatus', label: 'itemLabel', getHeight: () => q.correct?.[0], setHeight: v => { q.correct = [v] } }
 
 const populateEchelleFields = (q) => {
   if (!echelleSection || q.type !== 'echelle') return
@@ -1871,7 +1933,15 @@ const populateEchelleFields = (q) => {
     const f = echelleFieldsOf(q, slot.key)
     if (slot.previewWrap) slot.previewWrap.classList.toggle('d-none', !q[f.image])
     if (slot.previewImg && q[f.image]) slot.previewImg.src = q[f.image]
-    if (slot.opaqueNote) slot.opaqueNote.classList.toggle('d-none', !(q[f.image] && q[f.opaque]))
+    // Message selon ce qu'a donné l'import (voir removeUniformBackground).
+    const note = !q[f.image] ? ''
+      : q[f.bg] === 'removed' ? 'Fond retiré automatiquement : vérifie l\'aperçu ci-dessus.'
+        : q[f.opaque] ? 'Fond trop chargé pour être retiré automatiquement : l\'image restera telle quelle en jeu. Pour une silhouette, prends une image sur fond uni ou un PNG transparent.'
+          : ''
+    if (slot.opaqueNote) {
+      slot.opaqueNote.textContent = note
+      slot.opaqueNote.classList.toggle('d-none', !note)
+    }
     if (slot.label) slot.label.value = q[f.label] || ''
     const h = f.getHeight()
     if (slot.height) slot.height.value = Number(h) > 0 ? h : ''
@@ -1885,12 +1955,13 @@ ECHELLE_SLOTS.forEach(slot => {
       const file = slot.upload.files && slot.upload.files[0]
       slot.upload.value = ''
       if (!file || !questions[activeIndex]) return
-      processScaleImage(file, ({ dataUrl, ratio, opaque }) => {
+      processScaleImage(file, ({ dataUrl, ratio, opaque, bgStatus }) => {
         const q = questions[activeIndex]
         const f = echelleFieldsOf(q, slot.key)
         q[f.image] = dataUrl
         q[f.ratio] = ratio
         q[f.opaque] = opaque
+        q[f.bg] = bgStatus
         populateEchelleFields(q)
       })
     }
@@ -1910,6 +1981,7 @@ ECHELLE_SLOTS.forEach(slot => {
         q[f.image] = null
         q[f.ratio] = null
         q[f.opaque] = false
+        q[f.bg] = null
         populateEchelleFields(q)
       })
     }

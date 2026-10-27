@@ -1373,9 +1373,8 @@ const echelleZoomOutBtn = document.getElementById('echelleZoomOutBtn')
 const echelleZoomInBtn = document.getElementById('echelleZoomInBtn')
 const echelleHandle = document.getElementById('echelleHandle')
 const echelleRevealLayer = document.getElementById('echelleRevealLayer')
-// Silhouettes en aplat par masque CSS (mask-image) : possible seulement si
-// l'image est lisible en CORS (data: toujours ; Supabase Storage en
-// principe). Sinon repli sur les vraies images (voir setEchelleImages).
+// L'élément est-il affiché en silhouette (fond transparent, lisible en CORS) ?
+// Sinon, vraies images, y compris à la révélation (voir setEchelleMasks).
 let echelleMaskOk = false
 // Taille envoyée par CE joueur (null s'il n'a pas répondu) — pour le
 // bandeau de révélation (écart en %).
@@ -1677,26 +1676,56 @@ const formatScaleFactor = (height, refHeight) => {
   return `${txt}× plus ${r >= 1 ? 'grand' : 'petit'}`
 }
 // Silhouettes en aplat : l'image sert de masque à un fond uni (bleu pour la
-// référence, rouge pour l'estimation). Une image d'un autre domaine n'est
-// utilisable en masque que si son serveur l'autorise (CORS) — sinon le masque
-// échouerait et la silhouette deviendrait invisible : on le vérifie d'abord
-// par une requête CORS, et on retombe sur les vraies images en cas d'échec.
+// référence, rouge pour l'estimation) — mais SEULEMENT si elle a un fond
+// transparent (retour utilisateur : « pourquoi mes images sont des
+// rectangles de couleur ? » — une photo opaque donne un masque plein, donc
+// un rectangle). Chaque image est donc inspectée : transparente -> aplat ;
+// opaque -> la vraie image. Lire ses pixels exige aussi que son serveur
+// l'autorise (CORS) — sinon le masque échouerait aussi : vraie image.
 const cssUrl = (src) => `url("${String(src).replace(/"/g, '%22')}")`
+// true = au moins un pixel transparent, false = opaque, null = illisible
+// (CORS refusé, image cassée). Échantillon réduit à 64 px : largement assez
+// pour voir un fond transparent, sans coût notable.
+const probeImageTransparency = (src) => new Promise(resolve => {
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas')
+      c.width = 64
+      c.height = 64
+      const ctx = c.getContext('2d')
+      ctx.drawImage(img, 0, 0, 64, 64)
+      const { data } = ctx.getImageData(0, 0, 64, 64)
+      for (let i = 3; i < data.length; i += 4) if (data[i] < 250) return resolve(true)
+      resolve(false)
+    } catch {
+      // Canvas « contaminé » : l'image vient d'un autre domaine sans CORS.
+      resolve(null)
+    }
+  }
+  img.onerror = () => resolve(null)
+  img.src = src
+})
 const setEchelleMasks = (refSrc, itemSrc) => {
   echelleMaskOk = false
   if (echelleArea) echelleArea.classList.remove('use-mask')
+  ;[echelleRefEl, echelleItemEl].forEach(el => el?.classList.remove('has-sil'))
   if (!refSrc || !itemSrc) return
-  const apply = () => {
-    echelleMaskOk = true
-    if (echelleRefEl) echelleRefEl.style.setProperty('--sil-mask', cssUrl(refSrc))
-    if (echelleItemEl) echelleItemEl.style.setProperty('--sil-mask', cssUrl(itemSrc))
+  Promise.all([probeImageTransparency(refSrc), probeImageTransparency(itemSrc)]).then(([refAlpha, itemAlpha]) => {
+    if (refAlpha) {
+      echelleRefEl?.style.setProperty('--sil-mask', cssUrl(refSrc))
+      echelleRefEl?.classList.add('has-sil')
+    }
+    if (itemAlpha) {
+      echelleItemEl?.style.setProperty('--sil-mask', cssUrl(itemSrc))
+      echelleItemEl?.classList.add('has-sil')
+    }
+    // Révélation : aplats de couleur par joueur seulement si l'élément est
+    // une vraie silhouette (voir renderEchelleReveal).
+    echelleMaskOk = !!itemAlpha
     if (echelleArea) echelleArea.classList.add('use-mask')
-  }
-  const remote = [refSrc, itemSrc].filter(src => /^https?:/i.test(src) && new URL(src, location.href).origin !== location.origin)
-  if (!remote.length) { apply(); return }
-  Promise.all(remote.map(src => fetch(src, { mode: 'cors' }).then(res => { if (!res.ok) throw new Error(String(res.status)) })))
-    .then(apply)
-    .catch(err => console.warn('[echelle] masque impossible (CORS), images affichées telles quelles :', err))
+  })
 }
 const showEchelleQuestion = (payload) => {
   myScaleAnswer = null

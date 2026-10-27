@@ -577,3 +577,29 @@ code :
   - révélation à 4 joueurs ;
   - 9 % d'écart → 927 points.
 
+## Images opaques et retrait automatique du fond
+Retour de l'utilisateur : « pourquoi mes images sont des rectangles de
+couleur ? » Ses images étaient opaques : un masque plein donne un rectangle.
+- **En jeu :** chaque image est inspectée au chargement
+  (`probeImageTransparency`, échantillon 64 px, ce qui demande aussi le
+  CORS). Fond transparent : silhouette en aplat. Opaque, ou illisible en
+  CORS : la vraie image. Même logique pour les silhouettes de la
+  révélation. Les anciennes questions en profitent sans rien changer.
+- **Dans l'éditeur, à l'import (demande de l'utilisateur, « même DA ») :**
+  retrait automatique d'un fond uni, sans dépendance
+  (`removeUniformBackground`) :
+  - la couleur de fond est la médiane du pourtour ;
+  - la zone de cette couleur reliée aux bords est effacée (tolérance RVB
+    48), avec des bords adoucis ;
+  - les zones de même couleur enfermées dans l'objet sont conservées ;
+  - fond chargé (moins de 60 % du pourtour uniforme, ou plus de 97 % de
+    l'image effacée) : rien n'est effacé et un message l'explique.
+  - Lecture des pixels réduite à 1200 px.
+- Vérifié :
+  - un canard sur fond blanc bruité a son fond retiré et son œil blanc
+    conservé ;
+  - un bruit aléatoire est déclaré « fond trop chargé » ;
+  - en jeu, image opaque : vraie image ; image transparente : silhouette.
+- Les images **déjà importées** ne sont pas retraitées : il faut les
+  réimporter pour profiter du retrait du fond.
+

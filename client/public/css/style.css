@@ -3498,8 +3498,9 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
 .echelle-figure.is-item { left: 55%; cursor: grab; z-index: 2; }
 .echelle-scene.is-moving .echelle-figure.is-item { opacity: 0.75; }
 .echelle-img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: bottom; pointer-events: none; }
-/* Aplat masqué par l'image (--sil-mask, posé par index.js) ; l'<img> ne
-   reste visible qu'en repli, sans masque possible (voir setEchelleMasks). */
+/* Aplat masqué par l'image (--sil-mask, posé par index.js) quand elle a un
+   fond transparent (.has-sil) ; sinon (photo opaque, image sans CORS) la
+   vraie image reste affichée (voir setEchelleMasks). */
 .echelle-sil {
   display: none;
   position: absolute;
@@ -3508,8 +3509,8 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
   mask: var(--sil-mask) center bottom / 100% 100% no-repeat;
   pointer-events: none;
 }
-.echelle-area.use-mask .echelle-sil { display: block; }
-.echelle-area.use-mask .echelle-figure > .echelle-img { visibility: hidden; }
+.echelle-area.use-mask .echelle-figure.has-sil > .echelle-sil { display: block; }
+.echelle-area.use-mask .echelle-figure.has-sil > .echelle-img { visibility: hidden; }
 .echelle-figure.is-ref .echelle-sil { background: var(--echelle-ref-color); }
 .echelle-figure.is-item .echelle-sil { background: var(--echelle-item-color); }
 /* Toise pointillée verticale le long de la référence. */
