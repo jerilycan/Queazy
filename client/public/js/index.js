@@ -1054,6 +1054,16 @@ socket.on('tuto:done', () => {
 // écran d'intro vide.
 const emitQuestionShow = (payload) => {
   const meta = QUESTION_TYPE_META[payload.type]
+  // Aperçu « Tester » (éditeur, banque) : pas d'intro animée ni de décompte
+  // 3-2-1 (retour utilisateur : « je veux tester rapidement ») — la question
+  // démarre tout de suite, sur toutes les vues de l'aperçu (joueur, MJ, TV).
+  if (previewQuestionMode && meta) {
+    anyQuestionShown = true
+    enterGameScreen()
+    updateQuestionTypeBadge(payload.type)
+    socket.emit('question:show', payload)
+    return Promise.resolve(true)
+  }
   if (!meta || !questionIntroOverlay) {
     anyQuestionShown = true // tâche 043, étape 4 — voir la déclaration plus haut (filet de sécurité : pas d'intro pour ce type, donc pas de passage par tuto:show)
     socket.emit('question:show', payload)
