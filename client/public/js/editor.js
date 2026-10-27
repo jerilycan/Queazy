@@ -184,6 +184,12 @@ const qDifficultySelect = document.getElementById('qDifficultySelect')
 // "Ajouter à la banque" (action immédiate au clic) — la publication réelle
 // n'a lieu qu'au prochain SAUVEGARDE du quiz, voir persistQuiz.
 const addToBankCheckbox = document.getElementById('addToBankCheckbox')
+const addToBankNote = document.getElementById('addToBankNote')
+const ADD_TO_BANK_NOTE = addToBankNote ? addToBankNote.textContent : ''
+// Types qui ne peuvent pas aller dans la banque, faute de MJ en mode
+// « Jouer » (le Petit Bac n'a pas de bonne réponse prédéfinie) — DOIT rester
+// égal à AUTO_EXCLUDED_TYPES dans index.js.
+const BANK_EXCLUDED_TYPES = ['pbac', 'reveal']
 // Catégories (tâche 024) : liste FIXE gérée par un super admin
 // (bank_categories, voir admin-bank.html) — remplace l'ancien texte libre
 // à suggestions (tâche 021). Chargée une seule fois (comme
@@ -3157,7 +3163,9 @@ const saveCurrentQuestionState = () => {
 
   const q = questions[activeIndex]
   if (qDraftToggle) q.draft = qDraftToggle.checked
-  if (addToBankCheckbox) q.addToBank = addToBankCheckbox.checked
+  // Interrupteur grisé (type réservé au MJ) : il s'affiche décoché, on garde
+  // le choix du créateur pour un éventuel changement de type.
+  if (addToBankCheckbox && !BANK_EXCLUDED_TYPES.includes(qType.value)) q.addToBank = addToBankCheckbox.checked
   q.prompt = qPrompt.value.trim()
   if (qExplanation) q.explanation = qExplanation.value.trim()
   // categoryOptionsReady (pas categoryOptionsLoading) : tant que la vraie
@@ -3219,8 +3227,21 @@ const updateQTypeHint = () => {
   qTypeHint.classList.remove('d-none')
 }
 
+// Interrupteur « Ajouter à la banque » grisé (et affiché décoché) pour les
+// types réservés au MJ ; la valeur q.addToBank n'est pas touchée, c'est
+// publishFlaggedQuestionsToBank qui écarte ces types.
+const updateAddToBankToggle = () => {
+  if (!addToBankCheckbox) return
+  const excluded = BANK_EXCLUDED_TYPES.includes(qType.value)
+  const q = questions[activeIndex]
+  addToBankCheckbox.disabled = readOnly || excluded
+  addToBankCheckbox.checked = !excluded && (!q || q.addToBank !== false)
+  if (addToBankNote) addToBankNote.textContent = excluded ? 'Indisponible pour ce type : les réponses doivent être validées par un MJ, impossible en mode « Jouer ».' : ADD_TO_BANK_NOTE
+}
+
 const toggleTypeSections = () => {
   updateQTypeHint()
+  updateAddToBankToggle()
   mcqSection.classList.toggle('d-none', qType.value !== 'mcq')
   if (graduationSection) graduationSection.classList.toggle('d-none', qType.value !== 'graduation')
   if (trueFalseSection) trueFalseSection.classList.toggle('d-none', qType.value !== 'truefalse')
@@ -6124,6 +6145,7 @@ const uploadQuestionMedia = async (sb, ownerId, qs) => {
 const publishFlaggedQuestionsToBank = async (sb, session) => {
   const toPublish = questions.filter(q =>
     q.addToBank !== false &&
+    !BANK_EXCLUDED_TYPES.includes(q.type) &&
     !q.bankPublished &&
     (q.category || '').trim() &&
     q.difficulty
@@ -6625,20 +6647,6 @@ const typePickerCtaBtn = document.getElementById('typePickerCtaBtn')
 if (typePickerCtaBtn) typePickerCtaBtn.onclick = () => setEditorMode('advanced')
 const panelStandardCtaBtn = document.getElementById('panelStandardCtaBtn')
 if (panelStandardCtaBtn) panelStandardCtaBtn.onclick = () => setEditorMode('advanced')
-
-// "Zone experte" du groupe Publication (banque / catégorie / difficulté) : repliée par défaut,
-// même mécanique .is-open (grid-template-rows) que les autres accordéons de l'éditeur.
-const expertToggle = document.getElementById('expertToggle')
-const expertBody = document.getElementById('expertBody')
-const expertChevron = document.getElementById('expertChevron')
-if (expertToggle && expertBody) {
-  expertToggle.onclick = () => {
-    const willOpen = !expertBody.classList.contains('is-open')
-    expertBody.classList.toggle('is-open', willOpen)
-    expertToggle.setAttribute('aria-expanded', String(willOpen))
-    if (expertChevron) expertChevron.classList.toggle('open', willOpen)
-  }
-}
 
 // --- Initialisation ---
 

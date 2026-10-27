@@ -1002,37 +1002,21 @@
               </select>
             </div>
           </div>
-            <div class="auto-accordion">
-              <button type="button" class="auto-accordion-head" id="expertToggle" aria-expanded="false">
-                <span class="auto-accordion-head-left">🏦 Banque de questions</span>
-                <svg class="auto-chevron" id="expertChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-              </button>
-              <div class="auto-accordion-body" id="expertBody">
-                <div style="padding: 0 16px 14px;">
-          <!-- Tâche 026 bis (retour utilisateur, capture d'écran : "c'est
-               horrible") : le positionnement en absolu (coin haut-droit de
-               la grille) chevauchait les libellés Catégorie/Difficulté dès
-               que le panneau n'était pas assez large — remplacé par une
-               ligne dédiée, alignée à droite, AU-DESSUS de la grille :
-               jamais de chevauchement possible, quelle que soit la largeur. -->
-          <div class="add-to-bank-row">
-            <!-- Tâche 025 bis (retour utilisateur : "le bouton est beaucoup trop
-                 gros") : remplace l'ancien bouton "Ajouter à la banque" (clic
-                 = publication immédiate) par une case à cocher, COCHÉE PAR
-                 DÉFAUT (même sur une question déjà existante sans ce champ,
-                 voir editor.js addToBankCheckbox.checked = q.addToBank !==
-                 false) — la publication réelle n'a lieu qu'au prochain
-                 SAUVEGARDE du quiz (voir persistQuiz), pas au clic sur cette
-                 case, même patron que la case "Brouillon" juste au-dessus
-                 (un état du modèle, appliqué à la sauvegarde). -->
-            <label class="add-to-bank-checkbox" title="Publie une copie de cette question dans la banque du mode « Jouer » à la prochaine sauvegarde — nécessite d'être connecté et catégorie + difficulté renseignées (juste au-dessus, dans Publication).">
-              <input id="addToBankCheckbox" type="checkbox" checked />
-              <span>🏦 Ajouter à la banque</span>
+          <!-- "Ajouter à la banque" : interrupteur visible (retour utilisateur :
+               « doit être + visible » — auparavant une petite case dans un
+               accordéon replié). COCHÉ PAR DÉFAUT, même sur une question
+               existante sans ce champ (voir editor.js addToBankCheckbox.checked =
+               q.addToBank !== false) ; la publication réelle n'a lieu qu'à la
+               prochaine SAUVEGARDE du quiz (voir persistQuiz), même patron que
+               « Brouillon » plus haut. -->
+          <div class="detail-section">
+            <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
+              <input id="addToBankCheckbox" type="checkbox" checked class="qz-toggle-input" />
+              <span class="qz-toggle-track"><span class="qz-toggle-thumb"></span></span>
+              🏦 Ajouter à la banque de questions
             </label>
+            <p id="addToBankNote" class="text-muted font-13 mt-8">Publie une copie de cette question dans le mode « Jouer » à la prochaine sauvegarde. Il faut être connecté, avec une catégorie et une difficulté.</p>
           </div>
-                </div>
-              </div>
-            </div>
         </aside>
       </div>
     </div>
