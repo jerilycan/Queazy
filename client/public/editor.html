@@ -957,12 +957,25 @@
             </div>
           </div>
 
+          <!-- Encart bas de panneau (tâche 046, repris de Main.dc.html) : Standard seulement. -->
+          <div id="panelStandardCta" class="standard-cta" data-standard-only>
+            <div class="standard-cta-text">
+              <strong>Plus d'options disponibles</strong>
+              <span>Brouillon, banque de questions, catégorie, difficulté, image, son et médias de révélation — tout reste réglable en un clic.</span>
+            </div>
+            <button type="button" id="panelStandardCtaBtn" class="btn btn-secondary">⚙️ Passer en mode avancé</button>
+          </div>
+
+        </div>
+
           <!-- Groupe "Publication" (tâche 046, repris du canvas) : brouillon + "Zone experte"
-               (banque / catégorie / difficulté), réservé au mode Avancé et placé EN BAS du
-               formulaire — ces réglages ne concernent pas la création d'une question.
+               (banque / catégorie / difficulté), réservé au mode Avancé. Sorti du
+               formulaire dans un encart à droite (retour utilisateur : « un peu
+               déconnecté du centre ») — ces réglages ne concernent pas la création
+               d'une question. Masqué avec #questionDetail (voir style.css).
                Mêmes ids qu'avant (qDraftToggle, addToBankCheckbox, qCategorySelect,
                qDifficultySelect) : tout le JS existant continue de fonctionner à l'identique. -->
-          <div id="publicationSection" class="detail-section" data-advanced>
+        <aside id="publicationSection" class="question-side-panel" data-advanced>
             <label>📤 Publication <span class="advanced-pill">Avancé</span></label>
           <div class="detail-section">
             <label class="align-center d-flex gap-xs cursor-pointer font-bold font-14 qz-toggle-label">
@@ -1020,19 +1033,7 @@
                 </div>
               </div>
             </div>
-          </div>
-
-
-          <!-- Encart bas de panneau (tâche 046, repris de Main.dc.html) : Standard seulement. -->
-          <div id="panelStandardCta" class="standard-cta" data-standard-only>
-            <div class="standard-cta-text">
-              <strong>Plus d'options disponibles</strong>
-              <span>Brouillon, banque de questions, catégorie, difficulté, image, son et médias de révélation — tout reste réglable en un clic.</span>
-            </div>
-            <button type="button" id="panelStandardCtaBtn" class="btn btn-secondary">⚙️ Passer en mode avancé</button>
-          </div>
-
-        </div>
+        </aside>
       </div>
     </div>
 

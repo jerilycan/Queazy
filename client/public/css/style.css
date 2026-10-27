@@ -6746,6 +6746,53 @@ body.irl-player-mode .persistent-code, body.remote-player-mode .persistent-code 
   box-shadow: var(--shadow-sm);
 }
 
+/* Encart "Publication" à droite du formulaire (retour utilisateur : « un peu
+   déconnecté du centre ») — mode Avancé seulement ([data-advanced]), et
+   masqué avec #questionDetail pendant le choix du type. Sur grand écran, il
+   flotte dans la marge à droite de la page (le formulaire garde toute sa
+   largeur) ; sinon, il passe sous le formulaire ; sous 900 px, tout s'empile
+   (voir plus bas). */
+.question-side-panel {
+  align-self: start;
+  background: var(--gradient-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+#questionDetail.d-none ~ .question-side-panel { display: none; }
+/* Sous le formulaire : 1re ligne = la hauteur habituelle de .editor-layout
+   (le formulaire ne rétrécit pas), la grille s'allonge pour l'encart et la
+   page défile. */
+body.editor-advanced .editor-layout:not(:has(#questionDetail.d-none)) {
+  height: auto;
+  grid-template-rows: max(600px, calc(100vh - 140px)) auto;
+}
+.question-side-panel { grid-column: 2; margin-bottom: var(--space-lg); }
+/* 1700 px : de quoi loger 280 px de panneau + marges à droite du conteneur
+   (1100 px de large, voir .container). */
+@media (min-width: 1700px) {
+  .editor-layout { position: relative; }
+  .question-side-panel {
+    position: absolute;
+    top: 0;
+    left: calc(100% + var(--space-lg));
+    width: 280px;
+    max-height: 100%;
+    overflow-y: auto;
+  }
+  .question-side-panel .grid-cols-split { grid-template-columns: 1fr; gap: var(--space-md); }
+  body.editor-advanced .editor-layout:not(:has(#questionDetail.d-none)) { height: calc(100vh - 140px); grid-template-rows: none; }
+  .question-side-panel { margin-bottom: 0; }
+}
+@media (max-width: 900px) {
+  body.editor-advanced .editor-layout:not(:has(#questionDetail.d-none)) { grid-template-rows: none; }
+  .question-side-panel { grid-column: auto; }
+}
+
 /* Auparavant un bandeau plein dégradé accent, bord à bord, coins carrés en
    bas : partout ailleurs dans l'appli, ce dégradé n'habille QUE des boutons
    pilule arrondis (Rejoindre, Lancer...), jamais un simple panneau de fond —
