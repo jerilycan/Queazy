@@ -47,6 +47,12 @@ fichier avant d'improviser une architecture ou une convention.
 - **Ne rien pousser (`git push`) sans feu vert explicite de l'utilisateur** —
   consigne permanente, plus stricte que toute règle ci-dessous, valable même
   si une tâche semble "évidemment" terminée.
+- **Changer la version à chaque push** (`APP_VERSION` dans
+  `server/index.js`, affichée en bas de l'écran) — demande de
+  l'utilisateur, pour voir tout de suite en ligne s'il a la dernière
+  version. Version du milieu pour une nouvelle fonctionnalité
+  (2.38.0 → 2.39.0), dernier chiffre pour une correction ou un petit
+  ajustement (2.38.0 → 2.38.1).
 - Ne pas modifier `supabase/schema.sql` (schéma DB) sans validation.
 - Ne pas modifier `render.yaml` (config de déploiement) sans validation.
 - Ne jamais committer de secret ou de `.env` (rien n'est tracké aujourd'hui,
