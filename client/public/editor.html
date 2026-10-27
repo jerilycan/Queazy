@@ -417,7 +417,8 @@
                du dessin et gardées transparentes (voir processScaleImage
                dans editor.js) : c'est leur hauteur VISIBLE qui fait l'échelle. -->
           <div id="echelleSection" class="detail-section d-none">
-            <p class="text-muted font-13">Idéal : des PNG à fond transparent. Les marges vides sont retirées automatiquement.</p>
+            <p class="text-muted font-13">Les joueurs voient la <strong>référence</strong> (sa taille leur reste cachée) et doivent redimensionner l'<strong>élément à deviner</strong> jusqu'à sa vraie taille. Idéal : des PNG à fond transparent, les marges vides sont retirées automatiquement.</p>
+            <p class="text-muted font-13">Idées : un humain adulte (175 cm) → une girafe (5,5 m) · une console Wii (23 cm) → Psykokwak (80 cm) · un bus (3 m) → la tour Eiffel (330 m) · une pièce de 1 € (2,3 cm) → une fourmi (0,5 cm). Choisis une référence que tout le monde connaît.</p>
             <div class="echelle-slots">
             <div class="echelle-slot">
               <div class="echelle-slot-title">Référence</div>
@@ -428,10 +429,10 @@
               </div>
               <p id="echelleRefOpaque" class="text-muted font-13 mt-8 d-none">Pas de fond transparent : l'image entière servira de silhouette.</p>
               <label for="echelleRefLabel" class="mt-8">Nom</label>
-              <input type="text" id="echelleRefLabel" maxlength="60" placeholder="Ex. Nintendo Wii" />
+              <input type="text" id="echelleRefLabel" maxlength="60" placeholder="Ex. Un humain adulte" />
               <label for="echelleRefHeight" class="mt-8">Hauteur réelle</label>
               <div class="echelle-height-row">
-                <input type="number" id="echelleRefHeight" min="0.1" step="0.1" inputmode="decimal" placeholder="cm" />
+                <input type="number" id="echelleRefHeight" min="0.1" step="0.1" inputmode="decimal" placeholder="Ex. 175" />
                 <span class="echelle-height-unit">cm</span>
                 <span id="echelleRefHeightM" class="text-muted font-13"></span>
               </div>
@@ -445,10 +446,10 @@
               </div>
               <p id="echelleItemOpaque" class="text-muted font-13 mt-8 d-none">Pas de fond transparent : l'image entière servira de silhouette.</p>
               <label for="echelleItemLabel" class="mt-8">Nom</label>
-              <input type="text" id="echelleItemLabel" maxlength="60" placeholder="Ex. Psykokwak" />
+              <input type="text" id="echelleItemLabel" maxlength="60" placeholder="Ex. Une girafe" />
               <label for="echelleItemHeight" class="mt-8">Hauteur réelle (la réponse)</label>
               <div class="echelle-height-row">
-                <input type="number" id="echelleItemHeight" min="0.1" step="0.1" inputmode="decimal" placeholder="cm" />
+                <input type="number" id="echelleItemHeight" min="0.1" step="0.1" inputmode="decimal" placeholder="Ex. 550" />
                 <span class="echelle-height-unit">cm</span>
                 <span id="echelleItemHeightM" class="text-muted font-13"></span>
               </div>

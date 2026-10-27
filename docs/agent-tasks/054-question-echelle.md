@@ -541,3 +541,39 @@ et réécrit à la façon de QuEazy :
   la page ne défile pas quand le doigt est sur la scène, comme sur
   Magnitudle.
 
+## Alignement complet sur Magnitudle (« exactement la même chose »)
+Les écarts restants ont été repris, toujours en réécriture et sans copie de
+code :
+- **Silhouettes en aplat pendant le jeu** : la référence en bleu
+  (`#60a5fa`), l'estimation en rouge (`#ef4444`), par `mask-image` sur les
+  images. Une requête CORS vérifie d'abord que le masque est possible (une
+  image d'un autre domaine sans CORS donnerait une silhouette invisible).
+  Sinon, on revient aux vraies images. Même repli pour les silhouettes de la
+  révélation (image cernée de la couleur du joueur).
+- **Toise** : trait pointillé vertical le long de la référence (au lieu
+  d'une ligne horizontale).
+- **Déplacement libre** de l'estimation, y compris en hauteur (`itemElev`,
+  en cm, jamais sous le sol).
+- **Coins de redimensionnement** (4 carrés) à la souris, poignée ↗ en
+  tactile (`hover: none` et `pointer: coarse`).
+- Dans la scène : pastille « ✥ Glisse pour déplacer », boutons loupe en
+  haut à droite, « Ton estimation » sous l'élément. Sous la scène : la
+  légende « Référence (hauteur à l'échelle) · Élément (ajuste la
+  hauteur) » et la note 🔒 sur la taille cachée de la référence.
+- **Zoom avant limité au retour à l'échelle de départ**, comme eux.
+- L'estimation démarre à 55 % de la largeur : à 70 %, sa poignée tombait
+  sous les boutons loupe (bug trouvé en test).
+- **Conservé de QuEazy** : le rang des silhouettes de tous les joueurs à la
+  révélation (demande de l'utilisateur ; Magnitudle se joue seul).
+- **Éditeur** : exemples plus parlants, à la demande de l'utilisateur
+  (humain → girafe, Wii → Psykokwak, bus → tour Eiffel, pièce de 1 € →
+  fourmi) et explication de ce que voient les joueurs.
+- Vérifié en local, sur téléphone simulé et sur la TV :
+  - masque actif ;
+  - pincement : 23 → 46 cm ;
+  - poignée : 46 → 57,5 cm ;
+  - glisser : l'élément se déplace en x et en y ;
+  - boutons loupe ;
+  - révélation à 4 joueurs ;
+  - 9 % d'écart → 927 points.
+

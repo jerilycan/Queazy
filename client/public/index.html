@@ -1344,39 +1344,54 @@
             </div>
             <div id="haloCounter" class="halo-counter"></div>
           </div>
-          <!-- Question "échelle" (tâche 054) : référence et élément posés sur
-               le même sol ; le joueur règle la hauteur de l'élément en le
-               pinçant à deux doigts ou en tirant la poignée ↗ de son coin,
-               le déplace en le faisant glisser, et zoome la scène avec les
-               boutons loupe (jamais de zoom automatique). Toutes les tailles sont en %
+          <!-- Question "échelle" (tâche 054), méthode de jeu de Magnitudle :
+               référence (bleue) et estimation (rouge) en silhouettes ; le
+               joueur règle la hauteur de l'estimation en la pinçant à deux
+               doigts, en tirant sa poignée ↗ (tactile) ou un de ses coins
+               (souris), la déplace librement en la faisant glisser, et zoome
+               la scène avec les boutons loupe (jamais de zoom automatique).
+               Toutes les tailles sont en %
                de la scène (voir renderEchelleScene, index.js) : la copie de
                #stageWrap sur la TV reste juste à n'importe quelle taille. -->
           <div id="echelleArea" class="echelle-area d-none">
-            <div id="echelleScene" class="echelle-scene" aria-label="Scène : agrandis ou rétrécis l'élément (pincer, ou tirer la poignée ; flèches au clavier)">
+            <div id="echelleScene" class="echelle-scene" aria-label="Scène : agrandis ou rétrécis l'élément (pincer, poignée ou coins ; flèches au clavier)">
               <div class="echelle-ground"></div>
-              <!-- Repère pointillé à la hauteur de la référence, sur toute la
-                   largeur (comme Magnitudle) : aide à comparer à l'œil. -->
-              <div id="echelleRefLine" class="echelle-ref-line"></div>
+              <!-- Silhouettes en aplat (bleu = référence, rouge = estimation),
+                   comme Magnitudle : .echelle-sil masquée par l'image (voir
+                   setEchelleImages, index.js) ; l'<img> ne s'affiche qu'en
+                   repli si le masque est impossible (image sans CORS). -->
               <div id="echelleRef" class="echelle-figure is-ref">
                 <img id="echelleRefImg" class="echelle-img" alt="" draggable="false" />
+                <div class="echelle-sil"></div>
+                <!-- Toise pointillée verticale le long de la référence. -->
+                <span class="echelle-ref-measure"></span>
               </div>
               <div id="echelleItem" class="echelle-figure is-item">
-                <span id="echelleItemReadout" class="echelle-readout"></span>
                 <img id="echelleItemImg" class="echelle-img" alt="" draggable="false" />
+                <div class="echelle-sil"></div>
+                <!-- Coins de redimensionnement (souris) et poignée ↗ (tactile). -->
+                <span class="echelle-corner is-tl"></span>
+                <span class="echelle-corner is-tr"></span>
+                <span class="echelle-corner is-bl"></span>
+                <span class="echelle-corner is-br"></span>
                 <span id="echelleHandle" class="echelle-handle" aria-hidden="true">↗</span>
               </div>
+              <span id="echelleEstimateTag" class="echelle-estimate-tag">Ton estimation</span>
               <!-- Révélation : silhouette grisée à la vraie taille + celle de
                    chaque joueur, de sa couleur, pseudo au-dessus (voir
                    renderEchelleReveal, index.js). -->
               <div id="echelleRevealLayer" class="echelle-reveal-layer"></div>
-              <div id="echelleRefCaption" class="echelle-caption is-ref"></div>
-              <div id="echelleItemCaption" class="echelle-caption is-item"></div>
+              <span class="echelle-pill">✥ Glisse pour déplacer</span>
+              <div class="echelle-zoom">
+                <button type="button" id="echelleZoomInBtn" class="echelle-zoom-btn" aria-label="Rezoomer (revenir à l'échelle)">🔍+</button>
+                <button type="button" id="echelleZoomOutBtn" class="echelle-zoom-btn" aria-label="Dézoomer (plus de place pour agrandir)">🔍−</button>
+              </div>
             </div>
-            <div class="echelle-controls">
-              <button type="button" id="echelleZoomOutBtn" class="echelle-step-btn" aria-label="Dézoomer la scène (plus de place)">🔍−</button>
-              <span class="echelle-controls-hint">Pince à deux doigts ou tire la poignée ↗ · glisse pour déplacer</span>
-              <button type="button" id="echelleZoomInBtn" class="echelle-step-btn" aria-label="Rezoomer la scène">🔍+</button>
+            <div class="echelle-legend">
+              <span><strong id="echelleLegendRef" class="is-ref"></strong> (hauteur à l'échelle)</span>
+              <span><strong id="echelleLegendItem" class="is-item"></strong> (ajuste la hauteur)</span>
             </div>
+            <p class="echelle-note">🔒 Tu compares à l'échelle : la taille de la référence reste cachée pendant la question.</p>
           </div>
           <!-- Question "indice" (tâche 014) : indices texte/image qui
                apparaissent progressivement pendant la question, chacun à un

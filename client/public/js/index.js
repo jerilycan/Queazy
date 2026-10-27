@@ -1357,23 +1357,26 @@ let haloRadiusPct = HALO_DEFAULT_RADIUS_PCT
 // Hauteurs en cm. La scène montre une hauteur "visible" (viewHeight) sur sa
 // partie au-dessus du sol (ECHELLE_SKY_PCT) : chaque silhouette y prend
 // hauteur / viewHeight de cette partie, en %, rien en pixels — la copie de
-// #stageWrap sur la TV reste donc juste à toute taille. viewHeight suit la
-// plus grande silhouette (×ECHELLE_VIEW_MARGIN) pour que tout reste visible
-// (voir echelleFitView, recadrage après chaque appui sur −/+).
+// #stageWrap sur la TV reste donc juste à toute taille. viewHeight est cadrée
+// au départ de la question (echelleFitView) puis ne change plus que par les
+// boutons loupe (méthode Magnitudle, jamais de zoom automatique).
 const echelleArea = document.getElementById('echelleArea')
 const echelleScene = document.getElementById('echelleScene')
 const echelleRefEl = document.getElementById('echelleRef')
 const echelleItemEl = document.getElementById('echelleItem')
 const echelleRefImg = document.getElementById('echelleRefImg')
 const echelleItemImg = document.getElementById('echelleItemImg')
-const echelleItemReadout = document.getElementById('echelleItemReadout')
-const echelleRefCaption = document.getElementById('echelleRefCaption')
-const echelleItemCaption = document.getElementById('echelleItemCaption')
+const echelleLegendRef = document.getElementById('echelleLegendRef')
+const echelleLegendItem = document.getElementById('echelleLegendItem')
+const echelleEstimateTag = document.getElementById('echelleEstimateTag')
 const echelleZoomOutBtn = document.getElementById('echelleZoomOutBtn')
 const echelleZoomInBtn = document.getElementById('echelleZoomInBtn')
 const echelleHandle = document.getElementById('echelleHandle')
 const echelleRevealLayer = document.getElementById('echelleRevealLayer')
-const echelleRefLine = document.getElementById('echelleRefLine')
+// Silhouettes en aplat par masque CSS (mask-image) : possible seulement si
+// l'image est lisible en CORS (data: toujours ; Supabase Storage en
+// principe). Sinon repli sur les vraies images (voir setEchelleImages).
+let echelleMaskOk = false
 // Taille envoyée par CE joueur (null s'il n'a pas répondu) — pour le
 // bandeau de révélation (écart en %).
 let myScaleAnswer = null
@@ -1404,17 +1407,18 @@ const SCALE_BOUND_FACTOR = 200
 const SCALE_MAX_POINTS = 1000
 const ECHELLE_SKY_PCT = 84
 const ECHELLE_VIEW_MARGIN = 1.15
-const ECHELLE_STEP_RATIO = 1.02 // un appui sur −/+ : ±2 % de la taille
-// itemX : position horizontale de l'élément (en % de la scène), qu'on peut
-// glisser pour le poser contre la référence. baseView : vue de départ de la
-// question, repère des bornes du zoom manuel (boutons loupe).
-const echelleState = { refHeight: 100, height: 100, refRatio: 1, itemRatio: 1, viewHeight: 115, baseView: 115, itemX: 70, disabled: true }
-// Zoom manuel (boutons loupe, jamais automatique) : ×0,75 par appui, jusqu'à
-// 25 fois plus de champ que la vue de départ pour les grands éléments, et 4
-// fois moins pour bien voir un élément minuscule.
+const ECHELLE_STEP_RATIO = 1.02 // une flèche au clavier : ±2 % de la taille
+// itemX : position horizontale de l'élément (en % de la scène) ; itemElev :
+// hauteur de son pied au-dessus du sol (en cm, comme les tailles, pour
+// rester juste quand on zoome) — on le déplace librement, comme sur
+// Magnitudle. baseView : vue de départ de la question, borne du zoom.
+const echelleState = { refHeight: 100, height: 100, refRatio: 1, itemRatio: 1, viewHeight: 115, baseView: 115, itemX: 55, itemElev: 0, disabled: true }
+// Zoom manuel (boutons loupe, jamais automatique), comme Magnitudle : ×0,75
+// par appui jusqu'à 25 fois plus de champ que la vue de départ ; « rezoomer »
+// ne fait que revenir vers l'échelle de départ, jamais plus près.
 const ECHELLE_ZOOM_STEP = 0.75
 const ECHELLE_ZOOM_MAX_OUT = 25
-const ECHELLE_ZOOM_MAX_IN = 4
+const ECHELLE_ZOOM_MAX_IN = 1
 // Même format que formatScaleHeight côté serveur (récap) : « 23 cm », « 1,20 m ».
 const formatScaleHeight = (cm) => cm < 100
   ? `${Math.round(cm * 10) / 10} cm`.replace('.', ',')
@@ -1437,9 +1441,11 @@ const sizeEchelleFigure = (el, height, ratio) => {
 const renderEchelleScene = () => {
   sizeEchelleFigure(echelleRefEl, echelleState.refHeight, echelleState.refRatio)
   sizeEchelleFigure(echelleItemEl, echelleState.height, echelleState.itemRatio)
-  if (echelleItemEl) echelleItemEl.style.left = `${echelleState.itemX}%`
-  if (echelleRefLine) echelleRefLine.style.bottom = `${100 - ECHELLE_SKY_PCT + (echelleState.refHeight / echelleState.viewHeight) * ECHELLE_SKY_PCT}%`
-  if (echelleItemReadout) echelleItemReadout.textContent = formatScaleHeight(echelleState.height)
+  if (echelleItemEl) {
+    echelleItemEl.style.left = `${echelleState.itemX}%`
+    echelleItemEl.style.bottom = `${100 - ECHELLE_SKY_PCT + (echelleState.itemElev / echelleState.viewHeight) * ECHELLE_SKY_PCT}%`
+  }
+  if (echelleEstimateTag) echelleEstimateTag.style.left = `${echelleState.itemX}%`
   if (echelleScene) echelleScene.setAttribute('aria-valuetext', formatScaleHeight(echelleState.height))
 }
 const setEchelleHeight = (h, refit) => {
@@ -1487,20 +1493,27 @@ if (echelleScene) {
     const r = echelleItemEl.getBoundingClientRect()
     return { x: (r.left + r.right) / 2, y: r.bottom }
   }
+  const onResizeGrip = (p) => {
+    // Poignée ↗ (tactile) ou un des 4 coins (souris) — seuls ceux affichés
+    // comptent (getClientRects vide pour un élément en display:none).
+    const grips = [echelleHandle, ...echelleItemEl.querySelectorAll('.echelle-corner')]
+    return grips.some(g => g && g.getClientRects().length && inRect(g.getBoundingClientRect(), p.x, p.y, ECHELLE_HANDLE_SLOP_PX))
+  }
   const startGesture = (p) => {
     const pts = [...pointers.values()]
     if (pts.length >= 2) {
       gesture = { mode: 'pinch', initDist: Math.max(1, dist(pts[0], pts[1])), initHeight: echelleState.height }
+      echelleScene.classList.remove('is-moving')
       return
     }
-    if (echelleHandle && inRect(echelleHandle.getBoundingClientRect(), p.x, p.y, ECHELLE_HANDLE_SLOP_PX)) {
+    if (onResizeGrip(p)) {
       const foot = itemFoot()
       gesture = { mode: 'resize', foot, initDist: Math.max(1, dist(p, foot)), initHeight: echelleState.height }
       echelleScene.classList.add('is-resizing')
       return
     }
     if (echelleItemEl && inRect(echelleItemEl.getBoundingClientRect(), p.x, p.y)) {
-      gesture = { mode: 'move', startX: p.x, initItemX: echelleState.itemX }
+      gesture = { mode: 'move', startX: p.x, startY: p.y, initItemX: echelleState.itemX, initElev: echelleState.itemElev }
       echelleScene.classList.add('is-moving')
       return
     }
@@ -1508,6 +1521,9 @@ if (echelleScene) {
   }
   echelleScene.addEventListener('pointerdown', e => {
     if (echelleState.disabled) return
+    // Boutons loupe posés DANS la scène : leur clic ne doit pas démarrer de
+    // geste (la capture du pointeur par la scène avalerait le clic).
+    if (e.target.closest('button')) return
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     try { echelleScene.setPointerCapture(e.pointerId) } catch {}
     startGesture({ x: e.clientX, y: e.clientY })
@@ -1525,8 +1541,11 @@ if (echelleScene) {
     } else if (gesture.mode === 'resize') {
       setEchelleHeight(gesture.initHeight * dist(p, gesture.foot) / gesture.initDist, false)
     } else if (gesture.mode === 'move') {
-      const w = echelleScene.getBoundingClientRect().width || 1
-      echelleState.itemX = Math.min(92, Math.max(8, gesture.initItemX + (p.x - gesture.startX) / w * 100))
+      const r = echelleScene.getBoundingClientRect()
+      const skyPx = (r.height * ECHELLE_SKY_PCT / 100) || 1
+      echelleState.itemX = Math.min(95, Math.max(5, gesture.initItemX + (p.x - gesture.startX) / (r.width || 1) * 100))
+      // Pas sous le sol ; jusqu'en haut de la vue au plus.
+      echelleState.itemElev = Math.min(echelleState.viewHeight, Math.max(0, gesture.initElev - (p.y - gesture.startY) / skyPx * echelleState.viewHeight))
       renderEchelleScene()
     }
   })
@@ -1575,7 +1594,7 @@ const renderEchelleReveal = (target, players) => {
   // style.css .echelle-area.is-revealed).
   const left0 = 22, span = 76
   echelleArea.classList.add('is-revealed')
-  if (echelleRefCaption) echelleRefCaption.textContent = `${echelleRefLabel} · ${formatScaleHeight(echelleState.refHeight)}`
+  if (echelleLegendRef) echelleLegendRef.textContent = `${echelleRefLabel} · ${formatScaleHeight(echelleState.refHeight)}`
   const rect = echelleScene ? echelleScene.getBoundingClientRect() : null
   const slotPx = rect && rect.width ? rect.width * span / 100 / entries.length : 0
   let view = ECHELLE_VIEW_MARGIN * Math.min(tallest, base * ECHELLE_REVEAL_MAX_SPAN)
@@ -1592,7 +1611,7 @@ const renderEchelleReveal = (target, players) => {
   echelleState.viewHeight = view
   renderEchelleScene()
   echelleRevealLayer.replaceChildren()
-  const maskUrl = echelleItemSrc ? `url("${echelleItemSrc.replace(/"/g, '%22')}")` : ''
+  const maskUrl = echelleItemSrc ? cssUrl(echelleItemSrc) : ''
   entries.forEach((e, i) => {
     const leftPct = left0 + (i + 0.5) * span / entries.length
     const heightPct = Math.min(e.height / echelleState.viewHeight, 1 / ECHELLE_SKY_PCT * 100) * ECHELLE_SKY_PCT
@@ -1607,9 +1626,14 @@ const renderEchelleReveal = (target, players) => {
     fig.style.height = `${heightPct}%`
     fig.style.aspectRatio = String(echelleState.itemRatio || 1)
     if (!e.isTarget) fig.style.setProperty('--c', `var(--scale-player-${e.colorIdx % SCALE_PLAYER_COLORS})`)
-    if (maskUrl) {
+    if (maskUrl && echelleMaskOk) {
       fig.style.webkitMaskImage = maskUrl
       fig.style.maskImage = maskUrl
+    } else if (maskUrl) {
+      // Repli sans masque (voir setEchelleMasks) : la vraie image, cernée de
+      // la couleur du joueur.
+      fig.classList.add('is-image')
+      fig.style.backgroundImage = maskUrl
     }
     const label = document.createElement('div')
     label.className = `echelle-ghost-name${e.isTarget ? ' is-target' : ''}${clipped && !e.isTarget ? ' is-clipped' : ''}`
@@ -1628,6 +1652,28 @@ const renderEchelleReveal = (target, players) => {
 
 // Affichage d'une nouvelle question "échelle" : l'élément démarre à la
 // taille de la référence (aucun indice sur la réponse).
+// Silhouettes en aplat : l'image sert de masque à un fond uni (bleu pour la
+// référence, rouge pour l'estimation). Une image d'un autre domaine n'est
+// utilisable en masque que si son serveur l'autorise (CORS) — sinon le masque
+// échouerait et la silhouette deviendrait invisible : on le vérifie d'abord
+// par une requête CORS, et on retombe sur les vraies images en cas d'échec.
+const cssUrl = (src) => `url("${String(src).replace(/"/g, '%22')}")`
+const setEchelleMasks = (refSrc, itemSrc) => {
+  echelleMaskOk = false
+  if (echelleArea) echelleArea.classList.remove('use-mask')
+  if (!refSrc || !itemSrc) return
+  const apply = () => {
+    echelleMaskOk = true
+    if (echelleRefEl) echelleRefEl.style.setProperty('--sil-mask', cssUrl(refSrc))
+    if (echelleItemEl) echelleItemEl.style.setProperty('--sil-mask', cssUrl(itemSrc))
+    if (echelleArea) echelleArea.classList.add('use-mask')
+  }
+  const remote = [refSrc, itemSrc].filter(src => /^https?:/i.test(src) && new URL(src, location.href).origin !== location.origin)
+  if (!remote.length) { apply(); return }
+  Promise.all(remote.map(src => fetch(src, { mode: 'cors' }).then(res => { if (!res.ok) throw new Error(String(res.status)) })))
+    .then(apply)
+    .catch(err => console.warn('[echelle] masque impossible (CORS), images affichées telles quelles :', err))
+}
 const showEchelleQuestion = (payload) => {
   myScaleAnswer = null
   if (echelleRevealLayer) echelleRevealLayer.replaceChildren()
@@ -1636,7 +1682,10 @@ const showEchelleQuestion = (payload) => {
   echelleState.refRatio = Number(payload.refRatio) || 1
   echelleState.itemRatio = Number(payload.itemRatio) || 1
   echelleState.height = echelleState.refHeight
-  echelleState.itemX = 70
+  // Départ à 55 % de la largeur (pas tout à droite) : la poignée ↗ ne doit
+  // pas tomber sous les boutons loupe, calés en haut à droite de la scène.
+  echelleState.itemX = 55
+  echelleState.itemElev = 0
   echelleState.disabled = true
   echelleFitView()
   echelleState.baseView = echelleState.viewHeight
@@ -1650,12 +1699,13 @@ const showEchelleQuestion = (payload) => {
   // compare à l'œil, pas au calcul — affichée à la révélation (voir
   // renderEchelleReveal).
   echelleRefLabel = payload.refLabel || 'Référence'
-  if (echelleRefCaption) echelleRefCaption.textContent = echelleRefLabel
-  if (echelleItemCaption) echelleItemCaption.textContent = payload.itemLabel || '?'
+  if (echelleLegendRef) echelleLegendRef.textContent = echelleRefLabel
+  if (echelleLegendItem) echelleLegendItem.textContent = payload.itemLabel || '?'
   const setImages = (refSrc, itemSrc) => {
     echelleItemSrc = itemSrc || ''
     if (echelleRefImg) loadQuestionImage(echelleRefImg, refSrc || '', () => {})
     if (echelleItemImg) loadQuestionImage(echelleItemImg, itemSrc || '', () => {})
+    setEchelleMasks(refSrc || '', itemSrc || '')
   }
   if (payload.scaleImagesUrl) {
     // Images encore en base64 (aperçu, brouillon jamais sauvegardé) :

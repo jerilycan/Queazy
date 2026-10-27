@@ -2337,10 +2337,14 @@ select:focus { outline: none; border-color: var(--color-accent); background-colo
    presque entièrement noire, l'assombrir rendrait illisibles les zones
    révélées que le joueur veut continuer à regarder. */
 #haloWrap.is-locked { pointer-events: none; }
-/* Échelle : verrouillée à l'envoi sans griser la scène (le joueur garde sa
-   taille choisie bien lisible jusqu'à la révélation) — seuls −/+ s'éteignent. */
+/* Échelle : verrouillée à l'envoi sans griser la scène (le joueur garde son
+   estimation bien lisible jusqu'à la révélation) — seuls ses outils
+   (coins, poignée, loupes) disparaissent. */
 #echelleArea.is-locked .echelle-scene { pointer-events: none; }
-#echelleArea.is-locked .echelle-controls { opacity: 0.4; pointer-events: none; }
+#echelleArea.is-locked .echelle-corner,
+#echelleArea.is-locked .echelle-handle,
+#echelleArea.is-locked .echelle-zoom,
+#echelleArea.is-locked .echelle-pill { display: none; }
 
 /* Question "association" : deux colonnes de cartes cliquables (voir
    index.js buildAssociationArea) — pas de trait à tracer entre les deux
@@ -3447,11 +3451,17 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
    (De Morgan). Voir renderHaloMask côté index.js pour la construction des
    couches. */
 .halo-area { max-width: 640px; margin: var(--space-lg) auto 0; }
-/* Question "échelle" (tâche 054). Scène au ratio fixe ; tout y est en %
-   (hauteurs posées par index.js renderEchelleScene) pour que la copie sur la
-   TV garde les proportions exactes. Sol à 84 % de la hauteur (ECHELLE_SKY_PCT
-   dans index.js : les deux valeurs vont ensemble). */
-.echelle-area { max-width: 640px; margin: var(--space-lg) auto 0; }
+/* Question "échelle" (tâche 054), méthode de jeu de Magnitudle. Scène au
+   ratio fixe ; tout y est en % (hauteurs/positions posées par index.js
+   renderEchelleScene) pour que la copie sur la TV garde les proportions.
+   Sol à 84 % de la hauteur (ECHELLE_SKY_PCT dans index.js : les deux vont
+   ensemble). Silhouettes en aplat : bleu = référence, rouge = estimation. */
+.echelle-area {
+  --echelle-ref-color: #60a5fa;
+  --echelle-item-color: #ef4444;
+  max-width: 640px;
+  margin: var(--space-lg) auto 0;
+}
 .echelle-scene {
   position: relative;
   width: min(640px, 100%);
@@ -3462,6 +3472,7 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
   overflow: hidden;
   background:
     linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 100% 12.5%,
+    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px) 0 0 / 12.5% 100%,
     var(--gradient-card);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-lg);
@@ -3471,104 +3482,130 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
      ni zoomer ni faire défiler la page pendant le geste sur la scène. */
   touch-action: none;
 }
+.echelle-scene:focus-visible { outline: 3px solid var(--color-echelle); outline-offset: 3px; }
 .echelle-scene.is-resizing { cursor: nwse-resize; }
 .echelle-scene.is-moving { cursor: grabbing; }
-/* Pendant le déplacement, l'élément laisse voir la référence derrière lui. */
-.echelle-scene.is-moving .echelle-figure.is-item { opacity: 0.7; }
-.echelle-ref-line { position: absolute; z-index: 1; left: 0; right: 0; height: 0; border-top: 2px dashed rgba(255,255,255,0.28); pointer-events: none; transition: bottom 0.25s cubic-bezier(.22,1,.36,1); }
-.echelle-area.is-revealed .echelle-ref-line { display: none; }
-.echelle-figure.is-item { cursor: grab; }
-.echelle-scene:focus-visible { outline: 3px solid var(--color-echelle); outline-offset: 3px; }
-.echelle-ground { position: absolute; left: 0; right: 0; top: 84%; bottom: 0; border-top: 2px solid rgba(var(--color-echelle-rgb), 0.7); background: rgba(0,0,0,0.25); }
+.echelle-ground { position: absolute; left: 0; right: 0; top: 84%; bottom: 0; border-top: 2px solid rgba(96, 165, 250, 0.55); background: rgba(0,0,0,0.25); }
 .echelle-figure {
   position: absolute;
   bottom: 16%;
   transform: translateX(-50%);
   transition: height 0.25s cubic-bezier(.22,1,.36,1);
-  pointer-events: none;
 }
-.echelle-figure.is-ref { left: 28%; }
-.echelle-figure.is-item { left: 70%; }
-.echelle-img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: bottom; }
-/* Repère de la taille choisie, collé au-dessus de l'élément : la vue garde
-   15 % de marge au-dessus de la plus grande silhouette (ECHELLE_VIEW_MARGIN),
-   la pastille y tient. */
-.echelle-readout {
-  /* Taille choisie CACHÉE pendant la question (on compare à l'œil, comme la
-     taille de la référence) — l'élément reste dans le DOM pour un éventuel
-     retour arrière. */
+.echelle-scene.is-resizing .echelle-figure,
+.echelle-scene.is-moving .echelle-figure { transition: none; }
+.echelle-figure.is-ref { left: 18%; pointer-events: none; }
+.echelle-figure.is-item { left: 55%; cursor: grab; z-index: 2; }
+.echelle-scene.is-moving .echelle-figure.is-item { opacity: 0.75; }
+.echelle-img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: bottom; pointer-events: none; }
+/* Aplat masqué par l'image (--sil-mask, posé par index.js) ; l'<img> ne
+   reste visible qu'en repli, sans masque possible (voir setEchelleMasks). */
+.echelle-sil {
   display: none;
   position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translate(-50%, -6px);
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--color-echelle);
-  color: #2a0710;
-  font-weight: 800;
-  font-size: 14px;
-  white-space: nowrap;
+  inset: 0;
+  -webkit-mask: var(--sil-mask) center bottom / 100% 100% no-repeat;
+  mask: var(--sil-mask) center bottom / 100% 100% no-repeat;
+  pointer-events: none;
 }
-.echelle-caption {
+.echelle-area.use-mask .echelle-sil { display: block; }
+.echelle-area.use-mask .echelle-figure > .echelle-img { visibility: hidden; }
+.echelle-figure.is-ref .echelle-sil { background: var(--echelle-ref-color); }
+.echelle-figure.is-item .echelle-sil { background: var(--echelle-item-color); }
+/* Toise pointillée verticale le long de la référence. */
+.echelle-ref-measure { position: absolute; top: 0; bottom: 0; right: -10px; border-left: 2px dashed rgba(96, 165, 250, 0.6); pointer-events: none; }
+/* Coins de redimensionnement (souris) et poignée ↗ (tactile), comme
+   Magnitudle : les uns ou l'autre selon le pointeur de l'appareil. */
+.echelle-corner {
   position: absolute;
-  top: calc(84% + 6px);
-  transform: translateX(-50%);
-  max-width: 40%;
-  font-weight: 700;
-  font-size: 14px;
-  text-align: center;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 2px solid var(--echelle-item-color);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  cursor: nwse-resize;
 }
-.echelle-caption.is-ref { left: 28%; }
-.echelle-caption.is-item { left: 70%; color: var(--color-text); }
-.echelle-controls { display: flex; align-items: center; justify-content: center; gap: var(--space-sm); margin-top: var(--space-sm); }
-.echelle-controls-hint { font-size: 13px; color: var(--color-text-muted); text-align: center; }
-.echelle-step-btn {
-  -webkit-touch-callout: none;
-  width: 60px;
-  height: 52px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background: var(--gradient-card);
-  color: var(--color-text);
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.echelle-step-btn:active { transform: scale(0.94); }
-.echelle-step-btn:disabled { opacity: 0.35; cursor: default; }
-/* Poignée ↗ au coin de l'élément (redimensionnement à un doigt). */
+.echelle-corner.is-tl { top: -6px; left: -6px; }
+.echelle-corner.is-tr { top: -6px; right: -6px; cursor: nesw-resize; }
+.echelle-corner.is-bl { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.echelle-corner.is-br { bottom: -6px; right: -6px; }
 .echelle-handle {
   position: absolute;
-  top: -14px;
-  right: -14px;
-  width: 30px;
-  height: 30px;
-  display: flex;
+  top: -22px;
+  right: -26px;
+  width: 32px;
+  height: 32px;
+  display: none;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
   border: 1px solid var(--color-border);
-  background: var(--gradient-card);
-  color: var(--color-echelle);
+  background: var(--color-surface);
+  color: var(--echelle-item-color);
   font-weight: 800;
   font-size: 16px;
   box-shadow: var(--shadow-sm);
 }
-.echelle-area.is-spectator .echelle-handle,
-.echelle-area.is-locked .echelle-handle { display: none; }
-/* Révélation : l'élément du joueur cède la place au rang de silhouettes. */
+@media (hover: none) and (pointer: coarse) {
+  .echelle-corner { display: none; }
+  .echelle-handle { display: flex; }
+}
+.echelle-estimate-tag {
+  position: absolute;
+  bottom: 3%;
+  transform: translateX(-50%);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--echelle-item-color);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.echelle-pill {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: rgba(10, 8, 20, 0.8);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+  z-index: 3;
+}
+.echelle-zoom { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+.echelle-zoom-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: rgba(10, 8, 20, 0.8);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.echelle-zoom-btn:disabled { opacity: 0.35; cursor: default; }
+/* Sous la scène : qui est qui (couleurs des silhouettes) + règle du jeu. */
+.echelle-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin-top: var(--space-sm); font-size: 13px; color: var(--color-text-muted); }
+.echelle-legend strong.is-ref { color: var(--echelle-ref-color); }
+.echelle-legend strong.is-item { color: var(--echelle-item-color); }
+.echelle-note { margin: 6px 0 0; text-align: center; font-size: 12px; color: var(--color-text-muted); }
+/* Révélation : l'estimation du joueur cède la place au rang de silhouettes. */
 .echelle-reveal-layer { position: absolute; inset: 0; pointer-events: none; }
 .echelle-area.is-revealed .echelle-figure.is-item,
-.echelle-area.is-revealed .echelle-caption.is-item,
-.echelle-area.is-revealed .echelle-controls { display: none; }
+.echelle-area.is-revealed .echelle-estimate-tag,
+.echelle-area.is-revealed .echelle-pill,
+.echelle-area.is-revealed .echelle-zoom,
+.echelle-area.is-revealed .echelle-note,
+.echelle-area.is-revealed .echelle-legend span:last-child { display: none; }
+.echelle-area.is-revealed .echelle-figure.is-ref { left: 11%; }
 .echelle-ghost {
   position: absolute;
   bottom: 16%;
@@ -3583,9 +3620,12 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
   transform-origin: 50% 100%;
 }
 .echelle-ghost.is-target { background: #d9dce6; opacity: 0.9; z-index: 2; }
+/* Repli sans masque : la vraie image, cernée de la couleur du joueur. */
+.echelle-ghost.is-image { background: none center bottom / 100% 100% no-repeat; opacity: 1; filter: drop-shadow(0 0 2px var(--c, #fff)) drop-shadow(0 0 2px var(--c, #fff)); }
+.echelle-ghost.is-image.is-target { filter: grayscale(1) drop-shadow(0 0 2px #d9dce6); }
 .echelle-ghost-name {
   position: absolute;
-  transform: translate(-50%, -4px);
+  transform: translate(-50%, calc(-4px - var(--row, 0) * 1.7em));
   padding: 1px 8px;
   border-radius: 999px;
   background: rgba(10, 8, 20, 0.75);
@@ -3595,17 +3635,20 @@ body.is-host.game-active .container .order-compare.mine-hidden .order-compare-ra
   white-space: nowrap;
   z-index: 3;
 }
-.echelle-ghost-name { transform: translate(-50%, calc(-4px - var(--row, 0) * 1.7em)); }
 .echelle-ghost-name.is-target { background: #d9dce6; color: #1a1630; top: calc(84% + 6px); bottom: auto; transform: translateX(-50%); z-index: 4; }
 /* Silhouette plus haute que la vue : pseudo calé en haut de la scène. */
 .echelle-ghost-name.is-clipped { top: 4px; transform: translate(-50%, calc(var(--row, 0) * 1.7em)); }
-.echelle-area.is-revealed .echelle-figure.is-ref { left: 11%; }
-.echelle-area.is-revealed .echelle-caption.is-ref { left: 2%; transform: none; max-width: 30%; text-align: left; white-space: normal; font-size: 12px; }
 @keyframes echelleGhostIn { from { transform: translateX(-50%) scaleY(0); } to { transform: translateX(-50%) scaleY(1); } }
 @media (prefers-reduced-motion: reduce) { .echelle-ghost { animation: none; } }
-.echelle-area.is-spectator .echelle-controls,
-.echelle-area.is-spectator .echelle-readout { display: none; }
+/* MJ en « Présenter » et TV : ils ne jouent pas — scène seule, sans outils. */
+.echelle-area.is-spectator .echelle-corner,
+.echelle-area.is-spectator .echelle-handle,
+.echelle-area.is-spectator .echelle-pill,
+.echelle-area.is-spectator .echelle-zoom,
+.echelle-area.is-spectator .echelle-estimate-tag,
+.echelle-area.is-spectator .echelle-note { display: none; }
 .echelle-area.is-spectator .echelle-scene { max-height: 46vh; }
+.echelle-area.is-spectator .echelle-figure.is-item { cursor: default; }
 .halo-wrap {
   position: relative;
   width: min(640px, 100%);
